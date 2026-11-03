@@ -23,7 +23,6 @@ const appEl = $('#app');
 let searchTerm = '';
 const collapsed = new Set(lsGet('collapsed', []));
 
-// ---------- theme / layout ----------
 // In narrow windows the sidebar and side panel float over the content; there they open on demand and are not saved.
 const narrowSide = matchMedia('(max-width: 760px)');
 const narrowPanel = matchMedia('(max-width: 1100px)');
@@ -94,7 +93,6 @@ function resizer(id, varName, key, min, max, fromRight) {
 resizer('#rs-side', '--side-w', 'sidebarW', 220, 400, false);
 resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true);
 
-// ---------- sidebar ----------
 const dotCls = (t) => 'dot' + (t.dead ? ' dead' : t.streaming ? ' run' : t.unread ? ' unread' : ' open');
 
 function drawSidebar() {
@@ -216,7 +214,6 @@ async function renameTab(t) {
   if (n) renameSession(t, n).catch((e) => toast(e.message, 'error'));
 }
 
-// ---------- topbar ----------
 const shownTabs = new Set(); // tabs already drawn once: only new ones play the enter animation
 function drawTop() {
   const t = activeTab();
@@ -249,7 +246,6 @@ function drawTop() {
   if (focusedTab) topEl.querySelector(`.tab[data-id="${CSS.escape(focusedTab)}"]`)?.focus({ preventScroll: true });
 }
 
-// ---------- home ----------
 const homeHandlers = {
   openFolder,
   openSession,
@@ -259,7 +255,6 @@ const homeHandlers = {
 };
 const drawWelcome = () => drawHome(homeEl, homeHandlers);
 
-// ---------- active view ----------
 function viewFor(tab) {
   let v = views.get(tab.id);
   if (!v) {
@@ -359,7 +354,6 @@ on('insert', (text) => {
 on('settings', (tab) => settingsDialog(tab));
 on('home', (project) => newSession(project));
 
-// ---------- keyboard / palette ----------
 function paletteItems() {
   const t = activeTab();
   const dark = document.documentElement.dataset.theme === 'dark';
@@ -410,7 +404,6 @@ addEventListener('keydown', (e) => {
   }
 });
 
-// ---------- connection ----------
 const banner = $('#banner');
 const setBanner = (msg) => {
   banner.hidden = !msg;

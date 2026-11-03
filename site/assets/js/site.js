@@ -15,9 +15,6 @@
   const ease = (t) => 1 - Math.pow(1 - t, 3);
   const TAU = Math.PI * 2;
 
-  /* =====================================================================
-     1. words rise, blocks ease in
-     ===================================================================== */
   function splitWords(el, wrap) {
     let i = 0;
     const walk = (node) => {
@@ -83,9 +80,6 @@
     $$(".split").forEach((el) => el.classList.add("is-in"));
   }
 
-  /* =====================================================================
-     2. the problem scene: build the racing log
-     ===================================================================== */
   (function buildLog() {
     const log = $("#log");
     if (!log) return;
@@ -104,9 +98,6 @@
     log.innerHTML = out.join("") + out.join("");
   })();
 
-  /* =====================================================================
-     3. the hero: flat wordmark, rings, and the node that orbits the O
-     ===================================================================== */
   const readyAt = performance.now();
   const hero = { p: 0, visible: true };
   const wm = $("#wm");
@@ -135,9 +126,6 @@
     requestAnimationFrame(place);
   }
 
-  /* =====================================================================
-     4. one scroll engine: hero push, problem scene, window tilt, scenes
-     ===================================================================== */
   const nav = $(".nav");
   const bar = $("#progress");
   const heroSection = $("#hero");
@@ -221,9 +209,6 @@
     caps.forEach((c) => { c.style.opacity = 1; });
   }
 
-  /* =====================================================================
-     5. engines: switch, and an orbit that never stops
-     ===================================================================== */
   const orbit = $("#orbit");
   const lists = { orbix: $("#orbit-list-orbix"), omp: $("#orbit-list-omp") };
   $$("li", lists.orbix).forEach((li) => { if (/^(Ollama|LM Studio)$/.test(li.textContent)) li.classList.add("is-local"); });
@@ -326,9 +311,6 @@
     requestAnimationFrame(loop);
   }
 
-  /* =====================================================================
-     6. small things
-     ===================================================================== */
   if (finePointer && !reduced) {
     $$(".btn-magnet").forEach((b) => {
       b.addEventListener("pointermove", (e) => {
@@ -351,9 +333,6 @@
     b.addEventListener("click", show);
   });
 
-  /* =====================================================================
-     7. the demo: a real-shaped ORBIX 3.0 session the visitor steers
-     ===================================================================== */
   const chat = $("#chat");
   const plan = $("#plan");
   const approve = $("#approve");
@@ -653,9 +632,6 @@ Tests: <span class="pass">14 passed</span>, 14 total</pre>`);
     $$('img[src*="logo.svg"]').forEach((img) => { img.src = "assets/img/logo-static.svg"; });
   }
 
-  /* =====================================================================
-     boot
-     ===================================================================== */
   const boot = () => { root.classList.add("is-ready"); onFrame(); if (!reduced) requestAnimationFrame(loop); else { layoutOrbit(performance.now(), 0); } };
   if (document.fonts && document.fonts.load) {
     Promise.race([document.fonts.load('800 64px "Mona Sans"'), new Promise((r) => setTimeout(r, 900))]).then(boot, boot);

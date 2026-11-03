@@ -2,7 +2,6 @@
 import { api, rpc } from './api.js';
 import { baseName, debounce, toast, makeTitle } from './dom.js';
 
-// ---------- tiny event emitter ----------
 const listeners = {};
 export const on = (ev, fn) => {
   (listeners[ev] ||= new Set()).add(fn);
@@ -30,7 +29,6 @@ export const S = {
 
 export const activeTab = () => S.tabs.get(S.active) || null;
 
-// ---------- path keys (mirror of server Backend.keyPath) ----------
 function keyPath(p) {
   if (!p) return '';
   if (S.env?.backend.kind === 'native') return p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
@@ -41,7 +39,6 @@ function keyPath(p) {
   return x.replace(/\/+$/, '') || '/';
 }
 
-// ---------- tabs ----------
 export class Tab {
   constructor(id, workspace, opts = {}) {
     this.id = id;
@@ -210,7 +207,6 @@ export async function closeTab(id) {
   await stopping;
 }
 
-// ---------- messages ----------
 function addMessage(tab, m, bulk = false) {
   if (m.discard) return false; // a reply the user asked to redo
   const k = msgKey(m);
@@ -238,7 +234,6 @@ function note(tab, level, text, extra) {
   emit('tab:messages', tab, { type: 'append', msg: tab.messages[tab.messages.length - 1] });
 }
 
-// ---------- event reducer ----------
 export function routeEvent(procId, ev) {
   const tab = S.tabs.get(procId);
   if (!tab) return;
@@ -444,7 +439,6 @@ const attachSoft = debounce(async (tab) => {
   } catch {}
 }, 800);
 
-// ---------- extension UI ----------
 function handleUi(tab, ev) {
   switch (ev.method) {
     case 'select':
@@ -515,7 +509,6 @@ export async function replyUi(tab, dlg, payload) {
   }
 }
 
-// ---------- actions ----------
 /** Send a message (or steer / queue it while the agent works). `images`: [{ type: 'image', data, mimeType }]. */
 export async function sendPrompt(tab, text, { followUp = false, images = [] } = {}) {
   const cmd = { type: 'prompt', message: text };
@@ -567,7 +560,6 @@ export async function renameSession(tab, name) {
   emit('tab:status', tab);
 }
 
-// ---------- environment / sessions ----------
 export async function loadEnv() {
   const j = await api.get('/api/state');
   S.env = { app: j.app, backend: j.backend };

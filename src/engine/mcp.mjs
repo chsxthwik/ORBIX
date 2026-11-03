@@ -21,7 +21,6 @@ const INIT_TIMEOUT = 60000;
 const CALL_TIMEOUT = 180000;
 const MAX_RESULT = 60000;
 
-// ---------- config ----------
 function readConfig(file) {
   const j = readJson(file, null);
   const servers = j && typeof j.mcpServers === 'object' && j.mcpServers ? j.mcpServers : {};
@@ -118,7 +117,6 @@ function resolveWinCommand(cmd) {
   return cmd;
 }
 
-// ---------- transports ----------
 class StdioTransport {
   constructor({ backend, cwd, cfg, onMessage, onClose }) {
     this.onMessage = onMessage;
@@ -229,7 +227,6 @@ class HttpTransport {
   }
 }
 
-// ---------- one server ----------
 class McpClient {
   constructor({ name, cfg, scope, backend, cwd }) {
     this.name = name;
@@ -386,7 +383,6 @@ function formatResult(r) {
   return { text, ...(images.length ? { images } : {}), isError: !!r?.isError };
 }
 
-// ---------- per-session manager ----------
 const liveManagers = new Set();
 
 export class McpManager {
@@ -556,7 +552,6 @@ async function testServer({ name, cfg, backend, cwd }) {
   }
 }
 
-// ---------- HTTP routes (mounted by server.mjs) ----------
 export function mcpRoutes(server) {
   const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
   const live = (scope, name, wsKey) => {

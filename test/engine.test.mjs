@@ -13,7 +13,6 @@ const DATA = path.join(TMP, 'data');
 process.env.ORBIX_DATA = DATA;
 fs.mkdirSync(path.join(DATA, 'cache'), { recursive: true });
 
-// ---- injected model catalog (slim form, as catalog.mjs caches it) and a network that always fails ----
 const rec = (o) => ({ contextWindow: 200000, maxOutput: 8192, cost: { input: null, output: null, cacheRead: null, cacheWrite: null }, reasoning: false, vision: false, tools: true, efforts: null, budget: false, toggle: false, interleaved: null, canonical: null, ...o });
 const CATALOG = {
   anthropic: {

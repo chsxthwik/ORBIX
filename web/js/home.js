@@ -90,7 +90,6 @@ export function drawHome(root, H) {
   }
   const { comp, row } = C;
 
-  // ----- project -----
   const projBtn = h('button', { class: 'cbtn', type: 'button', title: 'Project folder', 'aria-haspopup': 'menu' });
   const g = projects.find((x) => x.path === draft.project);
   projBtn.replaceChildren(icon('folder', 14), h('span', { class: 'ell' }, g ? g.name : 'Choose a folder'), icon('chevron-down', 12, 'cbtn-chev'));
@@ -101,7 +100,6 @@ export function drawHome(root, H) {
     popMenu(projBtn, [...(items.length ? [...items, '-'] : []), { label: 'Open folder…', run: () => H.openFolder() }], { minWidth: 280 });
   });
 
-  // ----- engine (only when the optional OMP CLI is installed) -----
   const engSeg = ompOk
     ? h('div', { class: 'seg', role: 'radiogroup', 'aria-label': 'Engine' }, [['builtin', 'ORBIX agent'], ['omp', 'OMP CLI']].map(([id, label]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(engine === id), title: id === 'builtin' && !agentOk ? 'Set up an AI provider first' : '', onclick: () => {
         if (engine === id) return;
@@ -110,7 +108,6 @@ export function drawHome(root, H) {
       } }, label)))
     : null;
 
-  // ----- model (agent sessions; OMP sessions use OMP's own default) -----
   const m = homeModel();
   const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new session', hidden: engine !== 'builtin' || !agentOk }, icon('cpu', 14), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
   modelBtn.addEventListener('click', () => modelPicker({

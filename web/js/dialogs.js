@@ -69,7 +69,6 @@ export function promptDialog(title, label, value = '') {
   });
 }
 
-// ---------- menus ----------
 /**
  * A small menu under (or above) `anchor`. Items: { label, hint, on, run, danger } or '-' for a separator.
  * Arrow keys move, Enter picks, Esc or an outside click closes and focus returns to the anchor.
@@ -130,7 +129,6 @@ export function popMenu(anchor, items, { align = 'start', minWidth = 200 } = {})
   return close;
 }
 
-// ---------- folder picker ----------
 export function folderPicker(start = '') {
   return new Promise((resolve) => {
     let cur = start;
@@ -164,7 +162,6 @@ export function folderPicker(start = '') {
   });
 }
 
-// ---------- model picker ----------
 /** Searchable model list. `load()` returns the models; `onPick(model)` applies one (throw to keep the list open). */
 export function modelPicker({ load, current, onPick, extra }) {
   const list = h('div', { class: 'list mp-list', role: 'listbox', 'aria-label': 'Models' }, skeleton(8, 'pad'));
@@ -230,7 +227,6 @@ export function modelPicker({ load, current, onPick, extra }) {
   return m;
 }
 
-// ---------- agent requests (select / confirm / input / editor / open_url) ----------
 /** Tool approvals ("Allow once / Allow for this session / Deny") are shown inline above the composer, not as a modal. */
 export const isApproval = (d) => d?.method === 'select' && Array.isArray(d.options) && d.options.every((o) => typeof o === 'string') && d.options.includes('Deny');
 
@@ -296,7 +292,6 @@ export function syncExtDialogs(tab) {
   openDlgs.set(want.id, rec);
 }
 
-// ---------- form rows (settings screens) ----------
 /** A settings row: label (+ hint) on the left, control on the right. */
 export const row = (label, control, hint) => h('div', { class: 'set-row' }, h('div', { class: 'set-k' }, h('div', { class: 'set-l' }, label), hint ? h('div', { class: 'set-hint' }, hint) : null), h('div', { class: 'set-v' }, control));
 export const toggle = (val, onchange, label) => h('label', { class: 'switch' }, h('input', { type: 'checkbox', role: 'switch', checked: val ? true : null, 'aria-label': label || null, onchange: (e) => onchange(e.target.checked) }), h('i'));
@@ -306,7 +301,6 @@ export function shortcutsDialog() {
   modal({ title: 'Keyboard shortcuts', size: 'sm', body: h('dl', { class: 'keys' }, rows.map(([k, d]) => [h('dt', null, k.split(/(?<=\S)\+(?=\S)/).map((x, i) => [i ? '+' : null, kbd(x)])), h('dd', null, d)])) });
 }
 
-// ---------- command palette ----------
 export function palette(getItems) {
   const q = h('input', { type: 'search', class: 'pal-q', placeholder: 'Type a command or search conversations', 'aria-label': 'Search commands', spellcheck: 'false', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'pal-list' });
   const list = h('div', { class: 'list pal-list', role: 'listbox', id: 'pal-list' });

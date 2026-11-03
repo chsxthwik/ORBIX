@@ -147,7 +147,6 @@ export function isForeignShare(p, cwd) {
   return !!s && s !== shareOf(cwd);
 }
 
-// ---------- argument checking ----------
 const typeName = (v) => (Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v);
 const signature = (def) => {
   const props = def.input_schema.properties || {};

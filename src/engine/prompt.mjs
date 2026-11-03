@@ -41,7 +41,7 @@ export function summarizeStatus({ repo, branch, upstream, ahead, behind, files }
 }
 
 /** Git state of the project in one line; null when it cannot be read quickly. */
-export async function gitSummary(backend, workspace, timeout = 4000) {
+async function gitSummary(backend, workspace, timeout = 4000) {
   try {
     const r = await git(backend, workspace, ['status', '--porcelain=v1', '-z', '-b', '--untracked-files=normal'], { timeout, maxBytes: 512 * 1024 });
     if (r.code !== 0) return /not a git repository/i.test(r.stderr.toString('utf8')) ? 'not a git repository' : null;

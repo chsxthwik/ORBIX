@@ -173,7 +173,6 @@ export class Backend {
     return this.kind === 'wsl';
   }
 
-  // ---------- environment detection ----------
   /** Installed WSL distributions and the default one, from a single `wsl.exe -l -v`. */
   static async wslInfo() {
     const r = await runProc('wsl.exe', ['-l', '-v'], { timeout: 15000 });
@@ -240,7 +239,6 @@ export class Backend {
     return (await this.probe()).version;
   }
 
-  // ---------- paths ----------
   /** Path as the backend process sees it. */
   execPath(p) {
     return this.isWsl ? toLinuxPath(p) : p;
@@ -284,7 +282,6 @@ export class Backend {
     return this.isWsl ? `${home}/.omp/agent/sessions` : path.join(home, '.omp', 'agent', 'sessions');
   }
 
-  // ---------- process launching ----------
   /** Build a spawn() call for running `argv` (argv[0] is a backend-side command). */
   buildSpawn(argv, { cwd } = {}) {
     if (this.isWsl) {

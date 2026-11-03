@@ -117,7 +117,6 @@ export class AppServer {
     setInterval(() => this.heartbeat(), 15000).unref();
   }
 
-  // ---------- lifecycle ----------
   listen(port) {
     return new Promise((resolve, reject) => {
       const onErr = (e) => reject(e);
@@ -171,7 +170,6 @@ export class AppServer {
     this.server.close();
   }
 
-  // ---------- SSE ----------
   broadcast(msg) {
     if (!this.clients.size) return;
     const data = `data: ${JSON.stringify(msg)}\n\n`;
@@ -231,7 +229,6 @@ export class AppServer {
     this.broadcast({ p: id, e: out });
   }
 
-  // ---------- processes ----------
   /** Start a session; if a resumed session's model is gone (provider signed out), reopen it on the default model. */
   async startSession(opts) {
     try {
@@ -290,7 +287,6 @@ export class AppServer {
     return p;
   }
 
-  // ---------- HTTP plumbing ----------
   tokenOk(t) {
     const a = Buffer.from(String(t || ''));
     const b = Buffer.from(this.token);
@@ -409,7 +405,6 @@ export class AppServer {
     });
   }
 
-  // ---------- API ----------
   stateSnapshot() {
     const d = this.store.data;
     return {
@@ -672,7 +667,6 @@ export class AppServer {
         return { output: out };
       },
 
-      // ---- providers & sign-in (works without an open session) ----
       'GET /api/auth/providers': async () => ({ providers: await this.auth.providers(), ...this.auth.status() }),
       'POST /api/auth/login': async ({ body }) => {
         await this.auth.startLogin(String(body.provider || ''));

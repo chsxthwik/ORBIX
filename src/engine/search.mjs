@@ -18,7 +18,6 @@ const LINE_CHARS = 300;
 const escapeRe = (c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const byPath = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-// ---------- glob patterns (the glob tool and grep's glob filter) ----------
 /** Brace groups that are alternations: balanced and holding a top-level comma. `{2}` and a lone `{` stay literal, as in a shell. */
 function braceAlternations(glob) {
   const open = new Set();
@@ -64,14 +63,13 @@ export function globToRegExp(glob) {
 }
 
 /** Matcher for a glob: a pattern without `/` also matches a file's base name at any depth. */
-export function globMatcher(pattern) {
+function globMatcher(pattern) {
   const p = String(pattern ?? '').replace(/\\/g, '/').replace(/^\.\//, '');
   const re = globToRegExp(p);
   const nameOnly = !p.includes('/');
   return (rel) => re.test(rel) || (nameOnly && re.test(rel.slice(rel.lastIndexOf('/') + 1)));
 }
 
-// ---------- .gitignore ----------
 function ignoreRegExp(pat) {
   let anchored = pat.includes('/');
   if (pat.startsWith('/')) pat = pat.slice(1);
@@ -209,7 +207,6 @@ export async function walk(root, { maxFiles = MAX_WALK_FILES, signal, gitignore 
   return { files: files.sort(byPath), capped };
 }
 
-// ---------- ripgrep ----------
 const rgFound = new Map(); // 'win' | 'wsl:<distro>' -> { path, at }
 const RG_SKIP = [...SKIP_DIRS].flatMap((d) => ['-g', `!${d}`]);
 const RG_BASE = ['--no-config', '--hidden', '--no-require-git', '--color', 'never', '--sort', 'path', ...RG_SKIP];
@@ -284,7 +281,6 @@ function runRg(rg, args, onLine, signal) {
 const relOf = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '');
 const rgText = (o) => (o?.text != null ? o.text : o?.bytes ? Buffer.from(o.bytes, 'base64').toString('utf8') : '');
 
-// ---------- glob ----------
 /**
  * Files under `hostRoot` matching `pattern`, sorted. Returns { files (at most `limit`), total, capped, engine }.
  */
@@ -308,7 +304,6 @@ export async function globFiles({ hostRoot, pattern, limit = 300, backend, signa
   return { files: hits.slice(0, limit), total: hits.length, capped, engine: 'js' };
 }
 
-// ---------- grep ----------
 /** Shorten a long line to a window around its first match. */
 function clipLine(text, re) {
   if (text.length <= LINE_CHARS) return text;

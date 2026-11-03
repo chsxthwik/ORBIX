@@ -78,7 +78,6 @@ function draw() {
 
 const emptyState = (ic, text) => h('div', { class: 'empty' }, h('span', { class: 'empty-ico' }, icon(ic, 16)), text);
 
-// ---------- files ----------
 const joinP = (a, b) => (/^[A-Za-z]:|^\\\\/.test(a) ? a.replace(/[\\/]+$/, '') + '\\' + b.replace(/\//g, '\\') : (a === '/' ? '' : a.replace(/\/+$/, '')) + '/' + b);
 
 async function loadDir(p) {
@@ -161,7 +160,6 @@ const relTo = (ws, p) => {
   return a.toLowerCase().startsWith(b.toLowerCase() + '/') ? a.slice(b.length + 1) : p;
 };
 
-// ---------- git ----------
 /** Show the Changes panel, on the diff of `p` when git lists it (else the plain file). */
 export async function reviewChanges(t, p) {
   showTab('changes');
@@ -306,7 +304,6 @@ function drawDiff(t) {
   else c.append(renderUnifiedDiff(d.text));
 }
 
-// ---------- todos / agents ----------
 function drawTodos(t) {
   const total = (t.todos || []).flatMap((p) => p.tasks || []).length;
   if (!total) return body.append(emptyState('list', 'The agent’s task list shows here while it works.'));
@@ -320,7 +317,6 @@ function drawAgents(t) {
   body.append(h('div', { class: 'p-scroll pad agents' }, list.map(agentRow)));
 }
 
-// ---------- console ----------
 function drawConsole(t) {
   const out = h('div', { class: 'console-out' });
   const inp = h('input', { type: 'text', class: 'mono', placeholder: `Command in ${baseName(t.workspace)}`, 'aria-label': 'Shell command', spellcheck: 'false' });

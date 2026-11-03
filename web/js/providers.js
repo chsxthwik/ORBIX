@@ -93,7 +93,6 @@ function openTerminalLogin(id) {
   );
 }
 
-// ---------- sign-in flow dialog ----------
 function syncFlow() {
   if (!AUTH.login) {
     AUTH.flow?.close('__end');
@@ -162,7 +161,6 @@ async function startLogin(id) {
   }
 }
 
-// ---------- Settings → Providers ----------
 export function providersView(el) {
   const q = h('input', { type: 'search', placeholder: 'Search providers…', 'aria-label': 'Search providers', class: 'grow' });
   let filter = 'all';

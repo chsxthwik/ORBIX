@@ -4,7 +4,6 @@
 import fs from 'node:fs';
 import { looksBinary } from '../util.mjs';
 
-// ---------- text encodings ----------
 const CP1252 = { 0x80: 0x20ac, 0x82: 0x201a, 0x83: 0x0192, 0x84: 0x201e, 0x85: 0x2026, 0x86: 0x2020, 0x87: 0x2021, 0x88: 0x02c6, 0x89: 0x2030, 0x8a: 0x0160, 0x8b: 0x2039, 0x8c: 0x0152, 0x8e: 0x017d, 0x91: 0x2018, 0x92: 0x2019, 0x93: 0x201c, 0x94: 0x201d, 0x95: 0x2022, 0x96: 0x2013, 0x97: 0x2014, 0x98: 0x02dc, 0x99: 0x2122, 0x9a: 0x0161, 0x9b: 0x203a, 0x9c: 0x0153, 0x9e: 0x017e, 0x9f: 0x0178 };
 const CP1252_BACK = new Map(Object.entries(CP1252).map(([b, cp]) => [cp, +b]));
 
@@ -69,13 +68,12 @@ export function lineEnding(text) {
   return crlf === lf ? 'crlf' : crlf === 0 ? 'lf' : 'mixed';
 }
 
-// ---------- images ----------
 export const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 /** Largest image a provider accepts (Anthropic: 5 MB per image; OpenAI allows more). */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 /** Images with a longer edge than this are downscaled by the provider (Claude); 8000 px is the hard limit. */
-export const IMAGE_SCALE_EDGE = 1568;
-export const IMAGE_MAX_EDGE = 8000;
+const IMAGE_SCALE_EDGE = 1568;
+const IMAGE_MAX_EDGE = 8000;
 
 /** { mimeType, width, height } of a PNG / JPEG / GIF / WebP from its bytes, or null when it is none of them. */
 export function sniffImage(buf) {
@@ -154,7 +152,6 @@ export function base64Bytes(data) {
   return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
 }
 
-// ---------- terminal output ----------
 // CSI (colors, cursor moves), OSC (titles, hyperlinks) and two-byte escapes.
 const ANSI = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)?|[PX^_][^\x1b]*\x1b\\|[@-Z\\-_])|\x9b[0-?]*[ -/]*[@-~]/g;
 
@@ -202,7 +199,6 @@ export function looksBinaryText(s) {
   return bad > 16 && bad / sample.length > 0.02;
 }
 
-// ---------- cached reads ----------
 const textCache = new Map(); // host path -> { mtimeMs, size, value }
 const MAX_CACHE = 256;
 

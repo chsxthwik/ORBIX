@@ -21,7 +21,7 @@ export const WEB_SEARCH_DEF = {
 };
 
 export const ENDPOINTS = { brave: 'https://api.search.brave.com/res/v1/web/search', tavily: 'https://api.tavily.com/search' };
-export const SEARCH_NAMES = { brave: 'Brave Search', tavily: 'Tavily', searxng: 'SearXNG' };
+const SEARCH_NAMES = { brave: 'Brave Search', tavily: 'Tavily', searxng: 'SearXNG' };
 
 const cut = (s, n) => {
   const t = String(s ?? '').replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/\s+/g, ' ').trim();
