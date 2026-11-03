@@ -86,9 +86,10 @@ if (Test-Path (Join-Path $site 'index.html')) {
   $html = [regex]::Replace($html, 'ORBIX-\d+\.\d+\.\d+-win-x64\.zip', "ORBIX-$version-win-x64.zip")
   $html = [regex]::Replace($html, 'v\d+\.\d+\.\d+ for Windows', "v$version for Windows")
   $html = [regex]::Replace($html, 'Get ORBIX \d+\.\d+\.\d+', "Get ORBIX $version")
-  $html = [regex]::Replace($html, '\d+ MB zip', "$mb MB zip")
-  $html = [regex]::Replace($html, '<span>\d+ MB</span>', "<span>$mb MB</span>")
-  $html = [regex]::Replace($html, '(SHA-256 <code>)[0-9a-f]{64}(</code>)', "`${1}$sha`${2}")
+  $html = [regex]::Replace($html, '\b\d+ MB\b', "$mb MB")
+  $shaPattern = '(id="sha">)[0-9a-f]{64}(</code>)'
+  if (-not [regex]::IsMatch($html, $shaPattern)) { throw 'site\index.html has no SHA-256 element (id="sha") to stamp' }
+  $html = [regex]::Replace($html, $shaPattern, "`${1}$sha`${2}")
   [IO.File]::WriteAllText($page, $html, (New-Object Text.UTF8Encoding($false)))
   Write-Host "Website updated for ORBIX-$version-win-x64.zip  SHA-256 $sha"
 }
