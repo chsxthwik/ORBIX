@@ -111,7 +111,6 @@ export async function log(backend, ws, n = 20) {
 }
 
 
-// ---------- writes ----------
 const bad = (msg) => Object.assign(new Error(msg), { status: 400 });
 
 /** Paths the panel may touch: relative, inside the project, never a drive or parent path. */

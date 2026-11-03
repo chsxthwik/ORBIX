@@ -98,7 +98,6 @@ export function defaultMaxTokens(providerId, modelId) {
   return out ? Math.min(out, 32000) : 8192;
 }
 
-// ---------- retries ----------
 const sleep = (ms, signal) =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason || new Error('Aborted'));

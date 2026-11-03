@@ -162,7 +162,6 @@ export class AgentProc extends EventEmitter {
     return this;
   }
 
-  // ---------- RPC surface ----------
   send(obj) {
     if (obj?.type === 'extension_ui_response' && this.pendingAsk.has(obj.id)) {
       this.pendingAsk.get(obj.id)(obj);
@@ -486,7 +485,6 @@ export class AgentProc extends EventEmitter {
     return main;
   }
 
-  // ---------- model roles: fast (titles, summaries, helper agents) and plan ----------
   /** "provider/model" chosen for a role: this session's override, else the saved default, else '' (current model). */
   _roleSpec(role) {
     return this.roles[role] || this.config.roles?.()?.[role] || '';
@@ -554,7 +552,6 @@ export class AgentProc extends EventEmitter {
     return `${name} model is now ${where()}.`;
   }
 
-  // ---------- tools available this turn ----------
   _isReadOnly(name) {
     return READ_ONLY.has(name) || this.mcp.isReadOnly(name);
   }
@@ -573,7 +570,6 @@ export class AgentProc extends EventEmitter {
     return this.planMode ? defs.filter((d) => this._isReadOnly(d.name)) : defs;
   }
 
-  // ---------- the agent loop ----------
   _emit(ev) {
     this.emit('event', ev);
   }
@@ -896,7 +892,6 @@ export class AgentProc extends EventEmitter {
     return msg;
   }
 
-  // ---------- regenerate / edit and resend ----------
   /** Drop messages from `index` on (memory and session), optionally reverting their file changes first. */
   async _rewind(index, { undo = false } = {}) {
     const dropped = this.messages.slice(index);
@@ -959,7 +954,6 @@ export class AgentProc extends EventEmitter {
     return r;
   }
 
-  // ---------- compaction ----------
   async _compactCmd(focus) {
     const conn = await this._connect();
     await this._compact({ conn, reason: 'manual', focus });
@@ -1010,7 +1004,6 @@ export class AgentProc extends EventEmitter {
     }
   }
 
-  // ---------- approvals ----------
   /** Answer every open question with "cancelled" and close its dialog in the UI. */
   _cancelAsks() {
     for (const [id, resolve] of this.pendingAsk) {
@@ -1127,7 +1120,6 @@ export class AgentProc extends EventEmitter {
     return this._record(call, result, true, t0);
   }
 
-  // ---------- goal mode ----------
   _goalStatus() {
     const g = this.goal;
     this._emit({ type: 'extension_ui_request', id: `status-goal-${Date.now()}`, method: 'setStatus', statusKey: 'goal', statusText: g ? `Goal ${g.round}/${g.max}: working (Esc to stop)` : '' });
@@ -1169,7 +1161,6 @@ export class AgentProc extends EventEmitter {
     this.queue.followUp.push({ text: goalPrompt(g), images: [], attachments: [], attribution: 'goal' });
   }
 
-  // ---------- branching ----------
   /**
    * Copy the conversation before a user message (`messageId`, or `index`; default: all of it) into a new saved
    * session. Files are not touched. The UI opens the new session in a tab when it gets `branch_created`.
@@ -1188,7 +1179,6 @@ export class AgentProc extends EventEmitter {
     return out;
   }
 
-  // ---------- chat title from the fast model ----------
   /** Replace the first-words title by a short model-written one. Only when a fast model is chosen; never the main model. */
   async _aiTitle(fallback, text) {
     if (!this._roleSpec('fast')) return;
@@ -1203,7 +1193,6 @@ export class AgentProc extends EventEmitter {
     this._emit({ type: 'session_info_update', title: t });
   }
 
-  // ---------- subagents ----------
   async _runTask(call, conn) {
     const defs = this.defs.filter((d) => SUBAGENT_TOOLS.has(d.name) && (d.name !== 'web_search' || this._searchOn()));
     const last = new Map();
@@ -1240,7 +1229,6 @@ export class AgentProc extends EventEmitter {
     return r;
   }
 
-  // ---------- undo ----------
   async _undoIds(ids) {
     const lines = [];
     let ok = true;
@@ -1275,7 +1263,6 @@ export class AgentProc extends EventEmitter {
     return this._undoIds(ids);
   }
 
-  // ---------- slash commands ----------
   async _commands() {
     const [custom, skills] = await Promise.all([discoverCommands(this.backend.hostPath(this.workspace)).catch(() => []), this._skills()]);
     return [

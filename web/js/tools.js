@@ -67,7 +67,6 @@ export function toolSummary(call, res, ws) {
   }
 }
 
-// ---------- shared pieces ----------
 /**
  * Command or tool output: ANSI colours rendered, long output cut to its last lines (where errors usually are)
  * with "Show all", and a copy button. Very large output is never put in the DOM in full.
@@ -216,7 +215,6 @@ function statusBadge(status) {
   return h('span', { class: 'st ok', title: 'Done' }, icon('check', 14));
 }
 
-// ---------- bodies ----------
 const BODY = {
   bash(call, res, ctx) {
     const wrap = h('div');
@@ -367,7 +365,6 @@ export function agentRow(a) {
   return row;
 }
 
-// ---------- card ----------
 export function renderToolCard(tab, call, run, open) {
   const finalRes = tab.results.get(call.id);
   const result = finalRes ? { content: finalRes.content, details: finalRes.details } : run?.result || run?.partial || null;

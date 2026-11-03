@@ -9,7 +9,7 @@ import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, textOf } fro
 import { protect, unprotect } from './secrets.mjs';
 import { PRESETS } from './providers.mjs';
 
-export const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
+const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
 
 export class EngineConfig {
   constructor(dir = DATA_DIR) {
@@ -108,7 +108,6 @@ export class EngineConfig {
     this.data.models = { fast: fast === undefined ? cur.fast : String(fast || '').trim(), plan: plan === undefined ? cur.plan : String(plan || '').trim() };
     this.save();
   }
-  // ----- web search (the tool is offered to the model only when this is set up) -----
   searchReady() {
     const s = this.data.search;
     return !!s && (s.provider === 'searxng' ? !!s.baseUrl : !!s.key);
@@ -164,7 +163,6 @@ export class EngineConfig {
   }
 }
 
-// ---------- sessions ----------
 const sessionsDir = () => path.join(DATA_DIR, 'sessions');
 
 function projectFolder(keyPath) {

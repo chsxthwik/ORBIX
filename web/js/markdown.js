@@ -35,7 +35,6 @@ export function codeBlock(code, lang, { copy = true, maxHeight, plain = false } 
   return wrap;
 }
 
-// ---------- inline ----------
 const INLINE = /\\(?<esc>[\\`*_{}[\]()#+\-.!|~<>])|(?<tick>`+)(?<code>[\s\S]+?)\k<tick>|\*\*(?<b1>[^\s*][\s\S]*?)\*\*|__(?<b2>[^\s_][\s\S]*?)__|(?<![*\w])\*(?<i1>[^\s*][^*]*?)\*(?!\w)|(?<![_\w])_(?<i2>[^\s_][^_]*?)_(?![_\w])|~~(?<del>[\s\S]+?)~~|(?<img>!?)\[(?<lt>[^\]]+)\]\((?<lu>[^)\s]+)(?:\s+"[^"]*")?\)|<(?<al>(?:https?:\/\/|mailto:)[^\s>]+)>|(?<url>https?:\/\/[^\s<>)\]]+[^\s<>)\].,;:!?'"])/g;
 
 const link = (href, kids) => h('a', { href, target: '_blank', rel: 'noopener noreferrer', title: href }, kids);
@@ -87,7 +86,6 @@ function inlineLines(text, opts) {
   return frag;
 }
 
-// ---------- blocks ----------
 const isTableSep = (l) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l) && l.includes('-');
 const splitRow = (l) => {
   let s = l.trim();

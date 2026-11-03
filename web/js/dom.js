@@ -40,7 +40,6 @@ export function replace(el, ...kids) {
   return append(el, kids);
 }
 
-// ---------- icons (24x24, stroke) ----------
 const NS = 'http://www.w3.org/2000/svg';
 const P = {
   plus: 'M12 5v14M5 12h14',
@@ -121,7 +120,6 @@ export function icon(name, size = 16, cls = '') {
   return svg;
 }
 
-// ---------- logo ("Orbit core"; same geometry as the small variant in tools/make-icon.mjs) ----------
 const svgEl = (tag, attrs, ...kids) => {
   const el = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
@@ -198,7 +196,6 @@ export function leave(el, { hide = false, then } = {}) {
   setTimeout(fin, 260);
 }
 
-// ---------- formatting ----------
 export const fmtTokens = (n) => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(Math.round(n)));
 export const fmtCost = (c) => (c == null ? '–' : c < 0.01 && c > 0 ? '<$0.01' : '$' + c.toFixed(c < 1 ? 3 : 2));
 export function fmtDuration(ms) {
@@ -228,7 +225,6 @@ export function relPath(p, ws) {
   return p;
 }
 
-// ---------- toast / clipboard ----------
 export function toast(msg, kind = 'info', ms = 4200) {
   const root = $('#toasts');
   if (!root) return;
@@ -284,7 +280,6 @@ export async function copyButtonFeedback(btn, text) {
   }, 1200);
 }
 
-// ---------- local storage (per-viewer conveniences; keys used to start with "omph.") ----------
 export function lsGet(key, fallback) {
   try {
     const v = localStorage.getItem('orbix.' + key) ?? localStorage.getItem('omph.' + key);

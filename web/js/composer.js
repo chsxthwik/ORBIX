@@ -194,7 +194,6 @@ export class Composer {
     this.fileIn.click();
   }
 
-  // ---------- events ----------
   wire() {
     const ta = this.ta;
     ta.addEventListener('input', () => {
@@ -360,7 +359,6 @@ export class Composer {
     this.o.onChange?.();
   }
 
-  // ---------- pop-up ----------
   token() {
     const v = this.ta.value;
     const pos = this.ta.selectionStart;

@@ -2,7 +2,7 @@
 // Shared by the main agent loop (which shows it live) and by subagents and compaction (which only need the result).
 
 /** Provider stop reasons -> the internal vocabulary. */
-export const STOP_MAP = { end_turn: 'stop', tool_use: 'toolUse', max_tokens: 'length', stop_sequence: 'stop', refusal: 'stop', pause_turn: 'stop' };
+const STOP_MAP = { end_turn: 'stop', tool_use: 'toolUse', max_tokens: 'length', stop_sequence: 'stop', refusal: 'stop', pause_turn: 'stop' };
 
 const closers = (stack) => stack.map((c) => (c === '{' ? '}' : ']')).reverse().join('');
 

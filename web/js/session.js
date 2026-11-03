@@ -266,7 +266,6 @@ export class TabView {
     } else this.scrollBottom(true);
   }
 
-  // ---------- composer controls ----------
   updateComposer() {
     const t = this.tab;
     const st = t.state;
@@ -374,7 +373,6 @@ export class TabView {
     this.planBtn.disabled = false;
   }
 
-  // ---------- approvals ----------
   updateApproval() {
     const t = this.tab;
     const d = t.dead ? null : t.dialogs.find(isApproval) || null;
@@ -435,7 +433,6 @@ export class TabView {
     else if (e.key === 'Escape' && d.options.includes('Deny')) (e.preventDefault(), e.stopPropagation(), this.answerApproval('Deny'));
   }
 
-  // ---------- transcript ----------
   renderAll() {
     const t = this.tab;
     // Keep the reader's place (measured from the bottom, so earlier messages can be added above).
@@ -897,7 +894,6 @@ export class TabView {
     });
   }
 
-  // ---------- composer ----------
   focus() {
     this.composer.focus();
   }

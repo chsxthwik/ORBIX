@@ -16,8 +16,8 @@ import { DATA_DIR } from '../store.mjs';
 import { readJson, writeJson } from '../util.mjs';
 import { killTree } from '../backend.mjs';
 
-export const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'];
-export const HOOK_TIMEOUT_MS = 10000;
+const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'];
+const HOOK_TIMEOUT_MS = 10000;
 const MAX_OUTPUT = 16 * 1024;
 const MAX_INPUT = 64 * 1024;
 const MAX_HOOKS = 50;
