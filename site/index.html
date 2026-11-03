@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ORBIX - Unified ADE</title>
+  <meta name="description" content="ORBIX is a Windows app that puts coding agents in a cockpit: every step visible, every change approved, every edit undoable. Built-in agent with 17 providers, plus the OMP CLI.">
+  <meta name="theme-color" content="#0b0c0f">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://orbix-ade.vercel.app/">
+  <link rel="icon" type="image/svg+xml" href="assets/img/logo.svg?v=3">
+  <link rel="apple-touch-icon" href="assets/img/icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://orbix-ade.vercel.app/">
+  <meta property="og:site_name" content="ORBIX">
+  <meta property="og:title" content="ORBIX - Unified ADE">
+  <meta property="og:description" content="The cockpit for coding agents. Every step visible, every change approved, every edit undoable. Windows.">
+  <meta property="og:image" content="https://orbix-ade.vercel.app/assets/img/og.png?v=1">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://orbix-ade.vercel.app/assets/img/og.png?v=1">
+  <link rel="preload" href="assets/fonts/mona-sans-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/site.css?v=9">
+  <script src="assets/js/site.js?v=8" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="progress" aria-hidden="true"><i id="progress"></i></div>
+
+  <header class="nav" id="top">
+    <a class="brand" href="#top" aria-label="ORBIX, Unified ADE, home">
+      <img src="assets/img/logo.svg?v=3" alt="" width="26" height="26">
+      <span class="brand-name">ORBIX</span>
+      <span class="brand-tag">Unified ADE</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#problem">Why</a>
+      <a href="#demo">Try it</a>
+      <a href="#unified">One window</a>
+      <a href="#engines">Engines</a>
+      <a href="#safety">Safety</a>
+    </nav>
+    <a class="btn btn-small" href="#download">Download</a>
+  </header>
+
+  <main id="main">
+
+    <!-- ============ HERO ============ -->
+    <section class="hero" id="hero">
+      <div class="hero-sticky" id="hero-sticky">
+        <p class="eyebrow fx-up"><span class="dot" aria-hidden="true"></span>Unified ADE for Windows</p>
+
+        <h1 class="wordmark">
+          <span class="sr-only">ORBIX - Unified ADE</span>
+          <span class="wm" id="wm" aria-hidden="true">
+            <svg class="wm-ring wm-ring-back" viewBox="0 0 1000 170"><path pathLength="1" d="M20 85 A480 70 0 0 1 980 85"/></svg>
+            <span class="ch ch-o">O</span><span class="ch">R</span><span class="ch">B</span><span class="ch">I</span><span class="ch">X</span>
+            <svg class="wm-ring wm-ring-front" viewBox="0 0 1000 170"><path pathLength="1" d="M980 85 A480 70 0 0 1 20 85"/></svg>
+            <span class="wm-node" id="wm-node"></span>
+          </span>
+        </h1>
+
+        <div class="hero-sub">
+          <p class="tagline fx-up">The cockpit for coding agents.</p>
+          <div class="cta fx-up">
+            <a class="btn btn-magnet" href="https://github.com/chsxthwik/ORBIX/releases/download/v3.0.0/ORBIX-3.0.0-win-x64.zip" rel="noopener">
+              <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M1 2.3 6.6 1.5v5.4H1zM7.3 1.4 15 .3v6.6H7.3zM1 7.6h5.6V13L1 12.2zM7.3 7.6H15v6.5L7.3 13z" fill="currentColor"/></svg>
+              Download for Windows
+            </a>
+            <a class="btn btn-ghost" href="#problem">Why it exists</a>
+          </div>
+          <p class="fine fx-up">Free &middot; Source available &middot; Windows 10 &amp; 11 &middot; 34 MB</p>
+        </div>
+        <p class="cue" aria-hidden="true"><span></span>scroll</p>
+      </div>
+    </section>
+
+    <!-- ============ PROBLEM → SOLUTION (pinned, scroll-scrubbed) ============ -->
+    <section class="problem" id="problem" aria-label="Why ORBIX exists">
+      <div class="problem-track" id="problem-track">
+        <div class="problem-stage" id="problem-stage">
+          <p class="kicker">The problem</p>
+
+          <div class="viz">
+            <div class="term term-main" id="term-main" aria-hidden="true">
+              <div class="term-bar"><i></i><i></i><i></i><span>agent &mdash; zsh</span></div>
+              <div class="log"><div class="log-in" id="log"></div></div>
+              <div class="flash" id="flash"><span>&#9656; wrote</span> src/auth/validate.ts <b>applied</b></div>
+            </div>
+
+            <div class="tiles" id="tiles" aria-hidden="true">
+              <div class="mini"><b>shop-api</b><i>&#9656; edit cart.ts</i><i>$ npm test</i><i class="cur"></i></div>
+              <div class="mini"><b>docs</b><i>&#9656; read README.md</i><i>&#9656; edit nav.tsx</i><i class="cur"></i></div>
+              <div class="mini"><b>infra</b><i>$ terraform plan</i><i>&#9656; edit main.tf</i><i class="cur"></i></div>
+              <div class="mini"><b>mobile</b><i>&#9656; grep Biometric</i><i>&#9656; edit auth.kt</i><i class="cur"></i></div>
+              <div class="mini"><b>api-v2</b><i>$ pnpm build</i><i>&#9656; edit route.ts</i><i class="cur"></i></div>
+              <div class="mini"><b>scripts</b><i>&#9656; read deploy.sh</i><i>&#9656; edit deploy.sh</i><i class="cur"></i></div>
+            </div>
+
+            <div class="cockpit" id="cockpit" aria-hidden="true">
+              <div class="ck-bar"><img src="assets/img/logo.svg?v=3" alt="" width="14" height="14"><span>ORBIX</span><i class="on">shop-api</i><i>docs</i><i>infra</i><i>mobile</i></div>
+              <div class="ck-body">
+                <div class="ck-side"><b>Sessions</b><i class="on">Fix login</i><i>Rate limit</i><i>Cart</i><i>Orders</i></div>
+                <div class="ck-main">
+                  <i class="ck-card ok"><u></u>grep EMAIL.test <em>3 matches</em></i>
+                  <i class="ck-card ok"><u></u>read validate.ts <em>12 lines</em></i>
+                  <i class="ck-card ask"><u></u>edit validate.ts <em>waiting for you</em></i>
+                  <div class="ck-approve"><kbd>1</kbd> Allow once <kbd>2</kbd> This session <kbd>Esc</kbd> Deny</div>
+                </div>
+                <div class="ck-side right"><b>Changes</b><i class="d">&minus; [a-z0-9._-]+@</i><i class="a">+ [a-z0-9._%+-]+@</i><b class="b2">Files</b><i>auth/</i><i>cart/</i></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="caps">
+            <h2 class="cap" data-cap="0">Agent output <em>scrolls past.</em></h2>
+            <h2 class="cap" data-cap="1">Edits land <em>before you've read them.</em></h2>
+            <h2 class="cap" data-cap="2">Six agents. <em>Six terminals.</em></h2>
+            <h2 class="cap cap-yes" data-cap="3">One window. <em>You approve. You undo.</em></h2>
+          </div>
+          <ol class="dots-nav" aria-hidden="true"><li></li><li></li><li></li><li></li></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DEMO ============ -->
+    <section class="demo" id="demo" aria-labelledby="demo-title">
+      <div class="section-head">
+        <p class="kicker">Try it</p>
+        <h2 id="demo-title" class="split">Watch it fix a bug. Then you decide.</h2>
+        <p>Click an approval, or press <kbd>1</kbd> <kbd>2</kbd> <kbd>Esc</kbd>.</p>
+      </div>
+
+      <div class="window-wrap" id="win-wrap">
+        <div class="window" id="win">
+          <div class="titlebar">
+            <img src="assets/img/logo.svg?v=3" alt="" width="16" height="16">
+            <span>ORBIX</span>
+            <span class="tb-tab is-on">shop-api</span>
+            <span class="tb-tab">docs-site</span>
+            <span class="tb-spacer"></span>
+            <span class="tb-btn" aria-hidden="true">&#8212;</span><span class="tb-btn" aria-hidden="true">&#9634;</span><span class="tb-btn tb-x" aria-hidden="true">&#10005;</span>
+          </div>
+          <div class="win-body">
+            <aside class="win-side" aria-hidden="true">
+              <p class="side-label">Conversations</p>
+              <p class="side-item is-on">Fix the login bug</p>
+              <p class="side-item">Add rate limiting</p>
+              <p class="side-item">Explain the cart service</p>
+              <p class="side-item">Write tests for orders</p>
+              <p class="side-label">Plan</p>
+              <ol class="plan" id="plan">
+                <li data-step="find">Find the email check</li>
+                <li data-step="fix">Allow &ldquo;+&rdquo; in addresses</li>
+                <li data-step="test">Run the auth tests</li>
+              </ol>
+              <div class="plan-bar"><i id="plan-fill"></i></div>
+            </aside>
+            <div class="chat-col">
+              <div class="chat" id="chat" aria-live="polite"></div>
+              <div class="approve" id="approve" hidden>
+                <p class="approve-q" id="approve-q">ORBIX wants to edit <code>src/auth/validate.ts</code></p>
+                <div class="approve-btns" id="approve-btns"></div>
+              </div>
+              <div class="composer" aria-hidden="true">
+                <span class="composer-text">Describe a task, or type / for commands</span>
+                <span class="chip">claude-sonnet</span>
+                <span class="chip">thinking: medium</span>
+                <span class="chip">plan</span>
+                <span class="send"></span>
+              </div>
+            </div>
+          </div>
+          <div class="statusbar" aria-hidden="true">
+            <span><i class="ok"></i> Windows</span>
+            <span>ORBIX agent</span>
+            <span class="sb-state" id="sb-state">idle</span>
+            <span class="sb-grow"></span>
+            <span id="sb-tokens">0 tokens</span>
+            <span id="sb-cost">$0.000</span>
+          </div>
+        </div>
+      </div>
+      <div class="demo-foot">
+        <button class="btn btn-ghost btn-small" id="replay" type="button">&#8634; Play it again</button>
+        <p>Simulated in your browser.</p>
+      </div>
+    </section>
+
+    <!-- ============ UNIFIED ============ -->
+    <section class="unified" id="unified" aria-labelledby="uni-title">
+      <div class="section-head">
+        <p class="kicker">One window</p>
+        <h2 id="uni-title" class="split">Everything the agent touches.</h2>
+      </div>
+      <div class="uni-grid">
+        <div class="uni-sticky">
+          <div class="map" id="map" aria-hidden="true">
+            <div class="map-pane p-sessions" data-pane="sessions">
+              <b>Sessions</b>
+              <i>Fix the login bug</i><i>Add rate limiting</i><i>Explain the cart</i>
+            </div>
+            <div class="map-pane p-agent" data-pane="agent">
+              <b>Agent</b>
+              <i class="m-user">fix the login bug</i>
+              <i class="m-card ok">grep EMAIL.test</i>
+              <i class="m-card ok">read validate.ts</i>
+              <i class="m-card ask">edit validate.ts</i>
+            </div>
+            <div class="map-pane p-files" data-pane="files">
+              <b>Files</b>
+              <i>src/</i><i class="in">auth/</i><i class="in2 on">validate.ts</i><i class="in2">login.ts</i><i class="in">cart/</i>
+            </div>
+            <div class="map-pane p-git" data-pane="git">
+              <b>Changes</b>
+              <i class="d">- [a-z0-9._-]+@</i><i class="a">+ [a-z0-9._%+-]+@</i>
+            </div>
+            <div class="map-pane p-console" data-pane="console">
+              <b>Console</b>
+              <i>&gt; npm test -- auth</i><i class="a">14 passed</i>
+            </div>
+            <div class="map-pane p-models" data-pane="models">
+              <b>Model</b><i>17 providers + OMP</i><i>thinking: medium</i>
+            </div>
+          </div>
+        </div>
+        <ol class="scenes">
+          <li data-scene="agent">
+            <p class="scene-n">01</p>
+            <h3>The agent, step by step</h3>
+            <p>Every read, search and edit is a card you can open. Its plan sits beside it.</p>
+          </li>
+          <li data-scene="files">
+            <p class="scene-n">02</p>
+            <h3>Your project, beside it</h3>
+            <p>Browse files. Hand one over with <code>@</code>.</p>
+          </li>
+          <li data-scene="git">
+            <p class="scene-n">03</p>
+            <h3>Every change, as a diff</h3>
+            <p>Each edit has its own undo. <code>/undo</code> reverts a whole reply.</p>
+          </li>
+          <li data-scene="console">
+            <p class="scene-n">04</p>
+            <h3>Commands you can watch</h3>
+            <p>Windows or WSL. Stop means stop.</p>
+          </li>
+          <li data-scene="sessions">
+            <p class="scene-n">05</p>
+            <h3>Many tasks, many tabs</h3>
+            <p>Sessions side by side. A ping when one finishes.</p>
+          </li>
+          <li data-scene="models">
+            <p class="scene-n">06</p>
+            <h3>Any model, mid-sentence</h3>
+            <p>Switch model, thinking level and plan mode in the message box.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ ENGINES ============ -->
+    <section class="engines" id="engines" aria-labelledby="eng-title">
+      <div class="section-head">
+        <p class="kicker">Engines</p>
+        <h2 id="eng-title" class="split">Any model. Two ways in.</h2>
+      </div>
+
+      <div class="eng-ui">
+        <div class="seg" id="seg" role="tablist" aria-label="Engine">
+          <i class="seg-thumb" aria-hidden="true"></i>
+          <button type="button" role="tab" id="tab-orbix" aria-selected="true" aria-controls="eng-orbix" data-engine="orbix">ORBIX agent</button>
+          <button type="button" role="tab" id="tab-omp" aria-selected="false" aria-controls="eng-omp" data-engine="omp">OMP CLI</button>
+        </div>
+
+        <div class="eng-grid">
+          <div class="eng-copy">
+            <ul class="facts is-on" id="eng-orbix" role="tabpanel" aria-labelledby="tab-orbix">
+              <li><b>Built in.</b> Nothing else to install.</li>
+              <li><b>17 providers.</b> Paste a key, or sign in with OpenRouter.</li>
+              <li><b>Local models too.</b> Ollama, LM Studio, any OpenAI-compatible server.</li>
+              <li><b>Keys stay yours.</b> Encrypted for your Windows account.</li>
+            </ul>
+            <ul class="facts" id="eng-omp" role="tabpanel" aria-labelledby="tab-omp" hidden>
+              <li><b>Optional.</b> ORBIX finds it on Windows or in WSL.</li>
+              <li><b>Its own sign-ins.</b> Subscriptions, API keys, several accounts.</li>
+              <li><b>Plan usage</b> shown right inside ORBIX.</li>
+              <li><b>Same cockpit.</b> Same approvals, same undo.</li>
+            </ul>
+            <p class="eng-foot">17 built in, plus everything your OMP CLI signs in to. Pick per session.</p>
+          </div>
+
+          <div class="orbit-stage" id="orbit">
+            <svg class="orbit-track" id="orbit-track" aria-hidden="true"><ellipse/><ellipse/></svg>
+            <div class="orbit-core" aria-hidden="true"><span class="pulse"></span><span class="pulse p2"></span><img src="assets/img/logo.svg?v=3" alt="" width="64" height="64"></div>
+            <ul class="orbit-list" id="orbit-list-orbix" aria-label="Built-in providers">
+              <li>Anthropic</li><li>OpenAI</li><li>Google Gemini</li><li>xAI</li><li>Groq</li><li>Mistral</li>
+              <li>DeepSeek</li><li>OpenRouter</li><li>Together</li><li>Fireworks</li><li>Cerebras</li><li>Moonshot</li>
+              <li>Z.ai</li><li>Qwen</li><li>Ollama</li><li>LM Studio</li><li>Any OpenAI-compatible</li>
+            </ul>
+            <ul class="orbit-list" id="orbit-list-omp" aria-label="What OMP adds" hidden>
+              <li>Subscription sign-in</li><li>API keys</li><li>Several accounts</li><li>Plan usage</li><li>Its own settings</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SAFETY ============ -->
+    <section class="safety" id="safety" aria-labelledby="safe-title">
+      <p class="kicker">Safety</p>
+      <h2 id="safe-title" class="statement" data-scrub>Reading never asks. Writing always does.</h2>
+      <div class="rules">
+        <article>
+          <p class="rule-n">i.</p>
+          <h3>You approve every change</h3>
+          <p><kbd>1</kbd> once, <kbd>2</kbd> this session, <kbd>Esc</kbd> deny.</p>
+        </article>
+        <article>
+          <p class="rule-n">ii.</p>
+          <h3>Keys stay on your PC</h3>
+          <p>Encrypted for your Windows account. Sent only to the provider you chose.</p>
+        </article>
+        <article>
+          <p class="rule-n">iii.</p>
+          <h3>A server only this window reaches</h3>
+          <p><code>127.0.0.1</code>, fresh token every launch.</p>
+        </article>
+        <article>
+          <p class="rule-n">iv.</p>
+          <h3>One folder</h3>
+          <p>Everything ORBIX saves lives in its own <code>data</code> folder.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ KEYBOARD ============ -->
+    <section class="keys" aria-labelledby="keys-title">
+      <div class="section-head">
+        <p class="kicker">Keyboard first</p>
+        <h2 id="keys-title" class="split">Hands stay on the keys.</h2>
+      </div>
+      <div class="keys-grid">
+        <div>
+          <div class="cmds" id="cmds">
+            <button type="button" data-say="Read-only. The agent plans as a checklist and changes nothing." data-out="> plan mode on&#10;  reading src/auth/validate.ts&#10;  proposed 3 steps, no files changed">/plan</button>
+            <button type="button" data-say="Summarises the chat to free up context. Also automatic near the limit." data-out="> context 78% -> 31%&#10;  earlier turns summarised, last 12 kept">/compact</button>
+            <button type="button" data-say="Reverts every file change from the last reply." data-out="> undo: reverted 2 file changes&#10;  src/auth/validate.ts restored">/undo</button>
+            <button type="button" data-say="Tokens and cost for this session." data-out="> session  6,790 tokens  $0.021">/cost</button>
+            <button type="button" data-say="Switch model mid-conversation." data-out="> model: claude-sonnet  thinking: medium">/model</button>
+            <button type="button" data-say="Helper agents research in parallel." data-out="> 3 helpers started&#10;  done: search auth  done: read tests  done: check deps">task</button>
+            <button type="button" data-say="Connect MCP servers from Settings or .mcp.json." data-out="> connected: github, filesystem&#10;  12 tools available to the agent">MCP</button>
+            <button type="button" data-say="Skills from SKILL.md, custom commands from Markdown." data-out="> loaded 4 skills from SKILL.md&#10;  project rules read from AGENTS.md">skills</button>
+          </div>
+          <div class="cmd-card">
+            <p class="cmd-say" id="cmd-say" aria-live="polite">Hover or tap a command to see what it does.</p>
+            <pre class="cmd-out" id="cmd-out" aria-hidden="true">&gt; ready</pre>
+          </div>
+        </div>
+        <ul class="kbd-list">
+          <li><span><kbd>Ctrl</kbd><kbd>K</kbd></span> command palette</li>
+          <li><span><kbd>Ctrl</kbd><kbd>,</kbd></span> settings and providers</li>
+          <li><span><kbd>@</kbd></span> mention a file</li>
+          <li><span><kbd>Enter</kbd></span> send</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="faq" id="faq" aria-labelledby="faq-title">
+      <div class="section-head">
+        <p class="kicker">Questions</p>
+        <h2 id="faq-title" class="split">Before you install.</h2>
+      </div>
+      <div class="faq-list">
+        <details>
+          <summary>Do I need an account to use ORBIX?</summary>
+          <p>ORBIX has no account of its own. You bring a model: an API key from a provider, a sign-in such as OpenRouter, or a model running on your own PC.</p>
+        </details>
+        <details>
+          <summary>Where does my code go?</summary>
+          <p>To the model you choose, and only the files the agent reads for your task. A local model (Ollama or LM Studio) keeps everything on your PC.</p>
+        </details>
+        <details>
+          <summary>Can I undo what the agent changed?</summary>
+          <p>Yes. Every file change has its own undo, and <code>/undo</code> reverts a whole reply.</p>
+        </details>
+        <details>
+          <summary>Will it change files or run commands without asking?</summary>
+          <p>No. Reading and searching never ask. Edits and commands ask first, unless you switch to &ldquo;Allow everything&rdquo; in Settings.</p>
+        </details>
+        <details>
+          <summary>What is the OMP CLI?</summary>
+          <p>An optional command-line agent from the OMP authors. If you install it, ORBIX can run sessions with it, using its own sign-ins and settings.</p>
+        </details>
+        <details>
+          <summary>Does it run on Mac or Linux?</summary>
+          <p>No. ORBIX is a Windows app. It can run commands on Windows or inside WSL.</p>
+        </details>
+        <details>
+          <summary>Is it free?</summary>
+          <p>ORBIX is free to use. The source is available under the Functional Source License and turns MIT after two years. Your model provider charges for its own usage.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- ============ DOWNLOAD ============ -->
+    <section class="download" id="download" aria-labelledby="dl-title">
+      <div class="dl-card dl-card-main" id="dl-card">
+        <div class="dl-main">
+          <p class="kicker">Download</p>
+          <h2 id="dl-title">ORBIX 3.0.0</h2>
+          <p class="dl-lede">A Windows app for coding agents. Unzip it and run it. Nothing else to install.</p>
+          <ul class="chips" aria-label="Requirements">
+            <li>Windows 10 or 11</li><li>64-bit</li><li>Node.js included</li><li>34 MB</li>
+          </ul>
+          <a class="btn btn-big btn-magnet dl-btn" href="https://github.com/chsxthwik/ORBIX/releases/download/v3.0.0/ORBIX-3.0.0-win-x64.zip" rel="noopener">
+            <span>Download ORBIX-3.0.0-win-x64.zip</span><span class="dl-size">34 MB</span>
+          </a>
+          <details class="smallprint">
+            <summary>Windows says it protected your PC?</summary>
+            <p>ORBIX isn't code-signed yet. Click <b>More info</b>, then <b>Run anyway</b>.</p>
+          </details>
+        </div>
+        <div class="dl-side">
+          <ol class="steps">
+            <li><b>Unzip</b> and open <code>bin\ORBIX.exe</code>.</li>
+            <li><b>Add a key</b> with <kbd>Ctrl</kbd><kbd>,</kbd>, or sign in.</li>
+            <li><b>Pick a folder</b>, describe a task, press <kbd>Enter</kbd>.</li>
+          </ol>
+          <div class="sha-row">
+            <p class="sha-label">SHA-256</p>
+            <code class="sha-val" id="sha">2e17e3b8e1882ffac76210d3a1008d8f29fb5f28f6ce2fef184cf718bc471f38</code>
+            <button type="button" class="copy" id="copy-sha">Copy</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <div class="foot-top">
+      <div class="foot-brand">
+        <img src="assets/img/logo.svg?v=3" alt="" width="28" height="28">
+        <div><b>ORBIX</b><span>Unified ADE for Windows</span></div>
+      </div>
+      <nav class="foot-nav" aria-label="Footer">
+        <a href="#problem">Why</a><a href="#demo">Try it</a><a href="#unified">One window</a><a href="#engines">Engines</a><a href="#safety">Safety</a><a href="#faq">FAQ</a><a href="#download">Download</a>
+      </nav>
+    </div>
+    <div class="foot-bottom">
+      <p>&copy; 2026 chsxthwik. FSL-1.1-MIT.</p>
+      <p>Not affiliated with the <a href="https://omp.sh" rel="noopener">OMP</a> authors. Mona Sans and JetBrains Mono under the SIL Open Font License.</p>
+    </div>
+  </footer>
+</body>
+</html>

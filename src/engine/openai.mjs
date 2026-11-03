@@ -1,0 +1,250 @@
+// OpenAI-compatible chat client (streaming + tool calls). Works with OpenAI, Gemini, xAI, Groq, Mistral, DeepSeek,
+// OpenRouter, Together, Fireworks, Cerebras, Kimi, GLM, Qwen, Ollama, LM Studio and any server with the same API.
+// Emits the same normalised events as anthropic.mjs.
+import { parseSSE, httpError, post, streamError, imageBlock } from './anthropic.mjs';
+
+const join = (base, p) => base.replace(/\/+$/, '') + p;
+const headers = (apiKey, providerId) => ({
+  'content-type': 'application/json',
+  ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
+  ...(providerId === 'openrouter' ? { 'x-title': 'ORBIX' } : {}), // OpenRouter app name (optional)
+});
+
+// Not chat models: hidden from the model picker when the provider lists everything together.
+const NOT_CHAT = /(^|[-_/])(embed|embedding|whisper|tts|dall-e|moderation|rerank|transcribe|audio|realtime|speech|sora|veo|imagen|image-gen|guard)([-_./:]|$)|text-embedding|gpt-image|-image(-|$)/i;
+
+/** Rows from any of the /models shapes: {data:[...]}, {models:[...]}, or a bare array (Together). */
+export function modelRows(j) {
+  const rows = Array.isArray(j) ? j : Array.isArray(j?.data) ? j.data : Array.isArray(j?.models) ? j.models : [];
+  const out = [];
+  for (const m of rows) {
+    if (typeof m === 'string') {
+      out.push({ id: m, name: m });
+      continue;
+    }
+    let id = m?.id || m?.name || m?.model;
+    if (!id || typeof id !== 'string') continue;
+    id = id.replace(/^models\//, ''); // Gemini
+    if (m.type && !['chat', 'language', 'model', 'llm', 'code'].includes(String(m.type).toLowerCase())) continue; // Together / LM Studio
+    if (m.capabilities && m.capabilities.completion_chat === false) continue; // Mistral
+    out.push({ id, name: m.display_name || m.displayName || id });
+  }
+  const chat = out.filter((m) => !NOT_CHAT.test(m.id));
+  const list = chat.length ? chat : out;
+  const seen = new Set();
+  return list.filter((m) => !seen.has(m.id) && seen.add(m.id)).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export async function listModels({ apiKey, baseUrl, signal, providerId }) {
+  if (providerId === 'openrouter' && apiKey) {
+    // OpenRouter's model list is public, so check the key itself first.
+    const k = await post(join(baseUrl, '/key'), { headers: headers(apiKey, providerId), signal }, baseUrl);
+    if (!k.ok) throw await httpError(k);
+  }
+  const r = await post(join(baseUrl, '/models'), { headers: headers(apiKey, providerId), signal }, baseUrl);
+  if (!r.ok) throw await httpError(r);
+  return modelRows(await r.json());
+}
+
+// Signatures this client stores on content items, tagged so the Anthropic client never sends them:
+//   'oc:' + JSON reasoning_details (OpenRouter) on a thinking item
+//   'gx:' + JSON extra_content (Gemini thought signature) on a toolCall item
+const parseTag = (sig, tag) => {
+  if (typeof sig !== 'string' || !sig.startsWith(tag)) return null;
+  try {
+    return JSON.parse(sig.slice(tag.length));
+  } catch {
+    return null;
+  }
+};
+
+/** An OpenAI image_url part (data URL), or a text part when the image cannot be sent. */
+function imagePart(c) {
+  const b = imageBlock(c); // same type and size rules as for Claude
+  return b.type === 'image' ? { type: 'image_url', image_url: { url: `data:${b.source.media_type};base64,${b.source.data}` } } : b;
+}
+
+/**
+ * Internal (OMP-shaped) conversation -> OpenAI chat messages.
+ * `interleaved`: 'reasoning_content' sends earlier thinking back (DeepSeek, Kimi, GLM require it with tools).
+ * Tool messages can only hold text, so images a tool returned follow the tool messages as one user message.
+ */
+export function toOpenAIMessages(messages, { interleaved = null } = {}) {
+  const out = [];
+  let toolImages = [];
+  const flushImages = () => {
+    if (!toolImages.length) return;
+    out.push({ role: 'user', content: [{ type: 'text', text: 'Images returned by the tool calls above:' }, ...toolImages] });
+    toolImages = [];
+  };
+  for (const m of messages) {
+    if (m.role !== 'toolResult') flushImages();
+    if (m.role === 'user') {
+      const parts = [];
+      for (const c of Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content ?? '') }]) {
+        if (c.type === 'text' && c.text) parts.push({ type: 'text', text: c.text });
+        else if (c.type === 'image' && c.data) parts.push(imagePart(c));
+      }
+      if (!parts.length) continue;
+      out.push({ role: 'user', content: parts.every((p) => p.type === 'text') ? parts.map((p) => p.text).join('\n') : parts });
+    } else if (m.role === 'assistant') {
+      const content = m.content || [];
+      const text = content.filter((c) => c.type === 'text').map((c) => c.text).join('');
+      const calls = content
+        .filter((c) => c.type === 'toolCall')
+        .map((c) => {
+          const extra = parseTag(c.thinkingSignature, 'gx:');
+          return { id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) }, ...(extra ? { extra_content: extra } : {}) };
+        });
+      const thinking = content.filter((c) => c.type === 'thinking');
+      const details = thinking.flatMap((c) => parseTag(c.thinkingSignature, 'oc:') || []);
+      if (!text && !calls.length && !details.length) continue;
+      const msg = { role: 'assistant', content: text || null, ...(calls.length ? { tool_calls: calls } : {}) };
+      if (interleaved === 'reasoning_content') msg.reasoning_content = thinking.map((c) => c.thinking || '').join('');
+      if (details.length) msg.reasoning_details = details;
+      out.push(msg);
+    } else if (m.role === 'toolResult') {
+      out.push({ role: 'tool', tool_call_id: m.toolCallId, content: (m.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n') || '(no output)' });
+      for (const c of m.content || []) if (c.type === 'image' && c.data) toolImages.push(imagePart(c));
+    }
+  }
+  flushImages();
+  return out;
+}
+
+const FINISH = { stop: 'end_turn', length: 'max_tokens', tool_calls: 'tool_use', function_call: 'tool_use', content_filter: 'end_turn' };
+// Providers that send earlier thinking back as reasoning_content even when the catalog does not say so.
+const REASONING_BACK = new Set(['deepseek', 'moonshot', 'zai']);
+// Providers whose chat API accepts reasoning_effort.
+const EFFORT_PARAM = new Set(['openai', 'google', 'xai', 'groq', 'mistral', 'together', 'fireworks', 'cerebras', 'deepseek', 'moonshot', 'zai', 'qwen', 'custom', 'ollama', 'lmstudio']);
+
+/** Request body for one turn. */
+export function buildBody({ providerId, model, system, messages, tools, maxTokens = 8192, thinking = 'off', style, effort, interleaved }) {
+  const back = interleaved || (REASONING_BACK.has(providerId) ? 'reasoning_content' : null);
+  const body = { model, stream: true, stream_options: { include_usage: true }, messages: [...(system ? [{ role: 'system', content: system }] : []), ...toOpenAIMessages(messages, { interleaved: back })] };
+  // OpenAI reasoning models reject max_tokens; max_completion_tokens works for every current OpenAI model.
+  if (providerId === 'openai') body.max_completion_tokens = maxTokens;
+  else body.max_tokens = maxTokens;
+  if (tools?.length) body.tools = tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+  const kind = style?.kind || 'none';
+  if (providerId === 'openrouter') {
+    if (thinking !== 'off') body.reasoning = { effort: thinking };
+    else if (kind === 'toggle' || style?.efforts?.includes('none')) body.reasoning = { effort: 'none' };
+  } else if (kind === 'toggle' || (kind === 'effort' && style?.toggle)) {
+    // On/off switch (DeepSeek, GLM, Kimi use `thinking`; Qwen uses enable_thinking).
+    if (providerId === 'qwen') body.enable_thinking = thinking !== 'off';
+    else if (['deepseek', 'zai', 'moonshot'].includes(providerId)) body.thinking = { type: thinking !== 'off' ? 'enabled' : 'disabled' };
+    if (thinking !== 'off' && kind === 'effort' && effort && EFFORT_PARAM.has(providerId)) body.reasoning_effort = effort;
+  } else if (kind === 'effort' && EFFORT_PARAM.has(providerId)) {
+    if (thinking !== 'off' && effort) body.reasoning_effort = effort;
+    else if (thinking === 'off' && style?.efforts?.includes('none')) body.reasoning_effort = 'none';
+  } else if (kind === 'budget' && thinking !== 'off' && EFFORT_PARAM.has(providerId)) {
+    body.reasoning_effort = ['minimal', 'low', 'medium', 'high'].includes(thinking) ? thinking : 'high';
+  }
+  return body;
+}
+
+/** Merge streamed OpenRouter reasoning_details chunks into whole blocks (text/summary/data concatenated). */
+function mergeDetails(acc, chunk) {
+  for (const d of chunk) {
+    if (!d || typeof d !== 'object') continue;
+    const key = d.index ?? acc.length;
+    let cur = acc.find((x) => (x.index ?? -1) === key && x.type === d.type);
+    if (!cur) {
+      acc.push({ ...d });
+      continue;
+    }
+    for (const f of ['text', 'summary', 'data']) if (typeof d[f] === 'string') cur[f] = (cur[f] || '') + d[f];
+    for (const f of ['signature', 'id', 'format']) if (d[f]) cur[f] = d[f];
+  }
+}
+
+export async function* streamTurn({ apiKey, baseUrl, signal, ...rest }) {
+  const body = buildBody(rest);
+  const r = await post(join(baseUrl, '/chat/completions'), { method: 'POST', headers: headers(apiKey, rest.providerId), body: JSON.stringify(body), signal }, baseUrl);
+  if (!r.ok) throw await httpError(r);
+  yield { type: 'start' };
+  const started = new Map(); // tool block index -> extra_content
+  const details = [];
+  let sawThinking = false;
+  let finished = false;
+  const flushTools = function* () {
+    for (const [idx, extra] of started) {
+      if (extra) yield { type: 'signature', index: idx, signature: 'gx:' + JSON.stringify(extra) };
+      yield { type: 'block_stop', index: idx };
+    }
+  };
+  const flushReasoning = function* () {
+    if (!details.length) return;
+    if (!sawThinking) yield { type: 'thinking', index: -1, text: '' };
+    yield { type: 'signature', index: -1, signature: 'oc:' + JSON.stringify(details) };
+    details.length = 0;
+  };
+  try {
+    for await (const { data } of parseSSE(r.body, signal)) {
+      if (data.trim() === '[DONE]') break;
+      let d;
+      try {
+        d = JSON.parse(data);
+      } catch {
+        continue;
+      }
+      if (d.error) {
+        const e = new Error(d.error.message || 'The provider reported an error mid-stream');
+        const code = Number(d.error.code);
+        e.status = Number.isFinite(code) ? code : 500;
+        e.retryable = e.status === 429 || e.status >= 500;
+        throw e;
+      }
+      if (d.usage) {
+        // Normalise to Anthropic meaning: `input` excludes cached tokens (OpenAI's prompt_tokens includes them).
+        const cached = d.usage.prompt_cache_hit_tokens ?? d.usage.prompt_tokens_details?.cached_tokens ?? 0;
+        const cacheWrite = d.usage.prompt_tokens_details?.cache_write_tokens ?? 0;
+        const u = { type: 'usage', input: Math.max(0, (d.usage.prompt_tokens || 0) - cached - cacheWrite), output: d.usage.completion_tokens || 0, cacheRead: cached, cacheWrite };
+        if (typeof d.usage.cost === 'number') u.costUsd = d.usage.cost; // OpenRouter reports the real charge
+        yield u;
+      }
+      const ch = d.choices?.[0];
+      if (!ch) continue;
+      const delta = ch.delta || {};
+      const reasoning = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : typeof delta.reasoning === 'string' ? delta.reasoning : '';
+      if (Array.isArray(delta.reasoning_details) && delta.reasoning_details.length) {
+        mergeDetails(details, delta.reasoning_details);
+        if (!reasoning) {
+          const t = delta.reasoning_details.map((x) => (typeof x.text === 'string' ? x.text : typeof x.summary === 'string' ? x.summary : '')).join('');
+          if (t) {
+            sawThinking = true;
+            yield { type: 'thinking', index: -1, text: t };
+          }
+        }
+      }
+      if (reasoning) {
+        sawThinking = true;
+        yield { type: 'thinking', index: -1, text: reasoning };
+      }
+      if (delta.content) yield { type: 'text', index: 0, text: delta.content };
+      for (const tc of delta.tool_calls || []) {
+        const idx = 1000 + (tc.index ?? 0);
+        if (!started.has(idx)) {
+          started.set(idx, null);
+          yield { type: 'tool_start', index: idx, id: tc.id || `call_${idx}_${Date.now().toString(36)}`, name: tc.function?.name || '' };
+        }
+        if (tc.extra_content) started.set(idx, tc.extra_content); // Gemini thought signature
+        if (tc.function?.arguments) yield { type: 'tool_json', index: idx, json: tc.function.arguments };
+      }
+      if (ch.finish_reason && !finished) {
+        finished = true;
+        yield* flushReasoning();
+        yield* flushTools();
+        yield { type: 'stop', reason: FINISH[ch.finish_reason] || 'end_turn' };
+      }
+    }
+  } catch (e) {
+    throw streamError(e, signal);
+  }
+  if (!finished) {
+    yield* flushReasoning();
+    yield* flushTools();
+    yield { type: 'stop', reason: started.size ? 'tool_use' : 'end_turn' };
+  }
+}

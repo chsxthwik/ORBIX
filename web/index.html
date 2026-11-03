@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>ORBIX - Unified ADE</title>
+  <link rel="icon" type="image/png" href="/assets/icon.png">
+  <link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/js/theme-boot.js"></script>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <svg class="logo-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="orbix-tile" x1="3" y1="3" x2="61" y2="61" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#342b94"/><stop offset=".55" stop-color="#1c1863"/><stop offset="1" stop-color="#100d3b"/></linearGradient>
+      <linearGradient id="orbix-ra" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c4baff"/><stop offset="1" stop-color="#6a5af9"/></linearGradient>
+      <linearGradient id="orbix-rb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a6f3ff"/><stop offset="1" stop-color="#35aee6"/></linearGradient>
+      <radialGradient id="orbix-core" cx=".36" cy=".33" r=".75"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#b9b1ff"/></radialGradient>
+      <radialGradient id="orbix-glow"><stop offset="0" stop-color="#cfc8ff" stop-opacity=".55"/><stop offset="1" stop-color="#cfc8ff" stop-opacity="0"/></radialGradient>
+      <clipPath id="orbix-weave"><polygon points="32,32 -12,-12 76,-12"/><polygon points="32,32 -12,76 76,76"/></clipPath>
+    </defs>
+  </svg>
+  <div id="app" class="app">
+    <aside id="sidebar" class="sidebar" aria-label="Conversations"></aside>
+    <div id="rs-side" class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div>
+    <main class="main">
+      <div id="topbar" class="topbar"></div>
+      <section id="welcome" class="welcome" aria-label="Home"></section>
+      <section id="session" class="session" hidden></section>
+    </main>
+    <div id="rs-panel" class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize side panel"></div>
+    <aside id="panel" class="panel" aria-label="Side panel"></aside>
+  </div>
+  <footer id="statusbar" aria-label="Status"></footer>
+  <div id="banner" class="banner" role="status" hidden></div>
+  <div id="modal-root"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

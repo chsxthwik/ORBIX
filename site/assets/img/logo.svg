@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ORBIX">
+  <defs>
+    <linearGradient id="t" x1="3" y1="3" x2="61" y2="61" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#342b94"/><stop offset=".55" stop-color="#1c1863"/><stop offset="1" stop-color="#100d3b"/></linearGradient>
+    <linearGradient id="ra" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c4baff"/><stop offset="1" stop-color="#6a5af9"/></linearGradient>
+    <linearGradient id="rb" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a6f3ff"/><stop offset="1" stop-color="#35aee6"/></linearGradient>
+    <radialGradient id="c" cx=".36" cy=".33" r=".75"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#b9b1ff"/></radialGradient>
+    <radialGradient id="g"><stop offset="0" stop-color="#cfc8ff" stop-opacity=".55"/><stop offset="1" stop-color="#cfc8ff" stop-opacity="0"/></radialGradient>
+    <clipPath id="w"><polygon points="32,32 -12,-12 76,-12"/><polygon points="32,32 -12,76 76,76"/></clipPath>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="14" fill="url(#t)"/>
+  <rect x="3.5" y="3.5" width="57" height="57" rx="13.5" fill="none" stroke="#fff" stroke-opacity=".16"/>
+  <circle cx="32" cy="32" r="12" fill="url(#g)">
+    <animate attributeName="r" values="11;15;11" dur="4.2s" repeatCount="indefinite"/>
+  </circle>
+  <g fill="none" stroke-width="4" stroke-linecap="round">
+    <ellipse cx="32" cy="32" rx="27" ry="11.5" transform="rotate(45 32 32)" stroke="url(#rb)"/>
+    <ellipse cx="32" cy="32" rx="27" ry="11.5" transform="rotate(-45 32 32)" stroke="url(#ra)"/>
+    <g clip-path="url(#w)"><ellipse cx="32" cy="32" rx="27" ry="11.5" transform="rotate(45 32 32)" stroke="url(#rb)"/></g>
+  </g>
+  <circle cx="32" cy="32" r="5.2" fill="url(#c)">
+    <animate attributeName="r" values="5;5.8;5" dur="4.2s" repeatCount="indefinite"/>
+  </circle>
+  <!-- nodes ride both orbits, in opposite directions -->
+  <circle r="3.4" fill="#8eeeff">
+    <animateMotion dur="5.4s" repeatCount="indefinite" path="M51.09 12.91 A27 11.5 -45 1 1 12.91 51.09 A27 11.5 -45 1 1 51.09 12.91"/>
+  </circle>
+  <circle r="2.8" fill="#e7e2ff">
+    <animateMotion dur="7.3s" repeatCount="indefinite" path="M51.09 51.09 A27 11.5 45 1 0 12.91 12.91 A27 11.5 45 1 0 51.09 51.09"/>
+  </circle>
+</svg>

@@ -1,0 +1,39 @@
+{
+  "name": "orbix",
+  "version": "3.0.0",
+  "description": "ORBIX - Unified ADE: a Windows desktop agentic development environment with its own AI agent (the OMP CLI is optional). WSL and native Windows backends.",
+  "private": true,
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "orbix": "src/main.mjs"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test",
+    "serve": "node src/main.mjs --no-window",
+    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-host.ps1",
+    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1",
+    "doctor": "node tools/doctor.mjs",
+    "icon": "node tools/make-icon.mjs",
+    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-shortcut.ps1"
+  },
+  "keywords": [
+    "omp",
+    "coding-agent",
+    "desktop",
+    "windows",
+    "webview2",
+    "wsl",
+    "ade"
+  ],
+  "author": "chsxthwik",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chsxthwik/ORBIX.git"
+  },
+  "homepage": "https://github.com/chsxthwik/ORBIX"
+}
