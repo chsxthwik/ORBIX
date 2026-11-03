@@ -29,3 +29,10 @@ Thanks for helping! The project is intentionally small: no npm dependencies, no 
 ## License of contributions
 
 ORBIX is licensed under FSL-1.1-MIT (see `LICENSE`). By sending a pull request you agree that your contribution is licensed under the same terms and that the maintainer may also offer it under other licenses, including commercial ones.
+
+## Releasing (maintainer)
+
+1. Bump the version in `package.json`, add a section to `CHANGELOG.md`, run `npm test`.
+2. `npm run package` builds `release\ORBIX-<version>-win-x64.zip` and stamps the version, size and SHA-256 into `site\index.html`.
+3. Create a GitHub release `v<version>` and attach the zip.
+4. Deploy the site: from the `site` folder run `vercel deploy --prod`.
