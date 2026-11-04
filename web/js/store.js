@@ -250,6 +250,7 @@ function reduce(tab, ev) {
       if (!tab.streaming || !tab.turnStartedAt) tab.turnStartedAt = Date.now();
       tab.streaming = true;
       emit('tab:status', tab);
+      if (!tab.state?.model) refreshState(tab); // the first turn picks the model: show it, not "Choose model"
       break;
     case 'agent_end':
       if (ev.isTerminal === false) break;
