@@ -144,22 +144,6 @@ export function logo(size = 20) {
     svgEl('circle', { class: 'lg-sat', cx: 0, cy: 0, r: 3.8, fill: '#8eeeff' })); // drawn at the origin, placed on the ring by CSS (offset-path)
 }
 
-/** A faint orbital diagram for empty screens: two orbits with a node riding each, a dotted outer ring. Decorative. */
-export function orbitTrace(cls = '') {
-  const E = 'M20 200 a180 64 0 1 0 360 0 a180 64 0 1 0 -360 0';
-  const still = reduced.matches;
-  const ring = (rot, dur, node, r) => svgEl('g', { transform: `rotate(${rot} 200 200)` },
-    svgEl('path', { d: E, class: 'tr-ring', fill: 'none' }),
-    svgEl('circle', { class: `tr-node ${node}`, r, cx: still ? 380 : 0, cy: still ? 200 : 0 }, ...(still ? [] : [svgEl('animateMotion', { dur, repeatCount: 'indefinite', path: E })])));
-  return h('div', { class: `trace ${cls}`.trim(), 'aria-hidden': 'true' },
-    svgEl('svg', { viewBox: '0 0 400 400', focusable: 'false' },
-      svgEl('path', { d: 'M-50 200 a250 104 0 1 0 500 0 a250 104 0 1 0 -500 0', class: 'tr-ring dash', fill: 'none', transform: 'rotate(8 200 200)' }),
-      ring(-22, '16s', 'a', 3.6),
-      ring(30, '26s', 'b', 2.6),
-      svgEl('circle', { class: 'tr-halo', cx: 200, cy: 200, r: 20, fill: 'none' }),
-      svgEl('circle', { class: 'tr-core', cx: 200, cy: 200, r: 4.5 })));
-}
-
 export function iconBtn(name, title, onclick, cls = '') {
   return h('button', { class: `ibtn ${cls}`.trim(), title, 'aria-label': title.replace(/\s*\(.*\)$/, ''), onclick, type: 'button' }, icon(name, 16));
 }
