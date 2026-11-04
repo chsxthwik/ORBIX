@@ -1,5 +1,5 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, orbitTrace } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setFast, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
@@ -498,6 +498,7 @@ export class TabView {
     if (!show) return void this.emptyEl?.remove();
     if (this.emptyEl?.isConnected) return;
     this.emptyEl = h('div', { class: 'chat-empty' },
+      orbitTrace('sm'),
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
       h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
       h('div', { class: 'ce-keys' }, h('span', null, kbd('/'), ' commands'), h('span', null, kbd('@'), ' mention a file'), h('span', null, kbd('Shift+Enter'), ' new line')));
@@ -607,6 +608,7 @@ export class TabView {
     if (m.stopReason === 'error' && m.errorMessage) wrap.append(this.errorBox(m.errorMessage));
     else if (m.stopReason === 'aborted') wrap.append(h('div', { class: 'note' }, icon('stop', 12), h('span', null, 'Stopped')));
     if (!wrap.childElementCount) return null;
+    if (this.firstOfTurn(idx)) wrap.prepend(this.byline(m));
     const text = blocks.filter((b) => b.type === 'text' && b.text?.trim()).map((b) => b.text.trim()).join('\n\n');
     const acts = h('div', { class: 'msg-acts' });
     if (text) {
@@ -622,6 +624,17 @@ export class TabView {
     if (m.timestamp) acts.prepend(h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)));
     if (acts.childElementCount) wrap.append(acts);
     return wrap;
+  }
+
+  /** The first reply after your message carries the agent's name (later steps of the same turn do not). */
+  firstOfTurn(idx) {
+    const p = this.tab.messages[idx - 1];
+    return !p || p.role === 'user' || p.role === '_cmd';
+  }
+
+  byline(m) {
+    const model = typeof m?.model === 'string' ? m.model : this.tab.model?.id || '';
+    return h('div', { class: 'msg-by asst-by' }, logo(14), h('span', null, this.tab.engine === 'builtin' ? 'ORBIX' : 'OMP CLI'), model ? h('span', { class: 'by-model' }, model) : null);
   }
 
   errorBox(msg) {
@@ -777,6 +790,7 @@ export class TabView {
     }
     if (!this.liveEl) {
       this.liveEl = h('div', { class: 'msg asst live enter' });
+      if (this.firstOfTurn(t.messages.length)) this.liveEl.append((this.liveEl._by = this.byline(live)));
       this.tin.insertBefore(this.liveEl, this.pendingEl || null);
       this.liveBlocks = [];
       this.emptyEl?.remove();
@@ -832,6 +846,7 @@ export class TabView {
     if (!el) return;
     const after = this.liveBlocks.slice(0, i).reverse().find((x) => x?.el?.isConnected)?.el;
     if (after) after.after(el);
+    else if (this.liveEl._by?.isConnected) this.liveEl._by.after(el);
     else this.liveEl.prepend(el);
   }
 
