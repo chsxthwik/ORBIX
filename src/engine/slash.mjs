@@ -154,7 +154,7 @@ export async function runSlash(agent, text) {
     case 'mcp': {
       if (!agent.streaming) await agent.mcp.ensureStarted().catch(() => {});
       const st = agent.mcp.status();
-      agent._out(st.length ? st.map((s) => `- **${s.name}** (${s.scope}): ${s.status}${s.error ? ' — ' + s.error : ''}${s.tools.length ? `\n  tools: ${s.tools.join(', ')}` : ''}`).join('\n') : 'No MCP servers are configured. Add one in Settings → Tools & MCP, or put a `.mcp.json` in the project.');
+      agent._out(st.length ? st.map((s) => `- **${s.name}** (${s.scope}): ${s.status}${s.error ? ': ' + s.error : ''}${s.tools.length ? `\n  tools: ${s.tools.join(', ')}` : ''}`).join('\n') : 'No MCP servers are configured. Add one in Settings → Tools & MCP, or put a `.mcp.json` in the project.');
       return true;
     }
     case 'skills': {

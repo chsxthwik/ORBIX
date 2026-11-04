@@ -16,7 +16,7 @@ function forThisSetup(report) {
 
 function reportToText(report) {
   const lines = ['ORBIX diagnostics', ''];
-  for (const c of report.checks) lines.push(`[${c.ok ? 'OK' : 'FAIL'}] ${c.label}${c.detail ? ' — ' + c.detail : ''}${c.fix ? '\n       fix: ' + c.fix : ''}`);
+  for (const c of report.checks) lines.push(`[${c.ok ? 'OK' : 'FAIL'}] ${c.label}${c.detail ? ': ' + c.detail : ''}${c.fix ? '\n       fix: ' + c.fix : ''}`);
   lines.push('');
   for (const [k, v] of Object.entries(report.info)) lines.push(`${k}: ${v}`);
   return lines.join('\n');

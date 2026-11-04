@@ -325,9 +325,6 @@ input[type=checkbox] { width: 15px; height: 15px; margin: 0; }
 .home-mark { position: relative; flex: none; width: 56px; height: 56px; }
 .home-mark::after { content: ''; position: absolute; inset: 0; border-radius: 15px; box-shadow: 0 0 0 1px var(--accent-line); opacity: 0; animation: mark-ping 3.2s var(--ease) 1.2s infinite; pointer-events: none; }
 .home-mark .logo { animation: mark-in 700ms var(--ease-out) both; filter: drop-shadow(0 10px 24px var(--accent-soft)); }
-.home-mark .lg-sat { animation: lg-orbit 7s linear infinite; }
-.home-mark:hover .lg-sat { animation-duration: 2.2s; }
-.agent-busy .home-mark .lg-sat { animation-duration: 2.2s; }
 /* Features: what ORBIX does, each with the one action that uses it. */
 .features { margin-top: 44px; }
 .sec-note { color: var(--fg-3); font-size: 12px; }
@@ -892,10 +889,8 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 .ts-file:focus-visible { outline-offset: -2px; }
 .ts-more { padding: 4px 12px; color: var(--fg-3); font-size: 13px; }
 
-/* ---- logo: the satellite rides the ring, and orbits while the agent works ---- */
-.logo .lg-sat { offset-path: path('M51.09 12.91 A27 11.5 -45 1 1 12.91 51.09 A27 11.5 -45 1 1 51.09 12.91'); offset-rotate: 0deg; offset-distance: 0%; }
-.agent-busy .brand .lg-sat { animation: lg-orbit 2.4s linear infinite; }
-@keyframes lg-orbit { to { offset-distance: 100%; } }
+/* ---- logo: static X-in-O mark; while the agent works the sidebar mark breathes (opacity only, no layout shift) ---- */
+.agent-busy .brand .logo { animation: breathe 2.4s ease-in-out infinite; }
 
 /* model roles, web search, hooks (Settings) */
 .role-ctl { display: flex; gap: 8px; align-items: center; min-width: 0; }
@@ -975,8 +970,8 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
   .spin { animation-duration: .9s !important; animation-iteration-count: infinite !important; }
-  .dot.run::after, .tool-ico::after, .msg.live.typing .md ::after, .skel-l::after, .agent-busy .brand .lg-sat, .topbar.busy::after { animation: none !important; }
+  .dot.run::after, .tool-ico::after, .msg.live.typing .md ::after, .skel-l::after, .agent-busy .brand .logo, .topbar.busy::after { animation: none !important; }
   .composer.busy::before { animation: none !important; background: var(--live-line); }
-  .home-mark::after, .home-mark .lg-sat { animation: none !important; }
+  .home-mark::after { animation: none !important; }
   .skel { animation: none !important; }
 }

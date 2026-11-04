@@ -338,7 +338,7 @@ on('tab:messages', (tab, d) => {
 });
 on('tab:live', (tab) => viewOf(tab)?.renderLive());
 on('tab:tool', (tab, id) => viewOf(tab)?.updateTool(id));
-// The sidebar logo's satellite orbits while any session is working.
+// The sidebar logo breathes while any session is working.
 const syncBusy = () => document.documentElement.classList.toggle('agent-busy', [...S.tabs.values()].some((t) => t.streaming && !t.dead));
 on('tab:state', (tab) => (viewOf(tab)?.updateComposer(), syncBusy()));
 on('tabs', syncBusy);
