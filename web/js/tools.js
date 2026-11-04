@@ -371,7 +371,7 @@ export function renderToolCard(tab, call, run, open) {
   let status = run?.status;
   if (!status) status = finalRes ? (finalRes.isError ? 'error' : 'done') : tab.live && tab.live.message?.content?.some((c) => c.id === call.id) ? 'pending' : 'interrupted';
   if (finalRes && status === 'running') status = finalRes.isError ? 'error' : 'done';
-  if (status === 'running' && tab.waitingTool === call.id) status = 'waiting';
+  if (tab.waitingTool === call.id && !finalRes) status = 'waiting';
   if (status === 'error' && /^The user denied/i.test(resultText(result))) status = 'denied';
   const isOpen = open ?? (status === 'running' || OPEN_BY_DEFAULT.has(call.name));
   const agents = call.name === 'task' ? [...tab.subagents.values()].filter((s) => s.parentToolCallId === call.id) : [];

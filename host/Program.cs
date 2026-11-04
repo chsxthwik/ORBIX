@@ -223,6 +223,7 @@ class MainForm : Form
         psi.RedirectStandardOutput = true;
         psi.RedirectStandardError = true;
         psi.StandardOutputEncoding = Encoding.UTF8;
+        if (server != null) { try { server.Dispose(); } catch { } } // the previous server process, after a restart
         server = Process.Start(psi);
         var err = serverErr;
         lock (err) err.Clear();
@@ -300,7 +301,7 @@ class MainForm : Form
             core.PermissionRequested += delegate (object o, CoreWebView2PermissionRequestedEventArgs a)
             {
                 // Only our own origin may read the clipboard and show notifications; everything else keeps the default.
-                if ((a.PermissionKind == CoreWebView2PermissionKind.ClipboardRead || a.PermissionKind == CoreWebView2PermissionKind.Notifications) && a.Uri.StartsWith(origin, StringComparison.OrdinalIgnoreCase))
+                if ((a.PermissionKind == CoreWebView2PermissionKind.ClipboardRead || a.PermissionKind == CoreWebView2PermissionKind.Notifications) && (a.Uri.StartsWith(origin + "/", StringComparison.OrdinalIgnoreCase) || a.Uri.Equals(origin, StringComparison.OrdinalIgnoreCase)))
                     a.State = CoreWebView2PermissionState.Allow;
             };
             core.WebMessageReceived += delegate (object o, CoreWebView2WebMessageReceivedEventArgs a)

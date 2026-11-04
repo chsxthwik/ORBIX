@@ -512,6 +512,10 @@ describe('fsapi: readFile', () => {
     assert.equal(r.binary, undefined);
   });
 
+  test('a device such as NUL is refused instead of being read', async () => {
+    const dev = process.platform === 'win32' ? '\\\\.\\NUL' : '/dev/null';
+    await assert.rejects(fsapi.readFile(nat, dev), (e) => e.status === 400);
+  });
   test('empty file reads as an empty string, not binary', async () => {
     const r = await fsapi.readFile(nat, put('empty.txt', ''));
     assert.equal(r.content, '');

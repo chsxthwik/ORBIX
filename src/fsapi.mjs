@@ -89,6 +89,7 @@ export async function readFile(backend, p) {
     throw Object.assign(new Error(`Cannot read ${p}: ${e.code || e.message}`), { status: 404 });
   }
   if (st.isDirectory()) throw Object.assign(new Error('Is a directory'), { status: 400 });
+  if (!st.isFile()) throw Object.assign(new Error('Not a regular file'), { status: 400 }); // a device (CON, NUL) can block a read
   const ext = path.extname(host).slice(1).toLowerCase();
   const base = { path: p, size: st.size, mtime: st.mtimeMs, ext };
   if (IMG[ext]) {
@@ -100,9 +101,10 @@ export async function readFile(backend, p) {
   try {
     const len = Math.min(st.size, MAX_TEXT);
     const buf = Buffer.alloc(len);
-    await fh.read(buf, 0, len, 0);
-    if (looksBinary(buf)) return { ...base, binary: true };
-    return { ...base, content: buf.toString('utf8'), truncated: st.size > MAX_TEXT };
+    const { bytesRead } = await fh.read(buf, 0, len, 0);
+    const got = buf.subarray(0, bytesRead); // the file may have shrunk since stat
+    if (looksBinary(got)) return { ...base, binary: true };
+    return { ...base, content: got.toString('utf8'), truncated: st.size > MAX_TEXT };
   } finally {
     await fh.close();
   }

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping! The project is intentionally small: no npm dependencies, no bundler, no framework.
+Thanks for helping. The project is small on purpose: no npm dependencies, no bundler, no framework.
 
 ## Layout
 
@@ -25,6 +25,10 @@ Thanks for helping! The project is intentionally small: no npm dependencies, no 
 ## Tests
 
 `npm test` runs the regression suite in `test/` (Node's built-in runner, no dependencies, no network, no provider keys, nothing written outside a temp folder: each file points `ORBIX_DATA` at one). Add a test with every fix. A pure helper that has a test is exported so the test can import it; keep other helpers private, and keep an export when a test imports it.
+
+## Review
+
+There is no CI. Run `npm test` yourself before you open a pull request. `.github/CODEOWNERS` asks the maintainer to review every change.
 
 ## License of contributions
 

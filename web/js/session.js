@@ -180,7 +180,7 @@ export class TabView {
     this.queue = h('div', { class: 'queue' });
     this.widgets = h('div', { class: 'widgets' });
     this.composer = new Composer({
-      placeholder: 'Message ORBIX',
+      placeholder: t.engine === 'builtin' ? 'Message ORBIX' : 'Message OMP CLI',
       label: 'Message',
       state: t,
       workspace: () => t.workspace,
@@ -272,7 +272,7 @@ export class TabView {
     const m = t.model;
     const dead = t.dead;
     this.ta.disabled = dead;
-    this.ta.placeholder = dead ? 'This session has ended' : t.streaming ? 'Steer the agent, or Esc to stop' : 'Message ORBIX';
+    this.ta.placeholder = dead ? 'This session has ended' : t.streaming ? 'Steer the agent, or Esc to stop' : t.engine === 'builtin' ? 'Message ORBIX' : 'Message OMP CLI';
     this.composer.el.classList.toggle('busy', !!t.streaming);
     this.updateSend();
 
@@ -379,7 +379,7 @@ export class TabView {
     if (d === this.approvalDlg) return;
     this.approvalDlg = d;
     const prevWait = t.waitingTool;
-    t.waitingTool = d ? [...t.tools.entries()].reverse().find(([, r]) => r.status === 'running')?.[0] || null : null;
+    t.waitingTool = d ? [...t.tools.entries()].reverse().find(([, r]) => r.status === 'running')?.[0] || this.unansweredCall() : null;
     if (prevWait && prevWait !== t.waitingTool) {
       // The tool's run time starts when you answer, not while it waited for you.
       const r = t.tools.get(prevWait);
@@ -415,6 +415,16 @@ export class TabView {
     const wasHere = old?.contains(a) || !a?.isConnected;
     if (S.active === t.id && !document.querySelector('.scrim') && (wasHere || !a || a === document.body || (a === this.ta && !this.ta.value.trim()))) box.focus({ preventScroll: true });
     this.scrollBottom();
+  }
+
+  /** The latest tool call with no result yet (after a reload the live run info is gone, the call is not). */
+  unansweredCall() {
+    const t = this.tab;
+    for (const m of [t.live?.message, ...t.messages.slice(-6).reverse()]) {
+      const calls = Array.isArray(m?.content) ? m.content.filter((c) => c.type === 'toolCall' && !t.results.has(c.id)) : [];
+      if (calls.length) return calls[calls.length - 1].id;
+    }
+    return null;
   }
 
   answerApproval(value) {

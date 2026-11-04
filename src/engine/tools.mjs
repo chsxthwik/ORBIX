@@ -341,6 +341,7 @@ export function createTools({ backend, cwd, getSignal }) {
         const more = ents.length > MAX_LIST ? `\n[${ents.length - MAX_LIST} more entries not shown; use glob to search]` : '';
         return { text: ents.slice(0, MAX_LIST).join('\n') + more || '(empty folder)', details: { path: shown, entries: ents.length } };
       }
+      if (!st.isFile()) return { text: `${shown} is not a regular file (a device or pipe), so it is not read.`, isError: true };
       if (!st.size) return { text: '(empty file)', details: { path: shown, totalLines: 0 } };
       const head = Buffer.alloc(Math.min(st.size, 64));
       const fh = await fs.promises.open(file, 'r');

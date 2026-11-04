@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"  role="img" aria-label="ORBIX (small sizes)"><defs><linearGradient id="lt" x1="3" y1="3" x2="61" y2="61" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#3a2fa6"/><stop offset=".6" stop-color="#1e1a6b"/><stop offset="1" stop-color="#110e40"/></linearGradient>
+<linearGradient id="lr" x1="14" y1="14" x2="50" y2="50" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#d9d3ff"/><stop offset="1" stop-color="#7a6cf9"/></linearGradient>
+<linearGradient id="lo" x1="6" y1="40" x2="58" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7defff"/><stop offset="1" stop-color="#35aee6"/></linearGradient>
+<clipPath id="lf"><rect x="-10" y="32" width="84" height="40"/></clipPath><clipPath id="lb"><rect x="-10" y="-10" width="84" height="42"/></clipPath>
+<radialGradient id="lh"><stop offset="0" stop-color="#8f86ff" stop-opacity=".5"/><stop offset="1" stop-color="#8f86ff" stop-opacity="0"/></radialGradient></defs><rect x="3" y="3" width="58" height="58" rx="14" fill="url(#lt)"/><rect x="3.5" y="3.5" width="57" height="57" rx="13.5" fill="none" stroke="#fff" stroke-opacity=".14"/>
+<g transform="rotate(-32 32 32)"><g clip-path=""><g clip-path="url(#lb)"><ellipse cx="32" cy="32" rx="27" ry="10.5" fill="none" stroke="url(#lo)" stroke-width="5"/></g></g>
+<circle cx="32" cy="32" r="16.5" fill="none" stroke="url(#lr)" stroke-width="8"/>
+<g clip-path="url(#lf)"><ellipse cx="32" cy="32" rx="27" ry="10.5" fill="none" stroke="url(#lo)" stroke-width="5"/></g>
+<g transform="translate(32 32)"><circle cx="27.00" cy="0.00" r="4.6" fill="#8eeeff"/></g></g></svg>

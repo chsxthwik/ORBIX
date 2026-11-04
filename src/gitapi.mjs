@@ -6,7 +6,8 @@ import { isWinPath, runProc } from './backend.mjs';
 import { looksBinary } from './util.mjs';
 
 // Repos can be anything the user opens (a downloaded archive too): never run repo-configured programs from a read.
-const GIT = ['-c', 'core.quotepath=off', '-c', 'color.ui=never', '-c', 'core.fsmonitor=false'];
+// Literal pathspecs: a file called [id].js or :/ must not act as a pattern.
+const GIT = ['--literal-pathspecs', '-c', 'core.quotepath=off', '-c', 'color.ui=never', '-c', 'core.fsmonitor=false'];
 
 let winGit; // memoised: is Windows git available?
 async function hasWinGit() {

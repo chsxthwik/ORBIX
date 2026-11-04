@@ -2,6 +2,16 @@
 import { api, rpc } from './api.js';
 import { baseName, debounce, toast, makeTitle } from './dom.js';
 
+/** Debounce per tab: a call for one tab never cancels the pending call for another. */
+const perTab = (fn, ms) => {
+  const timers = new Map();
+  return (tab) => {
+    if (!tab) return;
+    clearTimeout(timers.get(tab.id));
+    timers.set(tab.id, setTimeout(() => (timers.delete(tab.id), fn(tab)), ms));
+  };
+};
+
 const listeners = {};
 export const on = (ev, fn) => {
   (listeners[ev] ||= new Set()).add(fn);
@@ -73,7 +83,6 @@ export class Tab {
     this.unread = false;
     this.turnStartedAt = 0;
     this.retry = null;
-    this.hiddenBefore = 0;
   }
   get name() {
     return makeTitle(this.title) || makeTitle(this.firstUserText()) || baseName(this.workspace) || 'Session';
@@ -131,13 +140,21 @@ async function openBranch(from, ev) {
 
 /** (Re)load state + history from the process. Safe to call after reconnects. */
 export async function attach(tab) {
-  const [st, msgs] = await Promise.all([rpc(tab.id, { type: 'get_state' }), rpc(tab.id, { type: 'get_messages' })]);
+  const [st, msgs, ui] = await Promise.all([rpc(tab.id, { type: 'get_state' }), rpc(tab.id, { type: 'get_messages' }), api.get(`/api/proc/ui?proc=${encodeURIComponent(tab.id)}`).catch(() => ({ requests: [] }))]);
   applyState(tab, st.data);
   tab.messages = [];
   tab.seen.clear();
   tab.results.clear();
   for (const m of msgs.data?.messages || []) addMessage(tab, m, true);
   tab.streaming = !!st.data.isStreaming;
+  // Events missed while disconnected: drop a stale live reply, and bring back questions still waiting for an answer.
+  if (!tab.streaming) {
+    tab.live = null;
+    tab.retry = null;
+  }
+  const open = ui.requests || [];
+  tab.dialogs = [...open, ...tab.dialogs.filter((d) => d.method === 'open_url' && !open.some((o) => o.id === d.id))];
+  emit('tab:dialog', tab);
   rpc(tab.id, { type: 'set_subagent_subscription', level: 'progress' }).catch(() => {});
   // The agent lists its slash commands on request (OMP pushes them), so ask when none came with the start reply.
   if (!tab.commands.length) rpc(tab.id, { type: 'get_available_commands' }).then((r) => (tab.commands = r.data?.commands || tab.commands)).catch(() => {});
@@ -168,8 +185,8 @@ export async function refreshState(tab) {
   } catch {}
 }
 
-const refreshStats = debounce(async (tab) => {
-  if (!tab || tab.dead) return;
+const refreshStats = perTab(async (tab) => {
+  if (tab.dead) return;
   try {
     const r = await rpc(tab.id, { type: 'get_session_stats' });
     tab.stats = r.data;
@@ -343,13 +360,19 @@ function reduce(tab, ev) {
       note(tab, ev.level || 'info', ev.message || '', { source: ev.source });
       break;
     case 'auto_compaction_start':
+    case 'manual_compaction_start':
       tab.compacting = true;
       emit('tab:status', tab);
       note(tab, 'info', 'Compacting context…');
       break;
-    case 'auto_compaction_end': {
+    case 'auto_compaction_end':
+    case 'manual_compaction_end': {
       tab.compacting = false;
       emit('tab:status', tab);
+      if (ev.skipped) {
+        note(tab, 'info', 'Nothing to compact yet');
+        break;
+      }
       const failed = ev.aborted || ev.result === null || !!ev.errorMessage;
       if (!failed) {
         note(tab, 'info', 'Context compacted');
@@ -357,6 +380,10 @@ function reduce(tab, ev) {
       } else if (tab.engine !== 'builtin') note(tab, 'warn', `Context was not compacted${ev.errorMessage ? ': ' + ev.errorMessage : ''}`); // the agent reports its own reason
       break;
     }
+    case 'queue_update':
+      tab.queued = { steering: ev.steering || [], followUp: ev.followUp || [] };
+      emit('tab:state', tab);
+      break;
     case 'auto_retry_start':
       tab.retry = ev;
       note(tab, 'warn', `Retrying request${ev.attempt ? ` (attempt ${ev.attempt}${ev.maxAttempts ? '/' + ev.maxAttempts : ''})` : ''}${ev.errorMessage ? ': ' + ev.errorMessage : ''}`);
@@ -429,7 +456,7 @@ function reduce(tab, ev) {
   }
 }
 
-const attachSoft = debounce(async (tab) => {
+const attachSoft = perTab(async (tab) => {
   try {
     const msgs = await rpc(tab.id, { type: 'get_messages' });
     tab.messages = [];
@@ -591,12 +618,12 @@ export async function savePrefs(patch) {
 }
 
 /** Reconcile after SSE (re)connect. */
-export async function onHello(procs) {
+export async function onHello(procs, fresh = new Set()) {
   const alive = new Set(procs.map((p) => p.id));
   for (const t of S.tabs.values()) {
     if (!alive.has(t.id) && !t.dead) {
       reduce(t, { type: 'proc_exit', code: null, message: 'The session process is no longer running.', stderr: [] });
-    } else if (alive.has(t.id) && t.ready) {
+    } else if (alive.has(t.id) && t.ready && !fresh.has(t.id)) {
       attach(t).then(() => {
         emit('tab:messages', t, { type: 'reset' });
         emit('tab:state', t);

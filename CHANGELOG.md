@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- **New logo.** A ring crossed by a tilted orbit with one node, drawn on a 64-unit grid. Small sizes (16 to 24 px) use a heavier variant. Icon, favicon, social image and README banner were redrawn to match.
 - **Interface redesign.** Warm-neutral surfaces with one accent colour for choices, mint for anything the agent is doing right now and amber for anything waiting on you. Borders carry the structure; the glows, gradients and the animated mark on the home screen are gone.
 - **Session view.** Your messages are blocks with a "You" label, not chat bubbles. Tool calls are compact steps on a rail that open into a card; thinking folds to one line. Approvals dock above the message box with the exact file or command and the keys 1, 2 and Esc.
 - **Home.** One question, the message box, then Projects and Recent side by side. The example-task chips were removed.

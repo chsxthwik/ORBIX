@@ -33,7 +33,7 @@ if (-not ((Test-Path $core) -and (Test-Path $wf) -and (Test-Path $loader))) {
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path $csc)) { throw "C# compiler not found at $csc" }
 $icon = Join-Path $root 'assets\icon.ico'
-if (-not (Test-Path $icon)) { & node (Join-Path $PSScriptRoot 'make-icon.mjs') }
+if (-not (Test-Path $icon)) { throw "Missing $icon" }
 
 $out = Join-Path $bin 'ORBIX.exe'
 # If the app is running its exe is locked: build next to it as .new. ORBIX.vbs swaps it in on the next start.
