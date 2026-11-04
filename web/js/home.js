@@ -1,6 +1,6 @@
 // Home: a composer to start a session (project, engine, model), the projects, and the recent conversations.
 // Shown when no session tab is active. With no AI provider set up it shows the first-run steps instead.
-import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd } from './dom.js';
+import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd, orbitTrace } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api, rpc } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, defaultEngine, engineReady, ompInstalled, savePrefs, groupSessions, on } from './store.js';
@@ -78,7 +78,9 @@ export function drawHome(root, H) {
     const heroSlot = h('div');
     const keysSlot = h('div');
     const gridSlot = h('div');
-    const wrap = h('div', { class: 'home' }, heroSlot, comp.el, keysSlot, gridSlot);
+    // The entrance plays once per mount, not on every redraw (sessions refresh every 30 s).
+    const wrap = h('div', { class: 'home intro' }, orbitTrace(), heroSlot, comp.el, keysSlot, gridSlot);
+    setTimeout(() => wrap.classList.remove('intro'), 900);
     C = { wrap, comp, row, heroSlot, keysSlot, gridSlot };
     // One drop handler per screen; it always feeds the current box.
     if (!root._drop) {
@@ -154,7 +156,7 @@ export function drawHome(root, H) {
   go.addEventListener('click', () => C.start());
 
   row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, engSeg || '', modelBtn, unsaved, h('span', { class: 'grow' }), h('span', { class: 'c-hint' }, kbd('Enter'), ' to start'), go);
-  C.heroSlot.replaceChildren(hero(g ? `What should ORBIX do in ${g.name}?` : 'What should ORBIX do?', engine === 'builtin' ? (S.engine?.approvals === 'auto' ? 'It reads the project, edits files and runs commands. Approvals are off, so it does not ask first.' : 'It reads the project, edits files and runs commands, and asks before it changes anything.') : 'This session runs the OMP CLI in the project folder.'));
+  C.heroSlot.replaceChildren(hero(['What should ORBIX do', g ? h('span', { class: 'home-h-dim' }, ` in ${g.name}?`) : '?'], engine === 'builtin' ? (S.engine?.approvals === 'auto' ? 'It reads the project, edits files and runs commands. Approvals are off, so it does not ask first.' : 'It reads the project, edits files and runs commands, and asks before it changes anything.') : 'This session runs the OMP CLI in the project folder.', engine === 'builtin' ? 'ORBIX agent · ready' : 'OMP CLI · ready'));
   C.keysSlot.replaceChildren(engine === 'builtin' && !agentOk ? h('p', { class: 'home-note' }, 'Set up an AI provider to use the ORBIX agent.', h('button', { class: 'link', type: 'button', onclick: () => H.settings('engine') }, 'Set up provider')) : statusStrip(H, engine, m));
   const recent = recentList(H);
   C.gridSlot.replaceChildren(h('div', { class: 'home-grid' + (recent ? '' : ' one') }, projectList(H, projects, () => redraw()), recent));
@@ -167,17 +169,17 @@ export function drawHome(root, H) {
 /** What a new session will use: the model, whether it asks first, and where commands run. Each chip opens its setting. */
 function statusStrip(H, engine, m) {
   const on = S.engine?.providers?.filter((p) => p.configured) || [];
-  const chip = (ic, text, title, onclick, tone) => h('button', { class: `hs-chip${tone ? ' ' + tone : ''}`, type: 'button', title, onclick }, icon(ic, 13), h('span', { class: 'ell' }, text));
+  const cell = (k, v, title, onclick, tone) => h('button', { class: `hs-cell${tone ? ' ' + tone : ''}`, type: 'button', title, onclick }, h('span', { class: 'hs-k' }, k), h('span', { class: 'hs-v ell' }, v));
   const b = S.env?.backend;
   const auto = S.engine?.approvals === 'auto';
-  const chips = [];
+  const cells = [];
   if (engine === 'builtin') {
     const names = on.map((p) => p.name);
-    chips.push(chip('cpu', m ? m.name || m.id : names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] || 'Default model', names.length ? `Providers: ${names.join(', ')}` : 'Set up a provider', () => H.settings('engine')));
-    chips.push(chip('shield', auto ? 'Approvals off' : 'Asks before changes', auto ? 'The agent edits and runs commands without asking. Click to change.' : 'Edits and commands ask first. Click to change.', () => H.settings('behavior'), auto ? 'warn' : ''));
-  } else chips.push(chip('terminal', 'OMP CLI', 'This session uses the OMP command-line agent', () => H.settings('omp')));
-  if (b) chips.push(chip('terminal', b.kind === 'wsl' ? `WSL · ${b.distro || '?'}` : 'Windows', 'Where the agent runs commands. Click to change.', () => H.settings('behavior')));
-  return h('div', { class: 'home-status' }, ...chips, h('span', { class: 'hs-keys' }, kbd('Ctrl+K'), ' commands  ', kbd('@'), ' files'));
+    cells.push(cell('Model', m ? m.name || m.id : names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] || 'Default', names.length ? `Providers: ${names.join(', ')}. Click to change.` : 'Set up a provider', () => H.settings('engine')));
+    cells.push(cell('Approvals', auto ? 'Off' : 'Ask first', auto ? 'The agent edits and runs commands without asking. Click to change.' : 'Edits and commands ask first. Click to change.', () => H.settings('behavior'), auto ? 'warn' : ''));
+  } else cells.push(cell('Engine', 'OMP CLI', 'This session uses the OMP command-line agent', () => H.settings('omp')));
+  if (b) cells.push(cell('Shell', b.kind === 'wsl' ? `WSL · ${b.distro || '?'}` : 'Windows', 'Where the agent runs commands. Click to change.', () => H.settings('behavior')));
+  return h('div', { class: 'home-status' }, h('div', { class: 'hs-bar' }, ...cells), h('span', { class: 'hs-keys' }, kbd('Ctrl+K'), ' commands  ', kbd('@'), ' files'));
 }
 
 /** Projects as a list: pick one to start the next session there. */
@@ -196,7 +198,7 @@ function projectList(H, projects, redraw) {
   return h('section', { class: 'projects' }, head, h('div', { class: 'p-list' }, ...rows));
 }
 
-const hero = (title, sub) => h('div', { class: 'hero' }, h('h1', { class: 'home-h' }, title), sub ? h('p', { class: 'home-sub' }, sub) : null);
+const hero = (title, sub, kick) => h('div', { class: 'hero' }, kick ? h('div', { class: 'home-kick' }, h('span', { class: 'dot live' }), kick) : null, h('h1', { class: 'home-h' }, title), sub ? h('p', { class: 'home-sub' }, sub) : null);
 
 function setupCard(H) {
   return h('section', { class: 'setup' },
