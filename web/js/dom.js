@@ -127,34 +127,14 @@ const svgEl = (tag, attrs, ...kids) => {
   return el;
 };
 
-// The mark: a ring (the O) crossed by a tilted orbit that passes behind it on the far side and in front on the near side,
-// a bright core, and a node riding the orbit. Geometry matches site/assets/img/logo.svg and assets/icon.png. Gradients live in index.html. Sizes up to 24 px use a heavier, simpler variant.
-const TILT = -32;
-const orbitPath = (rx, ry) => {
-  const a = (TILT * Math.PI) / 180;
-  const x = (32 + rx * Math.cos(a)).toFixed(2), y = (32 + rx * Math.sin(a)).toFixed(2);
-  const x2 = (64 - x).toFixed(2), y2 = (64 - y).toFixed(2);
-  return `path('M${x} ${y} A${rx} ${ry} ${TILT} 1 1 ${x2} ${y2} A${rx} ${ry} ${TILT} 1 1 ${x} ${y}')`;
-};
-
+// The mark: two orbits woven into an X inside an O, one cyan node. Geometry matches site/assets/img/logo-static.svg and assets/icon.png.
+// The symbols live in index.html (#orbix-mark, and #orbix-mark-s, the simplified master for sizes up to 32 px). The mark is static;
+// life comes from CSS on the .logo element, so there is no per-instance geometry and no layout shift.
 export function logo(size = 20) {
-  const small = size <= 24;
-  const R = small ? 16.5 : 17, RW = small ? 8 : 6.5, RX = small ? 27 : 26.5, RY = small ? 10.5 : 9.5, OW = small ? 5 : 3.6;
-  const orbit = (clip) => svgEl('ellipse', { cx: 32, cy: 32, rx: RX, ry: RY, fill: 'none', stroke: 'url(#orbix-rb)', 'stroke-width': OW, 'clip-path': clip });
-  const half = (y) => svgEl('rect', { x: -10, y, width: 84, height: 42 });
-  const sat = svgEl('circle', { class: 'lg-sat', cx: 0, cy: 0, r: small ? 4.6 : 3.9, fill: '#8eeeff' });
-  sat.style.offsetPath = orbitPath(RX, RY); // the rule in app.css still names the old path; inline style wins
-  return svgEl('svg', { class: 'logo', viewBox: '0 0 64 64', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' },
-    svgEl('rect', { x: 3, y: 3, width: 58, height: 58, rx: 14, fill: 'url(#orbix-tile)' }),
-    svgEl('rect', { x: 3.5, y: 3.5, width: 57, height: 57, rx: 13.5, fill: 'none', stroke: '#fff', 'stroke-opacity': 0.14 }),
-    ...(small ? [] : [svgEl('circle', { cx: 32, cy: 32, r: 22, fill: 'url(#orbix-glow)' })]),
-    svgEl('g', { transform: `rotate(${TILT} 32 32)` },
-      svgEl('clipPath', { id: 'lg-far' }, half(-10)), svgEl('clipPath', { id: 'lg-near' }, half(32)),
-      orbit('url(#lg-far)'),
-      svgEl('circle', { cx: 32, cy: 32, r: R, fill: 'none', stroke: 'url(#orbix-ra)', 'stroke-width': RW }),
-      orbit('url(#lg-near)'),
-      ...(small ? [] : [svgEl('circle', { cx: 32, cy: 32, r: 4.2, fill: '#fff' })])),
-    sat);
+  const use = document.createElementNS(NS, 'use');
+  use.setAttribute('href', size <= 32 ? '#orbix-mark-s' : '#orbix-mark');
+  const svg = svgEl('svg', { class: 'logo', viewBox: '0 0 512 512', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' }, use);
+  return svg;
 }
 
 export function iconBtn(name, title, onclick, cls = '') {

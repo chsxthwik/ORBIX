@@ -132,7 +132,7 @@ export function transcript(messages, maxChars) {
   return out;
 }
 
-const SUMMARY_SYSTEM = 'You compress coding-agent conversations into a precise working summary that lets the agent continue the task seamlessly. Write only the summary, no preamble.';
+const SUMMARY_SYSTEM = 'You compress coding-agent conversations into a precise working summary that lets the agent continue the task. Write only the summary, no preamble.';
 
 const SUMMARY_PROMPT = (focus) => `Summarize the conversation above for the agent that will continue it. Keep everything needed to carry on without re-reading files:
 

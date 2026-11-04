@@ -269,7 +269,7 @@ class McpClient {
       if (this.status === 'stopped') return;
       const tail = this.transport?.stderr?.slice(-3).join(' | ');
       this.status = 'error';
-      this.error = `${e?.message || 'closed'}${tail ? ' — ' + tail : ''}`;
+      this.error = `${e?.message || 'closed'}${tail ? ': ' + tail : ''}`;
       for (const [, p] of this.pending) p.reject(new Error(`MCP server "${this.name}" ${this.error}`));
       this.pending.clear();
     };
@@ -285,7 +285,7 @@ class McpClient {
     } catch (e) {
       const tail = this.transport?.stderr?.slice(-3).join(' | ');
       this.status = 'error';
-      this.error = `${e.message}${tail && !String(e.message).includes(tail) ? ' — ' + tail : ''}`;
+      this.error = `${e.message}${tail && !String(e.message).includes(tail) ? ': ' + tail : ''}`;
       await this.transport?.close().catch(() => {});
       throw new Error(`MCP server "${this.name}" could not start: ${this.error}`);
     }
