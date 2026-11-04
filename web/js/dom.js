@@ -144,17 +144,6 @@ export function logo(size = 20) {
     svgEl('circle', { class: 'lg-sat', cx: 0, cy: 0, r: 3.8, fill: '#8eeeff' })); // drawn at the origin, placed on the ring by CSS (offset-path)
 }
 
-/** The mark without its tile, alive: nodes ride both orbits, the core breathes. Decorative only (see .orbit in app.css). */
-export function orbit(cls = '') {
-  return h('div', { class: `orbit ${cls}`.trim(), 'aria-hidden': 'true' },
-    svgEl('svg', { viewBox: '0 0 64 64', focusable: 'false' },
-      svgEl('circle', { class: 'o-glow', cx: 32, cy: 32, r: 22, fill: 'url(#orbix-glow)' }),
-      ...weave(2.6),
-      svgEl('circle', { class: 'o-core', cx: 32, cy: 32, r: 5.6, fill: 'url(#orbix-core)' }),
-      svgEl('circle', { class: 'o-sat a', cx: 0, cy: 0, r: 3.2, fill: '#8eeeff' }),
-      svgEl('circle', { class: 'o-sat b', cx: 0, cy: 0, r: 2.6, fill: '#c4baff' })));
-}
-
 export function iconBtn(name, title, onclick, cls = '') {
   return h('button', { class: `ibtn ${cls}`.trim(), title, 'aria-label': title.replace(/\s*\(.*\)$/, ''), onclick, type: 'button' }, icon(name, 16));
 }

@@ -1,5 +1,5 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, orbit, leave } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setFast, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
@@ -194,7 +194,7 @@ export class TabView {
     this.sendBtn = h('button', { class: 'send', type: 'button', onclick: () => this.onSend(false, true) });
     this.modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model', onclick: () => this.pickModel() });
     this.thinkBtn = h('button', { class: 'cbtn', type: 'button', title: 'Thinking level', 'aria-haspopup': 'menu', onclick: (e) => this.pickThinking(e.currentTarget) });
-    this.planBtn = h('button', { class: 'cbtn', type: 'button', title: 'Plan mode: the agent only reads and proposes a plan, it changes nothing', onclick: () => this.togglePlan() });
+    this.planBtn = h('button', { class: 'cbtn plan', type: 'button', title: 'Plan mode: the agent only reads and proposes a plan, it changes nothing', onclick: () => this.togglePlan() });
     this.fastBtn = h('button', { class: 'cbtn', type: 'button', title: 'Fast mode', onclick: () => setFast(t, !t.state?.fastModeEnabled).catch((er) => toast(er.message, 'error')) });
     this.ctx = h('span', { class: 'ctx-meter' });
     this.statusLine = h('div', { class: 'c-status', 'aria-live': 'polite' });
@@ -277,7 +277,7 @@ export class TabView {
     this.updateSend();
 
     this.modelBtn.hidden = dead;
-    this.modelBtn.replaceChildren(icon('cpu', 14), h('span', { class: 'ell' }, m ? m.name || m.id : 'Choose model'), icon('chevron-down', 12, 'cbtn-chev'));
+    this.modelBtn.replaceChildren(icon('cpu', 14), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
     const efforts = m?.thinking?.efforts || [];
     const lvl = st?.thinkingLevel || 'off';
     this.thinkBtn.hidden = dead || !(m?.reasoning || efforts.length);
@@ -498,7 +498,6 @@ export class TabView {
     if (!show) return void this.emptyEl?.remove();
     if (this.emptyEl?.isConnected) return;
     this.emptyEl = h('div', { class: 'chat-empty' },
-      orbit('sm'),
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
       h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
       h('div', { class: 'ce-keys' }, h('span', null, kbd('/'), ' commands'), h('span', null, kbd('@'), ' mention a file'), h('span', null, kbd('Shift+Enter'), ' new line')));
@@ -594,7 +593,8 @@ export class TabView {
       }
       branch.disabled = false;
     });
-    return h('div', { class: 'msg user' }, bubble, h('div', { class: 'msg-acts' }, m.timestamp ? h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)) : null, copy, this.tab.dead ? null : edit, branch));
+    const by = h('div', { class: 'msg-by' }, h('span', null, 'You'), m.timestamp ? h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)) : null);
+    return h('div', { class: 'msg user' }, by, bubble, h('div', { class: 'msg-acts' }, copy, this.tab.dead ? null : edit, branch));
   }
 
   renderAssistant(m, idx, onPath, reuse = null) {

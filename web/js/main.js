@@ -1,5 +1,5 @@
 // ORBIX front-end bootstrap: layout, sidebar, tabs, keyboard, and routing of events to views.
-import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, logo, lsGet, lsSet, kbd } from './dom.js';
+import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, logo, lsGet, lsSet, kbd, copyText } from './dom.js';
 import { api, rpc, connectEvents } from './api.js';
 import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, tabForSession, ompInstalled, engineReady, renameSession } from './store.js';
 import { TabView, sessionMenu, copyConversation } from './session.js';
@@ -10,7 +10,7 @@ import { initNotify } from './notify.js';
 import { initStatusBar } from './chrome.js';
 import { openHelp } from './help.js';
 import { mountPanel, showTab } from './panels.js';
-import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog } from './dialogs.js';
+import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu } from './dialogs.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { onAuthEvent, onAuthHello } from './providers.js';
 
@@ -136,7 +136,7 @@ function drawSidebar() {
   }).filter(Boolean);
   replace(
     sideEl,
-    h('div', { class: 'side-top' }, h('div', { class: 'brand' }, logo(22), h('span', { class: 'wordmark' }, 'ORBIX'))),
+    h('div', { class: 'side-top' }, h('div', { class: 'brand' }, logo(20), h('span', { class: 'wordmark' }, 'ORBIX'), S.env?.app?.version ? h('span', { class: 'brand-v' }, S.env.app.version) : null)),
     h('button', { class: 'side-new' + (S.active ? '' : ' cur'), type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), 'New session', kbd('Ctrl+N')),
     h('div', { class: 'side-search' }, icon('search', 14), search),
     h('div', { class: 'side-scroll' },
@@ -214,7 +214,18 @@ async function renameTab(t) {
   if (n) renameSession(t, n).catch((e) => toast(e.message, 'error'));
 }
 
-const shownTabs = new Set(); // tabs already drawn once: only new ones play the enter animation
+/** The project of the active session, in the top bar: new session here, show the folder, copy its path. */
+function workspaceChip(t) {
+  const chip = h('button', { class: 'tb-ws', type: 'button', title: t.workspace, 'aria-haspopup': 'menu' }, icon('folder', 13), h('span', { class: 'ell' }, baseName(t.workspace)), icon('chevron-down', 11, 'cbtn-chev'));
+  chip.addEventListener('click', () => popMenu(chip, [
+    { header: t.workspace },
+    { label: 'New session in this project', hint: 'Ctrl+N', run: () => newSession(t.workspace) },
+    { label: 'Show in Explorer', run: () => api.post('/api/fs/reveal', { path: t.workspace }).catch((e) => toast(e.message, 'error')) },
+    { label: 'Copy path', run: () => copyText(t.workspace) },
+  ], { minWidth: 240 }));
+  return chip;
+}
+
 function drawTop() {
   const t = activeTab();
   const tabs = [...S.tabs.values()];
@@ -223,7 +234,7 @@ function drawTop() {
     topEl,
     iconBtn('panel-left', 'Sidebar (Ctrl+B)', toggleSidebar, 'tb-side' + (sideShown() ? ' on' : '')),
     h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Open sessions' },
-      tabs.map((x, i) => h('div', { class: 'tab' + (S.active === x.id ? ' cur' : '') + (shownTabs.has(x.id) ? '' : ' tab-in'), role: 'tab', dataset: { id: x.id }, 'aria-selected': String(S.active === x.id), tabindex: S.active === x.id || (!t && i === 0) ? '0' : '-1', title: `${x.name}\n${x.workspace}`, onclick: () => setActive(x.id), ondblclick: () => renameTab(x), onauxclick: (e) => e.button === 1 && closeWithCheck(x), onkeydown: (e) => {
+      tabs.map((x, i) => h('div', { class: 'tab' + (S.active === x.id ? ' cur' : ''), role: 'tab', dataset: { id: x.id }, 'aria-selected': String(S.active === x.id), tabindex: S.active === x.id || (!t && i === 0) ? '0' : '-1', title: `${x.name}\n${x.workspace}`, onclick: () => setActive(x.id), ondblclick: () => renameTab(x), onauxclick: (e) => e.button === 1 && closeWithCheck(x), onkeydown: (e) => {
         if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') (e.preventDefault(), setActive(x.id));
         else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
@@ -237,11 +248,10 @@ function drawTop() {
       h('button', { class: 'tab-x', type: 'button', tabindex: '-1', title: 'Close', 'aria-label': `Close ${x.name}`, onclick: (e) => (e.stopPropagation(), closeWithCheck(x)) }, icon('x', 12))))),
     iconBtn('plus', 'New session (Ctrl+N)', () => newSession(), S.active ? '' : 'on'),
     h('span', { class: 'grow' }),
+    t ? workspaceChip(t) : null,
     t ? iconBtn('more', 'Session actions', (e) => sessionMenu(t, e.currentTarget, { rename: () => renameTab(t), close: () => closeWithCheck(t) })) : null,
     t ? iconBtn('panel-right', 'Side panel (Ctrl+J)', togglePanel, 'tb-panel' + (panelShown() ? ' on' : '')) : null,
   );
-  for (const x of tabs) shownTabs.add(x.id);
-  for (const id of shownTabs) if (!S.tabs.has(id)) shownTabs.delete(id);
   topEl.querySelector('.tab.cur')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   if (focusedTab) topEl.querySelector(`.tab[data-id="${CSS.escape(focusedTab)}"]`)?.focus({ preventScroll: true });
 }

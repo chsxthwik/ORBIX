@@ -1,6 +1,6 @@
-// Home: a composer to start a session (project, engine, model) and the recent conversations.
-// Shown when no session tab is active. With no AI provider set up it shows the first-run step instead.
-import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd, orbit } from './dom.js';
+// Home: a composer to start a session (project, engine, model), the projects, and the recent conversations.
+// Shown when no session tab is active. With no AI provider set up it shows the first-run steps instead.
+import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api, rpc } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, defaultEngine, engineReady, ompInstalled, savePrefs, groupSessions, on } from './store.js';
@@ -10,7 +10,7 @@ import { popMenu, modelPicker } from './dialogs.js';
 // IME composition and the caret are never interrupted); only the parts around it are redrawn.
 const draft = { draft: '', attach: [], project: '', ephemeral: false };
 let models = null; // models of the configured providers, fetched once per provider change
-let C = null; // the mounted home view: { wrap, comp, row, heroSlot, keysSlot, recentSlot }
+let C = null; // the mounted home view: { wrap, comp, row, heroSlot, keysSlot, gridSlot }
 let starting = false;
 on('engine', () => (models = null));
 
@@ -65,7 +65,7 @@ export function drawHome(root, H) {
 
   if (!C || !root.contains(C.wrap)) {
     const comp = new Composer({
-      placeholder: 'Describe a task, for example: find why the login test fails and fix it',
+      placeholder: 'Describe a task. For example: find why the login test fails and fix it',
       label: 'Task for the new session',
       cls: 'home-composer',
       state: draft,
@@ -77,10 +77,9 @@ export function drawHome(root, H) {
     comp.el.append(row);
     const heroSlot = h('div');
     const keysSlot = h('div');
-    const projSlot = h('div');
-    const recentSlot = h('div');
-    const wrap = h('div', { class: 'home' }, heroSlot, comp.el, keysSlot, projSlot, recentSlot);
-    C = { wrap, comp, row, heroSlot, keysSlot, projSlot, recentSlot };
+    const gridSlot = h('div');
+    const wrap = h('div', { class: 'home' }, heroSlot, comp.el, keysSlot, gridSlot);
+    C = { wrap, comp, row, heroSlot, keysSlot, gridSlot };
     // One drop handler per screen; it always feeds the current box.
     if (!root._drop) {
       root._drop = true;
@@ -155,10 +154,10 @@ export function drawHome(root, H) {
   go.addEventListener('click', () => C.start());
 
   row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, engSeg || '', modelBtn, unsaved, h('span', { class: 'grow' }), h('span', { class: 'c-hint' }, kbd('Enter'), ' to start'), go);
-  C.heroSlot.replaceChildren(hero('Start a task', engine === 'builtin' ? (S.engine?.approvals === 'auto' ? 'ORBIX reads your project, edits files and runs commands. Approvals are off, so it does not ask first.' : 'ORBIX reads your project, edits files and runs commands. It asks before it changes anything.') : 'This session runs the OMP CLI in your project folder.'));
-  C.keysSlot.replaceChildren(!agentOk ? h('p', { class: 'home-note' }, 'The ORBIX agent needs an AI provider.', h('button', { class: 'link', type: 'button', onclick: () => H.settings('engine') }, 'Set one up')) : statusStrip(H, engine, m));
-  C.projSlot.replaceChildren(projectCards(H, projects, () => redraw()));
-  C.recentSlot.replaceChildren(recentList(H));
+  C.heroSlot.replaceChildren(hero(g ? `What should ORBIX do in ${g.name}?` : 'What should ORBIX do?', engine === 'builtin' ? (S.engine?.approvals === 'auto' ? 'It reads the project, edits files and runs commands. Approvals are off, so it does not ask first.' : 'It reads the project, edits files and runs commands, and asks before it changes anything.') : 'This session runs the OMP CLI in the project folder.'));
+  C.keysSlot.replaceChildren(engine === 'builtin' && !agentOk ? h('p', { class: 'home-note' }, 'Set up an AI provider to use the ORBIX agent.', h('button', { class: 'link', type: 'button', onclick: () => H.settings('engine') }, 'Set up provider')) : statusStrip(H, engine, m));
+  const recent = recentList(H);
+  C.gridSlot.replaceChildren(h('div', { class: 'home-grid' + (recent ? '' : ' one') }, projectList(H, projects, () => redraw()), recent));
   const active = document.activeElement;
   if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
@@ -178,28 +177,26 @@ function statusStrip(H, engine, m) {
     chips.push(chip('shield', auto ? 'Approvals off' : 'Asks before changes', auto ? 'The agent edits and runs commands without asking. Click to change.' : 'Edits and commands ask first. Click to change.', () => H.settings('behavior'), auto ? 'warn' : ''));
   } else chips.push(chip('terminal', 'OMP CLI', 'This session uses the OMP command-line agent', () => H.settings('omp')));
   if (b) chips.push(chip('terminal', b.kind === 'wsl' ? `WSL · ${b.distro || '?'}` : 'Windows', 'Where the agent runs commands. Click to change.', () => H.settings('behavior')));
-  return h('div', { class: 'home-status' }, ...chips, h('span', { class: 'hs-keys' }, kbd('Ctrl+K'), ' commands ', kbd('@'), ' files'));
+  return h('div', { class: 'home-status' }, ...chips, h('span', { class: 'hs-keys' }, kbd('Ctrl+K'), ' commands  ', kbd('@'), ' files'));
 }
 
-/** Recent projects as cards: pick one to start the next session there. */
-function projectCards(H, projects, redraw) {
+/** Projects as a list: pick one to start the next session there. */
+function projectList(H, projects, redraw) {
   const head = h('div', { class: 'sec-h' }, h('h2', null, 'Projects'), h('button', { class: 'link', type: 'button', onclick: () => H.openFolder() }, 'Open folder…'));
-  if (!projects.length) return h('section', { class: 'projects' }, head, h('button', { class: 'proj-card add wide', type: 'button', onclick: () => H.openFolder() }, icon('folder-plus', 16), h('span', null, 'Open a project folder to start')));
-  const cards = projects.slice(0, 6).map((g) => {
+  const rows = projects.slice(0, 8).map((g) => {
+    const cur = g.path === draft.project;
     const open = g.sessions.filter((x) => tabForSession(x)).length;
-    const meta = g.sessions.length ? `${g.sessions.length} conversation${g.sessions.length === 1 ? '' : 's'}${g.latest ? ' · ' + timeAgo(g.latest) : ''}` : 'No conversations yet';
-    return h('button', { class: 'proj-card' + (g.path === draft.project ? ' cur' : ''), type: 'button', title: g.path, 'aria-pressed': String(g.path === draft.project), onclick: () => ((draft.project = g.path), redraw()) },
-      h('span', { class: 'pc-ic' }, icon('folder', 16)),
-      h('span', { class: 'pc-t ell' }, g.name),
-      open ? h('span', { class: 'dot open', title: `${open} open` }) : null,
-      h('span', { class: 'pc-p ell' }, h('bdi', null, g.path)),
-      h('span', { class: 'pc-m' }, meta));
+    const meta = open ? `${open} open` : g.sessions.length ? `${g.sessions.length} chat${g.sessions.length === 1 ? '' : 's'}` : 'new';
+    return h('button', { class: 'p-row' + (cur ? ' cur' : ''), type: 'button', title: g.path, 'aria-pressed': String(cur), onclick: () => ((draft.project = g.path), redraw()) },
+      icon(cur ? 'folder-open' : 'folder', 15),
+      h('div', { class: 'p-main' }, h('span', { class: 'p-name ell' }, g.name, open ? h('span', { class: 'dot open' }) : null), h('span', { class: 'p-path ell' }, h('bdi', null, g.path))),
+      h('span', { class: 'p-meta' }, meta));
   });
-  cards.push(h('button', { class: 'proj-card add', type: 'button', onclick: () => H.openFolder() }, icon('folder-plus', 16), h('span', null, 'Open folder')));
-  return h('section', { class: 'projects' }, head, h('div', { class: 'proj-grid' }, ...cards));
+  if (!rows.length) rows.push(h('button', { class: 'p-row p-add', type: 'button', onclick: () => H.openFolder() }, icon('folder-plus', 15), h('div', { class: 'p-main' }, h('span', { class: 'p-name' }, 'Open a project folder'), h('span', { class: 'p-path' }, 'ORBIX works only inside folders you choose.'))));
+  return h('section', { class: 'projects' }, head, h('div', { class: 'p-list' }, ...rows));
 }
 
-const hero = (title, sub) => h('div', { class: 'hero' }, orbit(), h('h1', { class: 'home-h' }, title), sub ? h('p', { class: 'home-sub' }, sub) : null);
+const hero = (title, sub) => h('div', { class: 'hero' }, h('h1', { class: 'home-h' }, title), sub ? h('p', { class: 'home-sub' }, sub) : null);
 
 function setupCard(H) {
   return h('section', { class: 'setup' },
@@ -212,9 +209,9 @@ function setupCard(H) {
 }
 
 function recentList(H) {
-  const sessions = S.sessions.slice(0, 8);
-  const head = h('div', { class: 'sec-h' }, h('h2', null, 'Recent'), sessions.length ? h('button', { class: 'link', type: 'button', onclick: H.manage }, 'Manage') : null);
-  if (!sessions.length) return h('section', { class: 'recent' }, head, h('p', { class: 'r-empty' }, 'Your conversations show here.'));
+  const sessions = S.sessions.slice(0, 10);
+  if (!sessions.length) return null;
+  const head = h('div', { class: 'sec-h' }, h('h2', null, 'Recent'), h('button', { class: 'link', type: 'button', onclick: H.manage }, 'Manage'));
   const ompOk = ompInstalled();
   return h('section', { class: 'recent' }, head,
     h('div', { class: 'r-list' }, sessions.map((s) => {

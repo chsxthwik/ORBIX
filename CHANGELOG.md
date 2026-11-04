@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- **Interface redesign.** Warm-neutral surfaces with one accent colour for choices, mint for anything the agent is doing right now and amber for anything waiting on you. Borders carry the structure; the glows, gradients and the animated mark on the home screen are gone.
+- **Session view.** Your messages are blocks with a "You" label, not chat bubbles. Tool calls are compact steps on a rail that open into a card; thinking folds to one line. Approvals dock above the message box with the exact file or command and the keys 1, 2 and Esc.
+- **Home.** One question, the message box, then Projects and Recent side by side. The example-task chips were removed.
+- **Top bar.** The active session's project is a chip: new session there, show the folder, copy its path.
+- **Composer.** The model chip reads "Default model" until a turn picks one, and shows the model as soon as the first turn starts.
+- **Status bar and side panel** use the mono face for data (tokens, cost, branch, paths) and the same tab style as the top bar.
+
 ## 3.0.0
 - **ORBIX - Unified ADE**: a native Windows app where an AI agent works on your project. It reads files, edits them and runs commands, and asks before it changes anything. Every file change can be undone.
 - **Its own agent**: 17 providers (Anthropic, OpenAI, Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenRouter, Together, Fireworks, Cerebras, Moonshot, Z.ai, Qwen, Ollama, LM Studio, any OpenAI-compatible server), Sign in with OpenRouter, live model lists, prices and context sizes, thinking levels, automatic retries, cost and context display.
