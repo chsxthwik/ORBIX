@@ -1,5 +1,5 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, orbitTrace } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setFast, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
@@ -498,7 +498,6 @@ export class TabView {
     if (!show) return void this.emptyEl?.remove();
     if (this.emptyEl?.isConnected) return;
     this.emptyEl = h('div', { class: 'chat-empty' },
-      orbitTrace('sm'),
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
       h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
       h('div', { class: 'ce-keys' }, h('span', null, kbd('/'), ' commands'), h('span', null, kbd('@'), ' mention a file'), h('span', null, kbd('Shift+Enter'), ' new line')));
