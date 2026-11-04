@@ -1214,6 +1214,10 @@ describe('anthropic: pure helpers', () => {
       const evs = await collect(parseSSE(streamOf([bytes.slice(0, cut), bytes.slice(cut)])));
       assert.deepEqual(evs, [{ event: 'message', data: 'caf\u00e9 \u20ac' }]);
     });
+    test('a last event without the closing blank line is still delivered', async () => {
+      assert.deepEqual(await collect(parseSSE(streamOf([enc.encode('data: a\n\ndata: [DONE]')]))), [{ event: 'message', data: 'a' }, { event: 'message', data: '[DONE]' }]);
+      assert.deepEqual(await collect(parseSSE(streamOf([enc.encode('event: z\r\ndata: end\r\n')]))), [{ event: 'z', data: 'end' }]);
+    });
     test('an event without data lines is skipped', async () => {
       assert.deepEqual(await collect(parseSSE(streamOf([enc.encode('event: ping\n\ndata: x\n\n')]))), [{ event: 'message', data: 'x' }]);
     });

@@ -37,6 +37,17 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
+/** extension_ui_request methods that wait for an answer (the rest are notifications). */
+const ASK_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
+
+/** Keep `open` (id -> request) in step with a session's events: questions it asks, cancels, and a finished turn. */
+export function trackOpenUi(open, ev) {
+  if (ev.type === 'extension_ui_request') {
+    if (ASK_METHODS.has(ev.method) && ev.id != null) open.set(ev.id, ev);
+    else if (ev.method === 'cancel') open.delete(ev.targetId);
+  } else if (ev.type === 'agent_end' && ev.isTerminal !== false) open.clear();
+}
+
 const CSP = [
   "default-src 'self'",
   "img-src 'self' data: blob:",
@@ -156,7 +167,7 @@ export class AppServer {
 
   /** An agent is blocked on a question (approval) for the user. */
   get waitingForUser() {
-    return !!this.auth.login || [...this.procs.values()].some((p) => p.pendingAsk?.size > 0);
+    return !!this.auth.login || [...this.procs.values()].some((p) => p.pendingAsk?.size > 0 || p.openUi?.size > 0);
   }
 
   async shutdown() {
@@ -186,7 +197,7 @@ export class AppServer {
     for (const c of this.clients) c.write(': ping\n\n');
   }
   procList() {
-    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, startedAt: p.startedAt, resume: p.opts.resume || null, engine: p.engine || 'omp' }));
+    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: p.engine || 'omp' }));
   }
   broadcastProcs() {
     this.broadcast({ g: 'procs', procs: this.procList() });
@@ -247,7 +258,7 @@ export class AppServer {
   async startProc({ workspace, resume, model, thinking, noSession, engine }) {
     if (!workspace) throw new Error('A workspace folder is required');
     // Two agents appending to one saved conversation would interleave it.
-    if (engine === 'builtin' && resume && [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume)) {
+    if (resume && [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume)) {
       throw Object.assign(new Error('That conversation is already open in another tab.'), { status: 409 });
     }
     this.backend.update(this.store.data.backend);
@@ -256,8 +267,11 @@ export class AppServer {
       ? new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg })
       : new OmpProc({ id, backend: this.backend, workspace, resume, model: model || this.store.data.launch.model || '', thinking: thinking || this.store.data.launch.thinking || '', noSession });
     proc.cache = { commands: [] };
+    // Questions waiting for the user (approvals, inputs): a window that reloads or reconnects gets them again.
+    proc.openUi = new Map();
     proc.on('event', (ev) => {
       if (ev.type === 'available_commands_update') proc.cache.commands = ev.commands || [];
+      trackOpenUi(proc.openUi, ev);
       this.forward(id, ev);
       if (ev.type === 'agent_start' || ev.type === 'agent_end' || ev.type === 'prompt_result') this.broadcastProcs();
     });
@@ -354,10 +368,10 @@ export class AppServer {
       return res.end('ORBIX: open it from the app window or shortcut (token required).');
     }
     if (url.pathname.startsWith('/api/')) {
-      if (req.method !== 'GET') {
-        const origin = req.headers.origin;
-        if ((origin && origin !== `http://${req.headers.host}`) || req.headers['x-orbix'] !== '1') return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
-      }
+      // SameSite does not separate ports: a page on another local port would send our cookie. Browsers add Origin to
+      // its cross-origin reads, and to every write.
+      const origin = req.headers.origin;
+      if ((origin && origin !== `http://${req.headers.host}`) || (req.method !== 'GET' && req.headers['x-orbix'] !== '1')) return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
       const route = this.routes[`${req.method} ${url.pathname}`];
       if (!route) return this.json(res, 404, { ok: false, error: 'No such endpoint' });
       if (url.pathname !== '/api/events') await this.envReady; // the backend is settled before anything uses it
@@ -612,6 +626,7 @@ export class AppServer {
         return {};
       },
       'GET /api/procs': async () => ({ procs: this.procList() }),
+      'GET /api/proc/ui': async ({ q }) => ({ requests: [...this.proc(q.proc).openUi.values()] }),
 
       'POST /api/rpc': async ({ body }) => {
         const proc = this.proc(body.proc);
@@ -629,6 +644,7 @@ export class AppServer {
         const t = body.msg?.type;
         if (!['extension_ui_response', 'host_tool_result', 'host_tool_update', 'host_uri_result'].includes(t)) throw Object.assign(new Error('Unsupported reply type'), { status: 400 });
         proc.send(body.msg);
+        if (t === 'extension_ui_response') proc.openUi?.delete(body.msg.id);
         return {};
       },
 

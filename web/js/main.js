@@ -190,13 +190,14 @@ async function openSession(s) {
   if (narrowSide.matches && overlay.side) (overlay.side = false), applyPrefs();
   if (existing) return setActive(existing.id);
   try {
-    await openTab({ workspace: s.cwd, resume: s.path, title: s.title, engine: s.engine || 'omp' });
+    // cwdDisplay is the Windows form of the folder: the file tree, git panel and @mentions all use it.
+    await openTab({ workspace: s.cwdDisplay || s.cwd, resume: s.path, title: s.title, engine: s.engine || 'omp' });
   } catch (e) {
     if (e.status !== 409) return toast(e.message, 'error', 8000);
     // Already open in a tab this window has not adopted yet: find that process and switch to it.
     const chain = new Set([s.path, ...(s.chain || [])]);
     const procs = await api.get('/api/procs').then((j) => j.procs).catch(() => []);
-    const p = procs.find((x) => x.resume && chain.has(x.resume));
+    const p = procs.find((x) => (x.resume && chain.has(x.resume)) || (x.file && chain.has(x.file)));
     if (p && !S.tabs.has(p.id)) await adoptRunning([p]);
     const tab = (p && S.tabs.get(p.id)) || tabForSession(s);
     toast('Already open in another tab', 'info', 2500);
@@ -421,9 +422,12 @@ const setBanner = (msg) => {
   banner.textContent = msg || '';
 };
 
+/** Open a tab for every running session this window does not show yet. Returns the ids it just loaded. */
 async function adoptRunning(procs) {
+  const fresh = new Set();
   for (const p of procs) {
     if (S.tabs.has(p.id)) continue;
+    fresh.add(p.id);
     const tab = new Tab(p.id, p.workspace, { resume: p.resume, engine: p.engine });
     S.tabs.set(p.id, tab);
     try {
@@ -436,6 +440,7 @@ async function adoptRunning(procs) {
   }
   if (!S.active && S.tabs.size) setActive([...S.tabs.keys()][0]);
   else emit('tabs');
+  return fresh;
 }
 
 async function boot() {
@@ -458,8 +463,7 @@ async function boot() {
     onGlobal: async (g) => {
       if (g.g === 'hello') {
         onAuthHello(g.auth);
-        await adoptRunning(g.procs);
-        onHello(g.procs);
+        onHello(g.procs, await adoptRunning(g.procs));
       } else if (g.g === 'procs') onProcs(g.procs);
       else if (g.g === 'auth') onAuthEvent(g.e);
     },

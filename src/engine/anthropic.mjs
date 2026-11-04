@@ -7,6 +7,16 @@ export async function* parseSSE(body, signal) {
   const dec = new TextDecoder();
   let buf = '';
   const reader = body.getReader();
+  const block = (raw) => {
+    let event = 'message';
+    const data = [];
+    for (const line of raw.split(/\r?\n/)) {
+      if (line.startsWith(':')) continue;
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
+    }
+    return data.length ? { event, data: data.join('\n') } : null;
+  };
   try {
     for (;;) {
       if (signal?.aborted) return;
@@ -17,16 +27,13 @@ export async function* parseSSE(body, signal) {
       while ((i = buf.search(/\r?\n\r?\n/)) >= 0) {
         const raw = buf.slice(0, i);
         buf = buf.slice(i).replace(/^\r?\n\r?\n/, '');
-        let event = 'message';
-        const data = [];
-        for (const line of raw.split(/\r?\n/)) {
-          if (line.startsWith(':')) continue;
-          if (line.startsWith('event:')) event = line.slice(6).trim();
-          else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
-        }
-        if (data.length) yield { event, data: data.join('\n') };
+        const ev = block(raw);
+        if (ev) yield ev;
       }
     }
+    // Some servers end the stream right after the last event, without the blank line.
+    const last = block(buf + dec.decode());
+    if (last) yield last;
   } finally {
     try {
       reader.releaseLock();

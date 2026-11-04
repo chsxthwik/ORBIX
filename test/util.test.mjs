@@ -184,6 +184,13 @@ describe('readJson / writeJson / mkdirp', () => {
     assert.deepEqual(readJson(f, null), v);
   });
 
+  test('a failed writeJson leaves no temp file behind', () => {
+    const dir = path.join(tmp, 'failwrite');
+    const f = path.join(dir, 'target.json');
+    fs.mkdirSync(f, { recursive: true }); // the rename onto a folder fails
+    assert.throws(() => writeJson(f, { a: 1 }));
+    assert.deepEqual(fs.readdirSync(dir), ['target.json']);
+  });
   test('writeJson pretty-prints with two-space indentation', () => {
     const f = path.join(tmp, 'pretty.json');
     writeJson(f, { a: [1] });

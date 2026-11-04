@@ -20,7 +20,7 @@ const { createTools, isForeignShare } = await import('../src/engine/tools.mjs');
 const fsapi = await import('../src/fsapi.mjs');
 const { isPrivateAddress } = await import('../src/engine/webfetch.mjs');
 const { userMentionsHost } = await import('../src/engine/proc.mjs');
-const { describeServer } = await import('../src/engine/mcp.mjs');
+const { describeServer, McpManager } = await import('../src/engine/mcp.mjs');
 const oauth = await import('../src/engine/oauth.mjs');
 const gitapi = await import('../src/gitapi.mjs');
 const { runSlash, HELP } = await import('../src/engine/slash.mjs');
@@ -345,5 +345,20 @@ describe('@ mentions', () => {
     assert.deepEqual(got.map((g) => g.path), ['a.txt', 'sub']);
     assert.equal(got[0].text, 'AAA');
     assert.match(got[1].text, /folder listing/);
+  });
+});
+
+describe('MCP stdio limits', () => {
+  test('a server that streams an endless line is stopped instead of filling memory', async () => {
+    const script = path.join(TMP, 'flood.mjs');
+    fs.writeFileSync(script, "const c = 'x'.repeat(1 << 20);\n(function w() { while (process.stdout.write(c)); process.stdout.once('drain', w); })();\n");
+    fs.writeFileSync(path.join(DATA, 'mcp.json'), JSON.stringify({ mcpServers: { flood: { command: process.execPath, args: [script] } } }));
+    const notes = [];
+    const m = new McpManager({ backend: new Backend({ kind: 'native' }), workspace: TMP, hostRoot: TMP, ask: async () => null, notice: (l, msg) => notes.push(msg) });
+    const t0 = Date.now();
+    await m.ensureStarted();
+    await m.stopAll();
+    assert.ok(Date.now() - t0 < 20000, 'start must fail fast');
+    assert.match(notes.join('\n'), /could not start/);
   });
 });

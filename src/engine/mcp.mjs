@@ -20,6 +20,7 @@ const PROTOCOL = '2025-06-18';
 const INIT_TIMEOUT = 60000;
 const CALL_TIMEOUT = 180000;
 const MAX_RESULT = 60000;
+const MAX_LINE = 32 * 1024 * 1024; // one JSON-RPC message; a server that sends more without a line break is stopped
 
 function readConfig(file) {
   const j = readJson(file, null);
@@ -132,6 +133,7 @@ class StdioTransport {
     let buf = '';
     this.child.stdout.setEncoding('utf8');
     this.child.stdout.on('data', (d) => {
+      if (this.overflow) return;
       buf += d;
       let i;
       while ((i = buf.indexOf('\n')) >= 0) {
@@ -145,6 +147,12 @@ class StdioTransport {
           continue; // servers sometimes print logs to stdout; ignore non-JSON lines
         }
         for (const m of Array.isArray(msg) ? msg : [msg]) this.onMessage(m);
+      }
+      if (buf.length > MAX_LINE) {
+        this.overflow = true;
+        buf = '';
+        killTree(this.child);
+        onClose(new Error(`sent a line longer than ${MAX_LINE / 1024 / 1024} MB`));
       }
     });
     this.child.stderr.setEncoding('utf8');

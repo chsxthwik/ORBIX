@@ -63,7 +63,6 @@ export class OmpProc extends EventEmitter {
     this.assembler = new ChunkAssembler();
     this.streaming = false;
     this.startedAt = Date.now();
-    this.info = null;
   }
 
   async start() {
@@ -162,7 +161,6 @@ export class OmpProc extends EventEmitter {
     }
     if (ev.type === 'ready') {
       this.ready = true;
-      this.info = ev;
       this.emit('ready', ev);
       return;
     }

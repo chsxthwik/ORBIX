@@ -119,4 +119,17 @@ describe('git writes', { skip: !gitAvailable && 'git not installed' }, () => {
     await gitapi.stage(backend, repo, ['-n.txt']);
     assert.equal((await files())['-n.txt'].staged, true);
   });
+
+  test('paths are literal: a name with wildcard or pathspec characters touches only that file', async () => {
+    put('a.txt.keep', 'keep\n');
+    put('[a].txt', 'bracket\n');
+    put('a.txt', 'plain\n');
+    await gitapi.discard(backend, repo, { untracked: ['[a].txt'] });
+    assert.equal(fs.existsSync(path.join(repo, '[a].txt')), false);
+    assert.equal(fs.existsSync(path.join(repo, 'a.txt')), true, '"[a].txt" must not also match "a.txt"');
+    // ":/" is pathspec magic for "the whole repository"
+    await gitapi.discard(backend, repo, { untracked: [':/'] }).catch(() => {});
+    assert.equal(fs.existsSync(path.join(repo, 'a.txt.keep')), true);
+    assert.equal(fs.existsSync(path.join(repo, 'a.txt')), true);
+  });
 });

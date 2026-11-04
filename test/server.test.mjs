@@ -16,7 +16,25 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = (f) => pathToFileURL(path.join(ROOT, 'src', f)).href;
 
 const { Store } = await import(SRC('store.mjs'));
-const { AppServer, VERSION } = await import(SRC('server.mjs'));
+const { AppServer, VERSION, trackOpenUi } = await import(SRC('server.mjs'));
+
+describe('open questions survive a window reload', () => {
+  const ask = (id, method = 'select') => ({ type: 'extension_ui_request', id, method, title: 'Run this command?', options: ['Allow once', 'Deny'] });
+  test('questions are kept until answered, cancelled or the turn ends', () => {
+    const open = new Map();
+    trackOpenUi(open, ask('a'));
+    trackOpenUi(open, ask('b', 'input'));
+    trackOpenUi(open, { type: 'extension_ui_request', id: 'n', method: 'notify', message: 'hi' });
+    trackOpenUi(open, { type: 'extension_ui_request', id: 's', method: 'setStatus', statusKey: 'x' });
+    assert.deepEqual([...open.keys()], ['a', 'b'], 'only questions that wait for an answer');
+    trackOpenUi(open, { type: 'extension_ui_request', id: 'c', method: 'cancel', targetId: 'a' });
+    assert.deepEqual([...open.keys()], ['b']);
+    trackOpenUi(open, { type: 'agent_end', isTerminal: false });
+    assert.equal(open.size, 1, 'a non-terminal agent_end keeps them');
+    trackOpenUi(open, { type: 'agent_end' });
+    assert.equal(open.size, 0);
+  });
+});
 
 const TOKEN = 'a'.repeat(48);
 const COOKIE = `orbix=${TOKEN}`;
@@ -261,6 +279,14 @@ describe('CSRF guard on mutating API calls', () => {
     assert.equal(withOrigin.status, 200);
     assert.equal(withOrigin.json.ok, true);
     assert.equal((await post({ 'x-orbix': '1' })).status, 200);
+  });
+
+  test('a GET with a foreign Origin is blocked too (a page on another local port shares our cookie)', async () => {
+    const get = (origin) => raw(port, 'GET', '/api/state', { headers: { cookie: COOKIE, ...(origin ? { origin } : {}) } });
+    assert.equal((await get(`http://localhost:${port + 1}`)).status, 403);
+    assert.equal((await get('http://evil.example')).status, 403);
+    assert.equal((await get(`http://127.0.0.1:${port}`)).status, 200);
+    assert.equal((await get()).status, 200);
   });
 
   test('matching Origin without the header is still blocked', async () => {

@@ -1,6 +1,6 @@
 // Home: a composer to start a session (project, engine, model), the projects, and the recent conversations.
 // Shown when no session tab is active. With no AI provider set up it shows the first-run steps instead.
-import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd } from './dom.js';
+import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd, logo } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api, rpc } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, defaultEngine, engineReady, ompInstalled, savePrefs, groupSessions, on } from './store.js';
@@ -78,8 +78,9 @@ export function drawHome(root, H) {
     const heroSlot = h('div');
     const keysSlot = h('div');
     const gridSlot = h('div');
-    const wrap = h('div', { class: 'home' }, heroSlot, comp.el, keysSlot, gridSlot);
-    C = { wrap, comp, row, heroSlot, keysSlot, gridSlot };
+    const featSlot = h('div');
+    const wrap = h('div', { class: 'home' }, heroSlot, comp.el, keysSlot, gridSlot, featSlot);
+    C = { wrap, comp, row, heroSlot, keysSlot, gridSlot, featSlot };
     // One drop handler per screen; it always feeds the current box.
     if (!root._drop) {
       root._drop = true;
@@ -158,6 +159,7 @@ export function drawHome(root, H) {
   C.keysSlot.replaceChildren(engine === 'builtin' && !agentOk ? h('p', { class: 'home-note' }, 'Set up an AI provider to use the ORBIX agent.', h('button', { class: 'link', type: 'button', onclick: () => H.settings('engine') }, 'Set up provider')) : statusStrip(H, engine, m));
   const recent = recentList(H);
   C.gridSlot.replaceChildren(h('div', { class: 'home-grid' + (recent ? '' : ' one') }, projectList(H, projects, () => redraw()), recent));
+  C.featSlot.replaceChildren(features(H, comp, engine));
   const active = document.activeElement;
   if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
@@ -196,7 +198,40 @@ function projectList(H, projects, redraw) {
   return h('section', { class: 'projects' }, head, h('div', { class: 'p-list' }, ...rows));
 }
 
-const hero = (title, sub) => h('div', { class: 'hero' }, h('h1', { class: 'home-h' }, title), sub ? h('p', { class: 'home-sub' }, sub) : null);
+const hero = (title, sub) => h('div', { class: 'hero' }, h('div', { class: 'home-mark', 'aria-hidden': 'true' }, logo(56)), h('div', { class: 'hero-t' }, h('h1', { class: 'home-h' }, title), sub ? h('p', { class: 'home-sub' }, sub) : null));
+
+/**
+ * What ORBIX can do, each with the one action that uses it. Only real, shipped features; each card does something.
+ * Slash commands go into the task box (they run once a session starts); the rest open their setting.
+ */
+function features(H, comp, engine) {
+  const put = (text) => () => {
+    comp.ta.value = text;
+    comp.ta.dispatchEvent(new Event('input', { bubbles: true }));
+    comp.focus();
+  };
+  const agent = engine === 'builtin';
+  const items = [
+    ['shield', 'Asks before it acts', 'Edits and commands wait for your OK: 1 allow once, 2 for the session, Esc deny.', 'Approval settings', () => H.settings('behavior')],
+    ['undo', 'Undo any change', 'Every file edit has its own Undo, and /undo reverts the whole last reply.', null, null],
+    ['map', 'Plan first', 'The Plan button (or /plan) makes it read and propose a plan. Nothing on disk changes until you turn it off.', null, null],
+    ['users', 'Helper agents', 'Read-only helpers research in parallel and report back. Watch them in the Agents panel.', null, null],
+    ['key', '17 providers', 'Anthropic, OpenAI, Gemini, DeepSeek, OpenRouter, local Ollama and LM Studio. Keys stay encrypted on this PC.', 'AI providers', () => H.settings('engine')],
+    ['plug', 'MCP, skills, hooks', 'Add tools with MCP servers, teach it with SKILL.md files, guard it with your own hooks.', 'Tools & MCP', () => H.settings('tools')],
+    ['branch', 'Git built in', 'See, stage, discard and commit changes in the side panel. /review checks them for bugs.', agent ? 'Review my changes' : null, agent ? put('/review') : null],
+    ['terminal', ompInstalled() ? 'OMP CLI ready' : 'Windows or WSL', ompInstalled() ? 'Run a session with the OMP CLI instead of the built-in agent, with its own sign-ins.' : 'Commands run in PowerShell on Windows or inside a WSL distribution.', ompInstalled() ? 'OMP CLI settings' : 'Where commands run', () => H.settings(ompInstalled() ? 'omp' : 'behavior')],
+  ];
+  return h('section', { class: 'features', 'aria-label': 'What ORBIX can do' },
+    h('div', { class: 'sec-h' }, h('h2', null, 'What it can do'), h('span', { class: 'sec-note' }, kbd('/'), ' for every command')),
+    h('div', { class: 'feat-grid' }, items.map(([ic, t, d, act, run]) => {
+      const card = h(run ? 'button' : 'div', { class: 'feat' + (run ? ' act' : ''), type: run ? 'button' : null, onclick: run || null },
+        h('span', { class: 'feat-ic' }, icon(ic, 16)),
+        h('span', { class: 'feat-t' }, t),
+        h('span', { class: 'feat-d' }, d),
+        act ? h('span', { class: 'feat-a' }, act, icon('chevron-right', 12)) : null);
+      return card;
+    })));
+}
 
 function setupCard(H) {
   return h('section', { class: 'setup' },

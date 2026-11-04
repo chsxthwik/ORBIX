@@ -53,10 +53,17 @@ export function userMentionsHost(messages, host) {
 const isOverflow = (msg) => /context|too long|too many tokens|maximum.*tokens|token limit|prompt is too long|reduce the length/i.test(msg || '') && /exceed|maximum|limit|too long|too large|reduce/i.test(msg || '');
 const hasAnswer = (m) => m.content.some((c) => (c.type === 'text' && c.text.trim()) || c.type === 'toolCall');
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+/** Wait `ms`, or less when `signal` aborts (at once when it already has). Never rejects. */
 const sleep = (ms, signal) =>
   new Promise((resolve) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true });
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(t);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const t = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
   });
 
 export class AgentProc extends EventEmitter {
