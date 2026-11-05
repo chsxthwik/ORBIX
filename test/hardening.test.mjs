@@ -425,3 +425,26 @@ describe('reserved device names are not read as files', { skip: process.platform
     }
   });
 });
+
+describe('links opened in the browser', () => {
+  test('safeLink keeps http(s) only and percent-encodes quotes and spaces', () => {
+    assert.equal(util.safeLink('https://example.com/a" "C:\\x.exe'), 'https://example.com/a%22%20%22C:/x.exe');
+    for (const bad of ['file:///C:/Windows/System32/calc.exe', 'javascript:alert(1)', 'C:\\x.exe', '', null, 'http://exa mple.com/']) assert.throws(() => util.safeLink(bad), /http/, String(bad));
+  });
+});
+
+describe('OMP session delete', () => {
+  test('"<project>/.jsonl" and "..jsonl" are refused (their artifacts folder would be the project folder)', async () => {
+    const { deleteSessions } = await import('../src/sessions.mjs');
+    const root = path.join(TMP, 'omp-sessions');
+    const proj = path.join(root, 'proj');
+    fs.mkdirSync(proj, { recursive: true });
+    fs.writeFileSync(path.join(proj, 'keep.jsonl'), '{}\n');
+    const backend = { sessionsRoot: async () => root, hostPath: (p) => p };
+    for (const name of ['.jsonl', '..jsonl', ' .jsonl']) await assert.rejects(deleteSessions(backend, [path.join(proj, name)]), (e) => e.status === 400, name);
+    assert.ok(fs.existsSync(path.join(proj, 'keep.jsonl')));
+    fs.writeFileSync(path.join(proj, 'gone.jsonl'), '{}\n');
+    assert.equal(await deleteSessions(backend, [path.join(proj, 'gone.jsonl')]), 1);
+    assert.ok(fs.existsSync(path.join(proj, 'keep.jsonl')));
+  });
+});

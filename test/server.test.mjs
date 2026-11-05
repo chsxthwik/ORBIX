@@ -304,6 +304,40 @@ describe('CSRF guard on mutating API calls', () => {
     const r = await raw(port, 'POST', '/api/workspaces/remove', { headers: { 'x-orbix': '1', origin: `http://127.0.0.1:${port}` }, body });
     assert.equal(r.status, 401);
   });
+
+  test('GETs and static files from another site or another local port (no Origin, Sec-Fetch-Site) are blocked', async () => {
+    for (const site of ['cross-site', 'same-site']) {
+      for (const p of ['/api/state', '/api/fs/list?path=' + encodeURIComponent(TMP), '/', '/index.html']) {
+        const r = await raw(port, 'GET', p, { headers: { cookie: COOKIE, 'sec-fetch-site': site } });
+        assert.equal(r.status, 403, `${site} ${p}`);
+      }
+    }
+    for (const site of ['same-origin', 'none']) assert.equal((await raw(port, 'GET', '/api/state', { headers: { cookie: COOKIE, 'sec-fetch-site': site } })).status, 200, site);
+    assert.equal((await raw(port, 'GET', '/api/ping', { headers: { 'sec-fetch-site': 'cross-site' } })).status, 200, 'ping stays public');
+  });
+});
+
+describe('request bodies', () => {
+  test('a "__proto__" key in a body cannot change the prototype of stored settings', async () => {
+    const r = await api('POST', '/api/prefs', { body: '{"ui":{"__proto__":{"polluted":"yes"},"fontSize":15}}' });
+    assert.equal(r.status, 200);
+    assert.equal(Object.getPrototypeOf(store.data.ui), Object.prototype);
+    assert.equal(store.data.ui.polluted, undefined);
+    assert.equal(store.data.ui.fontSize, 15);
+  });
+
+  test('the event stream carries the protective headers too', async () => {
+    const headers = await new Promise((resolve, reject) => {
+      const rq = http.request({ host: '127.0.0.1', port, path: '/api/events', headers: { host: `127.0.0.1:${port}`, cookie: COOKIE }, agent: false }, (res) => {
+        resolve(res.headers);
+        res.destroy();
+      });
+      rq.on('error', reject);
+      rq.end();
+    });
+    assert.equal(headers['x-content-type-options'], 'nosniff');
+    assert.equal(headers['cross-origin-resource-policy'], 'same-origin');
+  });
 });
 
 describe('API plumbing', () => {

@@ -116,6 +116,21 @@ export function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
 
+/**
+ * An http(s) link in its parsed, percent-encoded form. rundll32 hands its raw command line to the URL handler, so a
+ * link (e.g. from model output) must not carry quotes or spaces that could split it into another argument.
+ */
+export function safeLink(raw) {
+  let u;
+  try {
+    u = new URL(String(raw ?? '').trim());
+  } catch {
+    throw new Error('Only http(s) links can be opened');
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Only http(s) links can be opened');
+  return u.href;
+}
+
 /** First `bytes` bytes of a file as UTF-8 (the tail may cut a multi-byte character; fine for sniffing headers). */
 export async function readHead(file, bytes) {
   const fh = await fs.promises.open(file, 'r');

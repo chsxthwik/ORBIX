@@ -687,7 +687,11 @@ export class TabView {
       for (const b of Array.isArray(m.content) ? m.content : []) {
         if (b.type !== 'toolCall') continue;
         const r = t.results.get(b.id);
-        if (r?.isError) n.failed++;
+        // A failed step counts once, as failed, not also as a file read or a command run.
+        if (r?.isError) {
+          n.failed++;
+          continue;
+        }
         const a = b.arguments || {};
         if (b.name === 'read') a.path && read.add(a.path);
         else if (/^(glob|grep|find|ast_grep|web_search|web_fetch)$/.test(b.name)) n.search++;
@@ -695,7 +699,7 @@ export class TabView {
         else if (b.name === 'task') n.help++;
         if (b.name !== 'edit' && b.name !== 'write' && b.name !== 'ast_edit') continue;
         const d = r?.details;
-        if (r?.isError || d?.undone) continue;
+        if (d?.undone) continue;
         const path = d?.path || a.path;
         if (!path) continue;
         const f = files.get(path) || { add: 0, del: 0, ids: [] };
@@ -706,7 +710,7 @@ export class TabView {
       }
     }
     const anchor = lastAsst && this.els.get(lastAsst);
-    const did = read.size + n.search + n.run + n.help + files.size;
+    const did = read.size + n.search + n.run + n.help + files.size + n.failed;
     if (!anchor || !did) return;
     // What the agent looked at and did in this reply, in one line (the transparency the tool steps give, summed up).
     const u = t.messages[start];

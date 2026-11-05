@@ -305,7 +305,23 @@ describe('tools: inputs and outputs', () => {
     const r = await run('edit', { path: 'ind.js', old_string: 'if (a) {\n    go();\n}', new_string: 'if (a) {\n    go();\n    stop();\n}' });
     assert.ok(!r.isError, r.text);
     assert.match(r.text, /ignoring whitespace differences; new text re-indented/);
+    assert.match(r.text, /\n\+4\|        stop\(\);/, 'a whitespace-tolerant edit shows its diff');
     assert.equal(fs.readFileSync(at('ind.js'), 'utf8'), 'function f() {\n    if (a) {\n        go();\n        stop();\n    }\n}\n');
+  });
+  test('edit: an exact match returns only the line range; a missing file points to write', async () => {
+    put(at('exact.txt'), 'a\nb\n');
+    assert.equal((await run('edit', { path: 'exact.txt', old_string: 'b', new_string: 'c' })).text.split('\n').length, 1);
+    const miss = await run('edit', { path: 'nofile.txt', old_string: 'a', new_string: 'b' });
+    assert.equal(miss.isError, true);
+    assert.match(miss.text, /^No such file or folder: nofile\.txt\..* To create a new file, use write\.$/);
+  });
+  test('invalidArgsText names the expected arguments and how to escape strings', () => {
+    const edit = tools_.TOOL_DEFS.find((d) => d.name === 'edit');
+    const t = tools_.invalidArgsText(edit);
+    assert.match(t, /^Not run: the arguments were not valid JSON\./);
+    assert.match(t, /edit\(path: string, old_string: string, new_string: string, replace_all\?: boolean\)/);
+    assert.match(tools_.invalidArgsText(undefined), /matching the tool schema/);
+    assert.equal(tools_.signature({ name: 'mcp_x', input_schema: { properties: { q: {} } } }), 'mcp_x(q?: any)');
   });
   test('edit: ambiguous matches and misses say where to look', async () => {
     put(at('amb.txt'), 'x = 1\ny = 2\nx = 1\n');
@@ -323,7 +339,10 @@ describe('tools: inputs and outputs', () => {
     const r = await run('bash', { command: cmd });
     assert.ok(!r.isError, r.text.slice(-300));
     assert.ok(r.text.startsWith('line 1\n'));
-    assert.match(r.text, /\n\[… \d+ characters omitted …\]\n/);
+    const m = /\n\[… (\d+) lines \((\d+) characters\) omitted; filter the output or redirect it to a file to see them …\]\n/.exec(r.text);
+    assert.ok(m, r.text.slice(9000, 11000));
+    const kept = r.text.split('\n').filter((l) => /^line \d+$/.test(l)).length;
+    assert.equal(kept + Number(m[1]), 6000, 'kept + omitted lines = all lines');
     assert.match(r.text, /line 6000\n\[exit code 0 · \d+\.\ds\]$/);
     assert.ok(r.text.length < 31000);
     assert.equal(r.details.truncated, true);
@@ -481,6 +500,15 @@ describe('system prompt', () => {
   });
   test('subagentPrompt adds the read-only role', () => {
     assert.match(prompt.subagentPrompt('BASE'), /^BASE\n\n# You are a subagent/);
+    const s = prompt.subagentPrompt('BASE', ['read', 'grep', 'web_search']);
+    assert.match(s, /your only tools are read, grep, web_search;/);
+    assert.match(s, /overrides the instructions above/);
+    assert.match(s, /cannot edit files, run commands, delegate or ask anyone questions/);
+  });
+  test('the core prompt covers verification honesty and truncated tool output', () => {
+    const p = prompt.buildSystemPrompt({ env, approvals: null });
+    assert.match(p, /Do not weaken, skip or delete tests/);
+    assert.match(p, /Long tool output is cut in the middle at a "\[… omitted …\]" marker/);
   });
 });
 
@@ -662,6 +690,27 @@ describe('agent loop end to end (mock provider)', () => {
     const tr = p.messages.find((m) => m.role === 'toolResult');
     assert.equal(tr.isError, true);
     assert.match(tr.content[0].text, /cut off because the reply reached the output token limit/);
+  });
+
+  test('a tool call with malformed JSON is not run; the model is told the expected arguments', async () => {
+    const p = await make();
+    script = [sseResponse(turn({ tools: [{ id: 'tj', name: 'edit', json: '{"path":"hello.txt","old_string":"hello" "new_string":"bye"}' }], stop: 'tool_use' })), sseResponse(turn({ text: 'Retrying.' }))];
+    // json without content_block_stop: the assembler closes it at the end of the stream
+    await send(p, 'edit it');
+    assert.equal(fs.readFileSync(path.join(ws, 'hello.txt'), 'utf8'), 'hello world\n');
+    const tr = p.messages.find((m) => m.role === 'toolResult');
+    assert.equal(tr.isError, true);
+    assert.match(tr.content[0].text, /^Not run: the arguments were not valid JSON\. Send the call again with one complete JSON object: edit\(path: string, old_string: string, new_string: string, replace_all\?: boolean\)/);
+  });
+
+  test('a subagent is told exactly which tools it has', async () => {
+    const p = await make();
+    script = [sseResponse(turn({ tools: [{ id: 'tk', name: 'task', args: { tasks: [{ task: 'look around' }] } }], stop: 'tool_use' })), sseResponse(turn({ text: 'Found it.' })), sseResponse(turn({ text: 'Summary.' }))];
+    await send(p, 'research');
+    const sub = requests.find((r) => /# You are a subagent/.test(r.body.system?.[0]?.text || ''));
+    assert.ok(sub, 'the subagent request was made');
+    assert.match(sub.body.system[0].text, /your only tools are read, glob, grep, web_fetch;/);
+    assert.deepEqual(sub.body.tools.map((t) => t.name), ['read', 'glob', 'grep', 'web_fetch']);
   });
 
   test('an empty reply is retried once and left out of the context', async () => {

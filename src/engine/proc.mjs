@@ -6,10 +6,10 @@ import path from 'node:path';
 import { clip, makeTitle, uid, textOf } from '../util.mjs';
 import { isWinPath } from '../backend.mjs';
 import * as providers from './providers.mjs';
-import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor } from './tools.mjs';
+import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor, invalidArgsText } from './tools.mjs';
 import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession } from './store.mjs';
 import { loadInstructions, readMentions, promptAttachments, promptImages } from './context.mjs';
-import { AUTO_COMPACT_RATIO, contextMessages, contextTokens, estimateTokens, findCut, lastMarker, rebuildSession, summarize, tokenScale } from './compact.mjs';
+import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, lastMarker, rebuildSession, summarize, tokenScale } from './compact.mjs';
 import { runTasks, SUBAGENT_TOOLS } from './subagent.mjs';
 import { TurnAssembler, collectTurn } from './assemble.mjs';
 import { HookRunner } from './hooks.mjs';
@@ -717,7 +717,7 @@ export class AgentProc extends EventEmitter {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       await this._drainSteer();
       if (this.abortCtl.signal.aborted) break;
-      if (this.autoCompact && !once.compacted && this._overThreshold(conn.contextWindow)) {
+      if (this.autoCompact && !once.compacted && this._overThreshold(conn.contextWindow, conn.args?.({}).maxTokens ?? 8192)) {
         once.compacted = true;
         await this._compact({ conn, reason: 'threshold' });
         if (this.abortCtl.signal.aborted) break;
@@ -798,8 +798,8 @@ export class AgentProc extends EventEmitter {
     }
   }
 
-  _overThreshold(cw = this.meta?.contextWindow) {
-    return !!cw && contextTokens(this.messages) > cw * AUTO_COMPACT_RATIO;
+  _overThreshold(cw = this.meta?.contextWindow, reserve = this._maxTokens() ?? 8192) {
+    return !!cw && contextTokens(this.messages) > compactLimit(cw, reserve);
   }
 
   /** The environment block, captured once per session so the system prompt stays byte-identical (prompt cache). */
@@ -811,10 +811,10 @@ export class AgentProc extends EventEmitter {
     return this.envFacts;
   }
 
-  async _system({ subagent = false } = {}) {
+  async _system({ subagent = false, tools } = {}) {
     const [env, rules, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), loadInstructions(this.backend, this.workspace).catch(() => []), subagent ? [] : this._skills()]);
     const model = this.model ? `${this.provider ? this.provider + '/' : ''}${this.model}` : '';
-    if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules }));
+    if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules }), tools);
     return buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode });
   }
 
@@ -1099,7 +1099,7 @@ export class AgentProc extends EventEmitter {
     if (call.truncated || call.invalidArguments) {
       result = call.truncated
         ? { text: 'Not run: this tool call was cut off because the reply reached the output token limit. Make smaller calls: for a large file, write the first part, then add the rest with edit.', isError: true }
-        : { text: 'Not run: the arguments were not valid JSON. Send the call again with one JSON object matching the tool schema.', isError: true };
+        : { text: invalidArgsText(this._toolDefs().find((d) => d.name === call.name)), isError: true };
     } else if (this.planMode && !this._isReadOnly(call.name)) result = { text: 'Plan mode is on, so this tool is not available. Only read and plan; the user can turn plan mode off with /plan.', isError: true };
     else if ((!this.defs.some((d) => d.name === call.name) && !this.mcp.has(call.name)) || (call.name === 'web_search' && !this._searchOn())) result = { text: `Unknown tool "${call.name}". Available tools: ${this._toolDefs().map((d) => d.name).join(', ')}.`, isError: true };
     if (!result) {
@@ -1209,7 +1209,7 @@ export class AgentProc extends EventEmitter {
     const sub = (await this._roleConnSafe('fast')) || conn;
     const r = await runTasks(call.arguments, {
       stream: sub.stream,
-      system: await this._system({ subagent: true }),
+      system: await this._system({ subagent: true, tools: defs.map((d) => d.name) }),
       toolDefs: defs,
       model: sub.model,
       thinking: sub.thinking,
@@ -1217,6 +1217,7 @@ export class AgentProc extends EventEmitter {
       parentToolCallId: call.id,
       idPrefix: `sub${++this.taskSeq}`,
       costOf: (u) => this._costOf(u, sub.info),
+      invalidArgs: invalidArgsText,
       runTool: (c, signal) => this.tools.run(c.name, c.arguments || {}, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.() }),
       onUpdate: (view) => {
         const first = !this.subagents.has(view.id);

@@ -3,11 +3,48 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { isWinPath, runProc } from './backend.mjs';
-import { looksBinary } from './util.mjs';
+import { looksBinary, ROOT } from './util.mjs';
 
-// Repos can be anything the user opens (a downloaded archive too): never run repo-configured programs from a read.
-// Literal pathspecs: a file called [id].js or :/ must not act as a pattern.
-const GIT = ['--literal-pathspecs', '-c', 'core.quotepath=off', '-c', 'color.ui=never', '-c', 'core.fsmonitor=false'];
+// Repos can be anything the user opens (a downloaded archive too): never run repo-configured programs.
+// Literal pathspecs: a file called [id].js or :/ must not act as a pattern. Hooks are looked up under a file (never a
+// folder), so none exists; signatures are not checked by `log` (that runs gpg.program).
+const GIT = ['--literal-pathspecs', '-c', 'core.quotepath=off', '-c', 'color.ui=never', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false'];
+const NO_HOOKS_WIN = path.join(ROOT, 'package.json');
+const NO_HOOKS_LINUX = '/dev/null';
+
+// Filter drivers (run by status, diff, add, restore) and signing programs set by the repository's own config (not
+// your system/global config) are switched off.
+const TRUSTED_SCOPES = new Set(['system', 'global', 'command']);
+const guardCache = new Map(); // backend kind|ws -> { at, args }
+async function repoGuards(run, key) {
+  const hit = guardCache.get(key);
+  if (hit && Date.now() - hit.at < 3000) return hit.args;
+  const re = '^(filter|gpg)\\.';
+  let r = await run(['config', '--show-scope', '-z', '--get-regexp', re]);
+  let scoped = true;
+  if (r.code === 129) {
+    r = await run(['config', '-z', '--get-regexp', re]); // git < 2.26: no scopes, so trust none
+    scoped = false;
+  }
+  if (r.code !== 0) return []; // no matches (1), or git cannot run: then the real call fails too
+  const parts = r.stdout.toString('utf8').split('\0');
+  const names = new Set();
+  let signer = false;
+  for (let i = 0; i < parts.length; i += scoped ? 2 : 1) {
+    const entry = scoped ? parts[i + 1] : parts[i];
+    if (!entry || (scoped && TRUSTED_SCOPES.has(parts[i]))) continue;
+    const k = entry.split('\n')[0];
+    if (k.startsWith('gpg.')) signer = true;
+    else if (k.startsWith('filter.') && k.lastIndexOf('.') > 7) names.add(k.slice(7, k.lastIndexOf('.')));
+  }
+  const args = signer ? ['-c', 'commit.gpgSign=false'] : [];
+  for (const n of names) {
+    if (n.includes('=')) throw new Error(`This repository's git config defines a filter ("${n}") that ORBIX cannot switch off, so git is not run here.`);
+    for (const v of ['clean=', 'smudge=', 'process=', 'required=false']) args.push('-c', `filter.${n}.${v}`);
+  }
+  guardCache.set(key, { at: Date.now(), args });
+  return args;
+}
 
 let winGit; // memoised: is Windows git available?
 async function hasWinGit() {
@@ -19,12 +56,16 @@ async function hasWinGit() {
 /** Run git for `ws`. Windows-drive workspaces use Windows git (fast, native); Linux ones go through WSL. */
 export async function git(backend, ws, args, opts = {}) {
   const onWinDrive = isWinPath(ws) || /^\/mnt\/[a-z](\/|$)/.test(ws);
+  const o = { timeout: opts.timeout || 30000, maxBytes: opts.maxBytes || 4 * 1024 * 1024 };
+  let run;
   if (onWinDrive && (await hasWinGit())) {
     const cwd = isWinPath(ws) ? ws : backend.hostPath(ws);
-    return runProc('git.exe', [...GIT, '-c', `safe.directory=*`, ...args], { cwd, timeout: opts.timeout || 30000, maxBytes: opts.maxBytes || 4 * 1024 * 1024 });
+    run = (a) => runProc('git.exe', [...GIT, '-c', `core.hooksPath=${NO_HOOKS_WIN}`, '-c', `safe.directory=*`, ...a], { cwd, ...o });
+  } else {
+    if (!backend.isWsl && !isWinPath(ws)) throw new Error('Not a Windows path');
+    run = (a) => backend.exec(['git', ...GIT, '-c', `core.hooksPath=${NO_HOOKS_LINUX}`, ...a], { cwd: ws, ...o });
   }
-  if (!backend.isWsl && !isWinPath(ws)) throw new Error('Not a Windows path');
-  return backend.exec(['git', ...GIT, ...args], { cwd: ws, timeout: opts.timeout || 30000, maxBytes: opts.maxBytes || 4 * 1024 * 1024 });
+  return run([...(await repoGuards(run, `${backend.kind}|${ws}`)), ...args]);
 }
 
 /** Parser for `git status --porcelain=v1 -z -b`. */
@@ -64,7 +105,7 @@ export function parseStatus(buf) {
 }
 
 export async function status(backend, ws) {
-  const r = await git(backend, ws, ['status', '--porcelain=v1', '-z', '-b', '--untracked-files=all']);
+  const r = await git(backend, ws, ['status', '--porcelain=v1', '-z', '-b', '--untracked-files=all', '--ignore-submodules=dirty']);
   if (r.code !== 0) {
     const msg = r.stderr.toString('utf8').trim();
     if (/not a git repository/i.test(msg)) return { repo: false, files: [] };
@@ -92,8 +133,8 @@ export async function diff(backend, ws, file, { untracked = false } = {}) {
     if (lines[lines.length - 1] === '') lines.pop();
     return { text: `--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n` + lines.map((l) => '+' + l).join('\n') + '\n' };
   }
-  let r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '-U3', 'HEAD', '--', file], { maxBytes: MAX });
-  if (r.code !== 0) r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '-U3', '--cached', '--', file], { maxBytes: MAX });
+  let r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '-U3', 'HEAD', '--', file], { maxBytes: MAX });
+  if (r.code !== 0) r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '-U3', '--cached', '--', file], { maxBytes: MAX });
   if (r.code !== 0) throw new Error(r.stderr.toString('utf8').trim() || 'git diff failed');
   return { text: r.stdout.toString('utf8') };
 }

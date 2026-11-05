@@ -5,6 +5,12 @@ import fs from 'node:fs';
 import { collectTurn } from './assemble.mjs';
 
 export const AUTO_COMPACT_RATIO = 0.8;
+
+/**
+ * Context tokens above which the next request compacts first. The reply's max_tokens is reserved too: many servers
+ * reject a request whose prompt plus max_tokens exceeds the window (at most half the window is reserved).
+ */
+export const compactLimit = (contextWindow, reserve = 0) => Math.min(contextWindow * AUTO_COMPACT_RATIO, contextWindow - Math.min(Math.max(0, reserve || 0), contextWindow / 2));
 const IMAGE_TOKENS = 1600;
 
 const textOf = (m) => (Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content ?? '') }]).map((c) => (c.type === 'text' ? c.text : c.type === 'thinking' ? c.thinking : c.type === 'toolCall' ? `${c.name} ${JSON.stringify(c.arguments || {})}` : '')).join('\n');
@@ -113,7 +119,12 @@ export function findCut(messages, keepTokens) {
 /** A plain-text transcript of messages for the summarizer, with long tool output clipped. */
 export function transcript(messages, maxChars) {
   const lines = [];
-  const clipTo = (s, n) => (s.length > n ? s.slice(0, n) + `… [${s.length - n} more characters]` : s);
+  // Start and end are kept: tool output ends with the exit code, the last error or the summary line.
+  const clipTo = (s, n) => {
+    if (s.length <= n) return s;
+    const tail = Math.floor(n / 3);
+    return `${s.slice(0, n - tail)} … [${s.length - n} characters omitted] … ${s.slice(-tail)}`;
+  };
   for (const m of messages) {
     if (m.role === 'compactionSummary') lines.push(`[Earlier summary]\n${m.summary}`);
     else if (m.role === 'user') {
