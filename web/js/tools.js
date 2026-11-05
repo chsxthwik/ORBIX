@@ -414,7 +414,7 @@ function fillBody(body, call, result, ctx) {
     const msg = ctx.tab.results.get(call.id);
     if (d.undone || msg?.details?.undone) body.append(h('div', { class: 'muted small undo-row' }, 'Undone'));
     else {
-      const b = h('button', { class: 'btn sm', type: 'button' }, icon('refresh', 13), 'Undo this change');
+      const b = h('button', { class: 'btn sm', type: 'button' }, icon('undo', 13), 'Undo this change');
       b.addEventListener('click', async () => {
         b.disabled = true;
         try {

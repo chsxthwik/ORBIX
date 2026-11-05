@@ -6,11 +6,11 @@
   <img alt="ORBIX - Unified ADE" src="docs/img/banner.svg" width="100%">
 </picture>
 
-[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-6a5af9)](LICENSE)
-[![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-35aee6)](#requirements)
-[![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-8f86ff)](CHANGELOG.md)
-[![17 providers](https://img.shields.io/badge/AI%20providers-17-c4baff)](#providers)
-[![Tests: 684 passing](https://img.shields.io/badge/tests-684%20passing-55c8ee)](#build-from-source)
+[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-3C3C44)](LICENSE)
+[![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0E8A7C)](#requirements)
+[![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-C2410C)](CHANGELOG.md)
+[![17 providers](https://img.shields.io/badge/AI%20providers-17-0E8A7C)](#providers)
+[![Tests: 689 passing](https://img.shields.io/badge/tests-689%20passing-1F9D55)](#build-from-source)
 
 [Quick start](#quick-start) | [Demo](#30-second-demo) | [Features](#features) | [How it works](#how-it-works) | [Providers](#providers) | [Safety](#safety) | [FAQ](#faq) | [Build](#build-from-source) | [Website](https://orbix-agent.vercel.app)
 
@@ -27,7 +27,7 @@ ORBIX is a native Windows app where an AI agent works on your code. It reads you
 
 ## Quick start
 
-1. **Unzip** the release anywhere and double-click `bin\ORBIX.exe` (or `ORBIX.vbs`). Run `Create-Shortcuts.cmd` once for Desktop and Start-menu shortcuts.
+1. **Unzip** the release anywhere. For daily use run `tools\install.ps1` once — it installs ORBIX to `%LOCALAPPDATA%\Programs\ORBIX` and adds Desktop and Start-menu shortcuts. Or just double-click `bin\ORBIX.exe` (or `ORBIX.vbs`) to run it portably.
 2. Press <kbd>Ctrl</kbd>+<kbd>,</kbd>, open **AI providers**, paste an API key and press **Check & save**. You can also sign in with OpenRouter or connect a local model.
 3. **Pick a project folder** on the home screen, describe a task and press <kbd>Enter</kbd>.
 

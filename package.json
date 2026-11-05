@@ -18,7 +18,8 @@
     "build": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-host.ps1",
     "package": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1",
     "doctor": "node tools/doctor.mjs",
-    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-shortcut.ps1"
+    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-shortcut.ps1",
+    "install:app": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install.ps1"
   },
   "keywords": [
     "omp",

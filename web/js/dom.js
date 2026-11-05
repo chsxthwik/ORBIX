@@ -127,14 +127,16 @@ const svgEl = (tag, attrs, ...kids) => {
   return el;
 };
 
-// The mark: two orbits woven into an X inside an O, one cyan node. Geometry matches site/assets/img/logo-static.svg and assets/icon.png.
-// The symbols live in index.html (#orbix-mark, and #orbix-mark-s, the simplified master for sizes up to 32 px). The mark is static;
-// life comes from CSS on the .logo element, so there is no per-instance geometry and no layout shift.
+// The mark, in the app's two signals: a ring (the O) in the text colour, a tilted teal orbit (the agent) and one orange
+// node (you). Drawn in currentColor plus the two signal tokens, so it follows the theme. Small sizes get heavier strokes.
 export function logo(size = 20) {
-  const use = document.createElementNS(NS, 'use');
-  use.setAttribute('href', size <= 32 ? '#orbix-mark-s' : '#orbix-mark');
-  const svg = svgEl('svg', { class: 'logo', viewBox: '0 0 512 512', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' }, use);
-  return svg;
+  const small = size <= 24;
+  // The orbit and its node sit in one group, so while an agent works the whole system can turn (see .lg-sys in app.css).
+  return svgEl('svg', { class: 'logo', viewBox: '0 0 24 24', width: size, height: size, fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
+    svgEl('circle', { class: 'lg-ring', cx: 12, cy: 12, r: 6.5, stroke: 'currentColor', 'stroke-width': small ? 2.2 : 1.8 }),
+    svgEl('g', { class: 'lg-sys' },
+      svgEl('ellipse', { class: 'lg-orbit', cx: 12, cy: 12, rx: 10.5, ry: 4, transform: 'rotate(-24 12 12)', stroke: '#33D1BE', 'stroke-width': small ? 1.8 : 1.4 }),
+      svgEl('circle', { class: 'lg-node', cx: 20.9, cy: 7, r: small ? 2.4 : 2.1, fill: '#FF7A2E' })));
 }
 
 export function iconBtn(name, title, onclick, cls = '') {

@@ -18,7 +18,7 @@ Remove-Item -Recurse -Force (Join-Path $stage 'assets\brand') -ErrorAction Silen
 # Ship only app files: no temp/backup/editor files, logs, source maps or tests that may sit in the source folders.
 Get-ChildItem $stage -Recurse -Force -File -Include '*.tmp', '*.log', '*.bak', '*.orig', '*.map', '*.test.mjs', '.DS_Store', 'Thumbs.db', 'desktop.ini' | Remove-Item -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'tools') | Out-Null
-foreach ($f in 'install-shortcut.ps1', 'doctor.mjs') { Copy-Item (Join-Path $PSScriptRoot $f) (Join-Path $stage "tools\$f") -Force }
+foreach ($f in 'install.ps1', 'uninstall.ps1', 'doctor.mjs') { Copy-Item (Join-Path $PSScriptRoot $f) (Join-Path $stage "tools\$f") -Force }
 
 # Bundled Node.js: newest v24 LTS build for win-x64, verified against nodejs.org's SHASUMS256.txt, cached in %TEMP%\orbix-build-cache (outside the project).
 $cache = Join-Path ([IO.Path]::GetTempPath()) 'orbix-build-cache'
@@ -50,7 +50,7 @@ Write-Host "Bundled $name"
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'bin') | Out-Null
 Copy-Item $exe (Join-Path $stage 'bin\ORBIX.exe') -Force
 foreach ($f in 'Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.WinForms.dll', 'WebView2Loader.dll', 'WebView2-LICENSE.txt') { Copy-Item (Join-Path $root "bin\$f") (Join-Path $stage "bin\$f") -Force }
-foreach ($f in 'ORBIX.vbs', 'Create-Shortcuts.cmd', 'README.md', 'LICENSE', 'NOTICE.md', 'SECURITY.md', 'CHANGELOG.md', 'package.json') { Copy-Item (Join-Path $root $f) (Join-Path $stage $f) -Force }
+foreach ($f in 'ORBIX.vbs', 'README.md', 'LICENSE', 'NOTICE.md', 'SECURITY.md', 'CHANGELOG.md', 'package.json') { Copy-Item (Join-Path $root $f) (Join-Path $stage $f) -Force }
 
 $zip = Join-Path $root "release\ORBIX-$version-win-x64.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }

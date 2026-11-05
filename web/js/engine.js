@@ -56,7 +56,7 @@ export async function renderEngineSettings(root) {
           const s = await api.get('/api/engine/oauth/status?state=' + encodeURIComponent(r.state));
           if (s.status === 'done') {
             stopSignIn();
-            toast(`OpenRouter: signed in${Number.isFinite(s.models) ? ` (${s.models} models)` : ''}`, 'ok', 4000);
+            toast(`OpenRouter: signed in${Number.isFinite(s.models) ? ` (${s.models} model${s.models === 1 ? '' : 's'})` : ''}`, 'ok', 4000);
             if (view?.root.isConnected) await view.refresh(s.engine);
             else await loadEngine().catch(() => {});
           } else if (s.status === 'error' || s.status === 'expired' || s.status === 'unknown') {
@@ -87,7 +87,7 @@ export async function renderEngineSettings(root) {
       save.textContent = 'Checking…';
       try {
         const r = await api.post('/api/engine/provider', { id: p.id, key: key?.value || '', baseUrl: url?.value || '' });
-        toast(`${p.name}: connected (${r.models} models)`, 'ok', 3500);
+        toast(`${p.name}: connected (${r.models} model${r.models === 1 ? '' : 's'})`, 'ok', 3500);
         await refresh(r.engine);
       } catch (e) {
         toast(e.message, 'error', 8000);
@@ -122,7 +122,7 @@ export async function renderEngineSettings(root) {
     }
 
     const status = p.configured
-      ? h('span', { class: 'pv-status on' }, h('span', { class: 'dot ok' }), p.models != null ? `Connected · ${p.models} models` : 'Connected')
+      ? h('span', { class: 'pv-status on' }, h('span', { class: 'dot ok' }), p.models != null ? `Connected · ${p.models} model${p.models === 1 ? '' : 's'}` : 'Connected')
       : null;
     const link = p.keyUrl ? h('button', { class: 'link', type: 'button', title: p.keyUrl, onclick: () => openLink(p.keyUrl) }, local ? 'Download' : 'Get a key', icon('external', 12)) : null;
 

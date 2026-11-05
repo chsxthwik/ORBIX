@@ -669,6 +669,12 @@ export function tabForSession(s) {
   return [...S.tabs.values()].find((t) => !t.dead && ((t.resume && chain.has(t.resume)) || (t.state?.sessionId && ids.has(t.state.sessionId)))) || null;
 }
 
+/** Open tabs of a project that the session list does not have yet (a new conversation is listed once it is saved). */
+export function unlistedTabs(g) {
+  const listed = new Set(g.sessions.map(tabForSession).filter(Boolean));
+  return [...S.tabs.values()].filter((t) => !t.dead && t.workspace && keyPath(t.workspace) === g.key && !listed.has(t));
+}
+
 export function groupSessions() {
   // Projects = saved workspaces ∪ any cwd seen in session history.
   const groups = new Map();

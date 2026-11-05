@@ -628,10 +628,6 @@ Tests: <span class="pass">14 passed</span>, 14 total</pre>`);
     });
   }
 
-  if (reduced) {
-    $$('img[src*="logo.svg"]').forEach((img) => { img.src = "assets/img/logo-static.svg"; });
-  }
-
   const boot = () => { root.classList.add("is-ready"); onFrame(); if (!reduced) requestAnimationFrame(loop); else { layoutOrbit(performance.now(), 0); } };
   if (document.fonts && document.fonts.load) {
     Promise.race([document.fonts.load('800 64px "Mona Sans"'), new Promise((r) => setTimeout(r, 900))]).then(boot, boot);
