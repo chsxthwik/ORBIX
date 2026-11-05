@@ -3,7 +3,7 @@
 // login / logout RPC commands, so the provider list, OAuth flows and credential store
 // are exactly the CLI's. API keys go through `omp auth import -` (OMP's transfer format).
 import { OmpProc } from './proc.mjs';
-import { log } from './util.mjs';
+import { log, safeLink } from './util.mjs';
 import { openExternal } from './launcher.mjs';
 
 const IDLE_MS = 5 * 60 * 1000;
@@ -97,7 +97,7 @@ export class AuthService {
     if (ev.method === 'open_url') {
       // Open the provider's sign-in page in the user's default browser, where they are already logged in.
       try {
-        openExternal(ev.url);
+        openExternal(safeLink(ev.url));
       } catch (e) {
         log('auth open_url', e.message);
       }

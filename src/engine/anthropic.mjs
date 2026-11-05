@@ -173,6 +173,7 @@ export async function* streamTurn({ apiKey, baseUrl = 'https://api.anthropic.com
   if (!r.ok) throw await httpError(r);
   yield { type: 'start' };
   const sigs = new Map(); // block index -> {signature, redacted}
+  let stopped = false;
   try {
     for await (const { event, data } of parseSSE(r.body, signal)) {
       let d;
@@ -221,7 +222,13 @@ export async function* streamTurn({ apiKey, baseUrl = 'https://api.anthropic.com
             const u = d.usage;
             yield { type: 'usage', output: u.output_tokens, outputIsTotal: true, ...(Number.isFinite(u.input_tokens) ? { input: u.input_tokens } : {}), ...(Number.isFinite(u.cache_read_input_tokens) ? { cacheRead: u.cache_read_input_tokens } : {}), ...(Number.isFinite(u.cache_creation_input_tokens) ? { cacheWrite: u.cache_creation_input_tokens } : {}) };
           }
-          if (d.delta?.stop_reason) yield { type: 'stop', reason: d.delta.stop_reason };
+          if (d.delta?.stop_reason) {
+            stopped = true;
+            yield { type: 'stop', reason: d.delta.stop_reason };
+          }
+          break;
+        case 'message_stop':
+          stopped = true;
           break;
         case 'error': {
           const t = d.error?.type;
@@ -236,6 +243,13 @@ export async function* streamTurn({ apiKey, baseUrl = 'https://api.anthropic.com
     }
   } catch (e) {
     throw streamError(e, signal);
+  }
+  // A stream that just ends, without a stop reason, was cut off (proxy timeout, dropped connection): the reply is
+  // incomplete, so it must not pass for a finished answer.
+  if (!stopped && !signal?.aborted) {
+    const e = new Error('Connection lost: the reply stream ended before the reply was complete');
+    e.retryable = true;
+    throw e;
   }
 }
 

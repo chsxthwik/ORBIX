@@ -141,6 +141,8 @@ export async function deleteSessions(backend, paths) {
     if (typeof p !== 'string' || !p.endsWith('.jsonl')) throw Object.assign(new Error('Not a session file'), { status: 400 });
     const file = path.resolve(backend.hostPath(p));
     if (path.dirname(path.dirname(file)) !== root) throw Object.assign(new Error('Refusing to delete outside the OMP sessions folder'), { status: 403 });
+    // "<project>/.jsonl" or "..jsonl": the artifacts folder next to it would be the project folder itself.
+    if (/^[.\s]*$/.test(path.basename(file).slice(0, -'.jsonl'.length))) throw Object.assign(new Error('Not a session file'), { status: 400 });
     return file;
   });
   for (const file of files) {

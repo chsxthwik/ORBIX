@@ -976,7 +976,7 @@ describe('providers: clientFor end to end with a stubbed network', () => {
   });
 
   test('anthropic: budget models get budget_tokens below max_tokens; thinking off sends no thinking block', async () => {
-    fetchHandler = async () => sse([]);
+    fetchHandler = async () => sse([{ event: 'message_stop', data: {} }]);
     await collect(clientFor('anthropic').stream({ apiKey: 'k', model: 'claude-sonnet-4-5', thinking: 'medium', messages: [u('x')] }));
     let b = reqBody();
     assert.deepEqual(b.thinking, { type: 'enabled', budget_tokens: 8192 });
@@ -987,7 +987,7 @@ describe('providers: clientFor end to end with a stubbed network', () => {
   });
 
   test('anthropic: messages go through toAnthropicMessages (empty assistant turns dropped)', async () => {
-    fetchHandler = async () => sse([]);
+    fetchHandler = async () => sse([{ event: 'message_stop', data: {} }]);
     await collect(clientFor('anthropic').stream({ apiKey: 'k', model: 'claude-3-5-haiku-latest', messages: [u('a'), { role: 'assistant', content: [] }, u('b')] }));
     assert.deepEqual(reqBody().messages.map((m) => m.role), ['user', 'user']);
   });
@@ -1037,6 +1037,22 @@ describe('providers: clientFor end to end with a stubbed network', () => {
 describe('anthropic: pure helpers', () => {
   const { retryAfterMs, isForeignSignature, toAnthropicMessages, httpError, buildBody, parseSSE, streamError } = anthropic;
   const H = (o) => new Headers(o);
+
+  test('a stream that ends without a stop reason is a lost connection, not a finished reply', async () => {
+    const start = { event: 'message_start', data: { message: { usage: { input_tokens: 1 } } } };
+    const text = [{ event: 'content_block_start', data: { index: 0, content_block: { type: 'text', text: '' } } }, { event: 'content_block_delta', data: { index: 0, delta: { type: 'text_delta', text: 'Half' } } }];
+    fetchHandler = async () => sse([start, ...text]);
+    await assert.rejects(() => collect(anthropic.streamTurn({ apiKey: 'k', model: 'm', messages: [u('x')] })), (e) => /Connection lost/.test(e.message) && e.retryable === true);
+    fetchHandler = async () => sse([start, ...text, { event: 'message_delta', data: { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } } }]);
+    const evs = await collect(anthropic.streamTurn({ apiKey: 'k', model: 'm', messages: [u('x')] }));
+    assert.equal(evs.at(-1).reason, 'end_turn');
+    fetchHandler = async () => sse([start, { event: 'message_stop', data: {} }]);
+    assert.ok(await collect(anthropic.streamTurn({ apiKey: 'k', model: 'm', messages: [u('x')] })));
+    const ctl = new AbortController();
+    ctl.abort();
+    fetchHandler = async () => sse([start]);
+    assert.ok(await collect(anthropic.streamTurn({ apiKey: 'k', model: 'm', messages: [u('x')], signal: ctl.signal })), 'a stop by the user is not an error');
+  });
 
   test('retryAfterMs: milliseconds header, seconds, HTTP date, junk', () => {
     assert.equal(retryAfterMs(H({ 'retry-after-ms': '1500' })), 1500);
@@ -1434,10 +1450,86 @@ describe('openai: pure helpers', () => {
       assert.ok(starts.every((s) => s.id));
       assert.notEqual(starts[0].id, starts[1].id);
     });
+    const callsOf = (evs) => {
+      const out = new Map();
+      for (const e of evs) {
+        if (e.type === 'tool_start') out.set(e.index, { id: e.id, name: e.name, json: '' });
+        else if (e.type === 'tool_json') out.get(e.index).json += e.json;
+      }
+      return [...out.values()];
+    };
+    test('tool calls without an index are told apart by id (one whole call per chunk)', async () => {
+      const evs = await turn([
+        { data: { choices: [{ delta: { tool_calls: [{ id: 'a', type: 'function', function: { name: 'read', arguments: '{"path":"x"}' } }] } }] } },
+        { data: { choices: [{ delta: { tool_calls: [{ id: 'b', type: 'function', function: { name: 'glob', arguments: '{"pattern":"*"}' } }] } }] } },
+        { data: { choices: [{ delta: {}, finish_reason: 'tool_calls' }] } },
+      ]);
+      assert.deepEqual(callsOf(evs), [{ id: 'a', name: 'read', json: '{"path":"x"}' }, { id: 'b', name: 'glob', json: '{"pattern":"*"}' }]);
+      assert.equal(evs.filter((e) => e.type === 'block_stop').length, 2);
+    });
+    test('a server that numbers every call 0 but gives each its own id still yields separate calls', async () => {
+      const evs = await turn([
+        { data: { choices: [{ delta: { tool_calls: [{ index: 0, id: 'a', function: { name: 'read', arguments: '{"path":' } }] } }] } },
+        { data: { choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"x"}' } }] } }] } },
+        { data: { choices: [{ delta: { tool_calls: [{ index: 0, id: 'b', function: { name: 'read', arguments: '{"path":"y"}' } }] } }] } },
+        { data: { choices: [{ delta: {}, finish_reason: 'tool_calls' }] } },
+      ]);
+      assert.deepEqual(callsOf(evs), [{ id: 'a', name: 'read', json: '{"path":"x"}' }, { id: 'b', name: 'read', json: '{"path":"y"}' }]);
+    });
+    test('a tool name that arrives after the id and first arguments is not lost', async () => {
+      const evs = await turn([
+        { data: { choices: [{ delta: { tool_calls: [{ index: 0, id: 'a', function: { arguments: '{"pa' } }] } }] } },
+        { data: { choices: [{ delta: { tool_calls: [{ index: 0, function: { name: 'read', arguments: 'th":"x"}' } }] } }] } },
+        { data: { choices: [{ delta: {}, finish_reason: 'tool_calls' }] } },
+      ]);
+      assert.deepEqual(callsOf(evs), [{ id: 'a', name: 'read', json: '{"path":"x"}' }]);
+      const nameless = await turn([{ data: { choices: [{ delta: { tool_calls: [{ index: 0, id: 'z', function: { arguments: '{}' } }] } }] } }]);
+      assert.deepEqual(callsOf(nameless), [{ id: 'z', name: '', json: '{}' }], 'a call that never gets a name still starts (and fails as an unknown tool)');
+    });
+    test('arguments sent as an object instead of a JSON string are serialised', async () => {
+      const evs = await turn([{ data: { choices: [{ delta: { tool_calls: [{ index: 0, id: 'a', function: { name: 'read', arguments: { path: 'x' } } }] }, finish_reason: 'tool_calls' }] } }]);
+      assert.deepEqual(callsOf(evs), [{ id: 'a', name: 'read', json: '{"path":"x"}' }]);
+    });
   });
 });
 
 // =====================================================================================================
+describe('subagent: tool results', () => {
+  test('clipResult keeps the start and the end with a marker that counts the omitted lines', () => {
+    assert.equal(subagent.clipResult('short'), 'short');
+    const text = Array.from({ length: 100 }, (_, i) => `row ${String(i).padStart(3, '0')}`).join('\n');
+    const t = subagent.clipResult(text, 400);
+    assert.ok(t.startsWith('row 000\n'));
+    assert.ok(t.endsWith('row 099'));
+    const m = /\n\[… (\d+) lines \((\d+) characters\) omitted; narrow the search or read a smaller range …\]\n/.exec(t);
+    assert.ok(m);
+    assert.equal(Number(m[2]), text.length - 400);
+  });
+  test('invalid tool arguments get the caller-provided message', async () => {
+    const defs = [{ name: 'read', description: '', input_schema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } }];
+    let n = 0;
+    const seen = [];
+    const stream = async function* ({ messages }) {
+      seen.push(messages);
+      yield { type: 'start' };
+      if (n++ === 0) {
+        yield { type: 'tool_start', index: 0, id: 'c1', name: 'read' };
+        yield { type: 'tool_json', index: 0, json: '{"path": "a' + '"x"}' };
+        yield { type: 'block_stop', index: 0 };
+        yield { type: 'stop', reason: 'tool_use' };
+      } else {
+        yield { type: 'text', index: 0, text: 'done' };
+        yield { type: 'stop', reason: 'end_turn' };
+      }
+    };
+    const r = await subagent.runTasks({ tasks: [{ task: 'look' }] }, { stream, system: 'S', toolDefs: defs, runTool: async () => ({ text: 'ran' }), idPrefix: 's', invalidArgs: (d) => `BAD ${d.name}` });
+    assert.match(r.text, /done/);
+    const tr = seen[1].find((m) => m.role === 'toolResult');
+    assert.equal(tr.content[0].text, 'BAD read');
+    assert.equal(tr.isError, true);
+  });
+});
+
 describe('subagent.collectTurn: assembling a message from stream events', () => {
   const { collectTurn } = subagent;
   async function* gen(evs) {
@@ -1498,6 +1590,13 @@ describe('subagent.collectTurn: assembling a message from stream events', () => 
 describe('compact: estimates, cut points, context', () => {
   const { estimateTokens, summaryText, findCut, contextMessages, contextTokens, tokenScale, lastMarker, transcript, rebuildSession, summarize } = compact;
   const marker = (summary = 'SUM') => ({ role: 'compactionSummary', summary, timestamp: 1 });
+
+  test('compactLimit reserves the reply max_tokens, at most half the window', () => {
+    assert.equal(compact.compactLimit(200000, 32000), 160000);
+    assert.equal(compact.compactLimit(128000, 32000), 96000);
+    assert.equal(compact.compactLimit(128000), 128000 * 0.8);
+    assert.equal(compact.compactLimit(32000, 64000), 16000);
+  });
 
   describe('estimateTokens', () => {
     test('about 3.6 characters per token, rounded up', () => {
@@ -1639,12 +1738,13 @@ describe('compact: estimates, cut points, context', () => {
   });
 
   describe('transcript', () => {
-    test('labels roles, tool calls and results; clips long tool output', () => {
-      const t = transcript([u('hello'), { role: 'assistant', content: [{ type: 'text', text: 'hi' }, call('1', 'read', { path: 'a' })] }, result('1', 'R'.repeat(2000)), { role: 'toolResult', toolName: 'bash', isError: true, content: [{ type: 'text', text: 'fail' }] }], 1e6);
+    test('labels roles, tool calls and results; clips long tool output keeping its start and end', () => {
+      const t = transcript([u('hello'), { role: 'assistant', content: [{ type: 'text', text: 'hi' }, call('1', 'read', { path: 'a' })] }, result('1', 'R'.repeat(2000)), result('2', 'S'.repeat(1990) + '[exit code 2]'), { role: 'toolResult', toolName: 'bash', isError: true, content: [{ type: 'text', text: 'fail' }] }], 1e6);
       assert.ok(t.includes('USER: hello'));
       assert.ok(t.includes('ASSISTANT: hi'));
       assert.ok(t.includes('ASSISTANT CALLED read: {"path":"a"}'));
-      assert.ok(t.includes(`RESULT of read: ${'R'.repeat(1500)}… [500 more characters]`));
+      assert.ok(t.includes(`RESULT of read: ${'R'.repeat(1000)} … [500 characters omitted] … ${'R'.repeat(500)}\n`));
+      assert.ok(t.includes(' … [503 characters omitted] … ') && t.includes('S[exit code 2]'), 'the end of tool output (exit code) survives');
       assert.ok(t.includes('RESULT of bash (error): fail'));
     });
     test('earlier summaries and attachments are included; assistant errors are noted', () => {

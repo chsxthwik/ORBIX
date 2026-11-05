@@ -4,7 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { ROOT, VERSION, log, uid } from './util.mjs';
+import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
 import { Backend } from './backend.mjs';
 import { OmpProc } from './proc.mjs';
 import { AgentProc } from './engine/proc.mjs';
@@ -339,7 +339,8 @@ export class AppServer {
         if (!n) return resolve({});
         let parsed;
         try {
-          parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+          // "__proto__" keys are dropped: Object.assign() of such a body (prefs) would swap an object's prototype.
+          parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'), (k, v) => (k === '__proto__' ? undefined : v));
         } catch {
           return reject(Object.assign(new Error('Invalid JSON body'), { status: 400 }));
         }
@@ -363,6 +364,10 @@ export class AppServer {
     }
     // OpenRouter sign-in comes back from the user's browser, which has no token cookie; it is checked by a one-time state instead.
     if (req.method === 'GET' && url.pathname.startsWith(oauth.CALLBACK_PATH + '/')) return oauth.handleCallback(url, res, this.engineCfg);
+    // A page on another port of this host is "same-site" and gets our cookie on plain GETs (<img>, <script>, links)
+    // that carry no Origin. Browsers say where a request comes from: only our own pages (or a typed URL) get through.
+    const site = req.headers['sec-fetch-site'];
+    if (site && site !== 'same-origin' && site !== 'none') return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
     if (!this.authed(req)) {
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...SECURITY_HEADERS });
       return res.end('ORBIX: open it from the app window or shortcut (token required).');
@@ -649,7 +654,7 @@ export class AppServer {
       },
 
       'GET /api/events': ({ req, res }) => {
-        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no' });
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no', ...SECURITY_HEADERS });
         res.write(`retry: 1500\n\n`);
         res.write(`data: ${JSON.stringify({ g: 'hello', procs: this.procList(), auth: this.auth.status(), t: Date.now() })}\n\n`);
         this.clients.add(res);
@@ -710,7 +715,7 @@ export class AppServer {
 
       'POST /api/open-url': async ({ body }) => {
         try {
-          openExternal(String(body.url || ''));
+          openExternal(safeLink(body.url));
         } catch (e) {
           throw Object.assign(e, { status: 400 });
         }

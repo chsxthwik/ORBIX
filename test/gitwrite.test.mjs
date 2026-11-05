@@ -133,3 +133,69 @@ describe('git writes', { skip: !gitAvailable && 'git not installed' }, () => {
     assert.equal(fs.existsSync(path.join(repo, 'a.txt')), true);
   });
 });
+
+describe('programs named by a repository\'s own config never run', { skip: !gitAvailable && 'git not installed' }, () => {
+  const backend = new Backend({ kind: 'native' });
+  let root;
+  let repo;
+  let mark;
+  const g = (...a) => execFileSync('git', ['-c', 'commit.gpgsign=false', ...a], { cwd: repo, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  const ran = () => (fs.existsSync(mark) ? fs.readFileSync(mark, 'utf8') : '');
+
+  before(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-gitevil-'));
+    repo = path.join(root, 'repo');
+    mark = path.join(root, 'ran.txt');
+    const m = mark.replace(/\\/g, '/');
+    fs.mkdirSync(repo);
+    g('init', '-q');
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n');
+    g('add', 'a.txt');
+    g('commit', '-qm', 'one');
+    // A HEAD commit with a signature, so `log` with log.showSignature would call gpg.program.
+    const tree = g('write-tree').trim();
+    const obj = `tree ${tree}\nparent ${g('rev-parse', 'HEAD').trim()}\nauthor t <t@e> 1 +0000\ncommitter t <t@e> 1 +0000\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n -----END PGP SIGNATURE-----\n\nsigned\n`;
+    const sha = execFileSync('git', ['hash-object', '-t', 'commit', '-w', '--stdin'], { cwd: repo, input: obj, encoding: 'utf8' }).trim();
+    g('update-ref', 'HEAD', sha);
+    const hooks = path.join(root, 'hooks');
+    fs.mkdirSync(hooks);
+    for (const h of ['prepare-commit-msg', 'post-commit', 'post-index-change', 'reference-transaction', 'post-checkout']) fs.writeFileSync(path.join(hooks, h), `#!/bin/sh\necho hook-${h} >> '${m}'\n`, { mode: 0o755 });
+    const gpg = path.join(root, 'gpg.sh');
+    fs.writeFileSync(gpg, `#!/bin/sh\necho gpg >> '${m}'\n`, { mode: 0o755 });
+    g('config', 'core.hooksPath', hooks.replace(/\\/g, '/'));
+    g('config', 'gpg.program', gpg.replace(/\\/g, '/'));
+    g('config', 'log.showSignature', 'true');
+    g('config', 'filter.evil.clean', `echo filter >> '${m}'; cat`);
+    g('config', 'filter.evil.smudge', `echo filter >> '${m}'; cat`);
+    g('config', 'filter.evil.required', 'true');
+    fs.writeFileSync(path.join(repo, '.git', 'info', 'attributes'), '* filter=evil\n');
+  });
+  after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  test('status, diff, log, stage, unstage, discard and commit run no repo filter, hook or signing program', async () => {
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'one\ntwo\n');
+    fs.writeFileSync(path.join(repo, 'b.txt'), 'b\n');
+    const st = await gitapi.status(backend, repo);
+    assert.deepEqual(st.files.map((f) => f.path).sort(), ['a.txt', 'b.txt']);
+    assert.match((await gitapi.diff(backend, repo, 'a.txt')).text, /\+two/);
+    assert.equal((await gitapi.log(backend, repo))[0].subject, 'signed');
+    await gitapi.stage(backend, repo, ['a.txt', 'b.txt']);
+    await gitapi.unstage(backend, repo, ['b.txt']);
+    await gitapi.discard(backend, repo, { untracked: ['b.txt'] });
+    await gitapi.commit(backend, repo, 'two');
+    fs.writeFileSync(path.join(repo, 'a.txt'), 'changed\n');
+    await gitapi.discard(backend, repo, { tracked: ['a.txt'] });
+    assert.equal(ran(), '');
+    // Control: plain git with this config does run them, so the checks above mean something.
+    g('log', '-2');
+    assert.match(ran(), /gpg/);
+  });
+
+  test('a filter name git cannot be told to switch off makes git refuse to run there', async () => {
+    const other = path.join(root, 'odd');
+    fs.mkdirSync(other);
+    execFileSync('git', ['init', '-q'], { cwd: other });
+    execFileSync('git', ['config', 'filter.a=b.clean', 'cat'], { cwd: other });
+    await assert.rejects(gitapi.status(backend, other), /cannot switch off/);
+  });
+});

@@ -52,7 +52,7 @@ const BASE_DEFS = [
   },
   {
     name: 'edit',
-    description: 'Replace text in a file. `old_string` is copied from the current file (from read output, without the line-number prefix) and must match exactly one place: include enough surrounding lines to make it unique, or set replace_all to change every occurrence. When there is no exact match, a unique match that differs only in whitespace or indentation is used (the new text is re-indented to fit). Returns a diff.',
+    description: 'Replace text in a file. `old_string` is copied from the current file (from read output, without the line-number prefix) and must match exactly one place: include enough surrounding lines to make it unique, or set replace_all to change every occurrence. When there is no exact match, a unique match that differs only in whitespace or indentation is used (the new text is re-indented to fit, and the result shows the diff). Returns the changed line range. The file must exist: use write to create one.',
     input_schema: { type: 'object', properties: { path: PATH, old_string: { type: 'string', description: 'Exact text to replace (not empty).' }, new_string: { type: 'string', description: 'Replacement text (may be empty to delete).' }, replace_all: { type: 'boolean', description: 'Replace every occurrence (default false).' } }, required: ['path', 'old_string', 'new_string'] },
   },
   bashDef(),
@@ -148,11 +148,15 @@ export function isForeignShare(p, cwd) {
 }
 
 const typeName = (v) => (Array.isArray(v) ? 'array' : v === null ? 'null' : typeof v);
-const signature = (def) => {
-  const props = def.input_schema.properties || {};
-  const req = new Set(def.input_schema.required || []);
-  return `${def.name}(${Object.entries(props).map(([k, s]) => `${k}${req.has(k) ? '' : '?'}: ${s.enum ? s.enum.map((e) => JSON.stringify(e)).join('|') : s.type}`).join(', ')})`;
+/** "edit(path: string, old_string: string, replace_all?: boolean)": a tool's arguments in one line, for error texts. */
+export const signature = (def) => {
+  const props = def.input_schema?.properties || {};
+  const req = new Set(def.input_schema?.required || []);
+  return `${def.name}(${Object.entries(props).map(([k, s]) => `${k}${req.has(k) ? '' : '?'}: ${s?.enum ? s.enum.map((e) => JSON.stringify(e)).join('|') : s?.type || 'any'}`).join(', ')})`;
 };
+
+/** Result text for a tool call whose arguments were not valid JSON. `def`: the tool's definition, when known. */
+export const invalidArgsText = (def) => `Not run: the arguments were not valid JSON. Send the call again with one complete JSON object${def ? `: ${signature(def)}` : ' matching the tool schema'}. Escape quotes, backslashes and line breaks inside strings (\\" \\\\ \\n).`;
 
 /** Check (and gently coerce: "10" -> 10, "true" -> true, a JSON string -> array) tool arguments. Returns { args } or { error }. */
 export function checkArgs(def, input) {
@@ -200,6 +204,15 @@ function occurrences(text, s) {
   for (let i = text.indexOf(s); i >= 0; i = text.indexOf(s, i + s.length)) at.push(i);
   return at;
 }
+const countLines = (s) => {
+  let n = 0;
+  for (let i = s.indexOf('\n'); i >= 0; i = s.indexOf('\n', i + 1)) n++;
+  return n;
+};
+const clipLines = (s, max) => {
+  const l = s.split('\n');
+  return l.length > max ? `${l.slice(0, max).join('\n')}\n[… ${l.length - max} more diff lines]` : s;
+};
 const listLines = (lines) => (lines.length > 8 ? `${lines.slice(0, 8).join(', ')}, …` : lines.join(', '));
 
 /** Levenshtein distance, stopping early beyond `max`. */
@@ -482,7 +495,9 @@ export function createTools({ backend, cwd, getSignal }) {
       const where = d.firstChangedLine === d.lastChangedLine ? `line ${d.firstChangedLine}` : `lines ${d.firstChangedLine}-${d.lastChangedLine}`;
       const count = all && at.length > 1 ? ` (${at.length} replacements)` : '';
       if (enc.encoding !== dec.encoding) notes.push(`saved as UTF-8: the text has characters that ${ENCODING_NAMES[dec.encoding]} cannot store`);
-      return { text: `Edited ${shown}${count}: ${where}${notes.length ? `; ${notes.join('; ')}` : ''}`, details: { path: shown, op: 'update', ...d, undo: makeUndo(shown, text, enc.buf, dec.encoding) } };
+      // A whitespace-tolerant match changed text the model did not quote exactly: show it so it can be checked.
+      const shownDiff = at.length ? '' : `\n${clipLines(d.diff, 40)}`;
+      return { text: `Edited ${shown}${count}: ${where}${notes.length ? `; ${notes.join('; ')}` : ''}${shownDiff}`, details: { path: shown, op: 'update', ...d, undo: makeUndo(shown, text, enc.buf, dec.encoding) } };
     },
 
     async bash({ command, timeout = 120, shell }, { onUpdate } = {}) {
@@ -494,10 +509,12 @@ export function createTools({ backend, cwd, getSignal }) {
       let head = '';
       let tail = '';
       let total = 0;
+      let totalLines = 0;
       let dropped = false;
       let last = 0;
       const push = (d) => {
         total += d.length;
+        totalLines += countLines(d);
         if (head.length < HEAD) {
           const room = HEAD - head.length;
           head += d.slice(0, room);
@@ -567,7 +584,8 @@ export function createTools({ backend, cwd, getSignal }) {
         const nl = t.indexOf('\n');
         if (nl >= 0 && nl < t.length / 2) t = t.slice(nl + 1);
         const omitted = total - h.length - t.length;
-        text = `${cleanTerminal(h, SGR_ON)}${h.endsWith('\n') ? '' : '\n'}[… ${omitted} characters omitted …]\n${cleanTerminal(t, SGR_ON)}`;
+        const lines = Math.max(0, totalLines - countLines(h) - countLines(t));
+        text = `${cleanTerminal(h, SGR_ON)}${h.endsWith('\n') ? '' : '\n'}[… ${lines} lines (${omitted} characters) omitted; filter the output or redirect it to a file to see them …]\n${cleanTerminal(t, SGR_ON)}`;
       }
       if (text && !text.endsWith('\n')) text += '\n';
       const took = fmtDuration(durationMs);
@@ -682,7 +700,7 @@ export function createTools({ backend, cwd, getSignal }) {
         return await fn(checked.args, hooks);
       } catch (e) {
         const p = checked.args?.path ?? '';
-        if (e.code === 'ENOENT') return { text: `No such file or folder: ${p}.${await suggest(p)}`, isError: true };
+        if (e.code === 'ENOENT') return { text: `No such file or folder: ${p}.${await suggest(p)}${name === 'edit' ? ' To create a new file, use write.' : ''}`, isError: true };
         if (e.code === 'EACCES' || e.code === 'EPERM') return { text: `Permission denied: ${p}. The file may be read-only or open in another program.`, isError: true };
         if (e.code === 'EISDIR') return { text: `${p} is a folder; give a file path.`, isError: true };
         if (e.code === 'EBUSY') return { text: `${p} is locked by another program; close it and try again.`, isError: true };

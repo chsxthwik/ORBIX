@@ -24,11 +24,23 @@ export const SUBAGENT_TOOLS = new Set(['read', 'glob', 'grep', 'web_fetch', 'web
 const MAX_TASKS = 6;
 const MAX_TURNS = 30;
 
+const MAX_RESULT = 40000;
+
+/** A tool result for a subagent, cut to MAX_RESULT characters in the middle with a marker (the end often matters most). */
+export function clipResult(text, max = MAX_RESULT) {
+  if (text.length <= max) return text;
+  const tail = Math.floor(max / 4);
+  const head = text.slice(0, max - tail);
+  const end = text.slice(-tail);
+  const lines = (text.slice(head.length, text.length - tail).match(/\n/g) || []).length;
+  return `${head}\n[… ${lines} lines (${text.length - max} characters) omitted; narrow the search or read a smaller range …]\n${end}`;
+}
+
 const textOfMsg = (m) => (m.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
 
 /**
  * Run the tasks of one `task` tool call. `ctx` supplies the model connection and callbacks:
- * { stream(args) -> async iterator, system, toolDefs, runTool(call, signal), signal, thinking, costOf(usage), onUpdate(agent), parentToolCallId, idPrefix, model }
+ * { stream(args) -> async iterator, system, toolDefs, runTool(call, signal), signal, thinking, costOf(usage), onUpdate(agent), parentToolCallId, idPrefix, model, invalidArgs(def) -> text }
  */
 export async function runTasks(input, ctx) {
   const tasks = (Array.isArray(input?.tasks) ? input.tasks : input?.task ? [{ task: input.task, name: input.name }] : []).filter((t) => t && typeof t.task === 'string' && t.task.trim());
@@ -114,8 +126,9 @@ async function runOne(a, ctx) {
           a.toolCount++;
           push(`${c.name} ${c.arguments?.path || c.arguments?.pattern || c.arguments?.url || ''}`.trim());
           tick();
-          const r = c.invalidArguments ? { text: msg.stopReason === 'length' ? 'This tool call was cut off by the output token limit. Make smaller calls.' : 'The tool arguments were not valid JSON. Send them again as one JSON object.', isError: true } : !ctx.toolDefs.some((d) => d.name === c.name) ? { text: `Tool "${c.name}" is not available to subagents (read-only: ${[...SUBAGENT_TOOLS].join(', ')}).`, isError: true } : await ctx.runTool(c, ctl.signal);
-          return { role: 'toolResult', toolCallId: c.id, toolName: c.name, content: [{ type: 'text', text: String(r.text ?? '').slice(0, 40000) }, ...(r.images || [])], isError: !!r.isError, timestamp: Date.now() };
+          const def = ctx.toolDefs.find((d) => d.name === c.name);
+          const r = c.invalidArguments ? { text: msg.stopReason === 'length' ? 'Not run: this tool call was cut off by the output token limit. Make smaller calls.' : ctx.invalidArgs?.(def) || 'Not run: the arguments were not valid JSON. Send the call again with one complete JSON object.', isError: true } : !def ? { text: `Tool "${c.name}" is not available to subagents. Available: ${ctx.toolDefs.map((d) => d.name).join(', ')}.`, isError: true } : await ctx.runTool(c, ctl.signal);
+          return { role: 'toolResult', toolCallId: c.id, toolName: c.name, content: [{ type: 'text', text: clipResult(String(r.text ?? '')) }, ...(r.images || [])], isError: !!r.isError, timestamp: Date.now() };
         }),
       );
       messages.push(...outs);

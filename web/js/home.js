@@ -1,6 +1,6 @@
 // Home: a composer to start a session (project, engine, model), the projects, and the recent conversations.
 // Shown when no session tab is active. With no AI provider set up it shows the first-run steps instead.
-import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd } from './dom.js';
+import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd, logo } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api, rpc } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, defaultEngine, engineReady, ompInstalled, savePrefs, groupSessions, on } from './store.js';
@@ -164,8 +164,9 @@ export function drawHome(root, H) {
   go.addEventListener('click', () => C.start());
 
   row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projects.length ? '' : projBtn, engSeg || '', modelBtn, planBtn, apprBtn, unsaved, h('span', { class: 'grow' }), h('span', { class: 'c-hint' }, kbd('Enter'), ' to start'), go);
-  C.heroSlot.replaceChildren(hero(['What should we build', ...(g ? [' in ', h('span', { class: 'home-h-proj' }, g.name), '?'] : ['?'])], engine === 'builtin' ? (S.engine?.approvals === 'auto' ? 'It reads the project, edits files and runs commands. Approvals are off, so it does not ask first.' : 'It reads the project, edits files and runs commands, and asks before it changes anything.') : 'This session runs the OMP CLI in the project folder.'));
+  C.heroSlot.replaceChildren(hero(['What should we build', ...(g ? [' in ', h('span', { class: 'home-h-proj' }, g.name), '?'] : ['?'])], engine === 'builtin' ? (S.engine?.approvals === 'auto' ? 'It reads the code, edits files and runs commands. Approvals are off, so it does not ask.' : 'It reads the code, edits files and runs commands, and asks before every change.') : 'The OMP CLI works in the folder you choose.'));
   C.tabsSlot.replaceChildren(...projectTabs(H, projects, () => redraw()));
+  C.tabsSlot.hidden = !projects.length;
   // The footer only speaks when it has something to say: no provider yet, or the OMP CLI's own setup.
   C.footSlot.replaceChildren(...(engine === 'builtin' && !agentOk ? [h('p', { class: 'home-note' }, 'Set up an AI provider to use the ORBIX agent.', h('button', { class: 'link', type: 'button', onclick: () => H.settings('engine') }, 'Set up provider'))] : engine === 'omp' ? [statusStrip(H, engine, m)] : []));
   C.lowerSlot.replaceChildren(lower(H, projects, engine));
@@ -187,7 +188,7 @@ function statusStrip(H, engine, m) {
     const names = on.map((p) => p.name);
     cells.push(cell('Model', m ? m.name || m.id : names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0] || 'Default', names.length ? `Providers: ${names.join(', ')}. Click to change.` : 'Set up a provider', () => H.settings('engine')));
     cells.push(cell('Approvals', auto ? 'Off' : 'Ask first', auto ? 'The agent edits and runs commands without asking. Click to change.' : 'Edits and commands ask first. Click to change.', () => H.settings('behavior'), auto ? 'warn' : ''));
-  } else cells.push(cell('Engine', 'OMP CLI', 'This session uses the OMP command-line agent', () => H.settings('omp')));
+  }
   if (b) cells.push(cell('Shell', b.kind === 'wsl' ? (b.distro ? `WSL · ${b.distro}` : 'WSL') : 'Windows', 'Where the agent runs commands. Click to change.', () => H.settings('behavior')));
   return h('div', { class: 'home-status' }, h('div', { class: 'hs-bar' }, ...cells));
 }
@@ -231,6 +232,7 @@ function lower(H, projects, engine) {
 const greeting = () => new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
 
 const hero = (title, sub) => h('div', { class: 'hero' },
+  h('span', { class: 'hero-mark' }, logo(40)),
   h('span', { class: 'home-eyebrow' }, greeting()),
   h('h1', { class: 'home-h' }, title),
   sub ? h('p', { class: 'home-sub' }, sub) : null);

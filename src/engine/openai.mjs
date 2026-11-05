@@ -164,14 +164,42 @@ export async function* streamTurn({ apiKey, baseUrl, signal, ...rest }) {
   const r = await post(join(baseUrl, '/chat/completions'), { method: 'POST', headers: headers(apiKey, rest.providerId), body: JSON.stringify(body), signal }, baseUrl);
   if (!r.ok) throw await httpError(r);
   yield { type: 'start' };
-  const started = new Map(); // tool block index -> extra_content
+  // Tool calls by stream key: { idx (block index), id, name, extra (Gemini extra_content), buf (arguments before
+  // the name arrived), started }. tool_start waits for the name, which some servers send after the id.
+  const calls = new Map();
+  const byIndex = new Map(); // the server's tool call index -> key of the call it currently means
+  let lastKey = null;
+  const keyOf = (tc) => {
+    if (Number.isInteger(tc.index)) {
+      const k = byIndex.get(tc.index);
+      const cur = k != null ? calls.get(k) : null;
+      // A server that numbers every call 0 but gives each its own id is sending a new call.
+      if (cur && !(tc.id && cur.id && tc.id !== cur.id)) return k;
+      const nk = `call${calls.size}`;
+      byIndex.set(tc.index, nk);
+      return nk;
+    }
+    // No index (one whole call per chunk): a known id continues that call, a new id starts one, no id continues the last.
+    if (tc.id) {
+      for (const [k, c] of calls) if (c.id === tc.id) return k;
+      return `call${calls.size}`;
+    }
+    return lastKey ?? `call${calls.size}`;
+  };
+  const startCall = function* (c) {
+    c.started = true;
+    yield { type: 'tool_start', index: c.idx, id: c.id || `call_${c.idx}_${Date.now().toString(36)}`, name: c.name || '' };
+    if (c.buf) yield { type: 'tool_json', index: c.idx, json: c.buf };
+    c.buf = '';
+  };
   const details = [];
   let sawThinking = false;
   let finished = false;
   const flushTools = function* () {
-    for (const [idx, extra] of started) {
-      if (extra) yield { type: 'signature', index: idx, signature: 'gx:' + JSON.stringify(extra) };
-      yield { type: 'block_stop', index: idx };
+    for (const c of calls.values()) {
+      if (!c.started) yield* startCall(c);
+      if (c.extra) yield { type: 'signature', index: c.idx, signature: 'gx:' + JSON.stringify(c.extra) };
+      yield { type: 'block_stop', index: c.idx };
     }
   };
   const flushReasoning = function* () {
@@ -223,14 +251,21 @@ export async function* streamTurn({ apiKey, baseUrl, signal, ...rest }) {
         yield { type: 'thinking', index: -1, text: reasoning };
       }
       if (delta.content) yield { type: 'text', index: 0, text: delta.content };
-      for (const tc of delta.tool_calls || []) {
-        const idx = 1000 + (tc.index ?? 0);
-        if (!started.has(idx)) {
-          started.set(idx, null);
-          yield { type: 'tool_start', index: idx, id: tc.id || `call_${idx}_${Date.now().toString(36)}`, name: tc.function?.name || '' };
+      for (const tc of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+        if (!tc || typeof tc !== 'object') continue;
+        const key = keyOf(tc);
+        lastKey = key;
+        let c = calls.get(key);
+        if (!c) calls.set(key, (c = { idx: 1000 + calls.size, id: '', name: '', extra: null, buf: '', started: false }));
+        if (tc.id && !c.id) c.id = tc.id;
+        if (tc.function?.name && !c.name) c.name = tc.function.name;
+        if (tc.extra_content) c.extra = tc.extra_content; // Gemini thought signature
+        const json = typeof tc.function?.arguments === 'string' ? tc.function.arguments : tc.function?.arguments && typeof tc.function.arguments === 'object' ? JSON.stringify(tc.function.arguments) : '';
+        if (!c.started && c.name) yield* startCall(c);
+        if (json) {
+          if (c.started) yield { type: 'tool_json', index: c.idx, json };
+          else c.buf += json;
         }
-        if (tc.extra_content) started.set(idx, tc.extra_content); // Gemini thought signature
-        if (tc.function?.arguments) yield { type: 'tool_json', index: idx, json: tc.function.arguments };
       }
       if (ch.finish_reason && !finished) {
         finished = true;
@@ -245,6 +280,6 @@ export async function* streamTurn({ apiKey, baseUrl, signal, ...rest }) {
   if (!finished) {
     yield* flushReasoning();
     yield* flushTools();
-    yield { type: 'stop', reason: started.size ? 'tool_use' : 'end_turn' };
+    yield { type: 'stop', reason: calls.size ? 'tool_use' : 'end_turn' };
   }
 }
