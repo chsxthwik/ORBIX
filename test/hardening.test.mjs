@@ -361,4 +361,67 @@ describe('MCP stdio limits', () => {
     assert.ok(Date.now() - t0 < 20000, 'start must fail fast');
     assert.match(notes.join('\n'), /could not start/);
   });
+  test('a server that exits mid-call rejects the in-flight call cleanly (no hang)', async () => {
+    const script = path.join(TMP, 'diemid.mjs');
+    fs.writeFileSync(
+      script,
+      `import rl from 'node:readline';
+const r = rl.createInterface({ input: process.stdin });
+const send = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+r.on('line', (l) => { let m; try { m = JSON.parse(l); } catch { return; }
+  if (m.method === 'initialize') send({ jsonrpc:'2.0', id:m.id, result:{ protocolVersion:'2025-06-18', capabilities:{}, serverInfo:{ name:'die', version:'1' } } });
+  else if (m.method === 'tools/list') send({ jsonrpc:'2.0', id:m.id, result:{ tools:[{ name:'t', description:'d', inputSchema:{ type:'object', properties:{} } }] } });
+  else if (m.method === 'tools/call') process.exit(1); });
+`,
+    );
+    fs.writeFileSync(path.join(DATA, 'mcp.json'), JSON.stringify({ mcpServers: { die: { command: process.execPath, args: [script] } } }));
+    const m = new McpManager({ backend: new Backend({ kind: 'native' }), workspace: TMP, hostRoot: TMP, ask: async () => null, notice: () => {} });
+    await m.ensureStarted();
+    const t0 = Date.now();
+    const r = await m.call('mcp__die__t', {});
+    assert.equal(r.isError, true);
+    assert.ok(Date.now() - t0 < 20000, 'must not hang on the dead call');
+    await m.stopAll();
+  });
+});
+
+describe('path boundary hardening (backend / files)', () => {
+  const cwd = 'C:\\work';
+  test('agent tools treat extended-length and device UNC paths as foreign and refuse them', () => {
+    for (const p of ['\\\\?\\UNC\\evil\\share\\x', '\\\\.\\C:\\Windows\\x', '\\\\.\\PhysicalDrive0', '\\\\?\\C:\\secret']) {
+      assert.equal(isForeignShare(p, cwd), true, p);
+    }
+    // WSL's own shares and local paths stay allowed.
+    assert.equal(isForeignShare('\\\\wsl.localhost\\Ubuntu\\home\\u', cwd), false);
+    assert.equal(isForeignShare('C:\\work\\sub\\a.txt', cwd), false);
+  });
+  test('read/write refuse an extended-length UNC path rather than opening a network share', async () => {
+    const tools = createTools({ backend: new Backend({ kind: 'native' }), cwd: TMP, getSignal: () => null });
+    for (const name of ['read', 'write']) {
+      const r = await tools.run(name, { path: '\\\\?\\UNC\\attacker.invalid\\share\\x.txt', content: 'x' });
+      assert.equal(r.isError, true, name);
+      assert.match(r.text, /Network paths are not opened by the agent/, name);
+    }
+  });
+  test('the git panel refuses paths that leave the project (.., absolute, drive, backslash ..)', async () => {
+    const b = new Backend({ kind: 'native' });
+    for (const bad of ['../etc/passwd', '..\\etc\\passwd', '/etc/passwd', 'C:\\Windows\\x', 'a\0b']) {
+      await assert.rejects(gitapi.stage(b, TMP, [bad]), (e) => e.status === 400, bad);
+    }
+  });
+});
+
+describe('reserved device names are not read as files', { skip: process.platform !== 'win32' && 'Windows device names only' }, () => {
+  test('tools.read and fsapi.readFile refuse CON/NUL rather than blocking on the device', async () => {
+    const dir = path.join(TMP, 'devdir');
+    fs.mkdirSync(dir, { recursive: true });
+    const tools = createTools({ backend: new Backend({ kind: 'native' }), cwd: dir, getSignal: () => null });
+    for (const name of ['CON', 'NUL', 'CON.txt', 'LPT1']) {
+      const r = await tools.run('read', { path: name });
+      assert.equal(r.isError, true, name);
+    }
+    for (const name of ['CON', 'NUL']) {
+      await assert.rejects(fsapi.readFile(new Backend({ kind: 'native' }), path.join(dir, name)), (e) => e.status === 404 || e.status === 400, name);
+    }
+  });
 });
