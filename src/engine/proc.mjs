@@ -1092,7 +1092,7 @@ export class AgentProc extends EventEmitter {
 
   async _runTool(call, conn) {
     const args = call.arguments || {};
-    const t0 = Date.now();
+    let t0 = Date.now();
     const intent = call.name === 'bash' ? clip(String(args.command ?? ''), 80) : call.name === 'web_fetch' ? clip(String(args.url ?? ''), 80) : this.mcp.has(call.name) ? this.mcp.describe(call.name) : undefined;
     this._emit({ type: 'tool_execution_start', toolCallId: call.id, toolName: call.name, args, intent });
     let result;
@@ -1111,6 +1111,7 @@ export class AgentProc extends EventEmitter {
       const ans = await this._askUser(this._askTitle(call), ['Allow once', 'Allow for this session', 'Deny']);
       if (!ans || ans === 'Deny') result = { text: 'The user denied this action. Do not retry it; ask what they want instead.', isError: true };
       else if (ans === 'Allow for this session') this.allowAlways.add(call.name);
+      t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you
     }
     if (!result) {
       const onUpdate = (text) => this._emit({ type: 'tool_execution_update', toolCallId: call.id, toolName: call.name, args, partialResult: { content: [{ type: 'text', text }], details: {} } });

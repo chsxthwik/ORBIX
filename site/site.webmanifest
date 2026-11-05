@@ -3,8 +3,8 @@
   "short_name": "ORBIX",
   "start_url": "/",
   "display": "browser",
-  "background_color": "#0b0c0f",
-  "theme_color": "#0b0c0f",
+  "background_color": "#0C0C0D",
+  "theme_color": "#0C0C0D",
   "icons": [
     {
       "src": "/assets/img/icon-192.png",

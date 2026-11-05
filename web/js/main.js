@@ -1,7 +1,7 @@
 // ORBIX front-end bootstrap: layout, sidebar, tabs, keyboard, and routing of events to views.
 import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, logo, lsGet, lsSet, kbd, copyText } from './dom.js';
 import { api, rpc, connectEvents } from './api.js';
-import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, tabForSession, ompInstalled, engineReady, renameSession } from './store.js';
+import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, ompInstalled, engineReady, renameSession } from './store.js';
 import { TabView, sessionMenu, copyConversation } from './session.js';
 import { drawHome, setHomeProject } from './home.js';
 import { openCleanup, confirmDeleteConversation } from './cleanup.js';
@@ -10,7 +10,7 @@ import { initNotify } from './notify.js';
 import { initStatusBar } from './chrome.js';
 import { openHelp } from './help.js';
 import { mountPanel, showTab } from './panels.js';
-import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu } from './dialogs.js';
+import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { onAuthEvent, onAuthHello } from './providers.js';
 
@@ -104,7 +104,8 @@ function drawSidebar() {
   const search = h('input', { type: 'search', placeholder: 'Filter conversations', value: searchTerm, 'aria-label': 'Filter conversations', spellcheck: 'false', oninput: (e) => ((searchTerm = e.target.value), drawSidebar()), onkeydown: (e) => e.key === 'Escape' && searchTerm && (e.stopPropagation(), (searchTerm = ''), drawSidebar()) });
   const projects = groups.map((g) => {
     const sess = g.sessions.filter((s) => !term || `${s.title} ${g.name} ${s.preview || ''}`.toLowerCase().includes(term));
-    if (term && !sess.length && !g.name.toLowerCase().includes(term)) return null;
+    const fresh = unlistedTabs(g).filter((t) => !term || `${t.name} ${g.name}`.toLowerCase().includes(term));
+    if (term && !sess.length && !fresh.length && !g.name.toLowerCase().includes(term)) return null;
     const open = !!term || !collapsed.has(g.key);
     const shown = open ? sess.slice(0, term ? 50 : 8) : [];
     const toggle = () => {
@@ -114,7 +115,7 @@ function drawSidebar() {
     };
     return h('div', { class: 'proj' },
       h('div', { class: 'proj-head' },
-        h('button', { class: 'proj-btn', type: 'button', title: g.path, 'aria-expanded': String(open), onclick: toggle }, icon(open ? 'chevron-down' : 'chevron-right', 12, 'chev'), h('span', { class: 'ell' }, g.name)),
+        h('button', { class: 'proj-btn', type: 'button', title: g.path, 'aria-expanded': String(open), onclick: toggle }, icon(open ? 'chevron-down' : 'chevron-right', 12, 'chev'), icon(open ? 'folder-open' : 'folder', 14, 'proj-ic'), h('span', { class: 'ell' }, g.name), g.sessions.length ? h('span', { class: 'proj-n num' }, g.sessions.length) : null),
         h('span', { class: 'row-acts' },
           iconBtn('plus', `New session in ${g.name}`, () => newSession(g.path), 'sm'),
           g.saved ? iconBtn('x', 'Remove from the list (files stay)', async () => {
@@ -125,6 +126,8 @@ function drawSidebar() {
               toast(e.message, 'error');
             }
           }, 'sm') : null)),
+      open ? fresh.map((t) => h('div', { class: 's-row' + (t.id === S.active ? ' cur' : '') },
+        h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, h('span', { class: dotCls(t) }), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when' }, 'now')))) : null,
       shown.map((s) => {
         const tab = tabForSession(s);
         const cur = !!tab && tab.id === S.active;
@@ -132,14 +135,16 @@ function drawSidebar() {
           h('button', { class: 's-btn', type: 'button', title: s.preview || s.title, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s) }, tab ? h('span', { class: dotCls(tab) }) : null, h('span', { class: 'ell grow' }, s.title), h('span', { class: 's-when' }, timeAgo(s.mtime))),
           h('span', { class: 'row-acts' }, iconBtn('trash', 'Delete conversation', () => confirmDeleteConversation(s), 'sm')));
       }),
+      open && !term && !sess.length && !fresh.length ? h('div', { class: 's-none' }, 'No conversations yet') : null,
       open && !term && sess.length > shown.length ? h('button', { class: 's-more', type: 'button', onclick: () => ((searchTerm = g.name), drawSidebar(), sideEl.querySelector('.side-search input')?.focus()) }, `${sess.length - shown.length} more`) : null);
   }).filter(Boolean);
   replace(
     sideEl,
-    h('div', { class: 'side-top' }, h('div', { class: 'brand' }, logo(20), h('span', { class: 'wordmark' }, 'ORBIX'), S.env?.app?.version ? h('span', { class: 'brand-v' }, S.env.app.version) : null)),
+    h('div', { class: 'side-top' }, h('div', { class: 'brand' }, logo(20), h('span', { class: 'wordmark' }, 'ORBIX'), S.env?.app?.version ? h('span', { class: 'brand-v' }, `v${S.env.app.version}`) : null)),
     h('button', { class: 'side-new' + (S.active ? '' : ' cur'), type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), 'New session', kbd('Ctrl+N')),
     h('div', { class: 'side-search' }, icon('search', 14), search),
     h('div', { class: 'side-scroll' },
+      runningList(),
       h('div', { class: 'side-h' }, h('span', null, 'Projects'), iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm')),
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No matching conversations.') : h('div', { class: 'side-empty' }, 'Projects and their conversations show here.', h('button', { class: 'btn sm', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
     h('div', { class: 'side-foot' }, footStatus(), iconBtn('command', 'Commands (Ctrl+K)', () => palette(paletteItems)), iconBtn('cog', 'Settings (Ctrl+,)', () => settingsDialog())),
@@ -151,13 +156,28 @@ function drawSidebar() {
   }
 }
 
+/** Sessions that are working or waiting on you, at the top of the sidebar: teal = working, orange = needs you. */
+function runningList() {
+  const live = [...S.tabs.values()].filter((t) => !t.dead && (t.streaming || t.dialogs.some(isApproval)));
+  if (!live.length) return null;
+  return h('div', { class: 'run-sec' },
+    h('div', { class: 'side-h' }, h('span', null, 'Running')),
+    live.map((t) => {
+      const waiting = t.dialogs.some(isApproval);
+      return h('button', { class: 'run-row' + (t.id === S.active ? ' cur' : ''), type: 'button', title: `${t.name}\n${t.workspace}`, onclick: () => setActive(t.id) },
+        h('span', { class: 'dot' + (waiting ? ' warn' : ' run') }),
+        h('span', { class: 'ell grow' }, t.name),
+        h('span', { class: 'run-st' + (waiting ? ' you' : '') }, waiting ? 'needs you' : 'working'));
+    }));
+}
+
 /** Sidebar footer: whether the agent can work, and with which provider. */
 function footStatus() {
   const ready = engineReady();
   const omp = ompInstalled();
   const names = (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name.replace(/ \(.*\)$/, ''));
   const text = ready ? names.join(', ') : omp ? 'OMP CLI only' : 'Set up a provider';
-  return h('button', { class: 'foot-status', type: 'button', title: ready ? `AI providers: ${names.join(', ')}` : 'Add an API key or a local model', onclick: () => settingsDialog(ready ? 'start' : 'engine') }, h('span', { class: 'dot' + (ready || omp ? ' ok' : ' warn') }), h('span', { class: 'ell' }, text));
+  return h('button', { class: 'foot-status', type: 'button', title: ready ? `AI providers: ${names.join(', ')}` : 'Add an API key or a local model', onclick: () => settingsDialog(ready ? 'start' : 'engine') }, h('span', { class: 'dot' + (ready || omp ? ' ok' : ' warn') }), h('span', { class: 'ell' }, text), ready || omp ? null : h('span', { class: 'fs-k' }, 'Set up'));
 }
 
 function toggleTheme() {
@@ -348,11 +368,14 @@ on('tab:status', (tab) => {
   if (tab.dead && v && !v.deadShown) v.showDead();
   drawTop();
   drawSidebar();
+  if (!activeTab()) drawWelcome(); // Continue shows working / waiting states
 });
 on('tab:editor', (tab) => viewOf(tab)?.setText(tab.draft));
 on('tab:dialog', (tab) => {
   viewOf(tab)?.updateApproval();
   if (tab === activeTab()) syncExtDialogs(tab);
+  drawSidebar(); // "needs you" in the Running list
+  if (!activeTab()) drawWelcome();
 });
 on('insert', (text) => {
   const t = activeTab();
@@ -409,6 +432,12 @@ addEventListener('keydown', (e) => {
     const t = activeTab();
     const v = t && viewOf(t);
     if (v && (t.streaming || v.approvalDlg)) return e.preventDefault(), v.onEscape();
+  }
+  // 1 / 2 answer a waiting approval from anywhere outside a text field, not only while the card has focus.
+  if (/^[1-9]$/.test(e.key) && !mod && !e.altKey && !e.defaultPrevented && !e.target.closest?.('input, textarea, select, [contenteditable], .scrim, .menu')) {
+    const t = activeTab();
+    const v = t && viewOf(t);
+    if (v?.approvalDlg) return v.onApprovalKey(e);
   }
   if (e.altKey && !mod && /^[1-9]$/.test(e.key)) {
     const t = [...S.tabs.values()][+e.key - 1];

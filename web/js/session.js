@@ -618,6 +618,7 @@ export class TabView {
     else if (m.stopReason === 'aborted') wrap.append(h('div', { class: 'note' }, icon('stop', 12), h('span', null, 'Stopped')));
     if (!wrap.childElementCount) return null;
     if (this.firstOfTurn(idx)) wrap.prepend(this.byline(m));
+    else wrap.classList.add('cont');
     const text = blocks.filter((b) => b.type === 'text' && b.text?.trim()).map((b) => b.text.trim()).join('\n\n');
     const acts = h('div', { class: 'msg-acts' });
     if (text) {
@@ -630,8 +631,12 @@ export class TabView {
       retry.addEventListener('click', () => this.retry());
       acts.append(retry);
     }
+    // A step that only ran tools gets no action row (it would only add a gap between tool rows); a stopped or failed
+    // one keeps it for Retry.
+    const ended = m.stopReason === 'error' || m.stopReason === 'aborted';
+    if (!text && !ended) return wrap;
     if (m.timestamp) acts.prepend(h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)));
-    if (acts.childElementCount) wrap.append(acts);
+    wrap.append(acts);
     return wrap;
   }
 
@@ -667,43 +672,78 @@ export class TabView {
     const t = this.tab;
     this.summaryEl?.remove();
     this.summaryEl = null;
-    if (t.streaming || t.dead || t.engine !== 'builtin') return;
+    if (t.streaming || t.dead) return;
     let start = t.messages.length - 1;
     while (start >= 0 && t.messages[start].role !== 'user') start--;
+    if (start < 0) return;
+    const undoable = t.engine === 'builtin';
     const files = new Map(); // path -> { add, del, ids }
+    const read = new Set();
+    const n = { search: 0, run: 0, help: 0, failed: 0 };
     let lastAsst = null;
     for (const m of t.messages.slice(start + 1)) {
       if (m.role !== 'assistant') continue;
       lastAsst = m;
       for (const b of Array.isArray(m.content) ? m.content : []) {
-        if (b.type !== 'toolCall' || (b.name !== 'edit' && b.name !== 'write')) continue;
+        if (b.type !== 'toolCall') continue;
         const r = t.results.get(b.id);
+        if (r?.isError) n.failed++;
+        const a = b.arguments || {};
+        if (b.name === 'read') a.path && read.add(a.path);
+        else if (/^(glob|grep|find|ast_grep|web_search|web_fetch)$/.test(b.name)) n.search++;
+        else if (b.name === 'bash' || b.name === 'eval') n.run++;
+        else if (b.name === 'task') n.help++;
+        if (b.name !== 'edit' && b.name !== 'write' && b.name !== 'ast_edit') continue;
         const d = r?.details;
-        if (!d?.undoable || d.undone || r.isError) continue;
-        const f = files.get(d.path) || { add: 0, del: 0, ids: [] };
+        if (r?.isError || d?.undone) continue;
+        const path = d?.path || a.path;
+        if (!path) continue;
+        const f = files.get(path) || { add: 0, del: 0, ids: [] };
         const c = diffCounts(d);
         if (c) (f.add += c.add), (f.del += c.del);
-        f.ids.push(b.id);
-        files.set(d.path, f);
+        if (undoable && d?.undoable) f.ids.push(b.id);
+        files.set(path, f);
       }
     }
     const anchor = lastAsst && this.els.get(lastAsst);
-    if (!files.size || !anchor) return;
+    const did = read.size + n.search + n.run + n.help + files.size;
+    if (!anchor || !did) return;
+    // What the agent looked at and did in this reply, in one line (the transparency the tool steps give, summed up).
+    const u = t.messages[start];
+    const secs = u.timestamp && lastAsst.timestamp ? Math.max(0, Math.round((lastAsst.timestamp - u.timestamp) / 1000)) : null;
+    const pl = (k, one, many = one + 's') => `${k} ${k === 1 ? one : many}`;
+    const facts = [
+      read.size ? [icon('eye', 12), `Read ${pl(read.size, 'file')}`] : null,
+      n.search ? [icon('search', 12), pl(n.search, 'search', 'searches')] : null,
+      n.run ? [icon('terminal', 12), `Ran ${pl(n.run, 'command')}`] : null,
+      n.help ? [icon('users', 12), pl(n.help, 'helper')] : null,
+      files.size ? [icon('pencil', 12), `Changed ${pl(files.size, 'file')}`] : null,
+      n.failed ? [icon('alert', 12), pl(n.failed, 'failed step')] : null,
+    ].filter(Boolean);
+    const line = h('div', { class: 'ts-line' }, facts.map(([ic, txt], i) => h('span', { class: 'ts-fact' + (i === facts.length - 1 && n.failed ? ' bad' : '') }, ic, txt)), secs ? h('span', { class: 'ts-time num' }, secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`) : null);
+    if (!files.size) {
+      this.summaryEl = h('div', { class: 'turn-sum lite enter' }, line);
+      anchor.after(this.summaryEl);
+      if (this.stick) this.scrollBottom();
+      return;
+    }
     const all = [...files.values()];
-    const total = { add: all.reduce((n, f) => n + f.add, 0), del: all.reduce((n, f) => n + f.del, 0) };
-    const undo = h('button', { class: 'btn sm', type: 'button', title: 'Put every file changed in this reply back as it was' }, icon('refresh', 13), 'Undo all');
-    undo.addEventListener('click', () => this.undoAll(all.flatMap((f) => f.ids)));
+    const ids = all.flatMap((f) => f.ids);
+    const total = { add: all.reduce((s, f) => s + f.add, 0), del: all.reduce((s, f) => s + f.del, 0) };
+    const undo = ids.length ? h('button', { class: 'btn sm', type: 'button', title: 'Put every file changed in this reply back as it was' }, icon('undo', 13), 'Undo all') : null;
+    undo?.addEventListener('click', () => this.undoAll(ids));
     const rel = (p) => {
       const a = p.replace(/\\/g, '/');
       const b = t.workspace.replace(/\\/g, '/').replace(/\/+$/, '');
       return a.toLowerCase().startsWith(b.toLowerCase() + '/') ? a.slice(b.length + 1) : p;
     };
-    const rows = [...files].slice(0, 6).map(([p, f]) => h('button', { class: 'ts-file', type: 'button', title: p, onclick: () => reviewChanges(t, p) }, h('span', { class: 'ell grow' }, h('bdi', null, rel(p))), statChips(f, 'ts-stat num')));
+    const rows = [...files].slice(0, 6).map(([p, f]) => h('button', { class: 'ts-file', type: 'button', title: p, onclick: () => reviewChanges(t, p) }, icon('file', 12), h('span', { class: 'ell grow' }, h('bdi', null, rel(p))), statChips(f, 'ts-stat num')));
     if (files.size > 6) rows.push(h('div', { class: 'ts-more' }, `and ${files.size - 6} more`));
     this.summaryEl = h('div', { class: 'turn-sum enter' },
-      h('div', { class: 'ts-head' }, icon('pencil', 14), h('b', null, `${files.size} file${files.size === 1 ? '' : 's'} changed`), statChips(total, 'ts-stat num'), h('span', { class: 'grow' }),
+      h('div', { class: 'ts-head' }, h('b', null, `${files.size} file${files.size === 1 ? '' : 's'} changed`), statChips(total, 'ts-stat num'), h('span', { class: 'grow' }),
         h('button', { class: 'btn sm', type: 'button', onclick: () => reviewChanges(t, null) }, icon('branch', 13), 'Review'), undo),
-      h('div', { class: 'ts-files' }, ...rows));
+      h('div', { class: 'ts-files' }, ...rows),
+      line);
     anchor.after(this.summaryEl);
     if (this.stick) this.scrollBottom();
   }

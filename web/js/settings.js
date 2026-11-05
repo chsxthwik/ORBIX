@@ -91,7 +91,7 @@ function tabBehavior(el) {
 function whereRow() {
   const b = S.env.backend;
   const cur = b.kind === 'wsl' ? 'wsl|' + b.distro : 'native|';
-  const sel = h('select', { 'aria-label': 'Run commands in' }, h('option', { value: 'native|' }, 'Windows'), b.kind === 'wsl' ? h('option', { value: cur }, `WSL · ${b.distro}`) : null);
+  const sel = h('select', { 'aria-label': 'Run commands in' }, h('option', { value: 'native|' }, 'Windows'), b.kind === 'wsl' ? h('option', { value: cur }, (b.distro ? `WSL · ${b.distro}` : 'WSL · default distribution')) : null);
   sel.value = cur;
   api.get('/api/env').then((env) => {
     for (const d of env.distros || []) if (!sel.querySelector(`option[value="wsl|${CSS.escape(d)}"]`)) sel.append(h('option', { value: 'wsl|' + d }, `WSL · ${d}`));

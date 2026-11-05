@@ -15,7 +15,7 @@ function drawStatus() {
   const b = S.env?.backend;
   const busy = !!t?.streaming;
   const offline = S.connected === false;
-  const where = b ? (b.kind === 'wsl' ? `WSL · ${b.distro || '?'}` : 'Windows') : '';
+  const where = b ? (b.kind === 'wsl' ? (b.distro ? `WSL · ${b.distro}` : 'WSL') : 'Windows') : '';
   const state = offline ? 'Reconnecting…' : busy ? 'Working' : t?.dead ? 'Session ended' : t ? 'Ready' : S.tabs.size ? `${S.tabs.size} session${S.tabs.size === 1 ? '' : 's'} open` : 'Ready';
   const dot = offline ? ' warn' : busy ? ' run' : t?.dead ? ' dead' : ' ok';
   const left = [h('span', { class: 'sb-item' }, h('span', { class: 'dot' + dot }), h('span', { id: 'sb-state' }, state))];

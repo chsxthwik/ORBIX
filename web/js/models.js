@@ -14,7 +14,7 @@ export function renderModelRoles(root, engine) {
   if (!engine.providers.some((p) => p.configured)) return replace(root);
   const dl = h('datalist', { id: 'models-all' });
   const rows = ROLES.map(([role, label, hint]) => {
-    const input = h('input', { type: 'text', class: 'role-in', list: 'models-all', value: engine.models?.[role] || '', placeholder: 'Same as the session’s model', spellcheck: 'false', autocomplete: 'off', 'aria-label': label });
+    const input = h('input', { type: 'text', class: 'role-in', list: 'models-all', value: engine.models?.[role] || '', placeholder: 'Session model', spellcheck: 'false', autocomplete: 'off', 'aria-label': label });
     const save = btn('Save', async () => {
       save.disabled = true;
       try {

@@ -1,13 +1,13 @@
 # Changelog
 
 ## Unreleased
-- **New logo.** Two orbits cross to form the X of ORBIX inside an O, woven over and under, with one cyan node. Sizes up to 32 px use a heavier simplified master. Icon, favicon, social images, banner and in-app mark were redrawn; the in-app mark is static and the sidebar copy breathes while the agent works.
-- **Interface redesign.** Warm-neutral surfaces with one accent colour for choices, mint for anything the agent is doing right now and amber for anything waiting on you. Borders carry the structure; the glows, gradients and the animated mark on the home screen are gone.
-- **Session view.** Your messages are blocks with a "You" label, not chat bubbles. Tool calls are compact steps on a rail that open into a card; thinking folds to one line. Approvals dock above the message box with the exact file or command and the keys 1, 2 and Esc.
-- **Home.** One question, the message box, then Projects and Recent side by side. The example-task chips were removed.
-- **Top bar.** The active session's project is a chip: new session there, show the folder, copy its path.
-- **Composer.** The model chip reads "Default model" until a turn picks one, and shows the model as soon as the first turn starts.
-- **Status bar and side panel** use the mono face for data (tokens, cost, branch, paths) and the same tab style as the top bar.
+- **New look: two signals.** Graphite surfaces, orange for you (your messages, approvals, the action that starts work) and teal for the agent (anything it is doing right now). No gradients or glows.
+- **One mark everywhere.** A ring with a tilted orbit and an orange node, the orbit passing behind the ring at the top and in front at the bottom. The app, icon, favicon, README banners, social images, demo storyboard, architecture diagram and website all use it. The sidebar mark turns while the agent works.
+- **Home.** The question names the selected project, project tabs sit on the launch panel, and Model, Plan first and approval chips sit under the message box (they wrap on narrow windows). Recent shows what is working or waiting; a setup checklist hides once everything is done.
+- **Sidebar.** A Running section lists sessions that are working (teal) or need you (orange). A new conversation shows under its project right away instead of "No conversations yet".
+- **Session view.** Consecutive tool steps of one reply sit evenly instead of with large gaps. A reply summary lists what the agent read, searched, ran and changed. 1 and 2 answer an approval from anywhere outside a text field.
+- **Fixes.** A tool's run time no longer includes the time it waited for your approval. Tabs shrink before the tab strip scrolls. "1 model" instead of "1 models". The status bar shows "WSL" instead of "WSL · ?" for the default distribution. Undo buttons share one icon.
+- **Install.** `tools/install.ps1` installs ORBIX to `%LOCALAPPDATA%\Programs\ORBIX` with shortcuts and an Apps entry; `Uninstall-ORBIX.ps1` removes it and keeps your chat history. `Create-Shortcuts.cmd` is gone.
 
 ## 3.0.0
 - **ORBIX - Unified ADE**: a native Windows app where an AI agent works on your project. It reads files, edits them and runs commands, and asks before it changes anything. Every file change can be undone.
