@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>ORBIX - Unified ADE</title>
-  <meta name="description" content="ORBIX is a Windows app for AI coding agents. Every step is visible, every change needs your approval, every edit can be undone. Built-in agent with 17 providers, plus the optional OMP CLI.">
+  <title>ORBIX - Windows app for AI coding agents</title>
+  <meta name="description" content="ORBIX is a Windows app for running AI coding agents. It shows each step, asks before it changes a file or runs a command, and can undo any edit. Works with 17 providers, local models and the optional OMP CLI.">
   <meta name="theme-color" content="#0C0C0D">
   <meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://orbix-agent.vercel.app/">
@@ -15,45 +15,48 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://orbix-agent.vercel.app/">
   <meta property="og:site_name" content="ORBIX">
-  <meta property="og:title" content="ORBIX - Unified ADE">
-  <meta property="og:description" content="The cockpit for coding agents. Every step visible, every change approved, every edit undoable. Windows.">
-  <meta property="og:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=3">
+  <meta property="og:title" content="ORBIX - Windows app for AI coding agents">
+  <meta property="og:description" content="Run AI coding agents on Windows. Approve every change and undo any edit.">
+  <meta property="og:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=4">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=3">
+  <meta name="twitter:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=4">
   <link rel="preload" href="assets/fonts/mona-sans-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/site.css?v=10">
-  <script src="assets/js/site.js?v=9" defer></script>
+  <link rel="stylesheet" href="assets/css/site.css?v=14">
+  <script src="assets/js/site.js?v=12" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
   <div class="progress" aria-hidden="true"><i id="progress"></i></div>
 
   <header class="nav" id="top">
-    <a class="brand" href="#top" aria-label="ORBIX, Unified ADE, home">
+    <a class="brand" href="#top" aria-label="ORBIX, home">
       <img src="assets/img/logo.svg?v=6" alt="" width="26" height="26">
       <span class="brand-name">ORBIX</span>
-      <span class="brand-tag">Unified ADE</span>
+      <span class="brand-tag">AI coding agents</span>
     </a>
-    <nav aria-label="Sections">
+    <nav aria-label="Sections" id="nav-links">
       <a href="#problem">Why</a>
-      <a href="#demo">Try it</a>
-      <a href="#unified">One window</a>
-      <a href="#engines">Engines</a>
+      <a href="#demo">Demo</a>
+      <a href="#app">Screenshots</a>
+      <a href="#unified">Features</a>
+      <a href="#engines">Models</a>
       <a href="#safety">Safety</a>
+      <a href="#faq">FAQ</a>
     </nav>
     <a class="btn btn-small" href="#download">Download</a>
+    <button class="menu-btn" id="menu-btn" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu"><i></i><i></i></button>
   </header>
 
   <main id="main">
 
     <section class="hero" id="hero">
       <div class="hero-sticky" id="hero-sticky">
-        <p class="eyebrow fx-up"><span class="dot" aria-hidden="true"></span>Unified ADE for Windows</p>
+        <p class="eyebrow fx-up"><span class="dot" aria-hidden="true"></span>Windows app for AI coding agents</p>
 
         <h1 class="wordmark">
-          <span class="sr-only">ORBIX - Unified ADE</span>
+          <span class="sr-only">ORBIX - Windows app for AI coding agents</span>
           <span class="wm" id="wm" aria-hidden="true">
             <svg class="wm-ring wm-ring-back" viewBox="0 0 1000 170"><path pathLength="1" d="M20 85 A480 70 0 0 1 980 85"/></svg>
             <span class="ch ch-o">O</span><span class="ch">R</span><span class="ch">B</span><span class="ch">I</span><span class="ch">X</span>
@@ -63,18 +66,27 @@
         </h1>
 
         <div class="hero-sub">
-          <p class="tagline fx-up">The cockpit for coding agents.</p>
+          <p class="tagline fx-up"><span>Run AI coding agents</span> <span class="dim">without losing track of what they change.</span></p>
           <div class="cta fx-up">
-            <a class="btn btn-magnet" href="https://github.com/chsxthwik/ORBIX/releases/download/v3.0.0/ORBIX-3.0.0-win-x64.zip" rel="noopener">
+            <a class="btn btn-magnet btn-dl" href="https://github.com/chsxthwik/ORBIX/releases/download/v3.0.0/ORBIX-3.0.0-win-x64.zip" rel="noopener">
               <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M1 2.3 6.6 1.5v5.4H1zM7.3 1.4 15 .3v6.6H7.3zM1 7.6h5.6V13L1 12.2zM7.3 7.6H15v6.5L7.3 13z" fill="currentColor"/></svg>
-              Download for Windows
+              Download for Windows<small>v3.0.0 &middot; 34 MB</small>
             </a>
-            <a class="btn btn-ghost" href="#problem">Why it exists</a>
+            <a class="btn btn-ghost" href="#demo">See it work</a>
           </div>
-          <p class="fine fx-up">Free &middot; Source available &middot; Windows 10 &amp; 11 &middot; 34 MB</p>
+          <p class="fine fx-up">Free to use &middot; Source available &middot; Windows 10 and 11</p>
         </div>
         <p class="cue" aria-hidden="true"><span></span>scroll</p>
       </div>
+    </section>
+
+    <section class="stats" aria-label="ORBIX in numbers">
+      <ul>
+        <li><b data-count="17">17</b><span>AI providers built in</span></li>
+        <li><b data-count="689">689</b><span>automated tests passing</span></li>
+        <li><b data-count="34" data-suffix=" MB">34 MB</b><span>one zip, Node.js included</span></li>
+        <li><b data-count="0">0</b><span>accounts to create</span></li>
+      </ul>
     </section>
 
     <section class="problem" id="problem" aria-label="Why ORBIX exists">
@@ -126,7 +138,7 @@
 
     <section class="demo" id="demo" aria-labelledby="demo-title">
       <div class="section-head">
-        <p class="kicker">Try it</p>
+        <p class="kicker">Demo</p>
         <h2 id="demo-title" class="split">Watch it fix a bug. Then you decide.</h2>
         <p>Click an approval, or press <kbd>1</kbd> <kbd>2</kbd> <kbd>Esc</kbd>.</p>
       </div>
@@ -183,14 +195,44 @@
       </div>
       <div class="demo-foot">
         <button class="btn btn-ghost btn-small" id="replay" type="button">&#8634; Play it again</button>
-        <p>Simulated in your browser.</p>
+        <p>Simulated in your browser. The real app is below.</p>
+      </div>
+    </section>
+
+    <section class="gallery" id="app" aria-labelledby="app-title">
+      <div class="section-head">
+        <p class="kicker">Screenshots</p>
+        <h2 id="app-title" class="split">Not a mock-up. This is ORBIX.</h2>
+        <p>Version 3.0.0 on Windows 11. Pick a screen.</p>
+      </div>
+      <div class="shots" id="shots">
+        <div class="shot-tabs" role="tablist" aria-label="Screens" id="shot-tabs">
+          <button type="button" role="tab" aria-selected="true" aria-controls="shot-stage" data-i="0"><b>Home</b><span>Pick a project, describe a task, choose a model.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="1" tabindex="-1"><b>Asks first</b><span>Edits and commands wait for you. <kbd>1</kbd> <kbd>2</kbd> or <kbd>Esc</kbd>.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="2" tabindex="-1"><b>Review &amp; undo</b><span>Every change as a diff, each with its own Undo.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="3" tabindex="-1"><b>Explains code</b><span>Ask about your project. Get tables, steps and code.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="4" tabindex="-1"><b>Command palette</b><span><kbd>Ctrl</kbd> <kbd>K</kbd> finds any action or chat.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="5" tabindex="-1"><b>Providers</b><span>Paste a key, check it, done. Stored encrypted.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="6" tabindex="-1"><b>Light theme</b><span>Same app, light or dark.</span><i class="shot-bar"></i></button>
+        </div>
+        <figure class="shot-frame">
+          <div class="shot-stage" id="shot-stage" role="tabpanel" aria-live="polite">
+            <img class="is-on" src="assets/img/shots/home.webp" width="1600" height="1012" alt="ORBIX home screen asking what to build in shop-api, with recent sessions and a setup checklist" decoding="async">
+            <img src="assets/img/shots/chat-approval.webp" width="1600" height="1012" alt="The agent proposes a one-line edit to src/auth.js and waits with Allow once, Allow for this session and Deny" loading="lazy" decoding="async">
+            <img src="assets/img/shots/chat-done.webp" width="1600" height="1012" alt="A finished reply: the applied diff with Undo, passing tests and a summary of files changed" loading="lazy" decoding="async">
+            <img src="assets/img/shots/chat-answer.webp" width="1600" height="1012" alt="ORBIX explains how login works with a table of files, numbered steps and a diff" loading="lazy" decoding="async">
+            <img src="assets/img/shots/palette.webp" width="1600" height="1012" alt="The command palette listing new session, settings, AI providers and diagnostics" loading="lazy" decoding="async">
+            <img src="assets/img/shots/providers.webp" width="1600" height="1012" alt="Settings, AI providers: a connected custom server and fields to add Anthropic and OpenAI keys" loading="lazy" decoding="async">
+            <img src="assets/img/shots/light.webp" width="1600" height="1012" alt="The same session in the light theme" loading="lazy" decoding="async">
+          </div>
+        </figure>
       </div>
     </section>
 
     <section class="unified" id="unified" aria-labelledby="uni-title">
       <div class="section-head">
-        <p class="kicker">One window</p>
-        <h2 id="uni-title" class="split">Everything the agent touches.</h2>
+        <p class="kicker">Features</p>
+        <h2 id="uni-title" class="split">Sessions, files, diffs and a console in one window.</h2>
       </div>
       <div class="uni-grid">
         <div class="uni-sticky">
@@ -225,34 +267,28 @@
         </div>
         <ol class="scenes">
           <li data-scene="agent">
-            <p class="scene-n">01</p>
             <h3>The agent, step by step</h3>
             <p>Every read, search and edit is a card you can open. Its plan sits beside it.</p>
           </li>
           <li data-scene="files">
-            <p class="scene-n">02</p>
-            <h3>Your project, beside it</h3>
-            <p>Browse files. Hand one over with <code>@</code>.</p>
+            <h3>Browse your project</h3>
+            <p>Files sit next to the chat. Type <code>@</code> to hand one to the agent.</p>
           </li>
           <li data-scene="git">
-            <p class="scene-n">03</p>
             <h3>Every change, as a diff</h3>
             <p>Each edit has its own undo. <code>/undo</code> reverts a whole reply.</p>
           </li>
           <li data-scene="console">
-            <p class="scene-n">04</p>
             <h3>Commands you can watch</h3>
-            <p>Windows or WSL. Stop means stop.</p>
+            <p>Runs on Windows or in WSL. Output streams live and you can stop it.</p>
           </li>
           <li data-scene="sessions">
-            <p class="scene-n">05</p>
-            <h3>Many tasks, many tabs</h3>
-            <p>Sessions side by side. A ping when one finishes.</p>
+            <h3>Several sessions at once</h3>
+            <p>Keep more than one task open in tabs. You get a notification when one finishes.</p>
           </li>
           <li data-scene="models">
-            <p class="scene-n">06</p>
-            <h3>Any model, mid-sentence</h3>
-            <p>Switch model, thinking level and plan mode in the message box.</p>
+            <h3>Switch models mid-conversation</h3>
+            <p>Change the model, thinking level and plan mode from the message box.</p>
           </li>
         </ol>
       </div>
@@ -260,8 +296,8 @@
 
     <section class="engines" id="engines" aria-labelledby="eng-title">
       <div class="section-head">
-        <p class="kicker">Engines</p>
-        <h2 id="eng-title" class="split">Any model. Two ways in.</h2>
+        <p class="kicker">Models</p>
+        <h2 id="eng-title" class="split">Bring your own model.</h2>
       </div>
 
       <div class="eng-ui">
@@ -309,32 +345,28 @@
       <h2 id="safe-title" class="statement" data-scrub>Reading never asks. Writing always does.</h2>
       <div class="rules">
         <article>
-          <p class="rule-n">i.</p>
           <h3>You approve every change</h3>
           <p><kbd>1</kbd> once, <kbd>2</kbd> this session, <kbd>Esc</kbd> deny.</p>
         </article>
         <article>
-          <p class="rule-n">ii.</p>
           <h3>Keys stay on your PC</h3>
           <p>Encrypted for your Windows account. Sent only to the provider you chose.</p>
         </article>
         <article>
-          <p class="rule-n">iii.</p>
-          <h3>A server only this window reaches</h3>
-          <p><code>127.0.0.1</code>, fresh token every launch.</p>
+          <h3>Local server, new token each launch</h3>
+          <p>It listens on <code>127.0.0.1</code> only, so nothing outside your PC can reach it.</p>
         </article>
         <article>
-          <p class="rule-n">iv.</p>
-          <h3>One folder</h3>
-          <p>Everything ORBIX saves lives in its own <code>data</code> folder.</p>
+          <h3>Everything in one folder</h3>
+          <p>ORBIX saves its settings and chats in its own <code>data</code> folder.</p>
         </article>
       </div>
     </section>
 
-    <section class="keys" aria-labelledby="keys-title">
+    <section class="keys" id="keys" aria-labelledby="keys-title">
       <div class="section-head">
-        <p class="kicker">Keyboard first</p>
-        <h2 id="keys-title" class="split">Hands stay on the keys.</h2>
+        <p class="kicker">Shortcuts</p>
+        <h2 id="keys-title" class="split">Commands and shortcuts.</h2>
       </div>
       <div class="keys-grid">
         <div>
@@ -364,8 +396,8 @@
 
     <section class="faq" id="faq" aria-labelledby="faq-title">
       <div class="section-head">
-        <p class="kicker">Questions</p>
-        <h2 id="faq-title" class="split">Before you install.</h2>
+        <p class="kicker">FAQ</p>
+        <h2 id="faq-title" class="split">Common questions.</h2>
       </div>
       <div class="faq-list">
         <details>
@@ -404,7 +436,7 @@
         <div class="dl-main">
           <p class="kicker">Download</p>
           <h2 id="dl-title">ORBIX 3.0.0</h2>
-          <p class="dl-lede">A Windows app for coding agents. Unzip it and run it. Nothing else to install.</p>
+          <p class="dl-lede">A Windows app for AI coding agents. Unzip it and run it. Node.js is included, so there is nothing else to install.</p>
           <ul class="chips" aria-label="Requirements">
             <li>Windows 10 or 11</li><li>64-bit</li><li>Node.js included</li><li>34 MB</li>
           </ul>
@@ -417,13 +449,14 @@
           </details>
         </div>
         <div class="dl-side">
+          <p class="dl-side-title">Get started in 3 steps</p>
           <ol class="steps">
-            <li><b>Unzip</b> and open <code>bin\ORBIX.exe</code>.</li>
-            <li><b>Add a key</b> with <kbd>Ctrl</kbd><kbd>,</kbd>, or sign in.</li>
-            <li><b>Pick a folder</b>, describe a task, press <kbd>Enter</kbd>.</li>
+            <li><b>Unzip</b> and open <code>bin\ORBIX.exe</code></li>
+            <li><b>Add a key</b> with <kbd>Ctrl</kbd><kbd>,</kbd> or sign in</li>
+            <li><b>Pick a folder</b>, type a task, hit <kbd>Enter</kbd></li>
           </ol>
           <div class="sha-row">
-            <p class="sha-label">SHA-256</p>
+            <p class="sha-label">SHA-256 checksum</p>
             <code class="sha-val" id="sha">8555b7edc699904e7742eedfe2a4aff2d5472c9f2bc71ac0a1e28e10bbaaf814</code>
             <button type="button" class="copy" id="copy-sha">Copy</button>
           </div>
@@ -437,10 +470,10 @@
     <div class="foot-top">
       <div class="foot-brand">
         <img src="assets/img/logo.svg?v=6" alt="" width="28" height="28">
-        <div><b>ORBIX</b><span>Unified ADE for Windows</span></div>
+        <div><b>ORBIX</b><span>AI coding agents for Windows</span></div>
       </div>
       <nav class="foot-nav" aria-label="Footer">
-        <a href="#problem">Why</a><a href="#demo">Try it</a><a href="#unified">One window</a><a href="#engines">Engines</a><a href="#safety">Safety</a><a href="#faq">FAQ</a><a href="#download">Download</a>
+        <a href="#problem">Why</a><a href="#demo">Demo</a><a href="#app">Screenshots</a><a href="#unified">Features</a><a href="#engines">Models</a><a href="#safety">Safety</a><a href="#faq">FAQ</a><a href="#download">Download</a>
       </nav>
     </div>
     <div class="foot-bottom">

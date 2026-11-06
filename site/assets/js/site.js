@@ -55,7 +55,7 @@
     statementWords = $$(".sw", statement);
   }
 
-  const revealables = $$(".section-head > p:not(.kicker), .rules article, .kbd-list li, .cmds, .cmd-say, .dl-card, .steps li, .demo-foot, .scene-n, .seg, .eng-foot");
+  const revealables = $$(".section-head > p:not(.kicker), .stats li, .shot-frame, .shot-tabs, .rules article, .kbd-list li, .cmds, .cmd-say, .dl-card, .steps li, .demo-foot, .scene-n, .seg, .eng-foot");
   if ("IntersectionObserver" in window && !reduced) {
     revealables.forEach((el) => el.classList.add("reveal"));
     const io = new IntersectionObserver((entries) => {
@@ -104,23 +104,49 @@
   const node = $("#wm-node");
   if (wm && node) {
     let t = Math.PI * .15, last = performance.now();
+    // a short fading tail behind the node, so the orbit reads as motion
+    const TAIL = 8;
+    const tail = Array.from({ length: TAIL }, () => {
+      const d = document.createElement("span");
+      d.className = "wm-trail";
+      wm.appendChild(d);
+      return d;
+    });
+    // the ring leans a little toward the pointer (fine pointers only)
+    let tilt = 0, tiltTo = 0;
+    if (!reduced && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      window.addEventListener("pointermove", (e) => { tiltTo = (e.clientX / window.innerWidth - .5) * 6; }, { passive: true });
+    }
     const place = (now) => {
       const dt = Math.min(50, now - last);
       last = now;
+      tilt += (tiltTo - tilt) * Math.min(1, dt * .006);
+      wm.style.setProperty("--tilt", tilt.toFixed(3));
       const W = wm.offsetWidth, H = wm.offsetHeight;
       const sw = W * 1.18, sh = sw * 170 / 1000;
       const cx = W / 2, cy = H / 2 + sh * .04;
       const rx = sw * .48, ry = sh * (70 / 170) * (1 + hero.p * 1.9);
-      const th = (-8 + hero.p * 10) * Math.PI / 180;
+      const th = (-8 + hero.p * 10 + tilt) * Math.PI / 180;
       if (!reduced) t += dt * .00065;
-      const lx = rx * Math.cos(t), ly = ry * Math.sin(t);
-      const x = cx + lx * Math.cos(th) - ly * Math.sin(th);
-      const yy = cy + lx * Math.sin(th) + ly * Math.cos(th);
+      const at = (a) => {
+        const lx = rx * Math.cos(a), ly = ry * Math.sin(a);
+        return [cx + lx * Math.cos(th) - ly * Math.sin(th), cy + lx * Math.sin(th) + ly * Math.cos(th)];
+      };
+      const [x, yy] = at(t);
       const front = Math.sin(t) > 0;
       const shown = clamp((now - readyAt - 1900) / 600);
       node.style.transform = `translate(${x}px, ${yy}px) scale(${front ? 1 : .68})`;
       node.style.opacity = String(shown * (front ? 1 : .45));
       node.style.zIndex = front ? "4" : "1";
+      tail.forEach((d, i) => {
+        const a = t - (i + 1) * .075;
+        const [tx, ty] = at(a);
+        const f = Math.sin(a) > 0;
+        const k = 1 - (i + 1) / (TAIL + 1);
+        d.style.transform = `translate(${tx}px, ${ty}px) scale(${(f ? 1 : .68) * (.25 + k * .6)})`;
+        d.style.opacity = String(shown * k * (f ? .55 : .2));
+        d.style.zIndex = f ? "4" : "1";
+      });
       if (!reduced) requestAnimationFrame(place);
     };
     requestAnimationFrame(place);
@@ -139,7 +165,8 @@
   const map = $("#map");
   const scenes = $$(".scenes li");
   const navLinks = $$(".nav nav a");
-  const sections = navLinks.map((a) => $(a.getAttribute("href"))).filter(Boolean);
+  // every section counts, so the highlight clears when you pass the last linked one
+  const sections = $$("main > section[id]");
 
   function onFrame() {
     const vh = window.innerHeight;
@@ -294,7 +321,7 @@
       const y = cy + lx * Math.sin(th) + ly * Math.cos(th);
       const depth = (Math.sin(tt) + 1) / 2;
       li.style.transform = `translate(${x - li.offsetWidth / 2}px, ${y - li.offsetHeight / 2}px) scale(${(.8 + depth * .2) * (.4 + s * .6)})`;
-      li.style.opacity = String((.4 + depth * .6) * s);
+      li.style.opacity = String((.62 + depth * .38) * s);
       li.style.zIndex = depth > .5 ? "30" : "10";
       li.classList.toggle("is-front", depth > .7 && s > .9);
     });
@@ -386,7 +413,7 @@
   const turn = () => {
     const t = el("div", "turn");
     const av = el("img", "avatar");
-    av.src = "assets/img/logo.svg?v=3";
+    av.src = "assets/img/logo.svg?v=6";
     av.alt = "ORBIX";
     t.appendChild(av);
     chat.appendChild(t);
@@ -626,6 +653,99 @@ Tests: <span class="pass">14 passed</span>, 14 total</pre>`);
       copyBtn.classList.toggle("is-done", ok);
       setTimeout(() => { copyBtn.textContent = "Copy"; copyBtn.classList.remove("is-done"); }, 1600);
     });
+  }
+
+  /* mobile menu */
+  const menuBtn = $("#menu-btn");
+  if (menuBtn) {
+    const setMenu = (open) => {
+      nav.classList.toggle("is-open", open);
+      menuBtn.setAttribute("aria-expanded", String(open));
+      menuBtn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    };
+    menuBtn.addEventListener("click", () => setMenu(!nav.classList.contains("is-open")));
+    navLinks.forEach((a) => a.addEventListener("click", () => setMenu(false)));
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && nav.classList.contains("is-open")) { setMenu(false); menuBtn.focus(); }
+    });
+    window.matchMedia("(min-width: 1081px)").addEventListener("change", (m) => { if (m.matches) setMenu(false); });
+  }
+
+  /* numbers count up once, when they come into view */
+  const counters = $$(".stats b[data-count]");
+  const paintCount = (b, v) => { b.textContent = Math.round(v).toLocaleString("en-US") + (b.dataset.suffix || ""); };
+  if (counters.length && "IntersectionObserver" in window && !reduced) {
+    counters.forEach((b) => paintCount(b, 0));
+    const ioCount = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (!e.isIntersecting) return;
+        ioCount.unobserve(e.target);
+        const b = e.target, to = Number(b.dataset.count), t0 = performance.now(), dur = 1100 + Math.min(700, to);
+        const step = (now) => {
+          const k = ease(clamp((now - t0) / dur));
+          paintCount(b, to * k);
+          if (k < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+    }, { threshold: .6 });
+    counters.forEach((b) => ioCount.observe(b));
+  }
+
+  /* screenshots: tabs, arrow keys, gentle auto-advance until you pick one */
+  const shots = $("#shots");
+  if (shots) {
+    const tabs = $$("#shot-tabs button");
+    const imgs = $$("#shot-stage img");
+    const SHOT_MS = 5200;
+    let cur = 0, auto = !reduced, shotsVisible = false, timer = 0;
+    shots.style.setProperty("--shot-ms", SHOT_MS + "ms");
+    const show = (i, focus) => {
+      cur = (i + tabs.length) % tabs.length;
+      tabs.forEach((t, k) => {
+        const on = k === cur;
+        t.setAttribute("aria-selected", String(on));
+        t.tabIndex = on ? 0 : -1;
+        // restart the progress bar on the new tab
+        const bar = $(".shot-bar", t);
+        if (on && bar) { bar.style.animation = "none"; void bar.offsetWidth; bar.style.animation = ""; }
+      });
+      imgs.forEach((im, k) => im.classList.toggle("is-on", k === cur));
+      // warm the next image so the swap never flashes
+      const next = imgs[(cur + 1) % imgs.length];
+      if (next && next.loading === "lazy") next.loading = "eager";
+      if (focus) tabs[cur].focus();
+      if (window.innerWidth <= 960) tabs[cur].scrollIntoView({ block: "nearest", inline: "nearest", behavior: reduced ? "auto" : "smooth" });
+      schedule();
+    };
+    const stopAuto = () => { auto = false; shots.classList.remove("is-auto"); clearTimeout(timer); };
+    const schedule = () => {
+      clearTimeout(timer);
+      if (!auto) return;
+      shots.classList.toggle("is-auto", shotsVisible);
+      if (shotsVisible && !document.hidden) timer = setTimeout(() => show(cur + 1), SHOT_MS);
+    };
+    tabs.forEach((t, i) => t.addEventListener("click", () => { stopAuto(); show(i); }));
+    $("#shot-tabs").addEventListener("keydown", (e) => {
+      const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (e.key === "Home" || e.key === "End") { e.preventDefault(); stopAuto(); show(e.key === "Home" ? 0 : tabs.length - 1, true); return; }
+      if (!d) return;
+      e.preventDefault(); stopAuto(); show(cur + d, true);
+    });
+    // swipe on touch screens
+    let sx = null;
+    const stage = $("#shot-stage");
+    stage.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; }, { passive: true });
+    stage.addEventListener("touchend", (e) => {
+      if (sx == null) return;
+      const dx = e.changedTouches[0].clientX - sx;
+      sx = null;
+      if (Math.abs(dx) > 40) { stopAuto(); show(cur + (dx < 0 ? 1 : -1)); }
+    });
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver((entries) => { shotsVisible = entries[0].isIntersecting; schedule(); }, { threshold: .35 }).observe(shots);
+    }
+    document.addEventListener("visibilitychange", schedule);
   }
 
   const boot = () => { root.classList.add("is-ready"); onFrame(); if (!reduced) requestAnimationFrame(loop); else { layoutOrbit(performance.now(), 0); } };
