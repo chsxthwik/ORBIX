@@ -237,34 +237,9 @@
   }
 
   const orbit = $("#orbit");
-  const lists = { orbix: $("#orbit-list-orbix"), omp: $("#orbit-list-omp") };
-  $$("li", lists.orbix).forEach((li) => { if (/^(Ollama|LM Studio)$/.test(li.textContent)) li.classList.add("is-local"); });
-  const factsEl = { orbix: $("#eng-orbix"), omp: $("#eng-omp") };
-  const segEl = $("#seg");
-  let engine = "orbix", orbitItems = $$("li", lists.orbix), spawnStart = 0, orbitVisible = false, engineTouched = false;
-
-  function setEngine(name, byUser) {
-    if (byUser) engineTouched = true;
-    if (name === engine) return;
-    engine = name;
-    segEl.dataset.on = name;
-    $$("button", segEl).forEach((b) => b.setAttribute("aria-selected", String(b.dataset.engine === name)));
-    Object.entries(factsEl).forEach(([k, el]) => {
-      el.classList.remove("is-on");
-      el.hidden = k !== name;
-    });
-    void factsEl[name].offsetWidth;
-    factsEl[name].classList.add("is-on");
-    Object.entries(lists).forEach(([k, el]) => { el.hidden = k !== name; });
-    orbitItems = $$("li", lists[name]);
-    spawnStart = performance.now();
-  }
-  $$("button", segEl).forEach((b) => b.addEventListener("click", () => setEngine(b.dataset.engine, true)));
-  segEl.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { setEngine(engine === "orbix" ? "omp" : "orbix", true); e.preventDefault(); }
-  });
-  factsEl.orbix.classList.add("is-on");
-  if (!reduced) setInterval(() => { if (orbitVisible && !engineTouched && !document.hidden) setEngine(engine === "orbix" ? "omp" : "orbix", false); }, 6500);
+  const orbitList = $("#orbit-list-orbix");
+  $$("li", orbitList).forEach((li) => { if (/^(Ollama|LM Studio)$/.test(li.textContent)) li.classList.add("is-local"); });
+  let orbitItems = $$("li", orbitList), spawnStart = 0, orbitVisible = false;
 
   if ("IntersectionObserver" in window) {
     new IntersectionObserver((entries) => {
