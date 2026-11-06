@@ -370,7 +370,11 @@ export class AppServer {
     if (site && site !== 'same-origin' && site !== 'none') return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
     if (!this.authed(req)) {
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...SECURITY_HEADERS });
-      return res.end('ORBIX: open it from the app window or shortcut (token required).');
+      return res.end(
+        'ORBIX: this address needs its private token, so a plain http://localhost link will not open it.\n' +
+          'Open ORBIX from its app window or shortcut (ORBIX.vbs on Windows). If the window is already open, use it instead of a browser tab.\n' +
+          'If you started it from a terminal, open the "ORBIX-URL ..." address it printed (it ends in ?t=...).',
+      );
     }
     if (url.pathname.startsWith('/api/')) {
       // SameSite does not separate ports: a page on another local port would send our cookie. Browsers add Origin to
