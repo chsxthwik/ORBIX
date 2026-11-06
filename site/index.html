@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ORBIX - Windows app for AI coding agents</title>
-  <meta name="description" content="ORBIX is a Windows app for running AI coding agents. It shows each step, asks before it changes a file or runs a command, and can undo any edit. Works with 17 providers, local models and the optional OMP CLI.">
+  <meta name="description" content="ORBIX is a Windows app for running AI coding agents. It shows each step, asks before it changes a file or runs a command, and can undo any edit. Works with 17 providers and local models.">
   <meta name="theme-color" content="#0C0C0D">
   <meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://orbix-agent.vercel.app/">
@@ -23,7 +23,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=4">
   <link rel="preload" href="assets/fonts/mona-sans-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/site.css?v=14">
+  <link rel="stylesheet" href="assets/css/site.css?v=16">
   <script src="assets/js/site.js?v=12" defer></script>
 </head>
 <body>
@@ -261,7 +261,7 @@
               <i>&gt; npm test -- auth</i><i class="a">14 passed</i>
             </div>
             <div class="map-pane p-models" data-pane="models">
-              <b>Model</b><i>17 providers + OMP</i><i>thinking: medium</i>
+              <b>Model</b><i>17 providers</i><i>thinking: medium</i>
             </div>
           </div>
         </div>
@@ -300,42 +300,25 @@
         <h2 id="eng-title" class="split">Bring your own model.</h2>
       </div>
 
-      <div class="eng-ui">
-        <div class="seg" id="seg" role="tablist" aria-label="Engine">
-          <i class="seg-thumb" aria-hidden="true"></i>
-          <button type="button" role="tab" id="tab-orbix" aria-selected="true" aria-controls="eng-orbix" data-engine="orbix">ORBIX agent</button>
-          <button type="button" role="tab" id="tab-omp" aria-selected="false" aria-controls="eng-omp" data-engine="omp">OMP CLI</button>
+      <div class="eng-grid">
+        <div class="eng-copy">
+          <ul class="facts is-on" id="eng-orbix">
+            <li><b>Built in.</b> Nothing else to install.</li>
+            <li><b>17 providers.</b> Paste a key, or sign in with OpenRouter.</li>
+            <li><b>Local models too.</b> Ollama, LM Studio, any OpenAI-compatible server.</li>
+            <li><b>Keys stay yours.</b> Encrypted for your Windows account.</li>
+          </ul>
+          <p class="eng-foot">17 built in. Paste a key or sign in with OpenRouter. Pick per session.</p>
         </div>
 
-        <div class="eng-grid">
-          <div class="eng-copy">
-            <ul class="facts is-on" id="eng-orbix" role="tabpanel" aria-labelledby="tab-orbix">
-              <li><b>Built in.</b> Nothing else to install.</li>
-              <li><b>17 providers.</b> Paste a key, or sign in with OpenRouter.</li>
-              <li><b>Local models too.</b> Ollama, LM Studio, any OpenAI-compatible server.</li>
-              <li><b>Keys stay yours.</b> Encrypted for your Windows account.</li>
-            </ul>
-            <ul class="facts" id="eng-omp" role="tabpanel" aria-labelledby="tab-omp" hidden>
-              <li><b>Optional.</b> ORBIX finds it on Windows or in WSL.</li>
-              <li><b>Its own sign-ins.</b> Subscriptions, API keys, several accounts.</li>
-              <li><b>Plan usage</b> shown right inside ORBIX.</li>
-              <li><b>Same cockpit.</b> Same approvals, same undo.</li>
-            </ul>
-            <p class="eng-foot">17 built in, plus everything your OMP CLI signs in to. Pick per session.</p>
-          </div>
-
-          <div class="orbit-stage" id="orbit">
-            <svg class="orbit-track" id="orbit-track" aria-hidden="true"><ellipse/><ellipse/></svg>
-            <div class="orbit-core" aria-hidden="true"><span class="pulse"></span><span class="pulse p2"></span><img src="assets/img/logo.svg?v=6" alt="" width="64" height="64"></div>
-            <ul class="orbit-list" id="orbit-list-orbix" aria-label="Built-in providers">
-              <li>Anthropic</li><li>OpenAI</li><li>Google Gemini</li><li>xAI</li><li>Groq</li><li>Mistral</li>
-              <li>DeepSeek</li><li>OpenRouter</li><li>Together</li><li>Fireworks</li><li>Cerebras</li><li>Moonshot</li>
-              <li>Z.ai</li><li>Qwen</li><li>Ollama</li><li>LM Studio</li><li>Any OpenAI-compatible</li>
-            </ul>
-            <ul class="orbit-list" id="orbit-list-omp" aria-label="What OMP adds" hidden>
-              <li>Subscription sign-in</li><li>API keys</li><li>Several accounts</li><li>Plan usage</li><li>Its own settings</li>
-            </ul>
-          </div>
+        <div class="orbit-stage" id="orbit">
+          <svg class="orbit-track" id="orbit-track" aria-hidden="true"><ellipse/><ellipse/></svg>
+          <div class="orbit-core" aria-hidden="true"><span class="pulse"></span><span class="pulse p2"></span><img src="assets/img/logo.svg?v=6" alt="" width="64" height="64"></div>
+          <ul class="orbit-list" id="orbit-list-orbix" aria-label="Built-in providers">
+            <li>Anthropic</li><li>OpenAI</li><li>Google Gemini</li><li>xAI</li><li>Groq</li><li>Mistral</li>
+            <li>DeepSeek</li><li>OpenRouter</li><li>Together</li><li>Fireworks</li><li>Cerebras</li><li>Moonshot</li>
+            <li>Z.ai</li><li>Qwen</li><li>Ollama</li><li>LM Studio</li><li>Any OpenAI-compatible</li>
+          </ul>
         </div>
       </div>
     </section>
@@ -417,10 +400,6 @@
           <p>No. Reading and searching never ask. Edits and commands ask first, unless you switch to &ldquo;Allow everything&rdquo; in Settings.</p>
         </details>
         <details>
-          <summary>What is the OMP CLI?</summary>
-          <p>An optional command-line agent from the OMP authors. If you install it, ORBIX can run sessions with it, using its own sign-ins and settings.</p>
-        </details>
-        <details>
           <summary>Does it run on Mac or Linux?</summary>
           <p>No. ORBIX is a Windows app. It can run commands on Windows or inside WSL.</p>
         </details>
@@ -478,7 +457,7 @@
     </div>
     <div class="foot-bottom">
       <p>&copy; 2026 chsxthwik. FSL-1.1-MIT.</p>
-      <p>Not affiliated with the <a href="https://omp.sh" rel="noopener">OMP</a> authors. Mona Sans and JetBrains Mono under the SIL Open Font License.</p>
+      <p>Mona Sans and JetBrains Mono under the SIL Open Font License.</p>
     </div>
   </footer>
 </body>
