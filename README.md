@@ -10,13 +10,13 @@
 [![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0E8A7C)](#requirements)
 [![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-C2410C)](CHANGELOG.md)
 [![17 providers](https://img.shields.io/badge/AI%20providers-17-0E8A7C)](#providers)
-[![Tests: 689 passing](https://img.shields.io/badge/tests-689%20passing-1F9D55)](#build-from-source)
+[![Tests: 713 passing](https://img.shields.io/badge/tests-713%20passing-1F9D55)](#build-from-source)
 
-[Quick start](#quick-start) | [Demo](#30-second-demo) | [Features](#features) | [How it works](#how-it-works) | [Providers](#providers) | [Safety](#safety) | [FAQ](#faq) | [Build](#build-from-source) | [Website](https://orbix-agent.vercel.app)
+[Quick start](#quick-start) | [Demo](#30-second-demo) | [Features](#features) | [How it works](#how-it-works) | [Providers](#providers) | [Safety](#safety) | [FAQ](#faq) | [Build](#build-from-source) | [Architecture](docs/ARCHITECTURE.md) | [Website](https://orbix-agent.vercel.app)
 
 </div>
 
-ORBIX is a native Windows app where an AI agent works on your code. It reads your files, edits them and runs commands. You see every step, approve every change and can undo any of it. You bring your own API key or a local model. The release zip carries its own Node.js, so there is nothing to install.
+ORBIX is a native Windows desktop app where an AI agent works on your code. It reads your files, edits them and runs commands. You see every step, approve every change and undo any of it. Bring your own API key or point it at a local model. The release zip carries its own Node.js, so there is nothing to install.
 
 ## 30-second demo
 
@@ -27,15 +27,15 @@ ORBIX is a native Windows app where an AI agent works on your code. It reads you
 
 ## Quick start
 
-1. **Unzip** the release anywhere. For daily use run `tools\install.ps1` once — it installs ORBIX to `%LOCALAPPDATA%\Programs\ORBIX` and adds Desktop and Start-menu shortcuts. Or just double-click `bin\ORBIX.exe` (or `ORBIX.vbs`) to run it portably.
+1. **Unzip** the release anywhere. For daily use, run `tools\install.ps1` once to install to `%LOCALAPPDATA%\Programs\ORBIX` with Desktop and Start Menu shortcuts. Or double-click `bin\ORBIX.exe` (or `ORBIX.vbs`) to run it portably.
 2. Press <kbd>Ctrl</kbd>+<kbd>,</kbd>, open **AI providers**, paste an API key and press **Check & save**. You can also sign in with OpenRouter or connect a local model.
-3. **Pick a project folder** on the home screen, describe a task and press <kbd>Enter</kbd>.
+3. **Pick a project folder** on the home dashboard, describe a task and press <kbd>Enter</kbd>.
 
-When the agent wants to edit a file or run a command it asks: **Allow once**, **Allow for this session** or **Deny**. If something looks wrong, press <kbd>Ctrl</kbd>+<kbd>K</kbd> and choose **Diagnostics**.
+When the agent wants to edit a file or run a command, it asks: **Allow once**, **Allow for this session** or **Deny**. If something looks wrong, press <kbd>Ctrl</kbd>+<kbd>K</kbd> and choose **Diagnostics**.
 
 ### Requirements
 
-Windows 10 or 11 (x64) with the WebView2 Runtime (included in Windows 11 and recent Windows 10), and an API key or a local model server.
+Windows 10 or 11 (x64) with the WebView2 Runtime (ships with Windows 11 and recent Windows 10 updates), and an API key or a local model server.
 
 ## Features
 
@@ -100,7 +100,7 @@ flowchart LR
     Model -->|no more steps| Done([Final answer])
 ```
 
-The window (`bin\ORBIX.exe`) is a small native program that shows the interface (`web/`) in WebView2. It starts a local Node.js server (`src/`) that only this window can talk to. The server runs the agent, which calls the provider you chose and the tools on your PC. Conversations, settings and encrypted keys are saved in the `data` folder.
+The window (`bin\ORBIX.exe`) is a small native C# program that hosts the UI (`web/`) inside WebView2. It starts a local Node.js server (`src/`) that only this window can reach. The server runs the agent, calls the provider you chose and executes tools on your machine. Conversations, settings and encrypted keys live in the `data` folder.
 
 <details>
 <summary><b>Architecture diagram</b></summary>
@@ -110,18 +110,18 @@ The window (`bin\ORBIX.exe`) is a small native program that shows the interface 
 
 ## Providers
 
-Anthropic, OpenAI, Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenRouter (key or sign-in), Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, plus local **Ollama** and **LM Studio**, and a **custom server** for any OpenAI-style API (vLLM, llama.cpp, a company gateway). Model lists come live from each provider, so they need the provider to be reachable.
+Anthropic, OpenAI, Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenRouter (key or sign-in), Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, plus local **Ollama** and **LM Studio**, and a **custom server** slot for any OpenAI-compatible endpoint (vLLM, llama.cpp, a company gateway). Model lists are fetched live from each provider.
 
 ## Safety
 
-- Reading and searching never ask. Writing, editing and commands ask first. You can switch to "Allow everything" in Settings, Behavior.
-- Every file change can be undone, per edit or for a whole reply.
-- Keys are checked with the provider, then stored encrypted for your Windows account (DPAPI). They go only to the provider you chose.
-- The server listens on `127.0.0.1` and needs a per-launch token. A strict Content-Security-Policy is served with the UI.
-- Project MCP servers (`.mcp.json`) start only after you allow them, and the prompt shows the full command.
+- Read and search tools run without asking. Write, edit and command tools ask first. You can switch to "Allow everything" in Settings, Behavior.
+- Every file change can be undone per edit or for an entire reply.
+- Keys are validated with the provider, then stored encrypted for your Windows account (DPAPI). They are sent only to the provider you selected.
+- The server listens on `127.0.0.1` with a per-launch token. A strict Content-Security-Policy is served with the UI.
+- Project MCP servers (`.mcp.json`) start only after you allow them. The prompt shows the full command.
 - Web fetch refuses local and private network addresses unless you approve.
 
-The agent runs with your Windows user's permissions, so review what you approve. Details and how to report a vulnerability: [SECURITY.md](SECURITY.md).
+The agent runs with your Windows user permissions, so review what you approve. Details and how to report a vulnerability: [SECURITY.md](SECURITY.md).
 
 ## Keyboard shortcuts
 
@@ -178,31 +178,31 @@ The agent runs with your Windows user's permissions, so review what you approve.
 <details>
 <summary><b>Does ORBIX need an account or a subscription?</b></summary>
 <br>
-No ORBIX account. You bring your own API key (or a local model). You pay your provider directly, and the status bar shows tokens and cost when the model's price is known.
+No. You bring your own API key or use a local model. You pay your provider directly, and the status bar shows tokens and cost when the model's pricing is known.
 </details>
 
 <details>
 <summary><b>Where is my data?</b></summary>
 <br>
-In the <code>data</code> folder next to the app: conversations, settings and encrypted keys. Conversations can contain secrets that appeared in your chats, so treat that folder as sensitive. Your project files are only touched when you approve an edit.
+In the <code>data</code> folder next to the app: conversations, settings and encrypted keys. Conversations may contain secrets that appeared in your chats, so treat that folder as sensitive. Your project files are touched only when you approve an edit.
 </details>
 
 <details>
 <summary><b>What gets sent to the provider?</b></summary>
 <br>
-Your messages, the agent's tool definitions, your project rules, and the results of the tool steps (for example the text of a file the agent read). It goes only to the provider you selected.
+Your messages, the agent's tool definitions, your project rules and the results of tool steps (for example the contents of a file the agent read). Everything goes only to the provider you selected.
 </details>
 
 <details>
 <summary><b>Can I run it fully offline?</b></summary>
 <br>
-Yes, with a local model server such as Ollama or LM Studio. Model lists and web fetch need a network; a local server does not.
+Yes. Use a local model server such as Ollama or LM Studio. Fetching model lists and web pages needs a network connection, but everything else works offline.
 </details>
 
 <details>
 <summary><b>Do I need to install anything else, like Node.js?</b></summary>
 <br>
-No. The ORBIX agent is built in and the release zip bundles Node.js. Building from source needs Node.js 20 or newer.
+No. The agent engine is built in and the release zip bundles Node.js. Building from source requires Node.js 20 or newer.
 </details>
 
 ## Build from source
@@ -215,11 +215,11 @@ npm test           # regression tests (no network, no keys)
 npm start          # run from source (Node.js 20 or newer)
 ```
 
-No npm dependencies, no bundler, no framework. See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout and ground rules, and [CHANGELOG.md](CHANGELOG.md) for what changed.
+Zero npm dependencies, no bundler, no framework. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together, [CONTRIBUTING.md](CONTRIBUTING.md) for the layout and ground rules, and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## License
 
-[FSL-1.1-MIT](LICENSE): free to use, read, change and share for any purpose except selling a competing product. Each version becomes MIT two years after its release. Third-party notices are in [NOTICE.md](NOTICE.md).
+[FSL-1.1-MIT](LICENSE). Free to use, read, modify and distribute for any purpose except selling a competing product. Each release converts to MIT two years after its date. Third-party notices: [NOTICE.md](NOTICE.md).
 
 <div align="center">
 <br>
