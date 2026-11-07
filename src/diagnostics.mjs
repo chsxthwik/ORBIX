@@ -34,33 +34,21 @@ export async function collect(app) {
     ({ distros } = await Backend.wslInfo().catch(() => ({ distros: [] })));
     add('wsl', 'WSL is available', distros.length > 0, distros.length ? distros.join(', ') : 'no distributions found', 'Install WSL and a Linux distribution (wsl --install), or switch the backend to Windows in Settings.');
     add('distro', `WSL distribution "${backend.distro}" exists`, distros.includes(backend.distro), backend.distro || '(none selected)', 'Pick an installed distribution in Settings → Backend.');
-  }
-
-  const omp = app.envInfo.omp || (await backend.resolveOmp().catch(() => null));
-  const ids = app.engineCfg?.configuredIds() || [];
-  add('engine', 'An AI provider is set up', ids.length > 0 || !!omp, ids.length ? ids.map((i) => app.engineCfg.provider(i).name).join(', ') : omp ? 'none yet (OMP sessions still work)' : 'none yet', 'Open Settings → AI providers and add a key, sign in with OpenRouter, or connect a local Ollama / LM Studio.');
-  if (omp) add('omp', 'OMP CLI (optional)', true, `${omp}  ${app.envInfo.version || ''}`.trim());
-
-  let sessionsRoot = '';
-  let sessionDirs = 0;
-  if (omp) {
-    try {
-      sessionsRoot = await backend.sessionsRoot();
-      sessionDirs = (await fs.promises.readdir(backend.hostPath(sessionsRoot))).length;
-      add('sessions', 'OMP session folder is readable', true, `${sessionsRoot} (${sessionDirs} project folder${sessionDirs === 1 ? '' : 's'})`);
-    } catch (e) {
-      add('sessions', 'OMP session folder is readable', false, sessionsRoot || String(e.message), 'It is created by OMP on first use; this is normal before your first OMP session.');
+    if (distros.includes(backend.distro)) {
+      const home = (await backend.probe().catch(() => ({}))).home;
+      add('wsl-start', `WSL distribution "${backend.distro}" starts`, !!home, home ? `home ${home}` : 'no answer from the distribution', 'Start it once from a terminal (wsl -d <name>) to finish its setup, then run this check again.');
     }
   }
 
+  const ids = app.engineCfg?.configuredIds() || [];
+  add('engine', 'An AI provider is set up', ids.length > 0, ids.length ? ids.map((i) => app.engineCfg.provider(i).name).join(', ') : 'none yet', 'Open Settings → AI providers and add a key, sign in with OpenRouter, or connect a local Ollama / LM Studio.');
+
   return {
-    ok: checks.every((c) => c.ok || c.id === 'sessions'),
+    ok: checks.every((c) => c.ok),
     checks,
     info: {
       'ORBIX': VERSION,
       Backend: backend.isWsl ? `WSL (${backend.distro})` : 'Windows native',
-      'OMP binary': omp || 'not found',
-      'OMP version': app.envInfo.version || 'unknown',
       'Node.js': process.version,
       System: `${os.type()} ${os.release()} ${process.arch}`,
       'App folder': ROOT,

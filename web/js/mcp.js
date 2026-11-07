@@ -56,7 +56,7 @@ function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) 
   const save = btn('Save', async () => {
     try {
       await api.post('/api/mcp/save', { name: nameIn.value.trim(), config: parse(), oldName: isNew ? null : name });
-      toast('Saved. New messages in open sessions use it.', 'ok', 3000);
+      toast('Saved. Open sessions use it from their next message.', 'ok', 3000);
       done(true);
     } catch (e) {
       toast(e.message, 'error', 7000);
@@ -152,7 +152,7 @@ export async function renderMcpSettings(root) {
     searchBox,
     hooksBox,
     h('h4', { class: 'set-sub' }, 'Skills and commands'),
-    h('p', { class: 'muted small' }, 'Skills are folders with a SKILL.md in .agents/skills, .claude/skills or .omp/skills of a project, or in the app’s data/skills. Custom slash commands are Markdown files in .omp/commands or .claude/commands (or data/commands); $ARGUMENTS is replaced with the text after the command. Type / in a session to see them.'),
+    h('p', { class: 'muted small' }, 'Skills are folders that contain a SKILL.md file. Put them in a project’s .agents/skills, .claude/skills or .omp/skills folder, or in the app’s data/skills folder. Custom slash commands are Markdown files in .claude/commands or .omp/commands (or data/commands). In a command file, $ARGUMENTS is replaced with whatever you type after the command. Type / in a session to see them all.'),
   );
   renderSearchSettings(searchBox);
   renderHooksSettings(hooksBox, ws);

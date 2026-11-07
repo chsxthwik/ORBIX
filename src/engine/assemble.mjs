@@ -81,7 +81,7 @@ export class TurnAssembler {
     this.dirty = new Set(); // tool block indexes with unparsed JSON
   }
 
-  /** Apply one event. Returns { kind, index, delta } for a live view (kind as in OMP's assistantMessageEvent), or null. */
+  /** Apply one event. Returns { kind, index, delta } for a live view (kind as in assistantMessageEvent), or null. */
   push(ev) {
     const msg = this.msg;
     switch (ev.type) {

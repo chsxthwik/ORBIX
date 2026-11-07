@@ -122,21 +122,85 @@ export function icon(name, size = 16, cls = '') {
 
 const svgEl = (tag, attrs, ...kids) => {
   const el = document.createElementNS(NS, tag);
-  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) el.setAttribute(k, v);
   el.append(...kids);
   return el;
 };
 
 // The mark, in the app's two signals: a ring (the O) in the text colour, a tilted teal orbit (the agent) and one orange
 // node (you). Drawn in currentColor plus the two signal tokens, so it follows the theme. Small sizes get heavier strokes.
-export function logo(size = 20) {
-  const small = size <= 24;
-  // The orbit and its node sit in one group, so while an agent works the whole system can turn (see .lg-sys in app.css).
-  return svgEl('svg', { class: 'logo', viewBox: '0 0 24 24', width: size, height: size, fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
-    svgEl('circle', { class: 'lg-ring', cx: 12, cy: 12, r: 6.5, stroke: 'currentColor', 'stroke-width': small ? 2.2 : 1.8 }),
-    svgEl('g', { class: 'lg-sys' },
-      svgEl('ellipse', { class: 'lg-orbit', cx: 12, cy: 12, rx: 10.5, ry: 4, transform: 'rotate(-24 12 12)', stroke: '#33D1BE', 'stroke-width': small ? 1.8 : 1.4 }),
-      svgEl('circle', { class: 'lg-node', cx: 20.9, cy: 7, r: small ? 2.4 : 2.1, fill: '#FF7A2E' })));
+// The mark: a planet, an orbit tilted -24deg that passes behind it and in front of it, and the node at the orbit's
+// near end. The far half is masked out where it crosses the planet, so the ring reads as a ring, not a crossing.
+// While an agent works the node travels the orbit (.lg-node has an offset-path; see .agent-busy in app.css).
+const ORBIT_FRONT = 'M21.87 7.61A10.8 4.1 -24 0 1 2.13 16.39';
+const ORBIT_BACK = 'M2.13 16.39A10.8 4.1 -24 0 1 21.87 7.61';
+// The full orbit, starting at the near (front) end, for the comet trail. Its far half is hidden only where it passes
+// behind the planet (mask: the planet disc clipped to the half-plane above the orbit's major axis).
+const ORBIT_FULL = ORBIT_FRONT + 'A10.8 4.1 -24 0 1 21.87 7.61';
+let logoN = 0;
+/**
+ * The ORBIX mark, drawn for its size. Three levels of detail so it reads at every size:
+ *   tiny  (<= 16 px)  heavy strokes, no far side of the orbit: a ring, a stroke and a dot that survive 14 px.
+ *   small (<= 28 px)  the full mark in flat colour (sidebar, bylines).
+ *   large (>  28 px)  a lit planet (sphere shading, an equatorial band, a rim light), the ring lit from the top left,
+ *                     the orbit brightening toward the node, and a highlight on the node.
+ * The viewBox has a 1-unit margin so the node never touches the edge at any size; set the size with CSS (width) or
+ * the `size` argument. `alive` adds the idle motion (a slow orbit with a comet trail); while an agent works
+ * (.agent-busy / .msg.live) the node and trail speed up.
+ */
+export function logo(size = 20, { alive = false } = {}) {
+  const tier = size <= 16 ? 'tiny' : size <= 28 ? 'small' : 'large';
+  const large = tier === 'large';
+  const id = `lgm${++logoN}`;
+  const sw = tier === 'tiny' ? 2.1 : tier === 'small' ? 1.7 : 1.4; // orbit stroke
+  const rw = tier === 'tiny' ? 2.7 : tier === 'small' ? 2.3 : 1.9; // ring stroke
+  const hole = tier === 'large' ? 7.3 : 7.6; // the planet's footprint the far orbit hides behind
+  const url = (s) => `url(#${id}${s})`;
+  const defs = svgEl('defs', {},
+    svgEl('mask', { id: `${id}b`, maskUnits: 'userSpaceOnUse', x: -2, y: -2, width: 28, height: 28 },
+      svgEl('rect', { x: -2, y: -2, width: 28, height: 28, fill: '#fff' }),
+      svgEl('circle', { cx: 12, cy: 12, r: hole, fill: '#000' })),
+    // The far half of the orbit (above its major axis) is behind the planet; the near half passes in front.
+    svgEl('clipPath', { id: `${id}h` }, svgEl('polygon', { points: '-2,-2 26,-2 26,5.77 -2,18.23' })),
+    svgEl('mask', { id: `${id}t`, maskUnits: 'userSpaceOnUse', x: -2, y: -2, width: 28, height: 28 },
+      svgEl('rect', { x: -2, y: -2, width: 28, height: 28, fill: '#fff' }),
+      svgEl('circle', { cx: 12, cy: 12, r: hole, fill: '#000', 'clip-path': url('h') })));
+  if (large) {
+    defs.append(
+      // Sphere: lit from the top left, falling into shadow at the bottom right.
+      svgEl('radialGradient', { id: `${id}p`, cx: '34%', cy: '30%', r: '78%' },
+        svgEl('stop', { offset: '0', 'stop-color': 'currentColor', 'stop-opacity': '.30' }),
+        svgEl('stop', { offset: '.55', 'stop-color': 'currentColor', 'stop-opacity': '.08' }),
+        svgEl('stop', { offset: '1', 'stop-color': 'currentColor', 'stop-opacity': '0' })),
+      svgEl('linearGradient', { id: `${id}r`, x1: '0', y1: '0', x2: '1', y2: '1' },
+        svgEl('stop', { offset: '0', 'stop-color': 'currentColor' }),
+        svgEl('stop', { offset: '1', 'stop-color': 'currentColor', 'stop-opacity': '.58' })),
+      svgEl('linearGradient', { id: `${id}o`, gradientUnits: 'userSpaceOnUse', x1: '2', y1: '16.4', x2: '22', y2: '7.6' },
+        svgEl('stop', { offset: '0', class: 'lg-stop-a' }),
+        svgEl('stop', { offset: '1', class: 'lg-stop-b' })),
+      svgEl('clipPath', { id: `${id}c` }, svgEl('circle', { cx: 12, cy: 12, r: 5.25 })));
+  }
+  const planet = large
+    ? svgEl('g', { class: 'lg-planet' },
+        svgEl('circle', { cx: 12, cy: 12, r: 5.25, fill: url('p') }),
+        // An equatorial band at the orbit's tilt, and a thin rim light on the lit side.
+        svgEl('g', { 'clip-path': url('c') },
+          svgEl('ellipse', { class: 'lg-band', cx: 12, cy: 12.4, rx: 7.4, ry: 1.25, transform: 'rotate(-24 12 12)' })),
+        svgEl('path', { class: 'lg-rim', d: 'M8.1 9.6A4.6 4.6 0 0 1 13.6 7.6' }))
+    : '';
+  return svgEl('svg', { class: `logo ${tier}` + (alive ? ' alive' : ''), viewBox: '-1 -1 26 26', width: size, height: size, fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
+    defs,
+    planet,
+    tier === 'tiny' ? '' : svgEl('path', { class: 'lg-orbit lg-back', d: ORBIT_BACK, mask: url('b'), 'stroke-width': sw }),
+    svgEl('circle', { class: 'lg-ring', cx: 12, cy: 12, r: 6.2, 'stroke-width': rw, stroke: large ? url('r') : null }),
+    svgEl('path', { class: 'lg-orbit lg-front', d: ORBIT_FRONT, 'stroke-width': sw, stroke: large ? url('o') : null }),
+    svgEl('path', { class: 'lg-trail', d: ORBIT_FULL, pathLength: 100, mask: url('t'), 'stroke-width': sw + 0.6 }),
+    // The node rides the same orbit and shares the trail's mask, so it slips behind the planet on the far side.
+    // The mask sits on a group without a transform; the inner group carries the offset-path and moves.
+    svgEl('g', { mask: url('t') },
+      svgEl('g', { class: 'lg-node' },
+        svgEl('circle', { class: 'lg-dot', cx: 0, cy: 0, r: tier === 'tiny' ? 2.6 : tier === 'small' ? 2.4 : 2.15 }),
+        large ? svgEl('circle', { class: 'lg-spec', cx: -0.7, cy: -0.75, r: 0.7 }) : '')));
 }
 
 export function iconBtn(name, title, onclick, cls = '') {
@@ -290,15 +354,23 @@ export const debounce = (fn, ms) => {
 export const rafThrottle = (fn) => {
   let queued = false;
   let last;
-  return (...a) => {
+  let id = 0;
+  const run = (...a) => {
     last = a;
     if (queued) return;
     queued = true;
-    requestAnimationFrame(() => {
+    id = requestAnimationFrame(() => {
       queued = false;
+      id = 0;
       fn(...last);
     });
   };
+  run.cancel = () => {
+    if (id) cancelAnimationFrame(id);
+    queued = false;
+    id = 0;
+  };
+  return run;
 };
 
 /**

@@ -65,7 +65,7 @@ function imagePart(c) {
 }
 
 /**
- * Internal (OMP-shaped) conversation -> OpenAI chat messages.
+ * Internal conversation -> OpenAI chat messages.
  * `interleaved`: 'reasoning_content' sends earlier thinking back (DeepSeek, Kimi, GLM require it with tools).
  * Tool messages can only hold text, so images a tool returned follow the tool messages as one user message.
  */

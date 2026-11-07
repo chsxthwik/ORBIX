@@ -5,17 +5,17 @@ Thanks for helping. The project is small on purpose: no npm dependencies, no bun
 ## Layout
 
 - `host/Program.cs`: the native window (C# 5, WinForms + WebView2). Built by `npm run build` with the compiler that ships with Windows.
-- `src/*.mjs`: the local Node server: `main.mjs` (start, single instance), `server.mjs` (`AppServer`: HTTP API, static UI, SSE events), `backend.mjs` (WSL or Windows, path translation), `fsapi.mjs` / `gitapi.mjs` (file browser, Changes panel), `diagnostics.mjs`, and the optional OMP CLI (`proc.mjs`, `auth.mjs`, `ompcfg.mjs`, `sessions.mjs`).
-- `src/engine/*.mjs`: the ORBIX agent. `proc.mjs` (`AgentProc`) is the agent loop; `slash.mjs` slash commands; `tools.mjs`, `webfetch.mjs`, `subagent.mjs`, `mcp.mjs` its tools; `providers.mjs`, `anthropic.mjs`, `openai.mjs`, `catalog.mjs` the model APIs; `store.mjs` saved chats and keys. It emits the same events as an OMP process (engine id `builtin` on the wire), so the UI treats both alike.
+- `src/*.mjs`: the local Node server: `main.mjs` (start, single instance), `server.mjs` (`AppServer`: HTTP API, static UI, SSE events), `backend.mjs` (WSL or Windows, path translation), `fsapi.mjs` / `gitapi.mjs` (file browser, Changes panel) and `diagnostics.mjs`.
+- `src/engine/*.mjs`: the ORBIX agent. `proc.mjs` (`AgentProc`) is the agent loop; `slash.mjs` slash commands; `tools.mjs`, `webfetch.mjs`, `subagent.mjs`, `mcp.mjs` its tools; `providers.mjs`, `anthropic.mjs`, `openai.mjs`, `catalog.mjs` the model APIs; `store.mjs` saved chats and keys. The UI drives it through JSON requests and its event stream (engine id `builtin` on the wire).
 - `web/`: the UI (plain ES modules + CSS). `web/js/store.js` turns the event stream into state; `session.js` and `tools.js` render it.
-- `tools/`: build, packaging (bundles a checksum-verified Node.js), icon and doctor scripts.
+- `tools/`: build, packaging (bundles a checksum-verified Node.js), install and uninstall, and doctor scripts.
 
 ## Ground rules
 
 1. Keep it dependency-free and light. Prefer a small helper over a library.
 2. Never insert untrusted text with `innerHTML`; use the `h()` helper (text nodes only).
 3. Show real data only. If something is unknown, say so; never invent values.
-4. Everything the app writes goes under its own `data/` folder (or `ORBIX_DATA`). Nothing in WSL except what the optional OMP CLI itself writes.
+4. Everything the app writes goes under its own `data/` folder (or `ORBIX_DATA`). Nothing is written inside WSL.
 5. Destructive actions need an explicit confirmation and must be logged.
 
 ## Try your change

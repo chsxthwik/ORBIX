@@ -9,5 +9,3 @@ ORBIX is licensed under the Functional Source License, Version 1.1, MIT Future L
 | [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) wrapper DLLs | Embeds the WebView2 runtime in the window, `bin/` | Microsoft license, see `bin/WebView2-LICENSE.txt` |
 | [Node.js](https://nodejs.org) (`runtime/node.exe` in release zips) | Runs the local server | MIT and bundled licenses, see `runtime/NODE-LICENSE.txt` |
 | Microsoft Edge WebView2 Runtime | Renders the UI | Installed separately by Windows / Microsoft |
-
-**OMP is not part of this project.** ORBIX has its own agent. If you install the [OMP](https://omp.sh) CLI yourself, ORBIX can also run sessions with it. ORBIX is not affiliated with or endorsed by the OMP authors.

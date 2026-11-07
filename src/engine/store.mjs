@@ -267,7 +267,7 @@ export function parseAgentHead(text) {
 
 const listCache = new Map(); // file -> { mtime, size, head }
 
-/** Session-list entries in the same shape as OMP sessions (plus engine: 'builtin'). Unchanged files are not re-read. */
+/** Session-list entries (id, path, cwd, title, mtime, size, chain, engine: 'builtin'). Unchanged files are not re-read. */
 export async function listAgentSessions(backend) {
   const root = sessionsDir();
   let dirs;

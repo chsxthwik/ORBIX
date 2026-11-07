@@ -421,7 +421,7 @@ describe('tools: createTools against a real folder', () => {
     });
   });
 
-  // globToRegExp and makeDiff are private to tools.mjs, so their rules are checked through the glob and write tools.
+  // Glob matching (search.mjs) and makeDiff (tools.mjs) are checked through the glob and write tools.
   describe('glob pattern semantics', () => {
     const FILES = ['a/b', 'a/x/b', 'a/x/y/b', 'a/xb', 'abc', 'ac', 'abbc', 'aab', 'a.js', 'a.js.map', 'a.jsx', 'xa.jsx', '.env', '.vscode/settings.json', 'p/q/x.txt', 'x.txt', 'a.b', 'axb', 'a+b', '(x)', '[ab]', 'a{2}', 'aa', '$x^', 'README.MD'];
     before(() => {

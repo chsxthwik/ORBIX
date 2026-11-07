@@ -345,7 +345,8 @@ export async function grepFiles({ hostRoot, single, regex, glob, context = 0, li
     if (looksBinary(buf)) return null;
     const lines = buf.toString('utf8').split('\n');
     const found = [];
-    for (let i = 0; i < lines.length; i++) if (regex.test(lines[i])) found.push(i);
+    // Match without the line's \r, so `$` works on CRLF files as it does in an editor.
+    for (let i = 0; i < lines.length; i++) if (regex.test(lines[i].endsWith('\r') ? lines[i].slice(0, -1) : lines[i])) found.push(i);
     if (!found.length) return null;
     total += found.length;
     return { rel: f.rel, lines, found };
@@ -374,10 +375,11 @@ export async function grepFiles({ hostRoot, single, regex, glob, context = 0, li
 }
 
 async function grepRg(rg, { regex, glob, context, limit, filter, signal }) {
-  const args = ['--json', ...RG_BASE, '--max-filesize', '1M', '-e', regex.source];
+  // --crlf: `$` matches before \r\n as well. --iglob: file globs are case-insensitive, as in the JS engine.
+  const args = ['--json', ...RG_BASE, '--crlf', '--max-filesize', '1M', '-e', regex.source];
   if (regex.flags.includes('i')) args.push('-i');
   if (context > 0) args.push('-C', String(context));
-  if (glob) args.push('-g', glob);
+  if (glob) args.push('--iglob', glob);
   args.push('.');
   const counts = new Map();
   const hits = [];

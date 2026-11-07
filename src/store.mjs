@@ -9,52 +9,53 @@ const FILE = path.join(DATA_DIR, 'config.json');
 
 const DEFAULTS = {
   version: 1,
-  backend: { kind: 'wsl', distro: '', ompPath: '' },
+  backend: { kind: 'wsl', distro: '' },
   workspaces: [],
   ui: { theme: 'system', density: 'comfortable', showThinking: true, autoScroll: true, rightPanel: true, rightTab: 'files', sidebarW: 292, panelW: 380, fontSize: 14 },
-  launch: { model: '', thinking: '' },
 };
+
+/** Keys older versions saved for an external CLI engine (since removed); dropped on load so they never come back. */
+function dropRetired(saved) {
+  const { launch, ...rest } = saved;
+  const { ompPath, ...backend } = saved.backend || {};
+  const { engine, defaultEngine, ...ui } = saved.ui || {};
+  return { ...rest, backend, ui };
+}
 
 export class Store {
   constructor() {
-    const saved = readJson(FILE, {});
+    const saved = dropRetired(readJson(FILE, {}));
     this.data = {
       ...DEFAULTS,
       ...saved,
-      backend: { ...DEFAULTS.backend, ...(saved.backend || {}) },
-      ui: { ...DEFAULTS.ui, ...(saved.ui || {}) },
-      launch: { ...DEFAULTS.launch, ...(saved.launch || {}) },
+      backend: { ...DEFAULTS.backend, ...saved.backend },
+      ui: { ...DEFAULTS.ui, ...saved.ui },
       workspaces: Array.isArray(saved.workspaces) ? saved.workspaces : [],
     };
     this._t = null;
   }
 
   /**
-   * Until the user picks a backend: use the first WSL distribution that has OMP, else Windows if it has OMP.
-   * With no OMP anywhere keep WSL (when installed) so the agent's commands run in Linux, else run on Windows.
-   * Runs after the server is listening. Candidates are probed on their own Backend objects; the server's `backend`
-   * only switches once, to the result, and keeps that lookup cached.
+   * Until the user picks a backend: run commands in the first WSL distribution that starts (the default one first),
+   * so the agent works in Linux; with no usable WSL, on Windows. Runs after the server is listening. Candidates are
+   * probed on their own Backend objects; the server's `backend` only switches once, to the result, and keeps that
+   * lookup cached.
    */
   async autodetect(backend) {
     if (this.data.backendChosen) return;
-    const native = new Backend({ kind: 'native', distro: '', ompPath: '' });
-    const nativeOmp = native.resolveOmp().catch(() => null);
     const { distros, defaultDistro } = await Backend.wslInfo().catch(() => ({ distros: [], defaultDistro: '' }));
     const order = [defaultDistro, ...distros].filter((d, i, a) => d && a.indexOf(d) === i);
-    const choose = (b, chosen) => {
-      this.data.backend = { kind: b.kind, distro: b.distro, ompPath: '' };
-      if (chosen) this.data.backendChosen = true;
+    const choose = (b) => {
+      this.data.backend = { kind: b.kind, distro: b.distro };
+      this.data.backendChosen = true;
       backend.adopt(b);
       this.save();
     };
-    const tried = [];
     for (const distro of order) {
-      const b = new Backend({ kind: 'wsl', distro, ompPath: '' });
-      tried.push(b);
-      if (await b.resolveOmp().catch(() => null)) return choose(b, true);
+      const b = new Backend({ kind: 'wsl', distro });
+      if ((await b.probe().catch(() => ({}))).home) return choose(b);
     }
-    if (await nativeOmp) return choose(native, true);
-    choose(tried[0] || native, false);
+    choose(new Backend({ kind: 'native', distro: '' }));
   }
 
   save() {

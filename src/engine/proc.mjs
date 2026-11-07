@@ -1,6 +1,6 @@
 // The ORBIX agent: one conversation's agent loop (model streaming, tools, approvals, compaction, subagents, undo).
-// It has the same request()/send()/events surface as an OMP RPC process (src/proc.mjs), so the server and UI
-// treat both engines alike. Its engine id on the wire is 'builtin'.
+// The server and UI drive it through request()/send() and its event stream (JSON frames: get_state, prompt,
+// agent_start/end, message_update, tool_execution_*, extension_ui_request). Its engine id on the wire is 'builtin'.
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { clip, makeTitle, uid, textOf } from '../util.mjs';
@@ -33,7 +33,7 @@ function goalPrompt(g) {
 }
 const MID_STREAM_RETRY_MS = 1500;
 const CONTINUE_TEXT = 'Your previous reply was cut off by the output token limit. Continue exactly where it stopped, without repeating what you already wrote.';
-/** Protocol additions over OMP's RPC that this engine supports (the UI can show the matching actions). */
+/** Optional protocol features this engine supports (the UI shows the matching actions). */
 const FEATURES = ['regenerate', 'edit_message', 'attachments', 'prompt_status', 'branch'];
 const GOAL_ROUNDS = 6;
 const TITLE_SYSTEM = 'You name chat sessions. Reply with only a title of at most 6 words for the conversation that starts with the message below: no quotes, no trailing punctuation, same language as the message.';
@@ -196,8 +196,6 @@ export class AgentProc extends EventEmitter {
         return ok(this._stats());
       case 'get_subagents':
         return ok({ subagents: [...this.subagents.values()] });
-      case 'set_subagent_subscription':
-        return ok({ level: cmd.level });
       case 'set_model': {
         if (!cmd.modelId) throw new Error('modelId is required');
         await this._setModel(cmd.provider, cmd.modelId);
@@ -205,22 +203,11 @@ export class AgentProc extends EventEmitter {
       }
       case 'set_thinking_level':
         return ok({ level: await this._setThinking(String(cmd.level || 'off')) });
-      case 'cycle_thinking_level': {
-        await this._refreshMeta(false);
-        const all = ['off', ...(this.meta?.levels || [])];
-        if (all.length < 2) throw new Error('This model has no thinking levels');
-        return ok({ level: await this._setThinking(all[(all.indexOf(this.thinkingLevel) + 1) % all.length]) });
-      }
-      case 'set_auto_compaction':
-        this.autoCompact = cmd.enabled !== false;
-        return ok({ enabled: this.autoCompact });
       case 'compact': {
         if (this.streaming) throw new Error('Wait for the agent to finish (or stop it), then compact.');
         this._exclusive(() => this._compactCmd(cmd.customInstructions || cmd.focus || '')).catch((e) => this.emit('stderr', String(e?.stack || e)));
         return ok({});
       }
-      case 'set_fast_mode':
-        throw new Error('Fast mode is not available in the ORBIX agent');
       case 'export_html': {
         const file = writeExport({ title: this.title || 'Conversation', workspace: this.workspace, model: this.model ? `${this.provider}/${this.model}` : '', messages: this.messages });
         return ok({ path: file });
@@ -632,6 +619,16 @@ export class AgentProc extends EventEmitter {
 
   /** Run `fn` as one agent activity: streaming flag, agent_start/agent_end with a summary, errors, then queued follow-ups. */
   async _exclusive(fn) {
+    const work = this._runExclusive(fn);
+    this._activity = work;
+    try {
+      return await work;
+    } finally {
+      if (this._activity === work) this._activity = null;
+    }
+  }
+
+  async _runExclusive(fn) {
     this.streaming = true;
     this.abortCtl = new AbortController();
     const run = (this.run = { startedAt: Date.now(), status: 'completed', stopReason: 'stop', errorMessage: null, turns: 0, toolCalls: 0, from: this.messages.length });
@@ -928,7 +925,7 @@ export class AgentProc extends EventEmitter {
     this._idle('regenerate');
     let i = this.messages.length - 1;
     while (i >= 0 && this.messages[i].role !== 'user') i--;
-    if (i < 0) throw new Error('There is no message to answer again.');
+    if (i < 0) throw new Error('There’s no reply to regenerate yet.');
     const r = await this._rewind(i + 1, { undo });
     this._exclusive(async () => {
       const conn = await this._connect();
@@ -1107,12 +1104,16 @@ export class AgentProc extends EventEmitter {
       const hk = await this.hooks.run('PreToolUse', { tool: call.name, input: args }, this.abortCtl.signal);
       if (hk.blocked) result = { text: `Blocked by a hook: ${hk.reason}`, isError: true };
     }
+    // Stop pressed while a hook ran or an approval was open: nothing may run after that.
+    const stopped = () => this.abortCtl?.signal.aborted && { text: 'Not run: the agent was stopped before this step.', isError: true };
+    if (!result) result = stopped() || undefined;
     if (!result && this._needsApproval(call.name) && this.config.data.approvals === 'ask' && !this.allowAlways.has(call.name)) {
       const ans = await this._askUser(this._askTitle(call), ['Allow once', 'Allow for this session', 'Deny']);
       if (!ans || ans === 'Deny') result = { text: 'The user denied this action. Do not retry it; ask what they want instead.', isError: true };
       else if (ans === 'Allow for this session') this.allowAlways.add(call.name);
       t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you
     }
+    if (!result) result = stopped() || undefined;
     if (!result) {
       const onUpdate = (text) => this._emit({ type: 'tool_execution_update', toolCallId: call.id, toolName: call.name, args, partialResult: { content: [{ type: 'text', text }], details: {} } });
       if (call.name === 'task') result = await this._runTask(call, conn);
@@ -1218,7 +1219,20 @@ export class AgentProc extends EventEmitter {
       idPrefix: `sub${++this.taskSeq}`,
       costOf: (u) => this._costOf(u, sub.info),
       invalidArgs: invalidArgsText,
-      runTool: (c, signal) => this.tools.run(c.name, c.arguments || {}, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.() }),
+      // Helper agents go through the same PreToolUse / PostToolUse hooks as the main agent, so a hook that blocks
+      // reading a file or fetching a host cannot be side-stepped with the task tool.
+      runTool: async (c, signal) => {
+        const input = c.arguments || {};
+        const pre = await this.hooks.run('PreToolUse', { tool: c.name, input }, signal);
+        if (pre.blocked) return { text: `Blocked by a hook: ${pre.reason}`, isError: true };
+        if (signal?.aborted) return { text: 'Stopped.', isError: true };
+        let r = await this.tools.run(c.name, input, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.() });
+        if (!signal?.aborted) {
+          const post = await this.hooks.run('PostToolUse', { tool: c.name, input, extra: { result: { text: clip(String(r.text ?? ''), 8000), isError: !!r.isError } } }, signal);
+          if (post.blocked) r = { ...r, text: `${r.text}\n[Hook feedback] ${post.reason}` };
+        }
+        return r;
+      },
       onUpdate: (view) => {
         const first = !this.subagents.has(view.id);
         const done = view.status !== 'running';
@@ -1289,13 +1303,18 @@ export class AgentProc extends EventEmitter {
     this._emit({ type: 'command_output', text });
   }
 
-  async stop() {
+  async stop(ms = 2500) {
     if (this.exited) return;
     this.goal = null;
     this.abortCtl?.abort();
     this.bashCtl?.abort();
     this._cancelAsks();
     this.exited = true;
+    // Let the current turn notice the abort and finish writing before the session file is closed.
+    if (this._activity) {
+      const cap = Number.isFinite(ms) && ms > 0 ? ms : 2500;
+      await Promise.race([this._activity.catch(() => {}), new Promise((r) => setTimeout(r, cap))]);
+    }
     this.streaming = false;
     await this.mcp.stopAll().catch(() => {});
     if (this.session) closeSession(this.session.file);

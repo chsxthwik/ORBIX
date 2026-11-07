@@ -206,7 +206,7 @@ function drawChanges(t) {
   if (!g) return loadGit();
   if (g.gitMissing) return body.append(emptyState('branch', 'Git is not installed, so changes cannot be shown.'));
   if (!g.repo) return body.append(emptyState('branch', 'This folder is not a git repository.'));
-  if (!g.files.length) return body.append(emptyState('check', 'No changes. Edits the agent makes show here.'));
+  if (!g.files.length) return body.append(emptyState('check', 'No changes yet. The agent’s edits will appear here.'));
   const list = h('div', { class: 'p-scroll' });
   const paths = (files) => files.flatMap((f) => (f.from ? [f.path, f.from] : [f.path]));
   const letter = (f) => (f.untracked ? 'U' : f.x !== ' ' ? f.x : f.y);
@@ -306,13 +306,13 @@ function drawDiff(t) {
 
 function drawTodos(t) {
   const total = (t.todos || []).flatMap((p) => p.tasks || []).length;
-  if (!total) return body.append(emptyState('list', 'The agent’s task list shows here while it works.'));
+  if (!total) return body.append(emptyState('list', 'The agent’s task list appears here while it works.'));
   body.append(h('div', { class: 'p-scroll pad' }, todoList(t.todos)));
 }
 
 function drawAgents(t) {
   const list = [...t.subagents.values()];
-  if (!list.length) return body.append(emptyState('users', 'Helper agents the agent starts for research show here.'));
+  if (!list.length) return body.append(emptyState('users', 'Helper agents started for research appear here.'));
   list.sort((a, b) => (b.progress?.durationMs ? 0 : 1) - (a.progress?.durationMs ? 0 : 1));
   body.append(h('div', { class: 'p-scroll pad agents' }, list.map(agentRow)));
 }
@@ -331,7 +331,7 @@ function drawConsole(t) {
     t.console.push(entry);
     paint();
     try {
-      const r = await rpc(t.id, { type: 'bash', command: entry.cmd }, 0);
+      const r = await rpc(t.id, { type: 'bash', command: entry.cmd });
       entry.out = String(r.data?.output ?? '').replace(/\n?\[exit code -?\d+\]\s*$/, '') || '(no output)';
       entry.code = r.data?.exitCode;
     } catch (er) {

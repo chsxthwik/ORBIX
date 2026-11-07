@@ -17,7 +17,7 @@ export const api = {
   post: (url, body) => call('POST', url, body ?? {}),
 };
 
-/** Send an RPC command to one OMP process and return its `response` frame. */
+/** Send an RPC command to one agent session and return its `response` frame. */
 export const rpc = (proc, cmd, timeout) => api.post('/api/rpc', { proc, cmd, timeout }).then((j) => j.response);
 
 export function connectEvents({ onEvent, onGlobal, onOpen, onClose }) {

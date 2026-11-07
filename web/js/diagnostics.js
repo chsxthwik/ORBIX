@@ -2,17 +2,6 @@
 import { h, icon, copyText, replace, skeleton } from './dom.js';
 import { api } from './api.js';
 import { modal, btn } from './dialogs.js';
-import { ompInstalled, engineReady } from './store.js';
-
-/** Without the optional OMP CLI, its checks are noise: drop them and judge the agent's setup instead. */
-function forThisSetup(report) {
-  if (ompInstalled()) {
-    return { ...report, checks: report.checks.map((c) => (c.id === 'engine' ? { ...c, label: 'ORBIX agent' } : c)) };
-  }
-  const checks = report.checks.filter((c) => c.id !== 'omp' && c.id !== 'sessions').map((c) => (c.id === 'engine' ? { ...c, label: 'AI provider set up', ok: engineReady(), fix: engineReady() ? '' : 'Add an API key in Settings → AI providers.' } : c));
-  const info = Object.fromEntries(Object.entries(report.info).filter(([k]) => !/omp/i.test(k)));
-  return { checks, info };
-}
 
 function reportToText(report) {
   const lines = ['ORBIX diagnostics', ''];
@@ -34,7 +23,7 @@ export function openDiagnostics() {
     replace(body, skeleton(5, 'pad'));
     copy.disabled = true;
     try {
-      report = forThisSetup((await api.get('/api/diagnostics')).report);
+      report = (await api.get('/api/diagnostics')).report;
     } catch (e) {
       return replace(body, h('div', { class: 'callout bad' }, e.message));
     }
