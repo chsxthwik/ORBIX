@@ -1,5 +1,4 @@
-// Regression tests for the core server modules: backend path mapping, fsapi, gitapi.parseStatus,
-// ompcfg.parseConfigList, sessions (parseSessionHead / collapseChains) and proc (ChunkAssembler / startupError).
+// Regression tests for the core server modules: backend path mapping and command building, fsapi, gitapi.
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -17,9 +16,6 @@ process.env.GIT_CEILING_DIRECTORIES = path.dirname(SCRATCH);
 const { Backend, isWinPath, toLinuxPath, linuxToHost, runProc } = await import('../src/backend.mjs');
 const fsapi = await import('../src/fsapi.mjs');
 const { parseStatus } = await import('../src/gitapi.mjs');
-const { parseConfigList } = await import('../src/ompcfg.mjs');
-const { parseSessionHead, collapseChains } = await import('../src/sessions.mjs');
-const { ChunkAssembler, startupError } = await import('../src/proc.mjs');
 
 after(() => {
   if (prevCeiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
@@ -201,9 +197,9 @@ describe('backend: Backend instance path methods', () => {
 describe('backend: buildSpawn', () => {
   test('WSL: distro, --cd (converted, unquoted) and -e argv in that order', () => {
     const b = new Backend({ kind: 'wsl', distro: 'Ubuntu' });
-    const r = b.buildSpawn(['omp', '--mode', 'rpc-ui'], { cwd: 'C:\\My Proj' });
+    const r = b.buildSpawn(['mytool', '--mode', 'rpc-ui'], { cwd: 'C:\\My Proj' });
     assert.equal(r.cmd, 'wsl.exe');
-    assert.deepEqual(r.args, ['-d', 'Ubuntu', '--cd', '/mnt/c/My Proj', '-e', 'omp', '--mode', 'rpc-ui']);
+    assert.deepEqual(r.args, ['-d', 'Ubuntu', '--cd', '/mnt/c/My Proj', '-e', 'mytool', '--mode', 'rpc-ui']);
   });
   test('WSL: no distro / no cwd means no -d / --cd', () => {
     const b = new Backend({ kind: 'wsl' });
@@ -211,8 +207,8 @@ describe('backend: buildSpawn', () => {
   });
   test('native: plain executable is spawned directly with the cwd', () => {
     const b = new Backend({ kind: 'native' });
-    const r = b.buildSpawn(['C:\\bin\\omp.exe', 'a b', '--x'], { cwd: 'C:\\w' });
-    assert.equal(r.cmd, 'C:\\bin\\omp.exe');
+    const r = b.buildSpawn(['C:\\bin\\mytool.exe', 'a b', '--x'], { cwd: 'C:\\w' });
+    assert.equal(r.cmd, 'C:\\bin\\mytool.exe');
     assert.deepEqual(r.args, ['a b', '--x']);
     assert.equal(r.opts.cwd, 'C:\\w');
   });
@@ -253,7 +249,7 @@ describe('backend: buildSpawn', () => {
   for (const ext of ['cmd', 'BAT']) {
     test(`native .${ext} shim: runs through cmd.exe /d /s /c with verbatim arguments`, () => {
       const b = new Backend({ kind: 'native' });
-      const r = b.buildSpawn([`C:\\Program Files\\omp\\omp.${ext}`, 'x'], { cwd: 'C:\\w' });
+      const r = b.buildSpawn([`C:\\Program Files\\mytool\\mytool.${ext}`, 'x'], { cwd: 'C:\\w' });
       assert.deepEqual(r.args.slice(0, 3), ['/d', '/s', '/c']);
       assert.equal(r.args.length, 4);
       assert.equal(r.opts.windowsVerbatimArguments, true);
@@ -264,7 +260,7 @@ describe('backend: buildSpawn', () => {
 
   test('native .cmd shim: no cmd.exe metacharacter survives unescaped, whatever the arguments are', () => {
     const b = new Backend({ kind: 'native' });
-    const { args } = b.buildSpawn(['C:\\Program Files\\omp\\omp.cmd', ...nasty]);
+    const { args } = b.buildSpawn(['C:\\Program Files\\mytool\\mytool.cmd', ...nasty]);
     const line = args[3].slice(1, -1);
     const bare = line.replace(/\^./g, '');
     assert.ok(!/[()\][%!"<>&|;,*?`^]/.test(bare), `unescaped metacharacter left in: ${bare}`);
@@ -272,12 +268,12 @@ describe('backend: buildSpawn', () => {
 
   test('native .cmd shim: after cmd.exe and the batch %* expansion peel off their escape layers, the target receives the original arguments', () => {
     const b = new Backend({ kind: 'native' });
-    const { args } = b.buildSpawn(['C:\\Program Files\\omp\\omp.cmd', ...nasty]);
+    const { args } = b.buildSpawn(['C:\\Program Files\\mytool\\mytool.cmd', ...nasty]);
     const line = args[3].slice(1, -1);
     // layer 1: cmd.exe parsing of the command line; layer 2: %* expansion inside the .cmd
     const seenByTarget = uncaret(uncaret(line));
     // The first token is the shim path itself (escaped once); strip it, then parse the rest as a C runtime command line.
-    const afterBin = seenByTarget.slice(seenByTarget.indexOf('omp.cmd') + 'omp.cmd'.length + 1);
+    const afterBin = seenByTarget.slice(seenByTarget.indexOf('mytool.cmd') + 'mytool.cmd'.length + 1);
     assert.deepEqual(parseArgv(afterBin), nasty);
   });
 });
@@ -639,6 +635,27 @@ describe('fsapi: findFiles (directory walk, no git repository)', () => {
     const all = await fsapi.findFiles(nat, repo, '', 100);
     assert.deepEqual([...all].sort(), ['.gitignore', 'src/kept.js', 'top.js']);
   });
+
+  test('a file deleted from the work tree but still in the index is not offered', { skip: !gitAvailable && 'git not installed' }, async () => {
+    const repo = fresh('gitgone');
+    execFileSync('git', ['init', '-q'], { cwd: repo });
+    fs.writeFileSync(path.join(repo, 'gone.js'), '');
+    fs.writeFileSync(path.join(repo, 'kept.js'), '');
+    execFileSync('git', ['add', 'gone.js', 'kept.js'], { cwd: repo });
+    fs.unlinkSync(path.join(repo, 'gone.js'));
+    fsapi.clearFileIndex();
+    assert.deepEqual(await fsapi.findFiles(nat, repo, '', 100), ['kept.js']);
+  });
+
+  test('the file list is cached, and clearFileIndex makes a new file visible', async () => {
+    const dir = fresh('findcache');
+    fs.writeFileSync(path.join(dir, 'one.txt'), '');
+    assert.deepEqual(await fsapi.findFiles(nat, dir, 'one'), ['one.txt']);
+    fs.writeFileSync(path.join(dir, 'two.txt'), '');
+    assert.deepEqual(await fsapi.findFiles(nat, dir, 'two'), []); // still the cached list
+    fsapi.clearFileIndex();
+    assert.deepEqual(await fsapi.findFiles(nat, dir, 'two'), ['two.txt']);
+  });
 });
 
 // ───────────────────────────── gitapi.parseStatus ─────────────────────────────
@@ -791,331 +808,6 @@ describe('gitapi: parseStatus', () => {
     assert.deepEqual([f['mod.txt'].x, f['mod.txt'].y], [' ', 'M']);
     assert.equal(f['sp ace/untr ü.txt'].untracked, true);
     assert.equal(r.files.length, 4);
-  });
-});
-
-// ───────────────────────────── ompcfg.parseConfigList ─────────────────────────────
-describe('ompcfg: parseConfigList', () => {
-  test('groups, keys, values and plain types', () => {
-    const text = ['[Display]', '  theme = dark (string)', '  fontSize = 14 (number)', '  wrap = true (boolean)', '', '[Model Roles]', '  default = claude-opus-4 (string)'].join('\n');
-    assert.deepEqual(parseConfigList(text), [
-      { name: 'Display', items: [
-        { key: 'theme', value: 'dark', type: 'string', options: null },
-        { key: 'fontSize', value: '14', type: 'number', options: null },
-        { key: 'wrap', value: 'true', type: 'boolean', options: null },
-      ] },
-      { name: 'Model Roles', items: [{ key: 'default', value: 'claude-opus-4', type: 'string', options: null }] },
-    ]);
-  });
-
-  test('a "|"-separated type becomes an enum with its options', () => {
-    const g = parseConfigList('[Sec]\n  level = high (low|medium|high)');
-    assert.deepEqual(g[0].items[0], { key: 'level', value: 'high', type: 'enum', options: ['low', 'medium', 'high'] });
-  });
-
-  test('values may contain parentheses, equals signs and spaces: only the last (...) is the type', () => {
-    const g = parseConfigList('[S]\n  cmd = run --flag=1 (fast) now (string)\n  path = C:\\Program Files (x86)\\omp (string)');
-    assert.equal(g[0].items[0].value, 'run --flag=1 (fast) now');
-    assert.equal(g[0].items[0].type, 'string');
-    assert.equal(g[0].items[1].value, 'C:\\Program Files (x86)\\omp');
-  });
-
-  test('an empty value is kept as an empty string', () => {
-    const g = parseConfigList('[S]\n  key =  (string)');
-    assert.deepEqual(g[0].items[0], { key: 'key', value: '', type: 'string', options: null });
-  });
-
-  test('CRLF line endings are handled', () => {
-    const g = parseConfigList('[A]\r\n  k = v (string)\r\n[B]\r\n  n = 1 (number)\r\n');
-    assert.deepEqual(g.map((x) => [x.name, x.items[0].key, x.items[0].value]), [['A', 'k', 'v'], ['B', 'n', '1']]);
-  });
-
-  test('empty groups and items before the first header are dropped', () => {
-    const g = parseConfigList('  orphan = 1 (number)\n[Empty]\n[Real]\n  a = b (string)\n[AlsoEmpty]\n');
-    assert.deepEqual(g.map((x) => x.name), ['Real']);
-  });
-
-  test('lines that do not match the item shape are skipped without breaking neighbours', () => {
-    const g = parseConfigList('[S]\n  good = 1 (number)\n  no type here\nrandom noise\n    deeper = 2 (number)\n  also = 3 (number)');
-    assert.deepEqual(g[0].items.map((i) => i.key), ['good', 'also']);
-  });
-
-  test('empty input gives no groups', () => assert.deepEqual(parseConfigList(''), []));
-});
-
-// ───────────────────────────── sessions ─────────────────────────────
-describe('sessions: parseSessionHead', () => {
-  const jl = (...objs) => objs.map((o) => (typeof o === 'string' ? o : JSON.stringify(o))).join('\n') + '\n';
-  const user = (content) => ({ type: 'message', message: { role: 'user', content } });
-
-  test('reads id, cwd, timestamp, continuation and the first user message', () => {
-    const m = parseSessionHead(jl({ type: 'session', id: 's1', cwd: '/mnt/c/proj', timestamp: '2026-01-01T00:00:00Z', continuationOf: 's0' }, user('Fix the bug')));
-    assert.deepEqual(m, { id: 's1', cwd: '/mnt/c/proj', title: '', firstUser: 'Fix the bug', timestamp: '2026-01-01T00:00:00Z', continuationOf: 's0' });
-  });
-
-  test('empty text gives the all-empty meta', () => {
-    assert.deepEqual(parseSessionHead(''), { id: '', cwd: '', title: '', firstUser: '', timestamp: '', continuationOf: '' });
-  });
-
-  test('the last line is treated as possibly cut off and ignored', () => {
-    const text = JSON.stringify({ type: 'session', id: 'a' }) + '\n' + JSON.stringify(user('hello'));
-    const m = parseSessionHead(text); // no trailing newline: the user line may be incomplete
-    assert.equal(m.id, 'a');
-    assert.equal(m.firstUser, '');
-  });
-
-  test('a truncated final record (file head cut mid-line) does not break earlier ones', () => {
-    const m = parseSessionHead(jl({ type: 'session', id: 'a', cwd: '/x' }) + '{"type":"message","message":{"role":"us');
-    assert.deepEqual([m.id, m.cwd], ['a', '/x']);
-  });
-
-  test('invalid JSON lines and blank lines are skipped', () => {
-    const m = parseSessionHead('\nnot json\n   \n{"type":"session","id":"z"}\n{oops\n');
-    assert.equal(m.id, 'z');
-  });
-
-  test('CRLF line endings', () => {
-    const m = parseSessionHead('{"type":"session","id":"c","cwd":"C:\\\\p"}\r\n{"type":"message","message":{"role":"user","content":"hi"}}\r\n');
-    assert.deepEqual([m.id, m.cwd, m.firstUser], ['c', 'C:\\p', 'hi']);
-  });
-
-  test('user content as text blocks: only text parts, joined, whitespace collapsed', () => {
-    const m = parseSessionHead(jl({ type: 'session', id: 'a' }, user([{ type: 'image', data: 'xx' }, { type: 'text', text: '  line one\n\n line   two ' }, { type: 'text', text: 'three' }])));
-    assert.equal(m.firstUser, 'line one line two three');
-  });
-
-  test('only the first user message counts; assistant messages are ignored; a user message without text does not count', () => {
-    const m = parseSessionHead(jl(
-      { type: 'session', id: 'a' },
-      { type: 'message', message: { role: 'assistant', content: 'I am the assistant' } },
-      user([{ type: 'image', data: 'x' }]),
-      user('real first'),
-      user('second'),
-    ));
-    assert.equal(m.firstUser, 'real first');
-  });
-
-  test('title: explicit title record wins over later ones; session header title overrides; title_change always updates', () => {
-    assert.equal(parseSessionHead(jl({ type: 'session', id: 'a' }, { type: 'title', title: 'First' }, { type: 'title', title: 'Second' })).title, 'First');
-    assert.equal(parseSessionHead(jl({ type: 'session', id: 'a', title: 'FromHeader' })).title, 'FromHeader');
-    assert.equal(parseSessionHead(jl({ type: 'session', id: 'a' }, { type: 'title', title: 'Old' }, { type: 'title_change', title: 'Renamed' })).title, 'Renamed');
-  });
-
-  test('parsing stops once id, title and first user message are known (later records are not read)', () => {
-    const m = parseSessionHead(jl({ type: 'session', id: 'a', title: 'T' }, user('hello'), { type: 'title_change', title: 'Late' }, { type: 'session', id: 'other' }));
-    assert.deepEqual([m.id, m.title, m.firstUser], ['a', 'T', 'hello']);
-  });
-
-  test('non-string title values are stringified; missing fields default to empty strings', () => {
-    const m = parseSessionHead(jl({ type: 'session', id: 'a', title: 42 }));
-    assert.equal(m.title, '42');
-    assert.equal(m.cwd, '');
-    assert.equal(m.continuationOf, '');
-  });
-});
-
-describe('sessions: collapseChains', () => {
-  const e = (id, continuationOf = '', extra = {}) => ({ id, continuationOf, path: `/s/${id}.jsonl`, ...extra });
-
-  test('standalone sessions pass through with a one-element chain, keeping order and fields', () => {
-    const r = collapseChains([e('a', '', { title: 'A' }), e('b')]);
-    assert.deepEqual(r.map((x) => x.id), ['a', 'b']);
-    assert.deepEqual(r[0], { id: 'a', continuationOf: '', path: '/s/a.jsonl', title: 'A', chain: ['/s/a.jsonl'], chainIds: ['a'], resumes: 0 });
-  });
-
-  test('a resumed conversation shows only its newest file; the chain lists newest to oldest', () => {
-    const r = collapseChains([e('c', 'b'), e('b', 'a'), e('a')]);
-    assert.equal(r.length, 1);
-    assert.equal(r[0].id, 'c');
-    assert.deepEqual(r[0].chain, ['/s/c.jsonl', '/s/b.jsonl', '/s/a.jsonl']);
-    assert.deepEqual(r[0].chainIds, ['c', 'b', 'a']);
-    assert.equal(r[0].resumes, 2);
-  });
-
-  test('input order does not matter (oldest first works the same)', () => {
-    const r = collapseChains([e('a'), e('b', 'a'), e('c', 'b')]);
-    assert.deepEqual(r.map((x) => [x.id, x.chainIds.join('>')]), [['c', 'c>b>a']]);
-  });
-
-  test('unrelated conversations stay separate and keep their relative order', () => {
-    const r = collapseChains([e('x1', 'x0'), e('y'), e('x0'), e('z', 'z0')]);
-    assert.deepEqual(r.map((x) => x.id), ['x1', 'y', 'z']);
-  });
-
-  test('continuation of a session that is not in the list (e.g. beyond the limit): shown, chain has only itself', () => {
-    const r = collapseChains([e('b', 'missing')]);
-    assert.equal(r.length, 1);
-    assert.equal(r[0].resumes, 0);
-    assert.deepEqual(r[0].chain, ['/s/b.jsonl']);
-    assert.equal(r[0].continuationOf, 'missing');
-  });
-
-  test('two resumes of the same parent both stay visible, each referencing the parent', () => {
-    const r = collapseChains([e('b', 'a'), e('c', 'a'), e('a')]);
-    assert.deepEqual(r.map((x) => [x.id, x.chainIds.join('>')]), [['b', 'b>a'], ['c', 'c>a']]);
-  });
-
-  test('the input entries are not mutated', () => {
-    const input = [e('b', 'a'), e('a')];
-    const snapshot = JSON.stringify(input);
-    collapseChains(input);
-    assert.equal(JSON.stringify(input), snapshot);
-  });
-
-  test('empty list', () => assert.deepEqual(collapseChains([]), []));
-
-  test('corrupt data with a continuation cycle must not make the conversation disappear', () => {
-    assert.ok(collapseChains([e('a', 'b'), e('b', 'a')]).length >= 1);
-    assert.ok(collapseChains([e('s', 's')]).length >= 1);
-  });
-});
-
-// ───────────────────────────── proc: ChunkAssembler / startupError ─────────────────────────────
-describe('proc: ChunkAssembler', () => {
-  const frames = (text, size, chunkId = 'c1') => {
-    const buf = Buffer.from(text, 'utf8');
-    const parts = [];
-    for (let i = 0; i < buf.length; i += size) parts.push(buf.subarray(i, i + size));
-    if (!parts.length) parts.push(Buffer.alloc(0));
-    return parts.map((p, index) => ({ type: 'rpc_chunk', chunkId, index, count: parts.length, byteLength: buf.length, data: p.toString('base64') }));
-  };
-  const feed = (asm, fs_) => fs_.map((f) => asm.push(f));
-
-  test('a single-chunk message is returned immediately', () => {
-    assert.equal(new ChunkAssembler().push(frames('{"a":1}', 1000)[0]), '{"a":1}');
-  });
-
-  test('multi-chunk message: null until the last chunk arrives, then the whole text', () => {
-    const out = feed(new ChunkAssembler(), frames('0123456789abcdef', 5));
-    assert.deepEqual(out, [null, null, null, '0123456789abcdef']);
-  });
-
-  test('a multi-byte character split across chunks is decoded intact (no U+FFFD)', () => {
-    const text = '{"s":"€🚀日本語é"}';
-    for (let size = 1; size <= 7; size++) {
-      const out = feed(new ChunkAssembler(), frames(text, size));
-      assert.equal(out.at(-1), text, `chunk size ${size}`);
-      assert.ok(!out.at(-1).includes('\uFFFD'));
-      assert.deepEqual(JSON.parse(out.at(-1)), { s: '€🚀日本語é' });
-    }
-  });
-
-  test('out-of-order arrival (reverse, rotated) reassembles by index', () => {
-    const text = 'the quick brown fox jumps over the lazy dog — ünïcode ✓';
-    const fr = frames(text, 7);
-    for (const order of [[...fr].reverse(), [...fr.slice(3), ...fr.slice(0, 3)]]) {
-      const out = feed(new ChunkAssembler(), order);
-      assert.deepEqual(out.slice(0, -1), new Array(fr.length - 1).fill(null));
-      assert.equal(out.at(-1), text);
-    }
-  });
-
-  test('a duplicate chunk is ignored: it neither completes the message early nor corrupts it', () => {
-    const asm = new ChunkAssembler();
-    const [f0, f1, f2] = frames('AAABBBCCC', 3);
-    assert.equal(asm.push(f0), null);
-    assert.equal(asm.push(f0), null);
-    assert.equal(asm.push({ ...f0, data: Buffer.from('ZZZ').toString('base64') }), null); // same index, different bytes: first one wins
-    assert.equal(asm.push(f1), null);
-    assert.equal(asm.push(f2), 'AAABBBCCC');
-  });
-
-  test('interleaved messages with different chunkIds are assembled independently', () => {
-    const asm = new ChunkAssembler();
-    const a = frames('first message', 4, 'A');
-    const b = frames('second MESSAGE!', 4, 'B');
-    const results = {};
-    for (let i = 0; i < Math.max(a.length, b.length); i++) {
-      for (const [id, fr] of [['A', a], ['B', b]]) if (fr[i]) { const r = asm.push(fr[i]); if (r != null) results[id] = r; }
-    }
-    assert.deepEqual(results, { A: 'first message', B: 'second MESSAGE!' });
-  });
-
-  test('a chunkId can be reused after its message completed', () => {
-    const asm = new ChunkAssembler();
-    assert.equal(feed(asm, frames('one', 2, 'same')).at(-1), 'one');
-    assert.equal(feed(asm, frames('two!', 3, 'same')).at(-1), 'two!');
-  });
-
-  test('an empty message (zero bytes, one chunk) yields an empty string', () => {
-    assert.equal(new ChunkAssembler().push(frames('', 4)[0]), '');
-  });
-
-  test('invalid first frames are rejected: missing/zero/negative count, oversized byteLength', () => {
-    const asm = new ChunkAssembler(100);
-    const base = { chunkId: 'x', index: 0, count: 1, byteLength: 1, data: 'YQ==' };
-    for (const bad of [{ count: 0 }, { count: -1 }, { count: undefined }, { count: 'abc' }, { byteLength: 101 }]) {
-      assert.throws(() => asm.push({ ...base, ...bad }), /invalid or oversized/, JSON.stringify(bad));
-    }
-    assert.equal(asm.push({ ...base, byteLength: 1 }), 'a'); // 1 <= 100 passes, and state from rejected frames did not leak in
-  });
-
-  test('maxBytes boundary is inclusive', () => {
-    const asm = new ChunkAssembler(10);
-    assert.equal(asm.push(frames('0123456789', 10)[0]), '0123456789');
-    assert.throws(() => asm.push(frames('0123456789A', 11, 'big')[0]), /oversized/);
-  });
-
-  test('out-of-range chunk index is rejected', () => {
-    const asm = new ChunkAssembler();
-    const f = frames('abcdef', 3)[0];
-    assert.throws(() => asm.push({ ...f, index: 2 }), /bad index/);
-    assert.throws(() => asm.push({ ...f, index: -1 }), /bad index/);
-  });
-
-  test('a byteLength that disagrees with the reassembled data is an error, and the id can start over afterwards', () => {
-    const asm = new ChunkAssembler();
-    const fr = frames('abcdef', 3).map((f) => ({ ...f, byteLength: 99 }));
-    asm.push(fr[0]);
-    assert.throws(() => asm.push(fr[1]), /length mismatch \(6 != 99\)/);
-    assert.equal(feed(asm, frames('abcdef', 3)).at(-1), 'abcdef');
-  });
-
-  test('a large payload split into many chunks round-trips', () => {
-    const payload = JSON.stringify({ rows: Array.from({ length: 3000 }, (_, i) => ({ i, s: `ünï-${i}-✓` })) });
-    const fr = frames(payload, 1021);
-    const out = feed(new ChunkAssembler(), [...fr].reverse());
-    assert.equal(out.at(-1), payload);
-  });
-});
-
-describe('proc: startupError', () => {
-  test('returns an Error whose message is the last "Error: ..." line of the tail', () => {
-    const e = startupError(1, ['bun: something', 'TypeError: first', '    at foo (x.ts:1:1)', 'Error: real cause here', '    at bar (y.ts:2:2)']);
-    assert.ok(e instanceof Error);
-    assert.equal(e.message, 'OMP could not start: real cause here');
-    assert.equal(e.restoreModel, null);
-  });
-
-  test('accepts lowercase "error:" and any *Error prefix, with leading indentation', () => {
-    assert.equal(startupError(1, ['   error: boom']).message, 'OMP could not start: boom');
-    assert.equal(startupError(1, ['RangeError:   too big']).message, 'OMP could not start: too big');
-  });
-
-  test('only anchored "<X>Error:" lines count (not mid-line mentions, not other prefixes)', () => {
-    const e = startupError(2, ['Uncaught TypeError: nope', 'ENOENT: no such file', 'ERROR: shouting']);
-    assert.ok(e.message.startsWith('OMP exited during startup (code 2).'));
-    assert.equal(e.restoreModel, null);
-  });
-
-  test('a model that can no longer be restored is exposed as restoreModel', () => {
-    const e = startupError(1, ['Error: Could not restore model anthropic/claude-old (not available)']);
-    assert.equal(e.restoreModel, 'anthropic/claude-old');
-    assert.ok(e.message.startsWith('OMP could not start: Could not restore model'));
-  });
-
-  test('no recognisable reason: reports the exit code and the last six non-empty lines, trimmed', () => {
-    const tail = ['l1', '', 'l2', '  l3  ', 'l4', 'l5', '', 'l6', 'l7', 'l8'];
-    assert.equal(startupError(137, tail).message, 'OMP exited during startup (code 137).\nl3\nl4\nl5\nl6\nl7\nl8');
-  });
-
-  test('an empty tail gives just the headline, without a dangling newline', () => {
-    assert.equal(startupError(1, []).message, 'OMP exited during startup (code 1).');
-    assert.equal(startupError(-1, ['', '   ']).message, 'OMP exited during startup (code -1).');
-  });
-
-  test('"Error:" with nothing after it is not a reason', () => {
-    assert.ok(startupError(1, ['Error:']).message.startsWith('OMP exited during startup'));
   });
 });
 

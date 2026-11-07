@@ -14,7 +14,6 @@ if (Test-Path (Join-Path $root 'release\stage')) { Remove-Item -Recurse -Force (
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
 foreach ($d in 'src', 'web', 'assets') { Copy-Item (Join-Path $root $d) (Join-Path $stage $d) -Recurse -Force }
-Remove-Item -Recurse -Force (Join-Path $stage 'assets\brand') -ErrorAction SilentlyContinue   # source artwork, not used by the app
 # Ship only app files: no temp/backup/editor files, logs, source maps or tests that may sit in the source folders.
 Get-ChildItem $stage -Recurse -Force -File -Include '*.tmp', '*.log', '*.bak', '*.orig', '*.map', '*.test.mjs', '.DS_Store', 'Thumbs.db', 'desktop.ini' | Remove-Item -Force
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'tools') | Out-Null

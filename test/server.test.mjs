@@ -23,7 +23,9 @@ describe('open questions survive a window reload', () => {
   test('questions are kept until answered, cancelled or the turn ends', () => {
     const open = new Map();
     trackOpenUi(open, ask('a'));
-    trackOpenUi(open, ask('b', 'input'));
+    trackOpenUi(open, ask('b'));
+    // The agent asks only with select; other methods are notifications (or unknown) and are never kept.
+    trackOpenUi(open, ask('i', 'input'));
     trackOpenUi(open, { type: 'extension_ui_request', id: 'n', method: 'notify', message: 'hi' });
     trackOpenUi(open, { type: 'extension_ui_request', id: 's', method: 'setStatus', statusKey: 'x' });
     assert.deepEqual([...open.keys()], ['a', 'b'], 'only questions that wait for an answer');
@@ -68,7 +70,7 @@ function raw(port, method, p, { headers = {}, body } = {}) {
 
 function makeStore() {
   const store = new Store();
-  store.data.backend = { kind: 'native', distro: '', ompPath: '' }; // never touch wsl.exe from tests
+  store.data.backend = { kind: 'native', distro: '' }; // never touch wsl.exe from tests
   store.data.backendChosen = true;
   return store;
 }
@@ -800,7 +802,7 @@ describe('shutdown', () => {
 const { Store } = await import(${JSON.stringify(SRC('store.mjs'))});
 const { AppServer } = await import(${JSON.stringify(SRC('server.mjs'))});
 const store = new Store();
-store.data.backend = { kind: 'native', distro: '', ompPath: '' };
+store.data.backend = { kind: 'native', distro: '' };
 const h = new AppServer({ store, token: 'tok' });
 const port = await h.listen(0);
 const get = (p) => new Promise((res, rej) => {

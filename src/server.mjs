@@ -6,7 +6,6 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
 import { Backend } from './backend.mjs';
-import { OmpProc } from './proc.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, isAgentSessionPath } from './engine/store.mjs';
@@ -14,12 +13,9 @@ import { clientFor } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import { webSearch } from './engine/websearch.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
-import { listSessions, deleteSessions } from './sessions.mjs';
 import { collect as collectDiagnostics } from './diagnostics.mjs';
 import * as fsapi from './fsapi.mjs';
 import * as gitapi from './gitapi.mjs';
-import * as ompcfg from './ompcfg.mjs';
-import { AuthService } from './auth.mjs';
 import { openExternal } from './launcher.mjs';
 
 export { VERSION };
@@ -38,7 +34,7 @@ const MIME = {
 };
 
 /** extension_ui_request methods that wait for an answer (the rest are notifications). */
-const ASK_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
+const ASK_METHODS = new Set(['select']);
 
 /** Keep `open` (id -> request) in step with a session's events: questions it asks, cancels, and a finished turn. */
 export function trackOpenUi(open, ev) {
@@ -88,19 +84,7 @@ function slimModel(m) {
 
 function shapeResponse(type, res) {
   if (!res.data) return res;
-  if (type === 'get_state') {
-    // get_state embeds the full system prompt and every tool's JSON schema (~100 KB); the UI only needs names.
-    const { systemPrompt, dumpTools, model, ...rest } = res.data;
-    return {
-      ...res,
-      data: {
-        ...rest,
-        model: slimModel(model),
-        tools: Array.isArray(dumpTools) ? dumpTools.map((t) => t.name) : [],
-        systemPromptChars: Array.isArray(systemPrompt) ? systemPrompt.join('').length : 0,
-      },
-    };
-  }
+  if (type === 'get_state') return { ...res, data: { ...res.data, model: slimModel(res.data.model) } };
   if (type === 'get_available_models') return { ...res, data: { ...res.data, models: (res.data.models || []).map(slimModel) } };
   return res;
 }
@@ -115,8 +99,7 @@ export class AppServer {
     this.engineCfg = new EngineConfig();
     this.procs = new Map();
     this.clients = new Set();
-    this.auth = new AuthService({ backend: this.backend, broadcast: (m) => this.broadcast(m) });
-    this.envInfo = { omp: null, version: null };
+    this.envInfo = {};
     this.envReady = Promise.resolve();
     this.hadClient = false;
     this.lastClientAt = Date.now();
@@ -141,7 +124,7 @@ export class AppServer {
     });
   }
 
-  /** First-run backend choice, then the OMP lookup. Runs after listen(); /api/state waits for it. */
+  /** First-run backend choice, then a check that it is reachable. Runs after listen(); /api/state waits for it. */
   startEnv() {
     this.envReady = this.store
       .autodetect(this.backend)
@@ -155,24 +138,24 @@ export class AppServer {
       this.backend.update(this.store.data.backend);
       const p = await this.backend.probe();
       const unreachable = this.backend.isWsl && !p.home;
-      this.envInfo = { omp: p.omp, version: p.omp ? p.version : null, ...(unreachable ? { error: `Cannot reach WSL distro "${this.backend.distro}". Is it installed and startable?` } : {}) };
+      this.envInfo = unreachable ? { error: `Can’t reach the WSL distribution "${this.backend.distro}". Make sure it’s installed and can start.` } : {};
     } catch (e) {
-      this.envInfo = { omp: null, version: null, error: e.message };
+      this.envInfo = { error: e.message };
     }
   }
 
   get busy() {
-    return !!this.auth.login || [...this.procs.values()].some((p) => p.streaming);
+    return [...this.procs.values()].some((p) => p.streaming);
   }
 
   /** An agent is blocked on a question (approval) for the user. */
   get waitingForUser() {
-    return !!this.auth.login || [...this.procs.values()].some((p) => p.pendingAsk?.size > 0 || p.openUi?.size > 0);
+    return [...this.procs.values()].some((p) => p.pendingAsk?.size > 0 || p.openUi?.size > 0);
   }
 
   async shutdown() {
     log('shutdown');
-    await Promise.all([...this.procs.values()].map((p) => p.stop(2500).catch(() => {})).concat(this.auth.stop()));
+    await Promise.all([...this.procs.values()].map((p) => p.stop(2500).catch(() => {})));
     for (const c of this.clients) {
       try {
         c.end();
@@ -197,7 +180,7 @@ export class AppServer {
     for (const c of this.clients) c.write(': ping\n\n');
   }
   procList() {
-    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: p.engine || 'omp' }));
+    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin' }));
   }
   broadcastProcs() {
     this.broadcast({ g: 'procs', procs: this.procList() });
@@ -240,22 +223,7 @@ export class AppServer {
     this.broadcast({ p: id, e: out });
   }
 
-  /** Start a session; if a resumed session's model is gone (provider signed out), reopen it on the default model. */
-  async startSession(opts) {
-    try {
-      return { proc: await this.startProc(opts) };
-    } catch (e) {
-      if (!e.restoreModel || !opts.resume || opts.model) throw e;
-      const st = await (await this.auth.proc()).request({ type: 'get_state' }, 30000);
-      const m = st.data?.model;
-      if (!m?.provider) throw e;
-      const fallback = `${m.provider}/${m.id}`;
-      const proc = await this.startProc({ ...opts, model: fallback });
-      return { proc, notice: `This session used ${e.restoreModel}, which is not available right now (sign in to its provider to use it again). Opened it with ${m.name || fallback}.` };
-    }
-  }
-
-  async startProc({ workspace, resume, model, thinking, noSession, engine }) {
+  async startProc({ workspace, resume, model, noSession }) {
     if (!workspace) throw new Error('A workspace folder is required');
     // Two agents appending to one saved conversation would interleave it.
     if (resume && [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume)) {
@@ -263,9 +231,7 @@ export class AppServer {
     }
     this.backend.update(this.store.data.backend);
     const id = uid('p');
-    const proc = engine === 'builtin'
-      ? new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg })
-      : new OmpProc({ id, backend: this.backend, workspace, resume, model: model || this.store.data.launch.model || '', thinking: thinking || this.store.data.launch.thinking || '', noSession });
+    const proc = new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg });
     proc.cache = { commands: [] };
     // Questions waiting for the user (approvals, inputs): a window that reloads or reconnects gets them again.
     proc.openUi = new Map();
@@ -297,7 +263,7 @@ export class AppServer {
 
   proc(id) {
     const p = this.procs.get(id);
-    if (!p) throw Object.assign(new Error('Session process is not running'), { status: 410 });
+    if (!p) throw Object.assign(new Error('This session is no longer running'), { status: 410 });
     return p;
   }
 
@@ -428,10 +394,9 @@ export class AppServer {
     const d = this.store.data;
     return {
       app: { version: VERSION, pid: process.pid },
-      backend: { ...d.backend, resolvedOmp: this.envInfo.omp, ompVersion: this.envInfo.version, error: this.envInfo.error || null },
+      backend: { kind: d.backend.kind, distro: d.backend.distro, error: this.envInfo.error || null },
       workspaces: d.workspaces,
       ui: d.ui,
-      launch: d.launch,
       procs: this.procList(),
     };
   }
@@ -450,19 +415,18 @@ export class AppServer {
 
       'POST /api/backend': async ({ body }) => {
         const kind = body.kind === 'native' ? 'native' : 'wsl';
-        this.store.data.backend = { kind, distro: String(body.distro || ''), ompPath: String(body.ompPath || '') };
+        this.store.data.backend = { kind, distro: String(body.distro || '') };
         this.store.data.backendChosen = true;
         this.store.save();
-        this.backend.forget(); // "Check again" after installing OMP must not reuse the old answer
+        this.backend.forget(); // "Check again" (a distro just installed or started) must not reuse the old answer
         await this.refreshEnv();
         return this.stateSnapshot();
       },
 
       'POST /api/prefs': async ({ body }) => {
         if (body.ui && typeof body.ui === 'object') Object.assign(this.store.data.ui, body.ui);
-        if (body.launch && typeof body.launch === 'object') Object.assign(this.store.data.launch, body.launch);
         this.store.saveSoon();
-        return { ui: this.store.data.ui, launch: this.store.data.launch };
+        return { ui: this.store.data.ui };
       },
 
       'POST /api/workspaces': async ({ body }) => {
@@ -479,8 +443,8 @@ export class AppServer {
       },
 
       'GET /api/sessions': async () => {
-        const [omp, own] = await Promise.all([listSessions(this.backend).catch(() => []), listAgentSessions(this.backend).catch(() => [])]);
-        return { sessions: [...omp, ...own].sort((a, b) => b.mtime - a.mtime) };
+        const own = await listAgentSessions(this.backend).catch(() => []);
+        return { sessions: own.sort((a, b) => b.mtime - a.mtime) };
       },
       'GET /api/engine': async () => ({ engine: this.engineCfg.publicView() }),
       'POST /api/engine/provider': async ({ body }) => {
@@ -613,17 +577,14 @@ export class AppServer {
         if (!paths.length || paths.length > 500) throw Object.assign(new Error('Nothing to delete'), { status: 400 });
         const busy = [...this.procs.values()].find((p) => (p.opts.resume && paths.includes(p.opts.resume)) || (p.session?.file && paths.includes(p.session.file)));
         if (busy) throw Object.assign(new Error('That conversation is open. Close it first.'), { status: 409 });
-        const own = paths.filter(isAgentSessionPath);
-        const omp = paths.filter((x) => !isAgentSessionPath(x));
-        let removed = 0;
-        if (own.length) removed += await deleteAgentSessions(own);
-        if (omp.length) removed += await deleteSessions(this.backend, omp);
-        return { removed };
+        // Only ORBIX's own conversation files can be deleted; any other path is refused before anything is removed.
+        if (!paths.every(isAgentSessionPath)) throw Object.assign(new Error('Only ORBIX conversations can be deleted'), { status: 400 });
+        return { removed: await deleteAgentSessions(paths) };
       },
 
       'POST /api/proc/start': async ({ body }) => {
-        const { proc, notice } = await this.startSession({ workspace: body.workspace, resume: body.resume, model: body.model, thinking: body.thinking, noSession: !!body.noSession, engine: body.engine === 'builtin' ? 'builtin' : 'omp' });
-        return { engine: proc.engine || 'omp', id: proc.id, workspace: proc.workspace, protocol: proc.protocol, commands: proc.cache.commands, notice: notice || null };
+        const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession });
+        return { engine: 'builtin', id: proc.id, workspace: proc.workspace, protocol: proc.protocol, commands: proc.cache.commands, notice: null };
       },
       'POST /api/proc/stop': async ({ body }) => {
         const p = this.procs.get(body.proc);
@@ -647,7 +608,7 @@ export class AppServer {
       'POST /api/reply': async ({ body }) => {
         const proc = this.proc(body.proc);
         const t = body.msg?.type;
-        if (!['extension_ui_response', 'host_tool_result', 'host_tool_update', 'host_uri_result'].includes(t)) throw Object.assign(new Error('Unsupported reply type'), { status: 400 });
+        if (t !== 'extension_ui_response') throw Object.assign(new Error('Unsupported reply type'), { status: 400 });
         proc.send(body.msg);
         if (t === 'extension_ui_response') proc.openUi?.delete(body.msg.id);
         return {};
@@ -656,7 +617,7 @@ export class AppServer {
       'GET /api/events': ({ req, res }) => {
         res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no', ...SECURITY_HEADERS });
         res.write(`retry: 1500\n\n`);
-        res.write(`data: ${JSON.stringify({ g: 'hello', procs: this.procList(), auth: this.auth.status(), t: Date.now() })}\n\n`);
+        res.write(`data: ${JSON.stringify({ g: 'hello', procs: this.procList(), t: Date.now() })}\n\n`);
         this.clients.add(res);
         this.hadClient = true;
         req.on('close', () => {
@@ -681,37 +642,6 @@ export class AppServer {
       'POST /api/git/unstage': async ({ body }) => (await gitapi.unstage(this.backend, wsPath(body), body.paths), {}),
       'POST /api/git/discard': async ({ body }) => (await gitapi.discard(this.backend, wsPath(body), { tracked: body.tracked, untracked: body.untracked }), {}),
       'POST /api/git/commit': async ({ body }) => ({ commit: await gitapi.commit(this.backend, wsPath(body), body.message) }),
-
-      'GET /api/omp/config': async () => ({ groups: await ompcfg.list(this.backend) }),
-      'POST /api/omp/config': async ({ body }) => {
-        const out = body.reset ? await ompcfg.reset(this.backend, body.key) : await ompcfg.set(this.backend, body.key, body.value);
-        return { output: out };
-      },
-
-      'GET /api/auth/providers': async () => ({ providers: await this.auth.providers(), ...this.auth.status() }),
-      'POST /api/auth/login': async ({ body }) => {
-        await this.auth.startLogin(String(body.provider || ''));
-        return {};
-      },
-      'POST /api/auth/cancel': async () => {
-        await this.auth.cancelLogin();
-        return {};
-      },
-      'POST /api/auth/reply': async ({ body }) => {
-        this.auth.reply(body.msg);
-        return {};
-      },
-      'GET /api/auth/accounts': async ({ q }) => ({ accounts: await this.auth.accounts(q.provider) }),
-      'POST /api/auth/logout': async ({ body }) => ({ result: await this.auth.logout(String(body.provider || ''), body.credentialId) }),
-      'POST /api/auth/key': async ({ body }) => {
-        await this.auth.setApiKey(String(body.provider || ''), body.key);
-        return {};
-      },
-      'POST /api/auth/terminal': async ({ body }) => {
-        await this.auth.openTerminalLogin(String(body.provider || ''));
-        return {};
-      },
-      'GET /api/auth/usage': async () => ({ reports: await this.auth.usage() }),
 
       'POST /api/open-url': async ({ body }) => {
         try {

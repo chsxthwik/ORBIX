@@ -32,7 +32,7 @@ async function deleteConversations(list) {
 }
 
 export async function confirmDeleteConversation(s) {
-  const versions = s.chain?.length > 1 ? `\n\nAll ${s.chain.length} saved versions are deleted.` : '';
+  const versions = s.chain?.length > 1 ? `\n\nAll ${s.chain.length} saved versions will be deleted.` : '';
   const ok = await confirmDialog('Delete conversation', `Delete “${s.title}”? This cannot be undone.${versions}`, { ok: 'Delete', danger: true });
   if (!ok) return false;
   try {

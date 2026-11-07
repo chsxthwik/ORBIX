@@ -1,4 +1,4 @@
-// Client state + the reducer that turns session RPC events (agent or OMP CLI) into UI state.
+// Client state + the reducer that turns the agent's session events into UI state.
 import { api, rpc } from './api.js';
 import { baseName, debounce, toast, makeTitle } from './dom.js';
 
@@ -54,7 +54,6 @@ export class Tab {
     this.id = id;
     this.workspace = workspace;
     this.resume = opts.resume || null;
-    this.engine = opts.engine || 'builtin';
     this.title = opts.title || '';
     this.state = null;
     this.models = null;
@@ -70,7 +69,6 @@ export class Tab {
     this.todos = [];
     this.subagents = new Map();
     this.statuses = new Map();
-    this.widgets = new Map();
     this.dialogs = [];
     this.attach = []; // composer attachments (images, text files) not sent yet
     this.draft = '';
@@ -102,9 +100,9 @@ export const textOf = (content) => (typeof content === 'string' ? content : Arra
 
 const msgKey = (m) => `${m.role}:${m.timestamp ?? ''}:${m.toolCallId ?? ''}:${typeof m.content === 'string' ? m.content.length : Array.isArray(m.content) ? m.content.length : 0}`;
 
-export async function openTab({ workspace, resume, noSession, model, thinking, title, engine }) {
-  const j = await api.post('/api/proc/start', { workspace, resume, noSession, model, thinking, engine });
-  const tab = new Tab(j.id, workspace, { resume, title, engine: j.engine });
+export async function openTab({ workspace, resume, noSession, model, title }) {
+  const j = await api.post('/api/proc/start', { workspace, resume, noSession, model });
+  const tab = new Tab(j.id, workspace, { resume, title });
   tab.commands = j.commands || [];
   if (j.notice) toast(j.notice, 'info', 10000);
   S.tabs.set(tab.id, tab);
@@ -126,7 +124,7 @@ export async function openTab({ workspace, resume, noSession, model, thinking, t
 async function openBranch(from, ev) {
   if (!ev.path || S.active !== from.id) return; // only the tab you are looking at opens it, so two windows do not both open one
   try {
-    const t = await openTab({ workspace: ev.workspace || from.workspace, resume: ev.path, title: ev.title, engine: 'builtin' });
+    const t = await openTab({ workspace: ev.workspace || from.workspace, resume: ev.path, title: ev.title });
     if (ev.text) {
       t.draft = ev.text;
       emit('tab:editor', t);
@@ -153,10 +151,9 @@ export async function attach(tab) {
     tab.retry = null;
   }
   const open = ui.requests || [];
-  tab.dialogs = [...open, ...tab.dialogs.filter((d) => d.method === 'open_url' && !open.some((o) => o.id === d.id))];
+  tab.dialogs = [...open];
   emit('tab:dialog', tab);
-  rpc(tab.id, { type: 'set_subagent_subscription', level: 'progress' }).catch(() => {});
-  // The agent lists its slash commands on request (OMP pushes them), so ask when none came with the start reply.
+  // The agent lists its slash commands on request, so ask when none came with the start reply.
   if (!tab.commands.length) rpc(tab.id, { type: 'get_available_commands' }).then((r) => (tab.commands = r.data?.commands || tab.commands)).catch(() => {});
   refreshStats(tab);
   rpc(tab.id, { type: 'get_subagents' })
@@ -343,15 +340,9 @@ function reduce(tab, ev) {
         tab.todos = ev.result.details.phases;
         emit('tab:panel', tab, 'todos');
       }
-      if (/^(edit|write|ast_edit|bash|eval)$/.test(ev.toolName)) emit('tab:panel', tab, 'git');
+      if (/^(edit|write|bash)$/.test(ev.toolName)) emit('tab:panel', tab, 'git');
       break;
     }
-    case 'todo_reminder':
-      if (ev.todos) {
-        tab.todos = [{ name: 'Todos', tasks: ev.todos }];
-        emit('tab:panel', tab, 'todos');
-      }
-      break;
     case 'command_output':
       tab.messages.push({ role: '_out', text: ev.text || '', ts: Date.now() });
       emit('tab:messages', tab, { type: 'append', msg: tab.messages[tab.messages.length - 1] });
@@ -360,13 +351,11 @@ function reduce(tab, ev) {
       note(tab, ev.level || 'info', ev.message || '', { source: ev.source });
       break;
     case 'auto_compaction_start':
-    case 'manual_compaction_start':
       tab.compacting = true;
       emit('tab:status', tab);
       note(tab, 'info', 'Compacting context…');
       break;
-    case 'auto_compaction_end':
-    case 'manual_compaction_end': {
+    case 'auto_compaction_end': {
       tab.compacting = false;
       emit('tab:status', tab);
       if (ev.skipped) {
@@ -377,13 +366,9 @@ function reduce(tab, ev) {
       if (!failed) {
         note(tab, 'info', 'Context compacted');
         attachSoft(tab);
-      } else if (tab.engine !== 'builtin') note(tab, 'warn', `Context was not compacted${ev.errorMessage ? ': ' + ev.errorMessage : ''}`); // the agent reports its own reason
+      } // otherwise the agent reports its own reason
       break;
     }
-    case 'queue_update':
-      tab.queued = { steering: ev.steering || [], followUp: ev.followUp || [] };
-      emit('tab:state', tab);
-      break;
     case 'auto_retry_start':
       tab.retry = ev;
       note(tab, 'warn', `Retrying request${ev.attempt ? ` (attempt ${ev.attempt}${ev.maxAttempts ? '/' + ev.maxAttempts : ''})` : ''}${ev.errorMessage ? ': ' + ev.errorMessage : ''}`);
@@ -392,16 +377,12 @@ function reduce(tab, ev) {
       tab.retry = null;
       if (ev.success === false) note(tab, 'error', `Retry failed${ev.finalError ? ': ' + ev.finalError : ''}`);
       break;
-    case 'retry_fallback_applied':
-      note(tab, 'warn', `Switched to fallback model ${ev.to || ev.model || ''}`.trim());
-      refreshState(tab);
-      break;
     case 'model_changed':
     case 'thinking_level_changed':
       refreshState(tab);
       break;
     case 'session_info_update': {
-      const t = ev.title || ev.name || ev.info?.title || ev.sessionName;
+      const t = ev.title;
       if (t) {
         tab.title = t;
         emit('tabs');
@@ -448,9 +429,6 @@ function reduce(tab, ev) {
       emit('tabs');
       loadSessions();
       break;
-    case 'rpc_frame_error':
-      note(tab, 'error', `Protocol error: ${ev.error || 'bad frame'}`);
-      break;
     default:
       break;
   }
@@ -470,9 +448,6 @@ const attachSoft = perTab(async (tab) => {
 function handleUi(tab, ev) {
   switch (ev.method) {
     case 'select':
-    case 'confirm':
-    case 'input':
-    case 'editor':
       tab.dialogs.push(ev);
       emit('tab:dialog', tab);
       if (S.active !== tab.id) {
@@ -484,10 +459,6 @@ function handleUi(tab, ev) {
       tab.dialogs = tab.dialogs.filter((d) => d.id !== ev.targetId);
       emit('tab:dialog', tab);
       break;
-    case 'notify':
-      if (S.active === tab.id) toast(ev.message || '', ev.notifyType === 'error' ? 'error' : ev.notifyType === 'warning' ? 'info' : ev.notifyType === 'success' ? 'ok' : 'info');
-      else note(tab, ev.notifyType === 'error' ? 'error' : 'info', ev.message || '');
-      break;
     case 'setStatus': {
       const key = ev.statusKey ?? ev.key ?? 'status';
       const text = ev.statusText ?? ev.text;
@@ -496,31 +467,6 @@ function handleUi(tab, ev) {
       emit('tab:state', tab);
       break;
     }
-    case 'setWidget': {
-      const key = ev.widgetKey ?? ev.key ?? 'widget';
-      const lines = ev.widgetLines ?? ev.lines ?? ev.content;
-      if (Array.isArray(lines) ? lines.length : lines) tab.widgets.set(key, { lines: Array.isArray(lines) ? lines : String(lines).split('\n'), placement: ev.widgetPlacement ?? ev.placement });
-      else tab.widgets.delete(key);
-      emit('tab:state', tab);
-      break;
-    }
-    case 'setTitle':
-      if (ev.title) {
-        tab.title = ev.title;
-        emit('tabs');
-        emit('tab:status', tab);
-      }
-      break;
-    case 'set_editor_text':
-      tab.draft = ev.text || '';
-      emit('tab:editor', tab);
-      break;
-    case 'open_url':
-      if (/^https?:\/\//i.test(ev.url || '')) {
-        tab.dialogs.push({ ...ev, method: 'open_url', id: ev.id || 'url-' + Date.now() });
-        emit('tab:dialog', tab);
-      }
-      break;
     default:
       break;
   }
@@ -529,7 +475,6 @@ function handleUi(tab, ev) {
 export async function replyUi(tab, dlg, payload) {
   tab.dialogs = tab.dialogs.filter((d) => d !== dlg);
   emit('tab:dialog', tab);
-  if (dlg.method === 'open_url') return;
   try {
     await api.post('/api/reply', { proc: tab.id, msg: { type: 'extension_ui_response', id: dlg.id, ...payload } });
   } catch (e) {
@@ -576,11 +521,6 @@ export async function setThinking(tab, level) {
   await refreshState(tab);
 }
 
-export async function setFast(tab, enabled) {
-  await rpc(tab.id, { type: 'set_fast_mode', enabled });
-  await refreshState(tab);
-}
-
 export async function renameSession(tab, name) {
   await rpc(tab.id, { type: 'set_session_name', name });
   tab.title = name;
@@ -593,7 +533,7 @@ export async function loadEnv() {
   S.env = { app: j.app, backend: j.backend };
   S.ui = j.ui;
   S.workspaces = j.workspaces;
-  loadEngine();
+  await loadEngine();
   return j;
 }
 
@@ -642,12 +582,6 @@ export function onProcs(procs) {
     }
   }
 }
-
-/** True when the optional OMP CLI was found. Without it the UI never offers or mentions OMP. */
-export const ompInstalled = () => !!S.env?.backend?.resolvedOmp;
-
-/** Engine for new sessions: the ORBIX agent, unless the user picked the OMP CLI (and it is installed). */
-export const defaultEngine = () => (S.ui.defaultEngine === 'omp' && ompInstalled() ? 'omp' : 'builtin');
 
 /** True when the agent has at least one AI provider it can use. */
 export const engineReady = () => !!S.engine?.providers?.some((p) => p.configured);

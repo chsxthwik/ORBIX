@@ -194,7 +194,10 @@ class HttpTransport {
   }
   send(msg) {
     this._post(msg).catch((e) => {
+      if (this.ctl.signal.aborted) return;
       if (msg.id != null) this.onMessage({ jsonrpc: '2.0', id: msg.id, error: { code: -32000, message: e.message } });
+      // Network failure or a session-level HTTP error: the connection is dead. A 400 on one call is not.
+      if (e.fatal !== false) this.onClose(e);
     });
   }
   async _post(msg) {
@@ -205,7 +208,9 @@ class HttpTransport {
     if (sid) this.sessionId = sid;
     if (!r.ok) {
       const t = await r.text().catch(() => '');
-      throw new Error(`HTTP ${r.status}${t ? ': ' + t.slice(0, 200) : ''}`);
+      const err = new Error(`HTTP ${r.status}${t ? ': ' + t.slice(0, 200) : ''}`);
+      err.fatal = r.status === 401 || r.status === 403 || r.status === 404 || r.status >= 500;
+      throw err;
     }
     const ct = r.headers.get('content-type') || '';
     if (r.status === 202 || msg.id == null) return void r.body?.cancel?.().catch?.(() => {});
@@ -235,10 +240,67 @@ class HttpTransport {
   }
 }
 
+/**
+ * ${NAME} and ${NAME:-default} in a server's command, args, env, url and headers, from ORBIX's environment, as in other
+ * MCP clients (so a shared .mcp.json can say "Bearer ${API_KEY}"). An unset variable without a default becomes ''.
+ * Trust is decided on the config as written (manager), never on the expanded values.
+ */
+export function expandEnv(cfg, env = process.env) {
+  const one = (s) => (typeof s === 'string' ? s.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (_, k, d) => env[k] ?? d ?? '') : s);
+  const map = (o) => (o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, one(v)])) : o);
+  return { ...cfg, command: one(cfg.command), url: one(cfg.url), args: Array.isArray(cfg.args) ? cfg.args.map(one) : cfg.args, env: map(cfg.env), headers: map(cfg.headers) };
+}
+
+const PROP_NAME = /^[a-zA-Z0-9_.-]{1,64}$/;
+/**
+ * An MCP tool's inputSchema in the shape providers accept for tool parameters: a plain JSON object schema at the
+ * top level (no oneOf/anyOf/allOf there, no $schema), local $refs inlined, property names within the providers'
+ * pattern. Returns null when it cannot be made valid (the tool is then left out, so one odd tool never breaks every
+ * request).
+ */
+export function normalizeSchema(input) {
+  let s;
+  try {
+    s = JSON.parse(JSON.stringify(input && typeof input === 'object' ? input : {}));
+  } catch {
+    return null; // circular or not serialisable
+  }
+  const defs = { ...(s.definitions || {}), ...(s.$defs || {}) };
+  const inline = (node, depth) => {
+    if (Array.isArray(node)) return node.map((x) => inline(x, depth));
+    if (!node || typeof node !== 'object') return node;
+    if (typeof node.$ref === 'string') {
+      const m = /^#\/(?:\$defs|definitions)\/(.+)$/.exec(node.$ref);
+      const { $ref, ...rest } = node;
+      if (!m || depth > 8 || !defs[m[1]]) return { ...rest }; // remote, unknown or too deep: an open schema
+      return inline({ ...defs[m[1]], ...rest }, depth + 1);
+    }
+    const out = {};
+    for (const [k, v] of Object.entries(node)) if (k !== '$defs' && k !== 'definitions' && k !== '$schema') out[k] = inline(v, depth);
+    return out;
+  };
+  s = inline(s, 0);
+  // Top-level combinators: merge the branches' properties into one object schema.
+  for (const key of ['allOf', 'anyOf', 'oneOf']) {
+    if (!Array.isArray(s[key])) continue;
+    const branches = s[key].filter((b) => b && typeof b === 'object');
+    s.properties = { ...Object.assign({}, ...branches.map((b) => b.properties || {})), ...(s.properties || {}) };
+    if (key === 'allOf') s.required = [...new Set([...(s.required || []), ...branches.flatMap((b) => b.required || [])])];
+    delete s[key];
+  }
+  s.type = 'object';
+  if (!s.properties || typeof s.properties !== 'object' || Array.isArray(s.properties)) s.properties = {};
+  if (Object.keys(s.properties).some((k) => !PROP_NAME.test(k))) return null;
+  if (Array.isArray(s.required)) s.required = s.required.filter((r) => r in s.properties);
+  return s;
+}
+
 class McpClient {
-  constructor({ name, cfg, scope, backend, cwd }) {
+  constructor({ name, cfg, scope, backend, cwd, onToolsChanged }) {
     this.name = name;
-    this.cfg = cfg;
+    this.source = cfg; // as written: identity for restart. this.cfg is expanded for the transport.
+    this.cfg = expandEnv(cfg);
+    this.onToolsChanged = onToolsChanged || null;
     this.scope = scope;
     this.backend = backend;
     this.cwd = cwd;
@@ -262,11 +324,15 @@ class McpClient {
   }
 
   async _start() {
+    // Drop the previous transport first: its close/exit must not mark this attempt as failed.
+    await this.transport?.close().catch(() => {});
+    this.transport = null;
     this.status = 'starting';
     this.error = null;
     const onMessage = (m) => this._onMessage(m);
     const onClose = (e) => {
-      if (this.status === 'stopped') return;
+      if (this.status === 'stopped' || this.status === 'error') return;
+      clearTimeout(this._relist);
       const tail = this.transport?.stderr?.slice(-3).join(' | ');
       this.status = 'error';
       this.error = `${e?.message || 'closed'}${tail ? ': ' + tail : ''}`;
@@ -324,7 +390,15 @@ class McpClient {
       else p.resolve(m.result);
       return;
     }
-    if (m.method === 'notifications/tools/list_changed') this.toolsChanged = true;
+    if (m.method === 'notifications/tools/list_changed') {
+      // Refresh at once (debounced), so the model sees added tools and stops seeing removed ones from its next turn.
+      this.toolsChanged = true;
+      clearTimeout(this._relist);
+      this._relist = setTimeout(() => {
+        if (this.status !== 'running') return;
+        this.listTools().then(() => this.onToolsChanged?.(), () => {});
+      }, 200);
+    }
   }
 
   request(method, params, { timeout = CALL_TIMEOUT, signal } = {}) {
@@ -369,6 +443,7 @@ class McpClient {
   async stop() {
     const was = this.status;
     this.status = 'stopped';
+    clearTimeout(this._relist);
     for (const [, p] of this.pending) p.reject(new Error('stopped'));
     this.pending.clear();
     if (was !== 'stopped') await this.transport?.close().catch(() => {});
@@ -435,7 +510,7 @@ export class McpManager {
     // Stop servers that were removed or whose config changed.
     for (const [key, c] of this.clients) {
       const w = wanted.get(key);
-      if (!w || JSON.stringify(w.cfg) !== JSON.stringify(c.cfg)) {
+      if (!w || JSON.stringify(w.cfg) !== JSON.stringify(c.source)) {
         await c.stop();
         this.clients.delete(key);
       }
@@ -460,7 +535,7 @@ export class McpManager {
       }
       if (this.closed) return; // the session stopped while we waited
       if (!c) {
-        c = new McpClient({ name: w.name, cfg: w.cfg, scope: w.scope, backend: this.backend, cwd: this.workspace });
+        c = new McpClient({ name: w.name, cfg: w.cfg, scope: w.scope, backend: this.backend, cwd: this.workspace, onToolsChanged: () => this._index() });
         this.clients.set(key, c);
       }
       starts.push(
@@ -489,19 +564,22 @@ export class McpManager {
       for (const t of c.tools) {
         let n = `mcp__${sanitize(c.name)}__${sanitize(t.name)}`;
         if (n.length > 64) n = n.slice(0, 55) + '_' + crypto.createHash('sha1').update(n).digest('hex').slice(0, 8);
-        if (!this.byTool.has(n)) this.byTool.set(n, { client: c, tool: t });
+        const schema = normalizeSchema(t.inputSchema);
+        if (!schema) {
+          this._warnOnce(`schema:${c.name}:${t.name}`, `MCP server "${c.name}": the tool "${t.name}" was left out because its parameter schema is not one the AI providers accept.`);
+          continue;
+        }
+        if (this.byTool.has(n)) {
+          this._warnOnce(`dup:${n}`, `MCP server "${c.name}": the tool "${t.name}" was left out because another server's tool has the same name (${n}). Rename one of the servers.`);
+          continue;
+        }
+        this.byTool.set(n, { client: c, tool: t, schema });
       }
     }
   }
 
   toolDefs() {
-    return [...this.byTool].map(([name, { client, tool }]) => {
-      const schema = tool.inputSchema && typeof tool.inputSchema === 'object' ? { ...tool.inputSchema } : {};
-      if (schema.type !== 'object') schema.type = 'object';
-      if (!schema.properties) schema.properties = {};
-      delete schema.$schema;
-      return { name, description: `[MCP ${client.name}] ${String(tool.description || tool.title || tool.name).slice(0, 1000)}`, input_schema: schema };
-    });
+    return [...this.byTool].map(([name, { client, tool, schema }]) => ({ name, description: `[MCP ${client.name}] ${String(tool.description || tool.title || tool.name).slice(0, 1000)}`, input_schema: schema }));
   }
 
   has(name) {

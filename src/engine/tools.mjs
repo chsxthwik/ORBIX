@@ -26,7 +26,7 @@ const BASH_BASE = 'Runs in the project folder (each call starts there again: cd 
 const bashDef = ({ windows = false, distro = '' } = {}) => ({
   name: 'bash',
   description: windows
-    ? `Run a command on Windows with cmd.exe (default) or, with shell "powershell", Windows PowerShell 5. ${BASH_BASE}`
+    ? `Run a command on Windows with cmd.exe (default) or, with shell "powershell", Windows PowerShell 5. A cmd command must be one line: join steps with && or use powershell for a multi-line script. ${BASH_BASE}`
     : `Run a command with bash${distro ? ` in WSL (${distro}); Windows drives are mounted at /mnt/<letter>/` : ''}. ${BASH_BASE}`,
   input_schema: {
     type: 'object',
@@ -110,7 +110,7 @@ function makeUndo(displayPath, before, written, encoding) {
   return { path: displayPath, before, afterHash: sha1(written), ...(encoding && encoding !== 'utf-8' ? { encoding } : {}) };
 }
 
-/** OMP-style diff text ("+12|new", "-12|old", " 12|context") with 2 lines of context; also the changed line range of the new text. */
+/** Numbered diff text ("+12|new", "-12|old", " 12|context") with 2 lines of context; also the changed line range of the new text. */
 function makeDiff(oldText, newText) {
   const a = oldText.split('\n');
   const b = newText.split('\n');
@@ -447,6 +447,8 @@ export function createTools({ backend, cwd, getSignal }) {
       let from = oldS;
       let to = newS;
       let at = occurrences(text, from);
+      // An exact match on a CRLF file still writes the new text with the file's CRLF line ends (no mixed endings).
+      if (at.length && crlf) to = toFile(newS);
       // `read` shows lines without their \r, so on a CRLF file match (and write) with CRLF line ends.
       if (!at.length && crlf && oldS.includes('\n') && !oldS.includes('\r')) {
         from = toFile(oldS);
@@ -504,6 +506,10 @@ export function createTools({ backend, cwd, getSignal }) {
       if (!command.trim()) return { text: 'command is empty.', isError: true };
       const secs = Math.min(600, Math.max(1, timeout | 0 || 120));
       const useShell = !backend.isWsl && shell === 'powershell' ? 'powershell' : backend.isWsl ? 'bash' : 'cmd';
+      // cmd.exe stops at the first line break and reports success, so the other lines would silently never run.
+      if (useShell === 'cmd' && /[\r\n]/.test(command.trim())) {
+        return { text: 'cmd runs only the first line of a multi-line command, so nothing was run. Join the steps on one line with && (stop at the first failure) or & (run all), or set shell to "powershell" to run a multi-line script.', isError: true };
+      }
       const t0 = Date.now();
       const child = backend.spawnShell(command, { cwd, ...(useShell === 'powershell' ? { shell: 'powershell' } : {}) });
       let head = '';

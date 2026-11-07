@@ -88,8 +88,8 @@ export async function readFile(backend, p) {
   } catch (e) {
     throw Object.assign(new Error(`Cannot read ${p}: ${e.code || e.message}`), { status: 404 });
   }
-  if (st.isDirectory()) throw Object.assign(new Error('Is a directory'), { status: 400 });
-  if (!st.isFile()) throw Object.assign(new Error('Not a regular file'), { status: 400 }); // a device (CON, NUL) can block a read
+  if (st.isDirectory()) throw Object.assign(new Error('That’s a folder, not a file'), { status: 400 });
+  if (!st.isFile()) throw Object.assign(new Error('That isn’t a regular file'), { status: 400 }); // a device (CON, NUL) can block a read
   const ext = path.extname(host).slice(1).toLowerCase();
   const base = { path: p, size: st.size, mtime: st.mtimeMs, ext };
   if (IMG[ext]) {
@@ -110,30 +110,82 @@ export async function readFile(backend, p) {
   }
 }
 
+// The list of a project's files is reused for a few seconds. Search runs on every keystroke; without this, each
+// query would start `git ls-files` (or walk the tree) again. A very large list is not cached, to keep memory flat.
+const FIND_TTL = 4000;
+const FIND_MAX = 8;
+const FIND_MAX_FILES = 40000;
+const findCache = new Map();
+const findPending = new Map();
+let findGen = 0;
+
+function findKey(backend, root) {
+  return `${backend.isWsl ? `wsl:${backend.distro || ''}` : 'native'}|${normalizeForUi(root, backend)}`;
+}
+
+async function listProjectFiles(backend, root) {
+  // `--cached` also lists files deleted from the work tree but still in the index; subtract those so search never
+  // offers a file that is not there to open.
+  const [r, gone] = await Promise.all([
+    git(backend, root, ['ls-files', '--cached', '--others', '--exclude-standard'], { timeout: 15000, maxBytes: 16 * 1024 * 1024 }).catch(() => null),
+    git(backend, root, ['ls-files', '--deleted'], { timeout: 15000, maxBytes: 4 * 1024 * 1024 }).catch(() => null),
+  ]);
+  if (r && r.code === 0) {
+    const removed = gone && gone.code === 0 ? new Set(gone.stdout.toString('utf8').split('\n').filter(Boolean)) : null;
+    return r.stdout.toString('utf8').split('\n').filter((f) => f && !removed?.has(f));
+  }
+  const files = [];
+  const host = backend.hostPath(normalizeForUi(root, backend));
+  const stack = [['', 0]];
+  while (stack.length && files.length < 8000) {
+    const [rel, depth] = stack.pop();
+    let ents;
+    try {
+      ents = await fs.promises.readdir(path.join(host, rel), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of ents) {
+      if (e.isDirectory()) {
+        if (!SKIP_DIRS.has(e.name) && depth < 6 && !e.name.startsWith('.')) stack.push([rel ? `${rel}/${e.name}` : e.name, depth + 1]);
+      } else files.push(rel ? `${rel}/${e.name}` : e.name);
+    }
+  }
+  return files;
+}
+
+/** Forget cached file lists. Used by tests and after a bulk change to a project. */
+export function clearFileIndex() {
+  findGen++;
+  findCache.clear();
+  findPending.clear();
+}
+
+async function cachedProjectFiles(backend, root) {
+  const key = findKey(backend, root);
+  const hit = findCache.get(key);
+  if (hit && Date.now() - hit.at < FIND_TTL) return hit.files;
+  let pending = findPending.get(key);
+  if (!pending) {
+    const gen = findGen;
+    pending = listProjectFiles(backend, root).then((files) => {
+      // The project may have been cleared while the list was being built: return it, but do not cache it.
+      if (gen === findGen && files.length <= FIND_MAX_FILES) {
+        findCache.set(key, { at: Date.now(), files });
+        if (findCache.size > FIND_MAX) findCache.delete(findCache.keys().next().value);
+      }
+      return files;
+    });
+    findPending.set(key, pending);
+    pending.finally(() => findPending.get(key) === pending && findPending.delete(key)).catch(() => {});
+  }
+  return pending;
+}
+
 /** Fuzzy file search for @-mentions: prefers `git ls-files`, falls back to a bounded walk. */
 export async function findFiles(backend, root, query, limit = 40) {
   const q = (query || '').toLowerCase();
-  let files = [];
-  const r = await git(backend, root, ['ls-files', '--cached', '--others', '--exclude-standard'], { timeout: 15000, maxBytes: 16 * 1024 * 1024 }).catch(() => null);
-  if (r && r.code === 0) files = r.stdout.toString('utf8').split('\n').filter(Boolean);
-  else {
-    const host = backend.hostPath(normalizeForUi(root, backend));
-    const stack = [['', 0]];
-    while (stack.length && files.length < 8000) {
-      const [rel, depth] = stack.pop();
-      let ents;
-      try {
-        ents = await fs.promises.readdir(path.join(host, rel), { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      for (const e of ents) {
-        if (e.isDirectory()) {
-          if (!SKIP_DIRS.has(e.name) && depth < 6 && !e.name.startsWith('.')) stack.push([rel ? `${rel}/${e.name}` : e.name, depth + 1]);
-        } else files.push(rel ? `${rel}/${e.name}` : e.name);
-      }
-    }
-  }
+  const files = await cachedProjectFiles(backend, root);
   const scored = [];
   for (const f of files) {
     const lf = f.toLowerCase();

@@ -29,7 +29,7 @@ export function renderModelRoles(root, engine) {
     input.addEventListener('keydown', (e) => e.key === 'Enter' && save.click());
     return row(label, h('div', { class: 'role-ctl' }, input, save), hint);
   });
-  replace(root, h('h4', { class: 'set-sub' }, 'Models'), h('p', { class: 'set-note' }, 'Pick which model does which job. Type to search, then Save. Leave a box empty to use the model of the session. In a session, /model fast and /model plan change them for that session only.'), rows, dl);
+  replace(root, h('h4', { class: 'set-sub' }, 'Models'), h('p', { class: 'set-note' }, 'Pick which model does which job. Type to search, then Save. Leave a box empty to use the session’s model. In a session, /model fast and /model plan change them for that session only.'), rows, dl);
   api.get('/api/engine/models').then((r) => {
     replace(dl, r.models.map((m) => h('option', { value: `${m.provider}/${m.id}` }, `${m.providerName}: ${m.name}`)));
     if (r.errors?.length) toast(r.errors[0], 'info', 5000);

@@ -29,14 +29,14 @@ const { readMentions } = await import('../src/engine/context.mjs');
 after(() => fs.rmSync(TMP, { recursive: true, force: true }));
 
 describe('backend probing', () => {
-  test('parseProbe reads marked values and ignores login-shell banners', () => {
-    const out = 'Welcome to Linux!\nORBIX_HOME=/home/u\nsome motd line\nORBIX_OMP=/home/u/.local/bin/omp\nORBIX_VER=omp/18.15.0\n';
-    assert.deepEqual(parseProbe(out), { home: '/home/u', omp: '/home/u/.local/bin/omp', version: 'omp/18.15.0' });
+  test('parseProbe reads the marked HOME and ignores login-shell banners', () => {
+    const out = 'Welcome to Linux!\nORBIX_HOME=/home/u\nsome motd line\n';
+    assert.deepEqual(parseProbe(out), { home: '/home/u' });
   });
-  test('parseProbe: no omp, and a non-absolute omp path is not trusted', () => {
-    assert.deepEqual(parseProbe('ORBIX_HOME=/root\nORBIX_OMP=\n'), { home: '/root', omp: null, version: null });
-    assert.equal(parseProbe('ORBIX_HOME=/root\nORBIX_OMP=omp: not found\n').omp, null);
-    assert.deepEqual(parseProbe(''), { home: null, omp: null, version: null });
+  test('parseProbe: a missing or non-absolute HOME is not trusted', () => {
+    assert.deepEqual(parseProbe('ORBIX_HOME=\n'), { home: null });
+    assert.deepEqual(parseProbe('ORBIX_HOME=relative/dir\n'), { home: null });
+    assert.deepEqual(parseProbe(''), { home: null });
   });
   test('parseDistroList: names, default, Docker skipped, translated STATE column with spaces', () => {
     const en = '  NAME                   STATE           VERSION\r\n* Debian             Running         2\r\n  Ubuntu-22.04           Stopped         2\r\n  docker-desktop         Stopped         2\r\n';
@@ -46,35 +46,37 @@ describe('backend probing', () => {
     assert.deepEqual(parseDistroList(''), { distros: [], defaultDistro: '' });
   });
   test('update() keeps cached lookups when nothing changed and drops them when the config changes', async () => {
-    const b = new Backend({ kind: 'native', distro: '', ompPath: 'C:\\tools\\omp.exe' });
-    b._probe = { home: 'C:\\Users\\u', omp: 'C:\\tools\\omp.exe', version: 'omp/1' };
+    const b = new Backend({ kind: 'wsl', distro: 'Debian' });
+    let runs = 0;
+    b._runProbe = async () => (runs++, { home: '/home/u' });
+    b._probe = { home: '/home/u' };
     b._probeAt = Date.now();
-    b.update({ kind: 'native', distro: '', ompPath: 'C:\\tools\\omp.exe' });
-    assert.equal(await b.resolveOmp(), 'C:\\tools\\omp.exe');
-    assert.equal(await b.version(), 'omp/1');
-    b.update({ kind: 'wsl', distro: 'Ubuntu', ompPath: '' });
+    b.update({ kind: 'wsl', distro: 'Debian' });
+    assert.deepEqual(await b.probe(), { home: '/home/u' });
+    assert.equal(runs, 0, 'same config: the cached lookup is reused');
+    b.update({ kind: 'wsl', distro: 'Ubuntu' });
     assert.equal(b._probe, null);
     b.forget();
     assert.equal(b._home, null);
   });
-  test('concurrent probe() calls share one lookup', async () => {
+  test('concurrent probe() calls share one lookup, and a found HOME is cached', async () => {
     const b = new Backend({ kind: 'native' });
     let runs = 0;
     b._runProbe = async () => {
       runs++;
       await new Promise((r) => setTimeout(r, 20));
-      return { home: 'H', omp: 'X', version: 'v' };
+      return { home: 'H' };
     };
     const [a, c] = await Promise.all([b.probe(), b.probe()]);
     assert.equal(runs, 1);
     assert.equal(a, c);
     await b.probe();
-    assert.equal(runs, 1, 'a found omp is cached');
+    assert.equal(runs, 1, 'a found HOME is cached');
   });
-  test('a missing omp is looked up again only after 30 s', async () => {
-    const b = new Backend({ kind: 'native' });
+  test('an unreachable distro (no HOME) is looked up again only after 30 s', async () => {
+    const b = new Backend({ kind: 'wsl', distro: 'Gone' });
     let runs = 0;
-    b._runProbe = async () => (runs++, { home: 'H', omp: null, version: null });
+    b._runProbe = async () => (runs++, { home: null });
     await b.probe();
     await b.probe();
     assert.equal(runs, 1);
@@ -430,21 +432,5 @@ describe('links opened in the browser', () => {
   test('safeLink keeps http(s) only and percent-encodes quotes and spaces', () => {
     assert.equal(util.safeLink('https://example.com/a" "C:\\x.exe'), 'https://example.com/a%22%20%22C:/x.exe');
     for (const bad of ['file:///C:/Windows/System32/calc.exe', 'javascript:alert(1)', 'C:\\x.exe', '', null, 'http://exa mple.com/']) assert.throws(() => util.safeLink(bad), /http/, String(bad));
-  });
-});
-
-describe('OMP session delete', () => {
-  test('"<project>/.jsonl" and "..jsonl" are refused (their artifacts folder would be the project folder)', async () => {
-    const { deleteSessions } = await import('../src/sessions.mjs');
-    const root = path.join(TMP, 'omp-sessions');
-    const proj = path.join(root, 'proj');
-    fs.mkdirSync(proj, { recursive: true });
-    fs.writeFileSync(path.join(proj, 'keep.jsonl'), '{}\n');
-    const backend = { sessionsRoot: async () => root, hostPath: (p) => p };
-    for (const name of ['.jsonl', '..jsonl', ' .jsonl']) await assert.rejects(deleteSessions(backend, [path.join(proj, name)]), (e) => e.status === 400, name);
-    assert.ok(fs.existsSync(path.join(proj, 'keep.jsonl')));
-    fs.writeFileSync(path.join(proj, 'gone.jsonl'), '{}\n');
-    assert.equal(await deleteSessions(backend, [path.join(proj, 'gone.jsonl')]), 1);
-    assert.ok(fs.existsSync(path.join(proj, 'keep.jsonl')));
   });
 });

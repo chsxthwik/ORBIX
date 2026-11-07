@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- **OMP CLI support removed.** ORBIX now runs only its own agent. Gone: OMP detection, the engine switch on Home, the OMP CLI settings tab and sign-in, Fast mode, `/handoff`, and listing or deleting OMP's own conversations (they stay in `~/.omp`, untouched). Old `ompPath`, `launch` and `defaultEngine` settings are dropped on load. Project folders `.omp/AGENTS.md`, `.omp/skills` and `.omp/commands` are still read. On first run ORBIX now picks the first WSL distribution that starts, else Windows.
+- **Home is a dashboard.** What is running now, conversations this week, projects, stored transcripts, 16 weeks of activity, projects by last use and recent conversations, next to the task box. Every number is read from your real data.
 - **New look: two signals.** Graphite surfaces, orange for you (your messages, approvals, the action that starts work) and teal for the agent (anything it is doing right now). No gradients or glows.
 - **One mark everywhere.** A ring with a tilted orbit and an orange node, the orbit passing behind the ring at the top and in front at the bottom. The app, icon, favicon, README banners, social images, demo storyboard, architecture diagram and website all use it. The sidebar mark turns while the agent works.
 - **Home.** The question names the selected project, project tabs sit on the launch panel, and Model, Plan first and approval chips sit under the message box (they wrap on narrow windows). Recent shows what is working or waiting; a setup checklist hides once everything is done.

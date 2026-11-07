@@ -1,12 +1,12 @@
-// Rendering of tool calls (bash, read, edit, write, grep, todo, task, ask, …) as collapsible cards.
+// Rendering of tool calls (bash, read, write, edit, glob, grep, todo, task, web_fetch, web_search, MCP tools) as collapsible cards.
 import { h, icon, spinner, fmtDuration, fmtTokens, fmtCost, relPath, toast, copyButtonFeedback } from './dom.js';
 import { ansiFragment, hasAnsi, stripAnsi } from './ansi.js';
 import { codeBlock, renderMarkdown } from './markdown.js';
 import { highlight, langFor } from './highlight.js';
 import { rpc } from './api.js';
 
-const ICONS = { bash: 'terminal', read: 'eye', write: 'file', edit: 'pencil', ast_edit: 'pencil', grep: 'search', glob: 'search', ast_grep: 'search', find: 'search', todo: 'list', task: 'users', web_search: 'globe', web_fetch: 'globe', ask: 'question', eval: 'play', wait: 'clock', lsp: 'bolt', debug: 'bolt', browser: 'globe', checkpoint: 'layers', rewind: 'layers' };
-const OPEN_BY_DEFAULT = new Set(['edit', 'write', 'todo', 'task', 'ask', 'ast_edit']);
+const ICONS = { bash: 'terminal', read: 'eye', write: 'file', edit: 'pencil', grep: 'search', glob: 'search', todo: 'list', task: 'users', web_search: 'globe', web_fetch: 'globe' };
+const OPEN_BY_DEFAULT = new Set(['edit', 'write', 'todo', 'task']);
 
 const resultText = (res) => (res?.content || []).filter((c) => c?.type === 'text').map((c) => c.text).join('\n');
 const resultImages = (res) => (res?.content || []).filter((c) => c?.type === 'image' && c.data);
@@ -19,17 +19,6 @@ function pretty(v) {
   }
 }
 
-function argsNoIntent(a) {
-  if (!a || typeof a !== 'object') return a;
-  const { i, ...rest } = a;
-  return rest;
-}
-
-function editPath(call, res) {
-  if (res?.details?.path) return res.details.path;
-  const m = /^\[([^\]#]+)#?[0-9A-Fa-f]*\]/m.exec(call.arguments?.input || '');
-  return m ? m[1] : '';
-}
 
 export function toolSummary(call, res, ws) {
   const a = call.arguments || {};
@@ -41,8 +30,7 @@ export function toolSummary(call, res, ws) {
     case 'write':
       return rp(a.path || '');
     case 'edit':
-    case 'ast_edit':
-      return rp(editPath(call, res) || a.path || '') || a.i || '';
+      return rp(res?.details?.path || a.path || '');
     case 'grep':
       return `${a.pattern || ''}${a.path ? '  in ' + rp(a.path) : ''}`;
     case 'glob':
@@ -52,18 +40,14 @@ export function toolSummary(call, res, ws) {
     case 'web_fetch':
       return a.url || '';
     case 'task':
-      return (a.tasks || []).map((t) => t.name || t.task?.slice(0, 40)).filter(Boolean).join(', ') || a.i || '';
-    case 'ask':
-      return a.questions?.[0]?.question || '';
-    case 'eval':
-      return a.title || a.language || '';
+      return (a.tasks || []).map((t) => t.name || t.task?.slice(0, 40)).filter(Boolean).join(', ');
     case 'todo': {
-      if (a.op || !Array.isArray(a.todos)) return a.op || '';
+      if (!Array.isArray(a.todos)) return '';
       const done = a.todos.filter((x) => x.status === 'completed').length;
       return `${a.todos.length} task${a.todos.length === 1 ? '' : 's'} · ${done} done`;
     }
     default:
-      return call.intent || a.i || '';
+      return call.intent || '';
   }
 }
 
@@ -164,7 +148,7 @@ const dl = (cls, a, b, text) => h('div', { class: `dl ${cls}` }, h('span', { cla
  * Edit diff format: " 1|text" (context, old line number), "-2|old" (old number), "+2|new" (new number).
  * The new-side number of a context line after the change is shifted by the lines added minus removed.
  */
-function renderOmpDiff(text) {
+function renderNumberedDiff(text) {
   const root = h('div', { class: 'diffview' });
   let shift = 0;
   for (const raw of text.split('\n')) {
@@ -230,9 +214,6 @@ const BODY = {
   read(call, res) {
     const d = res?.details;
     const lang = langFor((call.arguments?.path || '').split('.').pop());
-    if (d?.displayContent?.text != null) {
-      return h('div', null, codeView(d.displayContent.text, lang, { startLine: d.displayContent.startLine || 1 }), d.totalLines ? h('div', { class: 'muted small' }, `${d.totalLines} lines`) : null);
-    }
     const t = resultText(res).replace(/^\[[^\]]*\]\n/, '');
     // The ORBIX agent returns numbered lines ("12<TAB>text"): show them as code with real line numbers.
     const num = /^(\d+)\t/.exec(t);
@@ -259,7 +240,7 @@ const BODY = {
   },
   edit(call, res) {
     const d = res?.details;
-    if (d?.diff) return renderOmpDiff(d.diff);
+    if (d?.diff) return renderNumberedDiff(d.diff);
     const a = call.arguments || {};
     // Not applied yet (waiting for approval, or denied): show the proposed change from the arguments.
     if (typeof a.old_string === 'string' && typeof a.new_string === 'string') {
@@ -269,11 +250,8 @@ const BODY = {
       const t = resultText(res);
       return h('div', null, root, t && res?.isError ? output(t) : null);
     }
-    const wrap = h('div');
-    if (call.arguments?.input) wrap.append(h('pre', { class: 'out cmd' }, call.arguments.input));
     const t = resultText(res);
-    if (t) wrap.append(output(t));
-    return wrap;
+    return t ? output(t) : h('div', { class: 'muted small' }, 'Editing…');
   },
   grep(call, res) {
     const t = resultText(res);
@@ -292,32 +270,13 @@ const BODY = {
     if (!agents.length && t) wrap.append(output(t));
     return wrap;
   },
-  ask(call, res) {
-    const d = res?.details;
-    const wrap = h('div', { class: 'ask' });
-    for (const q of call.arguments?.questions || []) {
-      wrap.append(h('div', { class: 'ask-q' }, q.question));
-      wrap.append(h('div', { class: 'ask-opts' }, (q.options || []).map((o) => h('span', { class: 'tag' + (d?.selectedOptions?.includes(o.label) ? ' on' : '') }, o.label))));
-    }
-    const t = resultText(res);
-    if (t) wrap.append(h('div', { class: 'muted small' }, t));
-    return wrap;
-  },
   web_search(call, res) {
     const t = resultText(res);
     return t ? h('div', { class: 'out-md' }, renderMarkdown(t)) : h('div', { class: 'muted small' }, 'Searching the web…');
   },
-  eval(call, res) {
-    const a = call.arguments || {};
-    const wrap = h('div');
-    if (a.code) wrap.append(codeView(a.code, a.language === 'py' ? 'py' : 'js', { lineNumbers: false }));
-    const t = resultText(res);
-    if (t) wrap.append(output(t));
-    return wrap;
-  },
   generic(call, res) {
     const wrap = h('div');
-    const a = argsNoIntent(call.arguments);
+    const a = call.arguments;
     if (a && Object.keys(a).length) wrap.append(codeBlock(pretty(a), 'json', { copy: false, maxHeight: '240px' }));
     const t = resultText(res);
     if (t) wrap.append(output(t));
@@ -326,8 +285,6 @@ const BODY = {
   },
 };
 BODY.glob = BODY.grep;
-BODY.ast_grep = BODY.grep;
-BODY.ast_edit = BODY.edit;
 
 export function todoList(phases) {
   const root = h('div', { class: 'todos' });
@@ -351,7 +308,7 @@ export function agentRow(a) {
   row.append(
     h('div', { class: 'agent-head' }, running ? spinner(12) : status === 'completed' || status === 'done' ? icon('check', 13, 'ok-text') : status === 'failed' || status === 'error' ? icon('x', 13, 'err-text') : icon('circle', 12), h('strong', { class: 'ell' }, p.id || a.id || 'agent'), h('span', { class: 'tag' }, p.agent || a.agent || 'task'), h('span', { class: 'muted small' }, status)),
   );
-  const task = (p.assignment || p.task || a.assignment || '').toString().replace(/^Complete assignment thoroughly:\s*/i, '');
+  const task = (p.assignment || p.task || a.assignment || '').toString();
   if (task) row.append(h('div', { class: 'agent-task' }, task.length > 240 ? task.slice(0, 240) + '…' : task));
   const meta = [];
   if (p.toolCount != null) meta.push(`${p.toolCount} tools`);
@@ -380,7 +337,7 @@ export function renderToolCard(tab, call, run, open) {
   const dur = run?.startedAt && run?.endedAt ? run.endedAt - run.startedAt : finalRes?.details?.wallTimeMs;
   const summary = toolSummary(call, result, tab.workspace);
   const exit = call.name === 'bash' ? result?.details?.exitCode : null;
-  const extra = call.name === 'edit' || call.name === 'ast_edit' ? diffStat(result?.details) : exit ? h('span', { class: 'tool-exit num', title: 'Exit code' }, `exit ${exit}`) : result?.details?.timedOut ? h('span', { class: 'tool-exit' }, 'timed out') : null;
+  const extra = call.name === 'edit' ? diffStat(result?.details) : exit ? h('span', { class: 'tool-exit num', title: 'Exit code' }, `exit ${exit}`) : result?.details?.timedOut ? h('span', { class: 'tool-exit' }, 'timed out') : null;
   const head = h(
     'button',
     { class: 'tool-head', type: 'button', 'aria-expanded': String(isOpen) },
@@ -410,7 +367,7 @@ function fillBody(body, call, result, ctx) {
   }
   body.append(el);
   const d = result?.details;
-  if (ctx.tab?.engine === 'builtin' && d?.undoable && (call.name === 'edit' || call.name === 'write')) {
+  if (ctx.tab && d?.undoable && (call.name === 'edit' || call.name === 'write')) {
     const msg = ctx.tab.results.get(call.id);
     if (d.undone || msg?.details?.undone) body.append(h('div', { class: 'muted small undo-row' }, 'Undone'));
     else {

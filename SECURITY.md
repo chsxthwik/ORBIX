@@ -9,7 +9,7 @@ ORBIX runs a local server that can start an AI agent (which can run commands and
 - The native window only shows pages from its own server; other `http(s)` links open in your default browser and nothing else is opened.
 - API keys are verified with the provider, then stored encrypted with Windows DPAPI (current user only). They are decrypted in memory once per run, never sent to the UI, never logged, and only sent to the provider you chose.
 - The ORBIX agent asks before every write, edit or command unless you switch it to automatic in Settings.
-- Deleting conversations only accepts files inside the app's (or OMP's) own sessions folder and is logged to `data/logs/server.log`. The log is capped at 1 MB (one older copy is kept); API keys, agent shell commands and MCP server arguments are never written to it.
+- Deleting conversations only accepts files inside the app's own sessions folder and is logged to `data/logs/server.log`. The log is capped at 1 MB (one older copy is kept); API keys, agent shell commands and MCP server arguments are never written to it.
 - Sign in with OpenRouter uses OpenRouter's official PKCE flow; the local callback needs a one-time state that expires after 10 minutes, checks the format of what comes back, and forgets the verifier after use.
 - `web_fetch` refuses local and private network addresses (also when hidden in IPv6 forms, and when a name resolves to one) unless you typed that host yourself or approve it.
 - MCP servers listed in a project's `.mcp.json` only start after you allow them; the question shows the whole command and its environment (secret-looking values masked). A changed config asks again.
@@ -24,4 +24,4 @@ Please report privately (do not open a public issue) by contacting the maintaine
 ## Scope notes
 
 - The agent runs with the permissions of your Windows user (and your WSL user). Review what you ask it to do.
-- Session files can contain secrets that appeared in your conversations. Treat the `data/sessions` folder (and OMP's sessions folder) as sensitive.
+- Session files can contain secrets that appeared in your conversations. Treat the `data/sessions` folder as sensitive.

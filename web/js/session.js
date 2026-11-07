@@ -2,12 +2,13 @@
 import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
-import { S, emit, textOf, sendPrompt, abort, setThinking, setFast, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
+import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
 import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval } from './dialogs.js';
 import { viewFile, reviewChanges } from './panels.js';
 import { conversationToMarkdown } from './exporter.js';
 import { Composer } from './composer.js';
+import { Timeline } from './timeline.js';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -17,7 +18,6 @@ export function sessionMenu(t, anchor, { rename, close }) {
   popMenu(anchor, [
     { label: 'Rename…', run: rename },
     ...(cmd('compact') ? [{ label: 'Compact context', hint: '/compact', run: () => sendPrompt(t, '/compact').catch(() => {}) }] : []),
-    ...(cmd('handoff') ? [{ label: 'Hand off to a new context', hint: '/handoff', run: () => sendPrompt(t, '/handoff').catch(() => {}) }] : []),
     '-',
     { label: 'Copy as Markdown', run: () => copyConversation(t) },
     { label: 'Export as HTML', run: async () => {
@@ -110,8 +110,8 @@ class LiveMarkdown {
 function errorHelp(msg) {
   const m = String(msg || '');
   if (/\b(401|403)\b|unauthori[sz]ed|invalid.{0,20}(api.?)?key|incorrect api key|authentication|no api key/i.test(m)) return { hint: 'Check the API key for this provider.', act: 'Open AI providers', run: () => emit('settings', 'engine') };
-  if (/\b429\b|rate.?limit|quota|overloaded|capacity|too many requests/i.test(m)) return { hint: 'The provider is busy or the quota is used up. Wait a moment, then retry.' };
-  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|fetch failed|network|socket hang up|timed? ?out/i.test(m)) return { hint: 'ORBIX could not reach the provider. Check the connection, or that the local model server is running.' };
+  if (/\b429\b|rate.?limit|quota|overloaded|capacity|too many requests/i.test(m)) return { hint: 'The provider is busy, or your quota is used up. Wait a moment and try again.' };
+  if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|fetch failed|network|socket hang up|timed? ?out/i.test(m)) return { hint: 'ORBIX couldn’t reach the provider. Check your internet connection, or make sure your local model server is running.' };
   if (/context|too long|maximum.{0,20}tokens|token limit/i.test(m) && /exceed|maximum|limit|too long|reduce/i.test(m)) return { hint: 'The conversation is too long for this model. Compact it with /compact, or start a new session.' };
   if (/model.{0,40}(not found|does not exist|not support|unknown|unavailable)|no such model/i.test(m)) return { hint: 'Choose another model.', act: 'Choose model', run: 'model' };
   return null;
@@ -178,9 +178,8 @@ export class TabView {
     this.scroller = h('div', { class: 'transcript', tabindex: '-1', role: 'log', 'aria-label': 'Conversation', 'aria-live': 'off' }, this.tin);
     this.jump = h('button', { class: 'jump', type: 'button', hidden: true, onclick: () => this.scrollBottom(true) }, icon('arrow-down', 14), 'Latest');
     this.queue = h('div', { class: 'queue' });
-    this.widgets = h('div', { class: 'widgets' });
     this.composer = new Composer({
-      placeholder: t.engine === 'builtin' ? 'Message ORBIX' : 'Message OMP CLI',
+      placeholder: 'Message ORBIX',
       label: 'Message',
       state: t,
       workspace: () => t.workspace,
@@ -194,14 +193,15 @@ export class TabView {
     this.sendBtn = h('button', { class: 'send', type: 'button', onclick: () => this.onSend(false, true) });
     this.modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model', onclick: () => this.pickModel() });
     this.thinkBtn = h('button', { class: 'cbtn', type: 'button', title: 'Thinking level', 'aria-haspopup': 'menu', onclick: (e) => this.pickThinking(e.currentTarget) });
-    this.planBtn = h('button', { class: 'cbtn plan', type: 'button', title: 'Plan mode: the agent only reads and proposes a plan, it changes nothing', onclick: () => this.togglePlan() });
-    this.fastBtn = h('button', { class: 'cbtn', type: 'button', title: 'Fast mode', onclick: () => setFast(t, !t.state?.fastModeEnabled).catch((er) => toast(er.message, 'error')) });
+    this.planBtn = h('button', { class: 'cbtn plan', type: 'button', title: 'Plan mode: the agent reads and proposes a plan, but changes nothing', onclick: () => this.togglePlan() });
     this.ctx = h('span', { class: 'ctx-meter' });
     this.statusLine = h('div', { class: 'c-status', 'aria-live': 'polite' });
-    this.composer.el.append(h('div', { class: 'c-row' }, iconBtn('paperclip', 'Attach images or text files', () => this.composer.openFilePicker()), this.modelBtn, this.thinkBtn, this.planBtn, this.fastBtn, h('span', { class: 'grow' }), this.ctx, this.sendBtn));
-    this.dockCol = h('div', { class: 'dock-col' }, this.widgets, this.queue, this.composer.el, this.statusLine);
-    this.root = h('div', { class: 'session-inner' }, this.scroller, h('div', { class: 'dock' }, this.jump, this.dockCol), h('div', { class: 'drop-hint', 'aria-hidden': 'true' }, icon('paperclip', 18), 'Drop images or text files to attach'));
+    this.composer.el.append(h('div', { class: 'c-row' }, iconBtn('paperclip', 'Attach images or text files', () => this.composer.openFilePicker()), this.modelBtn, this.thinkBtn, this.planBtn, h('span', { class: 'grow' }), this.ctx, this.sendBtn));
+    this.dockCol = h('div', { class: 'dock-col' }, this.queue, this.composer.el, this.statusLine);
+    this.dock = h('div', { class: 'dock' }, this.jump, this.dockCol);
+    this.root = h('div', { class: 'session-inner' }, this.scroller, this.dock, h('div', { class: 'drop-hint', 'aria-hidden': 'true' }, icon('paperclip', 18), 'Drop images or text files to attach'));
     this.root._view = this;
+    this.timeline = new Timeline(this);
     this.composer.dropZone(this.root);
 
     // Follow new output only while the reader is at the bottom; any upward scroll stops it until they return.
@@ -216,7 +216,8 @@ export class TabView {
       this.showJump(!this.stick);
     }, { passive: true });
     // A window, panel or composer resize keeps a reader who was at the bottom at the bottom.
-    new ResizeObserver(() => this.stick && this.scroller.isConnected && (this.scroller.scrollTop = this.scroller.scrollHeight)).observe(this.scroller);
+    this.scrollerRo = new ResizeObserver(() => this.stick && this.scroller.isConnected && (this.scroller.scrollTop = this.scroller.scrollHeight));
+    this.scrollerRo.observe(this.scroller);
     this.scroller.addEventListener('wheel', (e) => {
       if (e.deltaY < 0 && this.scroller.scrollHeight > this.scroller.clientHeight) {
         this.stick = false;
@@ -254,6 +255,21 @@ export class TabView {
     this.saved = { top: this.scroller.scrollTop, stick: this.stick };
   }
 
+  /** The tab is closed for good: release observers and callbacks that would keep this view and its DOM alive. */
+  destroy() {
+    this.dead = true;
+    this.renderLive?.cancel?.();
+    if (this._tq) cancelAnimationFrame(this._tq);
+    this._tq = 0;
+    if (this._sb) cancelAnimationFrame(this._sb);
+    this._sb = 0;
+    this.timeline?.destroy();
+    this.scrollerRo?.disconnect();
+    this.composer?.destroy?.();
+    if (this.tab.afterUndo) this.tab.afterUndo = null;
+    this.root._view = null;
+  }
+
   /** Back on screen: the same scroll position, or the bottom when they were following. */
   reattach() {
     const s = this.saved;
@@ -272,7 +288,7 @@ export class TabView {
     const m = t.model;
     const dead = t.dead;
     this.ta.disabled = dead;
-    this.ta.placeholder = dead ? 'This session has ended' : t.streaming ? 'Steer the agent, or Esc to stop' : t.engine === 'builtin' ? 'Message ORBIX' : 'Message OMP CLI';
+    this.ta.placeholder = dead ? 'This session has ended' : t.streaming ? 'Add guidance, or press Esc to stop' : 'Message ORBIX';
     this.composer.el.classList.toggle('busy', !!t.streaming);
     this.updateSend();
 
@@ -288,11 +304,6 @@ export class TabView {
     this.planBtn.replaceChildren(icon('map', 14), h('span', null, st?.planMode ? 'Plan mode' : 'Plan'));
     this.planBtn.classList.toggle('on', !!st?.planMode);
     this.planBtn.setAttribute('aria-pressed', String(!!st?.planMode));
-    const hasFast = st && st.fastModeEnabled !== undefined;
-    this.fastBtn.hidden = dead || !hasFast;
-    this.fastBtn.replaceChildren(icon('bolt', 14), h('span', null, 'Fast'));
-    this.fastBtn.classList.toggle('on', !!st?.fastModeEnabled);
-    this.fastBtn.setAttribute('aria-pressed', String(!!st?.fastModeEnabled));
 
     const cu = t.stats?.contextUsage;
     if (cu?.contextWindow && cu.tokens > 0 && !dead) {
@@ -339,7 +350,6 @@ export class TabView {
     if (t.streaming && t.state?.tokensPerSecond) bits.push(h('span', { class: 'num' }, `${t.state.tokensPerSecond.toFixed(0)} tok/s`));
     if (t.streaming && !bits.length && !this.approvalDlg) bits.push(h('span', null, kbd('Enter'), ' steer  ', kbd('Alt+Enter'), ' queue  ', kbd('Esc'), ' stop'));
     replace(this.statusLine, bits);
-    replace(this.widgets, [...t.widgets.values()].map((w) => h('pre', { class: 'widget' }, w.lines.join('\n'))));
   }
 
   pickModel() {
@@ -349,7 +359,7 @@ export class TabView {
       current: t.model,
       onPick: async (x) => {
         await setModel(t, x);
-        if (t.engine === 'builtin') savePrefs({ homeModel: { provider: x.provider, id: x.id, name: x.name || x.id } });
+        savePrefs({ homeModel: { provider: x.provider, id: x.id, name: x.name || x.id } });
         this.focus();
       },
     });
@@ -627,7 +637,7 @@ export class TabView {
       acts.append(copy);
     }
     if (m.stopReason === 'error' || m.stopReason === 'aborted' || this.tab.state?.features?.includes('regenerate')) {
-      const retry = h('button', { class: 'msg-act retry', type: 'button', title: 'Answer your last message again' }, icon('refresh', 13), 'Retry');
+      const retry = h('button', { class: 'msg-act retry', type: 'button', title: 'Regenerate this reply' }, icon('refresh', 13), 'Retry');
       retry.addEventListener('click', () => this.retry());
       acts.append(retry);
     }
@@ -648,7 +658,7 @@ export class TabView {
 
   byline(m) {
     const model = typeof m?.model === 'string' ? m.model : this.tab.model?.id || '';
-    return h('div', { class: 'msg-by asst-by' }, logo(14), h('span', null, this.tab.engine === 'builtin' ? 'ORBIX' : 'OMP CLI'), model ? h('span', { class: 'by-model' }, model) : null);
+    return h('div', { class: 'msg-by asst-by' }, logo(14), h('span', null, 'ORBIX'), model ? h('span', { class: 'by-model' }, model) : null);
   }
 
   errorBox(msg) {
@@ -676,7 +686,7 @@ export class TabView {
     let start = t.messages.length - 1;
     while (start >= 0 && t.messages[start].role !== 'user') start--;
     if (start < 0) return;
-    const undoable = t.engine === 'builtin';
+    const undoable = true;
     const files = new Map(); // path -> { add, del, ids }
     const read = new Set();
     const n = { search: 0, run: 0, help: 0, failed: 0 };
@@ -830,6 +840,7 @@ export class TabView {
   }
 
   _renderLive() {
+    if (this.dead) return;
     const t = this.tab;
     const live = t.live?.message;
     if (!live) {
@@ -905,10 +916,12 @@ export class TabView {
 
   /** Tool updates arrive in bursts (streamed command output): redraw each card at most once per frame. */
   updateTool(id) {
+    if (this.dead) return;
     this.toolQ.add(id);
     if (this._tq) return;
     this._tq = requestAnimationFrame(() => {
       this._tq = 0;
+      if (this.dead) return;
       const ids = [...this.toolQ];
       this.toolQ.clear();
       for (const x of ids) this._updateTool(x);
@@ -957,6 +970,7 @@ export class TabView {
     if (this._sb) return;
     this._sb = requestAnimationFrame(() => {
       this._sb = 0;
+      if (this.dead) return;
       this.scroller.scrollTop = this.scroller.scrollHeight;
       this.showJump(false);
     });
@@ -991,7 +1005,6 @@ export class TabView {
     const svg = this.sendBtn.querySelector('svg');
     if (svg && !reduced.matches) svg.animate([{ transform: 'none' }, { opacity: 0, transform: 'translateY(-14px)', offset: 0.45 }, { opacity: 0, transform: 'translateY(12px)', offset: 0.46 }, { opacity: 1, transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
     this.scrollBottom(true);
-    if (t.engine === 'omp' && p.images.length) warnBlockedImages();
     try {
       await sendPrompt(t, p.text || '(see the attached image)', { followUp, images: p.images });
     } catch {
@@ -1000,14 +1013,4 @@ export class TabView {
     }
     this.updateComposer();
   }
-}
-
-let blockChecked = false;
-function warnBlockedImages() {
-  if (blockChecked) return;
-  blockChecked = true;
-  api.get('/api/omp/config').then((j) => {
-    const blocked = j.groups.flatMap((g) => g.items).find((i) => i.key === 'images.blockImages');
-    if (blocked?.value === 'true') toast('The OMP setting images.blockImages is on, so the model will not see attached images. Change it in Settings → OMP CLI.', 'info', 9000);
-  }).catch(() => {});
 }

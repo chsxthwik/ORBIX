@@ -1,7 +1,7 @@
 // Status bar: live, measured numbers only. Agent state and turn time, tokens, cost, tool calls,
 // git branch and changes, and where commands run. (Model and context use sit in the composer.)
 import { h, $, icon, fmtTokens, fmtCost } from './dom.js';
-import { S, on, activeTab, ompInstalled } from './store.js';
+import { S, on, activeTab } from './store.js';
 import { gitState } from './panels.js';
 
 let bar;
@@ -37,7 +37,6 @@ function drawStatus() {
     right.push(h('span', { class: 'sb-item', title: `${t.workspace}\nBranch ${g.branch}${g.upstream ? ' → ' + g.upstream : ''}${n ? ` · ${n} changed file${n === 1 ? '' : 's'}` : ''}` }, icon('branch', 12), h('span', { class: 'ell' }, g.branch || 'detached'), n ? h('b', { class: 'num' }, `${n} changed`) : null), sep('sb-opt'));
   } else if (t) right.push(h('span', { class: 'sb-item sb-path', title: t.workspace }, icon('folder', 12), h('bdi', { class: 'ell' }, t.workspace)), sep('sb-opt'));
   if (where) right.push(h('span', { class: 'sb-item sb-opt', title: 'Where the agent runs commands' }, icon('terminal', 12), where));
-  if (t && ompInstalled()) right.push(sep('sb-opt'), h('span', { class: 'sb-item sb-opt' }, t.engine === 'builtin' ? 'ORBIX agent' : 'OMP CLI'));
 
   bar.replaceChildren(...left, h('span', { class: 'grow' }), ...right);
   clearInterval(ticker);

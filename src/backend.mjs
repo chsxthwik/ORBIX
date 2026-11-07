@@ -1,5 +1,5 @@
-// Where commands run: inside WSL ("wsl") or natively on Windows ("native"). Used by the ORBIX agent's tools and
-// by the optional OMP CLI. Also owns all Windows <-> Linux path translation so the rest of the app stays agnostic.
+// Where commands run: inside WSL ("wsl") or natively on Windows ("native"). Used by the ORBIX agent's tools, MCP
+// servers, search and git. Also owns all Windows <-> Linux path translation so the rest of the app stays agnostic.
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
@@ -103,24 +103,14 @@ export function runProc(cmd, args, { cwd, input, timeout = 30000, env, maxBytes 
   });
 }
 
-// One WSL call finds HOME, the omp binary and its version (each wsl.exe start costs ~50-100 ms, more when the VM is cold).
-// A login shell may print banners, so every value carries a marker. $1 is an explicit omp path from Settings.
-const WSL_PROBE = [
-  'printf "ORBIX_HOME=%s\\n" "$HOME"',
-  'p="$1"; [ -n "$p" ] || p=$(command -v omp || ls "$HOME/.local/bin/omp" "$HOME/.bun/bin/omp" 2>/dev/null | head -n 1)',
-  'printf "ORBIX_OMP=%s\\n" "$p"',
-  'if [ -n "$p" ]; then printf "ORBIX_VER=%s\\n" "$("$p" --version 2>/dev/null | tail -n 1)"; fi',
-].join('; ');
+// One WSL call finds HOME and proves the distro starts (each wsl.exe start costs ~50-100 ms, more when the VM is cold).
+// A login shell may print banners, so the value carries a marker.
+const WSL_PROBE = 'printf "ORBIX_HOME=%s\\n" "$HOME"';
 
-/** Parse the WSL probe output into { home, omp, version } (missing values are null). */
+/** Parse the WSL probe output into { home } (null when missing or not an absolute Linux path). */
 export function parseProbe(text) {
-  const get = (k) => {
-    const m = new RegExp(`^${k}=(.*)$`, 'm').exec(text);
-    const v = m?.[1].trim();
-    return v || null;
-  };
-  const omp = get('ORBIX_OMP');
-  return { home: get('ORBIX_HOME'), omp: omp && omp.startsWith('/') ? omp : null, version: get('ORBIX_VER') };
+  const v = /^ORBIX_HOME=(.*)$/m.exec(text)?.[1].trim();
+  return { home: v && v.startsWith('/') ? v : null };
 }
 
 /** Parse `wsl.exe -l -v`: installed distributions (Docker's own are skipped) and the default one (marked *). */
@@ -141,27 +131,25 @@ export class Backend {
     this.update(cfg);
   }
 
-  /** Apply a backend config. Cached lookups (home, omp path, version) are kept unless something changed. */
+  /** Apply a backend config. The cached HOME lookup is kept unless something changed. */
   update(cfg) {
     const kind = cfg.kind === 'native' ? 'native' : 'wsl';
     const distro = cfg.distro || '';
-    const ompPath = cfg.ompPath || '';
-    if (kind === this.kind && distro === this.distro && ompPath === this.ompPath) return;
+    if (kind === this.kind && distro === this.distro) return;
     this.kind = kind;
     this.distro = distro;
-    this.ompPath = ompPath;
     this.forget();
   }
 
   /** Take over another Backend's config and its cached lookups (used by first-run detection). */
   adopt(other) {
-    this.update({ kind: other.kind, distro: other.distro, ompPath: other.ompPath });
+    this.update({ kind: other.kind, distro: other.distro });
     this._home = other._home;
     this._probe = other._probe;
     this._probeAt = other._probeAt;
   }
 
-  /** Drop cached lookups so the next call checks again (e.g. after OMP was installed). */
+  /** Drop cached lookups so the next call checks again (e.g. after a distro was installed or started). */
   forget() {
     this._home = null;
     this._probe = null;
@@ -189,11 +177,11 @@ export class Backend {
   }
 
   /**
-   * { home, omp, version } for this backend. A found omp is cached until the config changes or forget() is called;
-   * "not installed" is re-checked after 30 s. Concurrent callers share one lookup.
+   * { home } for this backend. A found HOME is cached until the config changes or forget() is called; an unreachable
+   * distro is re-checked after 30 s. Concurrent callers share one lookup.
    */
   probe() {
-    if (this._probe && (this._probe.omp || Date.now() - this._probeAt < 30000)) return Promise.resolve(this._probe);
+    if (this._probe && (this._probe.home || Date.now() - this._probeAt < 30000)) return Promise.resolve(this._probe);
     if (!this._probing) {
       const gen = (this._gen = (this._gen || 0) + 1);
       this._probing = this._runProbe()
@@ -214,29 +202,10 @@ export class Backend {
 
   async _runProbe() {
     if (this.isWsl) {
-      const r = await this.exec(['bash', '-lc', WSL_PROBE, 'orbix-probe', ...(this.ompPath ? [this.ompPath] : [])], { timeout: 30000 });
+      const r = await this.exec(['bash', '-lc', WSL_PROBE], { timeout: 30000 });
       return parseProbe(r.stdout.toString('utf8'));
     }
-    let omp = this.ompPath || null;
-    if (!omp) {
-      const r = await runProc('where.exe', ['omp'], { timeout: 10000 });
-      omp = (r.code === 0 && r.stdout.toString('utf8').split(/\r?\n/)[0]?.trim()) || null;
-    }
-    let version = null;
-    if (omp) {
-      const r = await this.exec([omp, '--version'], { timeout: 20000 });
-      version = r.code === 0 ? r.stdout.toString('utf8').trim().split(/\r?\n/).pop() || null : null;
-    }
-    return { home: os.homedir(), omp, version };
-  }
-
-  /** Locate the omp binary for the current backend (null when it is not installed). */
-  async resolveOmp() {
-    return (await this.probe()).omp;
-  }
-
-  async version() {
-    return (await this.probe()).version;
+    return { home: os.homedir() };
   }
 
   /** Path as the backend process sees it. */
@@ -273,13 +242,8 @@ export class Backend {
     if (this._home) return this._home;
     if (!this.isWsl) return (this._home = os.homedir());
     const { home } = await this.probe();
-    if (!home?.startsWith('/')) throw new Error(`Cannot reach WSL distro "${this.distro}". Is it installed and startable?`);
+    if (!home?.startsWith('/')) throw new Error(`Can’t reach the WSL distribution "${this.distro}". Make sure it’s installed and can start.`);
     return home;
-  }
-
-  async sessionsRoot() {
-    const home = await this.home();
-    return this.isWsl ? `${home}/.omp/agent/sessions` : path.join(home, '.omp', 'agent', 'sessions');
   }
 
   /** Build a spawn() call for running `argv` (argv[0] is a backend-side command). */
@@ -305,7 +269,9 @@ export class Backend {
     if (this.isWsl) return this.spawn(['bash', '-lc', command], { cwd, env, quiet: true });
     if (shell === 'powershell') {
       // -EncodedCommand (UTF-16LE base64) passes the script untouched: no quoting layer at all. UTF-8 output, no progress bars.
-      const script = `$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8\n${command}`;
+      // On its own, -EncodedCommand reports only 0 or 1; the epilogue passes on the exit code of the last native program
+      // that ran (pytest, npm, git, ...), or 1 when the last command failed. An explicit `exit N` in the script still wins.
+      const script = `$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8; $global:LASTEXITCODE = 0\n${command}\n$orbixOk = $?; if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE } elseif (-not $orbixOk) { exit 1 }`;
       return spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
         cwd,
         env: { ...process.env, ...env },
@@ -341,27 +307,5 @@ export class Backend {
   exec(argv, { cwd, input, timeout, maxBytes } = {}) {
     const { cmd, args, opts } = this.buildSpawn(argv, { cwd });
     return runProc(cmd, args, { cwd: opts.cwd, input, timeout, maxBytes, windowsVerbatimArguments: opts.windowsVerbatimArguments });
-  }
-
-  /**
-   * Open a visible console window running `argv` (used for CLI flows that need a real TTY,
-   * such as `omp login <provider>` for providers that ask for a secret).
-   */
-  openTerminal(argv) {
-    // A detached child on Windows gets its own console window, so no `start`/shell quoting is involved.
-    let cmd;
-    let args;
-    if (this.isWsl) {
-      const quoted = argv.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)).join(' ');
-      cmd = 'wsl.exe';
-      args = [...(this.distro ? ['-d', this.distro] : []), '-e', 'bash', '-lc', `${quoted}; echo; read -r -p 'Done. Press Enter to close this window.' _`];
-    } else {
-      cmd = process.env.ComSpec || 'cmd.exe';
-      args = ['/d', '/k', ...argv];
-    }
-    log('terminal', cmd, args.join(' '));
-    const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: false });
-    child.on('error', (e) => log('terminal launch failed', e.message));
-    child.unref();
   }
 }

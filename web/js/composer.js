@@ -449,6 +449,12 @@ export class Composer {
     } else this.ta.removeAttribute('aria-activedescendant');
   }
 
+  /** The owner is gone: drop in-flight @-search so it cannot write into a detached pop-up. */
+  destroy() {
+    clearTimeout(this.findT);
+    this.findSeq++;
+  }
+
   closePopup() {
     clearTimeout(this.findT);
     this.findSeq++;

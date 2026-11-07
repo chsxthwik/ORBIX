@@ -268,7 +268,7 @@ export function imageBlock(c) {
 
 const hasText = (t) => typeof t === 'string' && t.trim() !== ''; // whitespace-only text blocks are rejected
 
-/** OMP-shaped conversation -> Anthropic messages. Tool results are grouped into the user turn that follows the calls. */
+/** Internal conversation -> Anthropic messages. Tool results are grouped into the user turn that follows the calls. */
 export function toAnthropicMessages(messages) {
   const out = [];
   for (const m of messages) {

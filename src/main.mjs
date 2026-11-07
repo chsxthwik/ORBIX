@@ -99,7 +99,7 @@ async function main() {
   writeJson(LOCK, { port: h.port, token, pid: process.pid, started: Date.now() });
   handshake(url);
   setTimeout(() => loadCatalog(), 50);
-  h.envReady.then(() => log(`backend: ${store.data.backend.kind}${store.data.backend.distro ? ' (' + store.data.backend.distro + ')' : ''} | omp: ${h.envInfo.omp || 'NOT FOUND'} ${h.envInfo.version || ''}`));
+  h.envReady.then(() => log(`backend: ${store.data.backend.kind}${store.data.backend.distro ? ' (' + store.data.backend.distro + ')' : ''}${h.envInfo.error ? ' | ' + h.envInfo.error : ''}`));
 
   let stopping = false;
   const stop = async (code = 0) => {

@@ -45,7 +45,7 @@ export async function renderEngineSettings(root) {
       const r = await api.post('/api/engine/oauth/start');
       const started = Date.now();
       signIn = { state: r.state, url: r.url };
-      toast('Finish signing in in your browser.', 'info', 5000);
+      toast('Complete the sign-in in your browser.', 'info', 5000);
       signIn.timer = setInterval(async () => {
         if (!signIn || Date.now() - started > 10.5 * 60 * 1000) {
           stopSignIn();
@@ -111,7 +111,7 @@ export async function renderEngineSettings(root) {
     let oauthRow = null;
     if (p.oauth) {
       if (signIn) {
-        oauthRow = h('div', { class: 'pv-oauth' }, spinner(12), h('span', null, 'Finish signing in in your browser.'), h('button', { class: 'link', type: 'button', onclick: () => openLink(signIn.url) }, 'Open again'), h('button', { class: 'link', type: 'button', onclick: () => {
+        oauthRow = h('div', { class: 'pv-oauth' }, spinner(12), h('span', null, 'Complete the sign-in in your browser.'), h('button', { class: 'link', type: 'button', onclick: () => openLink(signIn.url) }, 'Open again'), h('button', { class: 'link', type: 'button', onclick: () => {
           api.post('/api/engine/oauth/cancel', { state: signIn?.state }).catch(() => {});
           stopSignIn();
           draw();
@@ -138,8 +138,9 @@ export async function renderEngineSettings(root) {
     const on = engine.providers.filter((p) => p.configured && match(p));
     const off = engine.providers.filter((p) => !p.configured && match(p));
     const kids = [];
+    // Group labels only when there are two groups; a single list needs no label (the page title says what it is).
     if (on.length) kids.push(h('div', { class: 'pv-group' }, 'Connected'), on.map(card));
-    if (off.length) kids.push(h('div', { class: 'pv-group' }, on.length ? 'Add another' : 'Providers'), off.map(card));
+    if (off.length) kids.push(on.length ? h('div', { class: 'pv-group' }, 'Add another') : '', off.map(card));
     if (!kids.length) kids.push(h('div', { class: 'empty' }, 'No provider matches.'));
     replace(list, ...kids);
   }
@@ -148,8 +149,9 @@ export async function renderEngineSettings(root) {
   view.drawRoles = () => root.isConnected && renderModelRoles(roles, engine);
   replace(root,
     roles,
-    h('h4', { class: 'set-sub' }, 'Providers'),
-    h('p', { class: 'set-note pv-intro' }, 'Keys are checked with the provider, then stored encrypted for your Windows account and sent only to that provider.'),
+    // A heading only when the Models section above is shown; on its own the list needs none.
+    engine.providers.some((p) => p.configured) ? h('h4', { class: 'set-sub' }, 'Providers') : '',
+    h('p', { class: 'set-note pv-intro' }, 'Keys are checked with the provider, stored encrypted for your Windows account, and sent only to that provider.'),
     h('div', { class: 'pv-tools' }, search),
     list);
   draw();

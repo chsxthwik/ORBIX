@@ -247,28 +247,11 @@ export function syncExtDialogs(tab) {
   };
   let body;
   let actions;
-  const title = want.method === 'open_url' ? 'Open link' : want.title || 'The agent needs your input';
+  const title = want.title || 'The agent needs your input';
   if (want.method === 'select') {
     const opts = (want.options || []).map((o) => (typeof o === 'string' ? { label: o, value: o } : { label: o.label ?? String(o.value), value: o.value ?? o.label }));
     body = h('div', { class: 'stack' }, want.message ? h('p', { class: 'prewrap' }, want.message) : null, h('div', { class: 'list', role: 'listbox' }, opts.map((o, i) => h('button', { class: 'list-it', type: 'button', role: 'option', onclick: () => answer({ value: o.value }) }, h('span', { class: 'grow' }, o.label), i < 9 ? kbd(String(i + 1)) : null))));
     actions = [btn('Cancel', () => rec.m.close())];
-  } else if (want.method === 'confirm') {
-    body = h('p', { class: 'prewrap' }, want.message || '');
-    actions = [btn('No', () => answer({ confirmed: false })), btn('Yes', () => answer({ confirmed: true }), 'primary')];
-  } else if (want.method === 'open_url') {
-    body = h('div', { class: 'stack' }, h('p', null, 'The agent wants to open this link, for example to sign in to a provider.'), h('code', { class: 'url-box' }, want.url));
-    actions = [btn('Dismiss', () => rec.m.close()), btn('Open in browser', () => {
-      api.post('/api/open-url', { url: want.url }).catch((e) => toast(e.message, 'error'));
-      answer({});
-    }, 'primary')];
-  } else {
-    const multi = want.method === 'editor';
-    const inp = multi ? h('textarea', { class: 'mono', rows: 10 }) : h('input', { type: want.secret || /key|token|password|secret/i.test(title + (want.placeholder || '')) ? 'password' : 'text', placeholder: want.placeholder || '', autocomplete: 'off', spellcheck: 'false' });
-    inp.value = want.prefill ?? want.value ?? want.text ?? '';
-    const ok = () => answer({ value: inp.value });
-    if (!multi) inp.addEventListener('keydown', (e) => e.key === 'Enter' && ok());
-    body = h('label', { class: 'field' }, want.message ? h('span', null, want.message) : null, inp);
-    actions = [btn('Cancel', () => rec.m.close()), btn('Submit', ok, 'primary')];
   }
   rec.m = modal({
     title,
@@ -297,15 +280,61 @@ export const row = (label, control, hint) => h('div', { class: 'set-row' }, h('d
 export const toggle = (val, onchange, label) => h('label', { class: 'switch' }, h('input', { type: 'checkbox', role: 'switch', checked: val ? true : null, 'aria-label': label || null, onchange: (e) => onchange(e.target.checked) }), h('i'));
 
 export function shortcutsDialog() {
-  const rows = [['Ctrl+N', 'New session'], ['Ctrl+K', 'Commands'], ['Ctrl+,', 'Settings'], ['Ctrl+B', 'Sidebar'], ['Ctrl+J', 'Side panel'], ['Ctrl+L', 'Focus the message box'], ['Alt+1…9', 'Switch session'], ['Enter', 'Send'], ['Shift+Enter', 'New line'], ['Alt+Enter', 'Queue a message while the agent works'], ['Esc', 'Stop the agent'], ['/', 'Slash commands'], ['@', 'Mention a file'], ['↑', 'Previous message (empty box)']];
+  const rows = [['Ctrl+N', 'New session'], ['Ctrl+K', 'Search conversations, files and commands'], ['Ctrl+,', 'Settings'], ['Ctrl+B', 'Sidebar'], ['Ctrl+J', 'Side panel'], ['Ctrl+L', 'Focus the message box'], ['Alt+1…9', 'Switch session'], ['Alt+↑ / Alt+↓', 'Previous / next message of yours'], ['Enter', 'Send'], ['Shift+Enter', 'New line'], ['Alt+Enter', 'Queue a message while the agent works'], ['Esc', 'Stop the agent'], ['/', 'Slash commands'], ['@', 'Mention a file'], ['↑', 'Recall your last message (when the box is empty)']];
   modal({ title: 'Keyboard shortcuts', size: 'sm', body: h('dl', { class: 'keys' }, rows.map(([k, d]) => [h('dt', null, k.split(/(?<=\S)\+(?=\S)/).map((x, i) => [i ? '+' : null, kbd(x)])), h('dd', null, d)])) });
 }
 
-export function palette(getItems) {
-  const q = h('input', { type: 'search', class: 'pal-q', placeholder: 'Type a command or search conversations', 'aria-label': 'Search commands', spellcheck: 'false', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'pal-list' });
+/**
+ * Search everything (Ctrl+K): commands, conversations, projects and, with `opts.files`, files of the open project.
+ * Items: { group, scope?, icon, label, hint?, text?, key?, run }. `scope` is one of SCOPES (default 'commands');
+ * `text` is extra searchable text (a conversation's first message). `opts.files(query)` returns a promise of items
+ * (scope 'files'); it is asked as you type, and stale answers are dropped. Tab / Shift+Tab change the scope.
+ */
+const SCOPES = [['all', 'All'], ['conversations', 'Conversations'], ['files', 'Files'], ['projects', 'Projects'], ['commands', 'Commands']];
+export function palette(getItems, opts = {}) {
+  const q = h('input', { type: 'search', class: 'pal-q', placeholder: 'Search conversations, files, projects and commands', 'aria-label': 'Search', spellcheck: 'false', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': 'pal-list' });
   const list = h('div', { class: 'list pal-list', role: 'listbox', id: 'pal-list' });
-  const foot = h('div', { class: 'pal-foot', 'aria-hidden': 'true' }, h('span', null, kbd('↑'), kbd('↓'), ' move'), h('span', null, kbd('Enter'), ' run'), h('span', null, kbd('Esc'), ' close'));
-  const m = modal({ title: 'Commands', cls: 'palette', body: h('div', null, h('div', { class: 'pal-top' }, icon('search', 16), q), list, foot), initialFocus: q });
+  const scopesEl = h('div', { class: 'pal-scopes', role: 'tablist', 'aria-label': 'Search in' });
+  const foot = h('div', { class: 'pal-foot', 'aria-hidden': 'true' }, h('span', null, kbd('↑'), kbd('↓'), ' move'), h('span', null, kbd('Tab'), ' scope'), h('span', null, kbd('Enter'), ' open'), h('span', null, kbd('Esc'), ' close'));
+  const m = modal({ title: 'Search', cls: 'palette', body: h('div', null, h('div', { class: 'pal-top' }, icon('search', 16), q), scopesEl, list, foot), initialFocus: q, onClose: () => { clearTimeout(fileTimer); fileSeq++; } });
+  let scope = 'all';
+  let files = [];
+  let fileQ = '';
+  let fileTimer = 0;
+  let fileSeq = 0;
+  let filesBusy = false;
+  const askFiles = (f) => {
+    clearTimeout(fileTimer);
+    const seq = ++fileSeq; // any answer already in flight belongs to an older query
+    if (!opts.files || f.length < 2 || !(scope === 'all' || scope === 'files')) {
+      files = [];
+      fileQ = '';
+      filesBusy = false;
+      return;
+    }
+    if (f === fileQ) {
+      filesBusy = false;
+      return;
+    }
+    filesBusy = true;
+    fileTimer = setTimeout(async () => {
+      const got = await opts.files(f).catch(() => []);
+      if (seq !== fileSeq || !list.isConnected) return; // a newer query is on its way, or the palette closed
+      files = got;
+      fileQ = f;
+      filesBusy = false;
+      draw();
+    }, 140);
+  };
+  const drawScopes = () => replace(scopesEl, SCOPES.filter(([k]) => k !== 'files' || opts.files).map(([k, l]) => h('button', { type: 'button', role: 'tab', class: 'pal-scope' + (k === scope ? ' on' : ''), 'aria-selected': String(k === scope), tabindex: '-1', onclick: () => setScope(k) }, l)));
+  const setScope = (k) => {
+    scope = k;
+    sel = 0;
+    drawScopes();
+    askFiles(q.value.trim());
+    draw();
+    q.focus();
+  };
   let items = [];
   let sel = 0;
   const mark = () => {
@@ -317,20 +346,27 @@ export function palette(getItems) {
     cur?.scrollIntoView({ block: 'nearest' });
     if (cur) q.setAttribute('aria-activedescendant', cur.id);
   };
-  const all = getItems();
+  const all = getItems().map((it) => ({ scope: 'commands', ...it }));
+  const inScope = (it) => scope === 'all' || it.scope === scope;
   const draw = () => {
     const f = q.value.trim();
-    // Ranked fuzzy match on the label (a hint or group match ranks lower); grouped only with no query.
+    const pool = [...all.filter(inScope), ...(inScope({ scope: 'files' }) ? files : [])];
+    // Ranked fuzzy match on the label; a match in the hint, group or a conversation's first message ranks lower.
+    // Results stay grouped (by best match within each group, groups in order of their best result).
     if (f) {
-      items = all.map((it) => {
+      const ranked = pool.map((it) => {
         const l = fuzzy(f, it.label);
-        const o = l ? null : fuzzy(f, `${it.hint || ''} ${it.group}`);
+        const o = l ? null : fuzzy(f, `${it.hint || ''} ${it.group}`) || (it.text && it.text.toLowerCase().includes(f.toLowerCase()) ? { score: 500 } : null);
         return l ? [l.score, it, l.hits] : o ? [o.score + 10000, it, []] : null;
-      }).filter(Boolean).sort((a, b) => a[0] - b[0]).slice(0, 60).map(([, it, hits]) => ({ ...it, hits }));
-    } else items = all.slice(0, 80);
+      }).filter(Boolean).sort((a, b) => a[0] - b[0]).slice(0, 80);
+      const order = [];
+      for (const [, it] of ranked) if (!order.includes(it.group)) order.push(it.group);
+      items = order.flatMap((g) => ranked.filter(([, it]) => it.group === g).slice(0, scope === 'all' ? 8 : 60).map(([, it, hits]) => ({ ...it, hits })));
+    } else items = pool.slice(0, 80);
     sel = Math.min(sel, Math.max(0, items.length - 1));
     let lastG = '';
-    replace(list, items.map((it, i) => [!f && it.group !== lastG ? h('div', { class: 'list-h' }, (lastG = it.group)) : null, h('button', { class: 'list-it', id: `pal-${i}`, type: 'button', tabindex: '-1', role: 'option', onclick: () => run(it), onmousemove: () => sel !== i && ((sel = i), mark()) }, it.icon ? h('span', { class: 'pal-ico' }, icon(it.icon, 14)) : null, h('span', { class: 'grow ell' }, marked(it.label, it.hits)), it.hint || f ? h('span', { class: 'pal-hint ell' }, it.hint || it.group) : null, it.key ? kbd(it.key) : null)]), !items.length ? h('div', { class: 'empty' }, 'No matches') : null);
+    const empty = scope === 'files' && f.length < 2 ? 'Type at least 2 characters to search files' : filesBusy && !items.length ? 'Searching files…' : f ? `No matches${scope === 'all' ? '' : ' in ' + SCOPES.find(([k]) => k === scope)[1].toLowerCase()}` : scope === 'files' ? 'Type at least 2 characters to search files' : 'Nothing here yet';
+    replace(list, items.map((it, i) => [it.group !== lastG ? h('div', { class: 'list-h' }, (lastG = it.group)) : null, h('button', { class: 'list-it', id: `pal-${i}`, type: 'button', tabindex: '-1', role: 'option', onclick: () => run(it), onmousemove: () => sel !== i && ((sel = i), mark()) }, it.icon ? h('span', { class: 'pal-ico' }, icon(it.icon, 14)) : null, h('span', { class: 'grow ell' }, marked(it.label, it.hits)), it.hint ? h('span', { class: 'pal-hint ell' }, it.hint) : null, it.key ? kbd(it.key) : null)]), !items.length ? h('div', { class: 'empty' }, empty) : null, filesBusy && items.length ? h('div', { class: 'pal-busy' }, 'Searching files…') : null);
     mark();
   };
   const run = (it) => {
@@ -339,12 +375,20 @@ export function palette(getItems) {
   };
   q.addEventListener('input', () => {
     sel = 0;
+    askFiles(q.value.trim());
     draw();
   });
   q.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') (e.preventDefault(), (sel = Math.min(items.length - 1, sel + 1)), mark());
     else if (e.key === 'ArrowUp') (e.preventDefault(), (sel = Math.max(0, sel - 1)), mark());
     else if (e.key === 'Enter' && items[sel]) (e.preventDefault(), run(items[sel]));
+    else if (e.key === 'Tab') {
+      e.preventDefault();
+      const ks = SCOPES.map(([k]) => k).filter((k) => k !== 'files' || opts.files);
+      setScope(ks[(ks.indexOf(scope) + (e.shiftKey ? -1 : 1) + ks.length) % ks.length]);
+    }
   });
+  if (opts.scope) scope = opts.scope;
+  drawScopes();
   draw();
 }

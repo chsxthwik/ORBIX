@@ -171,8 +171,6 @@ The agent runs with your Windows user's permissions, so review what you approve.
 | **Model roles** | Settings, AI providers, Models: a fast model for titles, summaries and helper agents, and a plan model for `/plan`. |
 | **Web search** | Settings, Tools & MCP: connect Brave Search, Tavily or your own SearXNG. The agent gets a `web_search` tool once one is set up. |
 | **Branching** | Every message of yours has a Branch button that opens a new session from that point. |
-
-If the [OMP](https://omp.sh) command-line agent is installed (in WSL or on Windows), ORBIX detects it and can run a session with it. You do not need it.
 </details>
 
 ## FAQ
@@ -202,9 +200,9 @@ Yes, with a local model server such as Ollama or LM Studio. Model lists and web 
 </details>
 
 <details>
-<summary><b>Do I need the OMP CLI or Node.js?</b></summary>
+<summary><b>Do I need to install anything else, like Node.js?</b></summary>
 <br>
-No to both. The ORBIX agent is built in and the release zip bundles Node.js. Building from source needs Node.js 20 or newer.
+No. The ORBIX agent is built in and the release zip bundles Node.js. Building from source needs Node.js 20 or newer.
 </details>
 
 ## Build from source

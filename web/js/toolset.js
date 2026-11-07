@@ -52,13 +52,13 @@ export async function renderSearchSettings(root) {
     key.hidden = sel.value === 'searxng' || !sel.value;
     url.hidden = sel.value !== 'searxng';
     key.placeholder = cur.provider === sel.value && cur.hasKey ? 'Key saved. Paste a new one to replace it.' : sel.value === 'searxng' ? 'Key (only if your server needs one)' : 'Paste your API key';
-    replace(help, svc ? [svc[2], ' ', h('button', { class: 'link', type: 'button', onclick: () => api.post('/api/open-url', { url: svc[3] }).catch((e) => toast(e.message, 'error')) }, 'Open the site')] : 'Without a service the agent has no web_search tool (it can still read a page with web_fetch).');
+    replace(help, svc ? [svc[2], ' ', h('button', { class: 'link', type: 'button', onclick: () => api.post('/api/open-url', { url: svc[3] }).catch((e) => toast(e.message, 'error')) }, 'Open the site')] : 'Without a search service, the agent can’t search the web. It can still read pages you give it.');
   };
   sel.addEventListener('change', sync);
   sync();
   replace(root,
     h('div', { class: 'mcp-head' }, h('h4', { class: 'set-sub' }, 'Web search'), cur.configured ? h('span', { class: 'tag ok' }, 'On') : h('span', { class: 'tag' }, 'Off')),
-    h('p', { class: 'set-note' }, 'Lets the agent search the web for current facts and documentation. It sends only the search words to the service you choose. It is off until you set one up; it needs no approval once on.'),
+    h('p', { class: 'set-note' }, 'Lets the agent look up current facts and documentation. Only your search words are sent to the service you choose. Once it’s set up, searches don’t need your OK.'),
     h('div', { class: 'pv-form' }, sel, url, key, save, off),
     help);
 }
@@ -79,14 +79,14 @@ export async function renderHooksSettings(root, ws) {
       note ? h('p', { class: 'muted small' }, note) : null,
       d.errors.map((e) => h('div', { class: 'callout bad prewrap' }, e)),
       d.hooks.length ? h('div', { class: 'mcp-tools' }, d.hooks.map((x) => h('div', { class: 'mcp-tool' }, h('span', { class: 'tag' }, x.event), x.matcher ? h('code', null, x.matcher) : h('span', { class: 'muted small' }, 'all'), h('code', { class: 'ell hk-cmd', title: x.command }, x.command)))) : null,
-      h('div', { class: 'card-f' }, btn(d.exists ? 'Show the file' : scope === 'user' ? 'Create & show the file' : 'Show the folder', () => api.post('/api/hooks/reveal', { scope, ws }).catch((e) => toast(e.message, 'error')))));
+      h('div', { class: 'card-f' }, btn(d.exists ? 'Show the file' : scope === 'user' ? 'Create and open the file' : 'Show the folder', () => api.post('/api/hooks/reveal', { scope, ws }).catch((e) => toast(e.message, 'error')))));
   const proj = data.project;
   replace(root,
     h('h4', { class: 'set-sub' }, 'Hooks'),
-    h('p', { class: 'set-note' }, 'A hook is a command of yours that runs at a fixed moment: before a tool runs (PreToolUse), after it (PostToolUse), when you send a message (UserPromptSubmit) or when the agent is about to finish (Stop). It gets the details as JSON on its input. Exit code 2 stops the action and tells the agent why; any other failure is only a warning. Each hook has 10 seconds. Hooks are edited as files; this list is read-only.'),
+    h('p', { class: 'set-note' }, 'A hook is your own command that runs at a set moment: before a tool runs (PreToolUse), after it runs (PostToolUse), when you send a message (UserPromptSubmit), or when the agent is about to finish (Stop). It receives the details as JSON on standard input. Exit code 2 blocks the action and tells the agent why; any other error only shows a warning. Each hook has 10 seconds to finish. Hooks live in files, so this list is read-only.'),
     h('code', { class: 'mcp-cmd' }, '{ "hooks": { "PreToolUse": [ { "matcher": "bash|edit", "command": "node check.js" } ] } }'),
     block('Your hooks', data.user, 'user'),
     proj
-      ? block('This project', proj, 'project', proj.exists ? (proj.hooks.length ? (proj.trusted ? 'You allowed these.' : 'They run only after you allow them once, the first time they would run.') : null) : 'Add .orbix/hooks.json to share hooks with everyone who works on this project. Each person is asked once before they run.')
+      ? block('This project', proj, 'project', proj.exists ? (proj.hooks.length ? (proj.trusted ? 'You allowed these.' : 'Each one asks for your OK the first time it runs.') : null) : 'Add .orbix/hooks.json to share hooks with everyone who works on this project. Each person is asked once before they run.')
       : h('p', { class: 'muted small' }, 'Open a session to see the hooks of its project (.orbix/hooks.json).'));
 }

@@ -1,7 +1,7 @@
 {
   "name": "orbix",
   "version": "3.0.0",
-  "description": "ORBIX - Unified ADE: a Windows desktop agentic development environment with its own AI agent (the OMP CLI is optional). WSL and native Windows backends.",
+  "description": "ORBIX - Unified ADE: a Windows desktop agentic development environment with its own AI agent. WSL and native Windows backends.",
   "private": true,
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
@@ -22,7 +22,6 @@
     "install:app": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install.ps1"
   },
   "keywords": [
-    "omp",
     "coding-agent",
     "desktop",
     "windows",
