@@ -1,18 +1,17 @@
 # Changelog
 
-## Unreleased
+## 3.1.0
 - **New themes and controls.** Midnight (cool dark) and Frost (cool light) join Dark and Light, with support for Windows high-contrast mode and the system's more-contrast setting. Buttons have clearer hover, pressed and disabled states, and the focus ring now follows each control's shape.
 - **Steadier ASCII orbit.** Even frame pacing, no squashing in narrow windows, and it stops cleanly when removed.
 - **README rewritten** with new logos, current screenshots of every theme, a provider grid and an architecture diagram.
 - **New Home.** One question and the task box first, with project, model, Plan first and approvals in its bottom row. Sessions that need you or are working show above it. Recent conversations, projects and this week follow, and the screen fits without scrolling on a normal window. The planet stage, big numbers and activity grid are gone.
-- **New mark and ASCII touches.** A cleaner solid logo that stays sharp at small sizes, and a new app icon. An ASCII orbit greets you on Home and reacts to your pointer and to what the agent is doing. The headline decodes into place, the task box types example tasks, spinners and the working indicator are ASCII, and empty panels have small art.
+- **New mark and ASCII touches.** A cleaner solid logo that stays sharp at small sizes, and a new app icon. The node on the sidebar mark travels its orbit while the agent works. An ASCII orbit greets you on Home and reacts to your pointer and to what the agent is doing. The headline decodes into place, the task box types example tasks, spinners and the working indicator are ASCII, and empty panels have small art.
 - **Real provider logos.** Providers now show their own marks on Home, in Settings, in the model picker and on the model button.
 - **Calmer workspace.** Sidebar has Home and Search rows. Side panel tabs show words. One tab style, sentence-case labels, and no animated background behind conversations.
 - **New Settings.** A larger sheet with a search box that jumps to any setting. Overview shows your setup at a glance; Providers is a short list where one row opens at a time; Models has its own page; Permissions uses clear choices, and Allow everything now asks you to confirm; Appearance shows theme previews.
 - **OMP CLI support removed.** ORBIX now runs only its own agent. Gone: OMP detection, the engine switch on Home, the OMP CLI settings tab and sign-in, Fast mode, `/handoff`, and listing or deleting OMP's own conversations (they stay in `~/.omp`, untouched). Old `ompPath`, `launch` and `defaultEngine` settings are dropped on load. Project folders `.omp/AGENTS.md`, `.omp/skills` and `.omp/commands` are still read. On first run ORBIX now picks the first WSL distribution that starts, else Windows.
-- **New look: two signals.** Graphite surfaces, orange for you (your messages, approvals, the action that starts work) and teal for the agent (anything it is doing right now). No gradients or glows.
-- **One mark everywhere.** A ring with a tilted orbit and an orange node, the orbit passing behind the ring at the top and in front at the bottom. The app, icon, favicon, README banners, social images, demo storyboard, architecture diagram and website all use it. The sidebar mark turns while the agent works.
-- **Sidebar.** A Running section lists sessions that are working (teal) or need you (orange). A new conversation shows under its project right away instead of "No conversations yet".
+- **New look.** Graphite surfaces with a lime accent in Dark and Light.
+- **Sidebar.** A Running section lists sessions that are working or need you. A new conversation shows under its project right away instead of "No conversations yet".
 - **Session view.** Consecutive tool steps of one reply sit evenly instead of with large gaps. A reply summary lists what the agent read, searched, ran and changed. 1 and 2 answer an approval from anywhere outside a text field.
 - **Fixes.** A tool's run time no longer includes the time it waited for your approval. Tabs shrink before the tab strip scrolls. "1 model" instead of "1 models". The status bar shows "WSL" instead of "WSL · ?" for the default distribution. Undo buttons share one icon.
 - **Install.** `tools/install.ps1` installs ORBIX to `%LOCALAPPDATA%\Programs\ORBIX` with shortcuts and an Apps entry; `Uninstall-ORBIX.ps1` removes it and keeps your chat history. `Create-Shortcuts.cmd` is gone.
