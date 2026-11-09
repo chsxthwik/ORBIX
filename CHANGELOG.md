@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- **New themes and controls.** Midnight (cool dark) and Frost (cool light) join Dark and Light, with support for Windows high-contrast mode and the system's more-contrast setting. Buttons have clearer hover, pressed and disabled states, and the focus ring now follows each control's shape.
+- **Steadier ASCII orbit.** Even frame pacing, no squashing in narrow windows, and it stops cleanly when removed.
+- **README rewritten** with new logos, current screenshots of every theme, a provider grid and an architecture diagram.
 - **New Home.** One question and the task box first, with project, model, Plan first and approvals in its bottom row. Sessions that need you or are working show above it. Recent conversations, projects and this week follow, and the screen fits without scrolling on a normal window. The planet stage, big numbers and activity grid are gone.
 - **New mark and ASCII touches.** A cleaner solid logo that stays sharp at small sizes, and a new app icon. An ASCII orbit greets you on Home and reacts to your pointer and to what the agent is doing. The headline decodes into place, the task box types example tasks, spinners and the working indicator are ASCII, and empty panels have small art.
 - **Real provider logos.** Providers now show their own marks on Home, in Settings, in the model picker and on the model button.

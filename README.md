@@ -1,229 +1,219 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/banner.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/img/banner-light.svg">
-  <img alt="ORBIX - Unified ADE" src="docs/img/banner.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/logo-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/img/logo-light.svg">
+  <img alt="ORBIX" src="docs/img/logo-light.svg" width="207" height="72">
 </picture>
 
-[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-3C3C44)](LICENSE)
-[![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0E8A7C)](#requirements)
-[![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-C2410C)](CHANGELOG.md)
-[![17 providers](https://img.shields.io/badge/AI%20providers-17-0E8A7C)](#providers)
-[![Tests: 713 passing](https://img.shields.io/badge/tests-713%20passing-1F9D55)](#build-from-source)
+**A Windows desktop app where an AI agent works on your code.**<br>
+It asks before it edits a file or runs a command, and every file change can be undone.<br>
+Bring your own API key or run a local model.
 
-[Quick start](#quick-start) | [Demo](#30-second-demo) | [Features](#features) | [How it works](#how-it-works) | [Providers](#providers) | [Safety](#safety) | [FAQ](#faq) | [Build](#build-from-source) | [Architecture](docs/ARCHITECTURE.md) | [Website](https://orbix-agent.vercel.app)
+[![Latest release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=4D6B00&labelColor=151514)](https://github.com/chsxthwik/ORBIX/releases/latest)
+[![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-4D6B00?style=flat-square&labelColor=151514)](#install)
+[![No npm dependencies](https://img.shields.io/badge/npm%20dependencies-0-4D6B00?style=flat-square&labelColor=151514)](package.json)
+[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-4D6B00?style=flat-square&labelColor=151514)](LICENSE)
+
+[Download](https://github.com/chsxthwik/ORBIX/releases/latest) · [Website](https://orbix-agent.vercel.app) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
 
 </div>
 
-ORBIX is a native Windows desktop app where an AI agent works on your code. It reads your files, edits them and runs commands. You see every step, approve every change and undo any of it. Bring your own API key or point it at a local model. The release zip carries its own Node.js, so there is nothing to install.
+<br>
 
-## 30-second demo
+<img src="docs/img/shots/approval.png" alt="ORBIX has searched and read the project, explained a login bug, and now shows a one-line diff with Allow once, Allow for this session and Deny" width="100%">
 
-<p align="center">
-  <img src="docs/img/demo.svg" alt="Storyboard: ask for a fix, ORBIX reads and searches, asks before editing, shows the diff with an Undo button, then lists the changed files" width="92%">
-  <br><sub>Illustrated storyboard of one task. Real screenshots are in the <a href="#screenshots">gallery</a>.</sub>
-</p>
+<sub>Screenshots show the current `main` branch, which is ahead of release 3.0.0. They use a sample project and a scripted local model; the tools in them really ran.</sub>
 
-## Quick start
+## Install
 
-1. **Unzip** the release anywhere. For daily use, run `tools\install.ps1` once to install to `%LOCALAPPDATA%\Programs\ORBIX` with Desktop and Start Menu shortcuts. Or double-click `bin\ORBIX.exe` (or `ORBIX.vbs`) to run it portably.
-2. Press <kbd>Ctrl</kbd>+<kbd>,</kbd>, open **AI providers**, paste an API key and press **Check & save**. You can also sign in with OpenRouter or connect a local model.
-3. **Pick a project folder** on the home dashboard, describe a task and press <kbd>Enter</kbd>.
+1. Download the zip from the [latest release](https://github.com/chsxthwik/ORBIX/releases/latest). It is about 34 MB and carries its own Node.js.
+2. Unzip it anywhere and run `bin\ORBIX.exe`. To install it with Desktop and Start Menu shortcuts instead, run:
 
-When the agent wants to edit a file or run a command, it asks: **Allow once**, **Allow for this session** or **Deny**. If something looks wrong, press <kbd>Ctrl</kbd>+<kbd>K</kbd> and choose **Diagnostics**.
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File tools\install.ps1
+   ```
 
-### Requirements
+3. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Paste an API key and press **Check & save**, sign in with OpenRouter, or connect a local model.
+4. Open a project folder, describe a task and press <kbd>Enter</kbd>.
 
-Windows 10 or 11 (x64) with the WebView2 Runtime (ships with Windows 11 and recent Windows 10 updates), and an API key or a local model server.
+You need Windows 10 or 11 (x64) and the WebView2 Runtime, which ships with Windows 11 and recent Windows 10 updates. There is no account and no subscription: you pay your provider directly, or nothing with a local model.
 
-## Features
+## How a task runs
+
+ORBIX reads and searches your project without interrupting you. When the agent wants to change a file or run a command, it stops and shows you exactly what it will do. You answer with <kbd>1</kbd> (allow once), <kbd>2</kbd> (allow for this session) or <kbd>Esc</kbd> (deny).
+
+When the reply ends, a summary lists every changed file with line counts. Each edit has **Undo this change**, and **Undo all** reverts the whole reply.
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="docs/img/icons/agent.svg" width="28" alt=""><br><b>Its own agent</b><br>Built in. Tools: read, write, edit, bash (PowerShell on Windows), glob, grep, web fetch, task list, and helper agents that research in parallel.</td>
-<td width="33%" valign="top"><img src="docs/img/icons/approve.svg" width="28" alt=""><br><b>Approvals inline</b><br>The question shows the exact file or command above the message box. <kbd>1</kbd> allow once, <kbd>2</kbd> allow for the session, <kbd>Esc</kbd> deny.</td>
-<td width="33%" valign="top"><img src="docs/img/icons/undo.svg" width="28" alt=""><br><b>Undo</b><br>Per-edit <b>Undo this change</b>, <b>Undo all</b> for a reply, and <code>/undo</code>. A summary card lists changed files with +/- counts.</td>
+<td width="50%"><img src="docs/img/shots/home.png" alt="Home screen with the task box, project and model pickers, recent conversations and projects"></td>
+<td width="50%"><img src="docs/img/shots/done.png" alt="A finished task with the applied diff, Undo this change, passing tests and a summary of the changed file"></td>
 </tr>
 <tr>
-<td width="33%" valign="top"><img src="docs/img/icons/providers.svg" width="28" alt=""><br><b>17 providers</b><br>Anthropic, OpenAI, Gemini and more, plus local Ollama and LM Studio. Model lists, prices and context sizes come from the provider.</td>
-<td width="33%" valign="top"><img src="docs/img/icons/cost.svg" width="28" alt=""><br><b>Thinking and cost</b><br>Thinking levels where the model has them. Tokens, context and cost in the status bar. Automatic retry when a provider is busy.</td>
-<td width="33%" valign="top"><img src="docs/img/icons/project.svg" width="28" alt=""><br><b>Project aware</b><br>Follows <code>AGENTS.md</code> and <code>CLAUDE.md</code>. Supports MCP servers, skills, custom slash commands and <code>@file</code> mentions.</td>
+<td><b>Start.</b> Pick a project and a model, then describe the task.</td>
+<td><b>Review.</b> The diff, the commands that ran and an undo for each change.</td>
 </tr>
 <tr>
-<td width="33%" valign="top"><img src="docs/img/icons/workspace.svg" width="28" alt=""><br><b>Workspace</b><br>Tabs for sessions, file browser and viewer, git changes with diffs (stage, unstage, discard, commit), a console and a plan panel.</td>
-<td width="33%" valign="top"><img src="docs/img/icons/windows.svg" width="28" alt=""><br><b>Windows or WSL</b><br>Run commands on Windows or inside WSL (Settings, Behavior). Projects can live on either side.</td>
-<td width="33%" valign="top"><img src="docs/img/icons/command.svg" width="28" alt=""><br><b>Command palette</b><br><kbd>Ctrl</kbd>+<kbd>K</kbd> for commands and saved chats. Light and dark themes. A notification when the agent finishes in the background.</td>
+<td><img src="docs/img/shots/palette.png" alt="Search palette covering conversations, files, projects and commands"></td>
+<td><img src="docs/img/shots/settings.png" alt="Settings open on Providers, with one connected server and a list of providers to add"></td>
+</tr>
+<tr>
+<td><b>Find anything.</b> <kbd>Ctrl</kbd>+<kbd>K</kbd> searches conversations, files, projects and commands.</td>
+<td><b>Connect a model.</b> Keys are checked with the provider before they are saved.</td>
 </tr>
 </table>
 
-## Screenshots
+## What is included
 
-<p align="center">
-  <img src="docs/img/chat-approval.png" alt="ORBIX asking for approval before editing a file" width="92%">
-</p>
-
-<details>
-<summary><b>More screenshots</b></summary>
-<br>
-<table>
-<tr>
-<td width="50%"><img src="docs/img/home.png" alt="Home screen"><br><sub><b>Home.</b> Pick a project, describe a task, press Enter.</sub></td>
-<td width="50%"><img src="docs/img/chat-done.png" alt="Finished task with diff, undo and a changed-files summary"><br><sub><b>Result.</b> Diff, Undo this change, and changed files.</sub></td>
-</tr>
-<tr>
-<td><img src="docs/img/chat-answer.png" alt="Markdown answer with a table, steps and a diff"><br><sub><b>Answers.</b> Markdown, tables, highlighted code and diffs.</sub></td>
-<td><img src="docs/img/providers.png" alt="Settings, AI providers"><br><sub><b>Providers.</b> Paste a key, or connect a local model.</sub></td>
-</tr>
-<tr>
-<td><img src="docs/img/palette.png" alt="Command palette"><br><sub><b>Command palette</b> (Ctrl+K).</sub></td>
-<td><img src="docs/img/light.png" alt="Light theme"><br><sub><b>Light theme.</b></sub></td>
-</tr>
-</table>
-<sub>Screenshots use a demo project and a local demo model server, not a real account.</sub>
-</details>
-
-## How it works
-
-```mermaid
-flowchart LR
-    You([You: describe a task]) --> Orbix[ORBIX<br/>adds tools and AGENTS.md]
-    Orbix --> Model[(Model you chose)]
-    Model -->|answer or tool call| Orbix
-    Orbix --> Kind{Tool step}
-    Kind -->|read, search| Run[Run on your PC]
-    Kind -->|edit, write, command| Ask{You approve?}
-    Ask -->|allow| Run
-    Ask -->|deny| Orbix
-    Run --> Card[Tool card in the chat<br/>diff and Undo for edits]
-    Card -->|result goes back| Model
-    Model -->|no more steps| Done([Final answer])
-```
-
-The window (`bin\ORBIX.exe`) is a small native C# program that hosts the UI (`web/`) inside WebView2. It starts a local Node.js server (`src/`) that only this window can reach. The server runs the agent, calls the provider you chose and executes tools on your machine. Conversations, settings and encrypted keys live in the `data` folder.
-
-<details>
-<summary><b>Architecture diagram</b></summary>
-<br>
-<img src="docs/img/architecture.svg" alt="ORBIX architecture: window, local server, agent, tools and providers" width="100%">
-</details>
+| Area | Details |
+| --- | --- |
+| **Agent** | Tools for `read`, `write`, `edit`, `glob`, `grep`, `bash`, `todo`, `web_fetch` and `web_search`, plus `task`, which runs read-only helper agents side by side. Plan mode only reads. `/goal` keeps working for up to 6 rounds. Older messages are summarized when the context fills up. |
+| **Models** | 17 providers, live model lists, thinking levels, and separate fast and plan models. Tokens and context show in the interface, and cost when the model's pricing is known. |
+| **Workspace** | Session tabs, and a side panel with Files, Changes (stage, unstage, discard, commit), Plan, Agents and Console. Branch from any of your messages, attach images and files, mention files with `@`, export a conversation to HTML. |
+| **Windows or WSL** | Commands, tools, MCP servers, git and hooks all run in one place: a WSL distribution, or Windows with `cmd.exe` or PowerShell. Paths are translated between the two. |
+| **Project context** | Follows `AGENTS.md` or `CLAUDE.md`, and supports MCP, skills, custom slash commands and hooks. |
 
 ## Providers
 
-Anthropic, OpenAI, Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenRouter (key or sign-in), Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, plus local **Ollama** and **LM Studio**, and a **custom server** slot for any OpenAI-compatible endpoint (vLLM, llama.cpp, a company gateway). Model lists are fetched live from each provider.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/providers-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/img/providers-light.png">
+  <img src="docs/img/providers-light.png" alt="Anthropic, OpenAI, Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenRouter, Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, Ollama, LM Studio, and a custom server for any OpenAI-compatible endpoint" width="100%">
+</picture>
 
-## Safety
+Model lists come live from each provider. Prices, context sizes and thinking support come from the [models.dev](https://models.dev) catalog, refreshed at most once a day. The custom server slot works with vLLM, llama.cpp, a company gateway or anything else that speaks the OpenAI chat API.
 
-- Read and search tools run without asking. Write, edit and command tools ask first. You can switch to "Allow everything" in Settings, Behavior.
-- Every file change can be undone per edit or for an entire reply.
-- Keys are validated with the provider, then stored encrypted for your Windows account (DPAPI). They are sent only to the provider you selected.
-- The server listens on `127.0.0.1` with a per-launch token. A strict Content-Security-Policy is served with the UI.
-- Project MCP servers (`.mcp.json`) start only after you allow them. The prompt shows the full command.
-- Web fetch refuses local and private network addresses unless you approve.
+## Security and privacy
 
-The agent runs with your Windows user permissions, so review what you approve. Details and how to report a vulnerability: [SECURITY.md](SECURITY.md).
+Approvals are a checkpoint, not a sandbox. The agent runs with your Windows user permissions, so read what you approve.
 
-## Keyboard shortcuts
-
-| Keys | What it does |
+| Action | Default |
 | --- | --- |
-| <kbd>Ctrl</kbd>+<kbd>K</kbd> | Command palette (commands and saved conversations) |
+| Reading and searching | Runs without asking |
+| `write`, `edit`, `bash` | Asks first |
+| MCP tools | Asks first, unless the server marks the tool read-only |
+| Project MCP servers and project hooks | Do not run until you approve them |
+| `web_fetch` to a local or private address | Asks first |
+| Allow everything | Off. Turning it on in Settings needs a confirmation |
+
+- **Local server:** listens only on `127.0.0.1`, behind a per-launch token held in an `HttpOnly`, `SameSite=Strict` cookie. It checks `Host` and `Origin`, and serves the UI with a strict Content Security Policy.
+- **API keys:** encrypted for your Windows account with DPAPI, sent only to the provider they belong to, and never written to the log.
+- **What goes to your provider:** your messages, tool definitions, project rules and tool results, including the contents of files the agent reads.
+- **Other network use:** the models.dev catalog, OpenRouter sign-in if you use it, and `web_fetch` and `web_search` when the agent calls them. ORBIX has no telemetry.
+- **On disk:** conversations are stored as plain text in the `data` folder and can contain anything that appeared in a chat, so treat that folder as sensitive.
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+## Architecture
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/img/architecture-light.png">
+  <img src="docs/img/architecture-light.png" alt="A native window shows the web interface and talks over HTTP and SSE to a local Node.js server. The server runs one agent loop per conversation, which calls the selected model provider and runs tools, MCP servers and hooks in WSL or on Windows. Conversations, settings and encrypted keys live in the data folder." width="100%">
+</picture>
+
+Three pieces run on one PC: a small C# window, a local Node.js server and a web interface written in plain ES modules. There is no bundler, framework or npm dependency. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools and storage.
+
+## Extending ORBIX
+
+| Feature | Where it lives |
+| --- | --- |
+| **Project rules** | `AGENTS.md`, `CLAUDE.md` or `.omp/AGENTS.md` in the project. `/init` writes a first version. |
+| **MCP servers** | Settings, Tools & MCP, or `.mcp.json` in the project. Stdio and HTTP. |
+| **Skills** | A folder with a `SKILL.md` in `.agents/skills`, `.claude/skills` or `.omp/skills`. |
+| **Slash commands** | Markdown files in `.omp/commands` or `.claude/commands`. `$ARGUMENTS` and `$1` to `$9` are filled in. |
+| **Hooks** | `hooks.json` in the data folder, or `.orbix/hooks.json` in a project. Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. Exit code 2 blocks the step and tells the model why. |
+| **Model roles** | Settings, Models: a fast model for titles, summaries and helper agents, and a plan model for `/plan`. |
+| **Web search** | Settings, Tools & MCP: Brave Search, Tavily or your own SearXNG. The `web_search` tool appears once one is set up. |
+
+<details>
+<summary><b>Keyboard shortcuts</b></summary>
+<br>
+
+| Keys | Action |
+| --- | --- |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd> | Search conversations, files, projects and commands |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | New session |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | Settings |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> | Show or hide the sidebar / side panel |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | Focus the message box |
-| <kbd>Alt</kbd>+<kbd>1</kbd>...<kbd>9</kbd> | Switch to tab 1 to 9 |
+| <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>9</kbd> | Switch to a tab |
+| <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>Alt</kbd>+<kbd>↓</kbd> | Jump to your previous / next message |
 | <kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> | Send / queue a message while the agent works |
 | <kbd>/</kbd> and <kbd>@</kbd> | Slash commands / mention a file |
-| <kbd>1</kbd> <kbd>2</kbd> <kbd>Esc</kbd> | Approval: allow once / allow for session / deny (Esc also stops the agent) |
+| <kbd>1</kbd> <kbd>2</kbd> <kbd>Esc</kbd> | Allow once / allow for this session / deny. <kbd>Esc</kbd> also stops the agent |
+
+</details>
 
 <details>
-<summary><b>Slash commands, project rules, MCP, skills and hooks</b></summary>
+<summary><b>Slash commands</b></summary>
 <br>
 
-**Slash commands**
-
-| Command | What it does |
+| Command | Action |
 | --- | --- |
-| `/plan` | Plan mode: the agent only reads and plans, it changes nothing |
+| `/plan` | Toggle plan mode: the agent only reads and plans |
 | `/undo` | Undo the file changes from the last reply |
 | `/retry` | Answer the last message again |
-| `/compact [focus]` | Summarize older messages to free up context (also automatic near the limit) |
-| `/model [provider/model]` | Show or switch the model |
+| `/compact [focus]` | Summarize older messages to free up context |
+| `/model [fast\|plan] [provider/model]` | Show or switch a model |
 | `/cost` | Tokens and cost of this session |
-| `/init` | Write an `AGENTS.md` with the project's rules |
-| `/review` | Review the uncommitted changes for bugs and risks |
-| `/commit` | Write a message for the staged changes and commit (asks first) |
-| `/branch` | Start a new session from the conversation up to a message of yours |
-| `/goal <text>` | Keep working on a goal for up to 6 rounds. Esc or `/goal stop` ends it |
-| `/memory`, `/hooks` | Show where `AGENTS.md` lives, and list the hooks that run |
-| `/mcp`, `/skills`, `/help` | List MCP servers, skills, and what the agent can do |
+| `/init [focus]` | Write an `AGENTS.md` with the project's rules |
+| `/review [focus]` | Review uncommitted changes for bugs and risks |
+| `/commit [notes]` | Write a message for the staged changes and commit |
+| `/branch` | Continue the conversation in a new tab. Files are not reverted |
+| `/goal <text>` | Keep working on a goal by itself, for up to 6 rounds |
+| `/memory`, `/hooks`, `/mcp`, `/skills`, `/help` | Show the project memory file, hooks, MCP servers, skills and help |
 
-**Project rules, MCP and skills**
-
-| Feature | Where to put it |
-| --- | --- |
-| **Project rules** | `AGENTS.md` or `CLAUDE.md` at the project root (also `.omp/AGENTS.md`). The agent follows them in every session. `/init` writes a first version. |
-| **MCP servers** | Settings, Tools & MCP, or a `.mcp.json` in the project. Project servers ask before they start. |
-| **Skills** | A folder with a `SKILL.md` in `.agents/skills`, `.claude/skills` or `.omp/skills`. The agent reads one when it fits the task. |
-| **Custom slash commands** | Markdown files in `.omp/commands` or `.claude/commands`. |
-| **Hooks** | `hooks.json` in the app's data folder, or `.orbix/hooks.json` in a project (asks once). Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. Exit code 2 blocks the step and tells the model why. |
-| **Model roles** | Settings, AI providers, Models: a fast model for titles, summaries and helper agents, and a plan model for `/plan`. |
-| **Web search** | Settings, Tools & MCP: connect Brave Search, Tavily or your own SearXNG. The agent gets a `web_search` tool once one is set up. |
-| **Branching** | Every message of yours has a Branch button that opens a new session from that point. |
 </details>
 
-## FAQ
+## Themes
 
-<details>
-<summary><b>Does ORBIX need an account or a subscription?</b></summary>
-<br>
-No. You bring your own API key or use a local model. You pay your provider directly, and the status bar shows tokens and cost when the model's pricing is known.
-</details>
+System, Dark, Light, Midnight and Frost, under Settings, Appearance.
 
-<details>
-<summary><b>Where is my data?</b></summary>
-<br>
-In the <code>data</code> folder next to the app: conversations, settings and encrypted keys. Conversations may contain secrets that appeared in your chats, so treat that folder as sensitive. Your project files are touched only when you approve an edit.
-</details>
+<table>
+<tr>
+<td width="50%"><img src="docs/img/shots/theme-dark.png" alt="Dark theme"></td>
+<td width="50%"><img src="docs/img/shots/theme-light.png" alt="Light theme"></td>
+</tr>
+<tr>
+<td><b>Dark</b></td>
+<td><b>Light</b></td>
+</tr>
+<tr>
+<td><img src="docs/img/shots/theme-midnight.png" alt="Midnight theme"></td>
+<td><img src="docs/img/shots/theme-frost.png" alt="Frost theme"></td>
+</tr>
+<tr>
+<td><b>Midnight</b></td>
+<td><b>Frost</b></td>
+</tr>
+</table>
 
-<details>
-<summary><b>What gets sent to the provider?</b></summary>
-<br>
-Your messages, the agent's tool definitions, your project rules and the results of tool steps (for example the contents of a file the agent read). Everything goes only to the provider you selected.
-</details>
+## Development
 
-<details>
-<summary><b>Can I run it fully offline?</b></summary>
-<br>
-Yes. Use a local model server such as Ollama or LM Studio. Fetching model lists and web pages needs a network connection, but everything else works offline.
-</details>
+Node.js 20 or newer. The window is compiled with the C# compiler that ships with Windows.
 
-<details>
-<summary><b>Do I need to install anything else, like Node.js?</b></summary>
-<br>
-No. The agent engine is built in and the release zip bundles Node.js. Building from source requires Node.js 20 or newer.
-</details>
-
-## Build from source
-
-```
-npm run build      # bin\ORBIX.exe (uses the C# compiler built into Windows)
-npm run package    # release\ORBIX-<version>-win-x64.zip
+```bash
+npm start          # run from source
+npm run serve      # the server only, in any browser
+npm test           # 680 tests, with no network and no API keys
 npm run doctor     # the Diagnostics checks, in the console
-npm test           # regression tests (no network, no keys)
-npm start          # run from source (Node.js 20 or newer)
+npm run build      # bin\ORBIX.exe
+npm run package    # release\ORBIX-<version>-win-x64.zip, with a checksum-verified Node.js
 ```
 
-Zero npm dependencies, no bundler, no framework. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together, [CONTRIBUTING.md](CONTRIBUTING.md) for the layout and ground rules, and [CHANGELOG.md](CHANGELOG.md) for what changed.
+```text
+host/      the native window (C#, WinForms, WebView2)
+src/       the local server: HTTP API, event stream, WSL and Windows backend
+src/engine the agent: loop, model clients, tools, MCP, hooks, sessions
+web/       the interface: plain ES modules and one stylesheet
+test/      regression tests on Node's built-in runner
+tools/     build, package, install and doctor scripts
+```
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-[FSL-1.1-MIT](LICENSE). Free to use, read, modify and distribute for any purpose except selling a competing product. Each release converts to MIT two years after its date. Third-party notices: [NOTICE.md](NOTICE.md).
-
-<div align="center">
-<br>
-<img src="assets/icon.png" alt="" width="40">
-<br>
-<sub><b>ORBIX - Unified ADE</b></sub>
-</div>
+[FSL-1.1-MIT](LICENSE): free to use, read, modify and distribute for any purpose except a competing product. Each release converts to MIT two years after its date. Third-party notices are in [NOTICE.md](NOTICE.md). Provider logos are trademarks of their owners and only identify each provider.
