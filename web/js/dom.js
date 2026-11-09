@@ -147,18 +147,19 @@ let logoN = 0;
 export function logo(size = 20, { alive = false } = {}) {
   const tier = size <= 16 ? 'tiny' : size <= 28 ? 'small' : 'large';
   const id = `lgm${++logoN}`;
-  const sw = tier === 'tiny' ? 2.3 : tier === 'small' ? 1.9 : 1.5; // orbit stroke
+  const sw = tier === 'tiny' ? 2.3 : tier === 'small' ? 1.7 : 1.0; // orbit stroke
+  const gap = tier === 'large' ? 0.5 : 0.7; // clear space between the ring and the planet, on each side
   const url = (x) => `url(#${id}${x})`;
   const box = { maskUnits: 'userSpaceOnUse', x: -2, y: -2, width: 28, height: 28 };
   const white = () => svgEl('rect', { x: -2, y: -2, width: 28, height: 28, fill: '#fff' });
   const defs = svgEl('defs', {},
     // The near half of the orbit cuts a clean gap through the planet.
-    svgEl('mask', { id: `${id}g`, ...box }, white(), svgEl('path', { d: ORBIT_FRONT, fill: 'none', stroke: '#000', 'stroke-width': sw + 1.5, 'stroke-linecap': 'round' })),
+    svgEl('mask', { id: `${id}g`, ...box }, white(), svgEl('path', { d: ORBIT_FRONT, fill: 'none', stroke: '#000', 'stroke-width': sw + gap * 2 })),
     // The far half stops short of the planet.
-    svgEl('mask', { id: `${id}b`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7.9, fill: '#000' })),
+    svgEl('mask', { id: `${id}b`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7 + gap, fill: '#000' })),
     // The node and its trail slip behind the planet on the far side only.
     svgEl('clipPath', { id: `${id}h` }, svgEl('polygon', { points: '-2,-2 26,-2 26,5.77 -2,18.23' })),
-    svgEl('mask', { id: `${id}t`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7.9, fill: '#000', 'clip-path': url('h') })));
+    svgEl('mask', { id: `${id}t`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7 + gap, fill: '#000', 'clip-path': url('h') })));
   return svgEl('svg', { class: `logo ${tier}` + (alive ? ' alive' : ''), viewBox: '-1 -1 26 26', width: size, height: size, fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
     defs,
     svgEl('path', { class: 'lg-orbit lg-back', d: ORBIT_BACK, mask: url('b'), 'stroke-width': sw }),
@@ -167,7 +168,7 @@ export function logo(size = 20, { alive = false } = {}) {
     svgEl('path', { class: 'lg-trail', d: ORBIT_FULL, pathLength: 100, mask: url('t'), 'stroke-width': sw + 0.5 }),
     // The mask sits on a group without a transform; the inner group carries the offset-path and moves.
     svgEl('g', { mask: url('t') },
-      svgEl('g', { class: 'lg-node' }, svgEl('circle', { class: 'lg-dot', cx: 0, cy: 0, r: tier === 'tiny' ? 2.8 : tier === 'small' ? 2.55 : 2.3 }))));
+      svgEl('g', { class: 'lg-node' }, svgEl('circle', { class: 'lg-dot', cx: 0, cy: 0, r: tier === 'tiny' ? 2.8 : tier === 'small' ? 2.3 : 1.7 }))));
 }
 
 export function iconBtn(name, title, onclick, cls = '') {
