@@ -12,6 +12,7 @@ import { openHelp } from './help.js';
 import { mountPanel, showTab, viewFile } from './panels.js';
 import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { openSettings as settingsDialog } from './settings.js';
+import { barHandlers, toggleZen, toggleWide, zenOn } from './workbench.js';
 
 const views = new Map();
 const sideEl = $('#sidebar');
@@ -387,6 +388,9 @@ on('prefs', (patch = {}) => {
   if (t && 'showThinking' in patch) views.get(t.id)?.renderAll();
 });
 const viewOf = (tab) => views.get(tab.id);
+barHandlers.rename = (t) => renameTab(t);
+// Focus mode only makes sense on a conversation: going Home leaves it.
+on('active', () => !activeTab() && zenOn() && toggleZen(false));
 on('tab:messages', (tab, d) => {
   const v = viewOf(tab);
   if (!v) return;
@@ -394,6 +398,7 @@ on('tab:messages', (tab, d) => {
   else if (d.type === 'remove') v.removeMsg(d.msg);
   else v.appendMsg(d.msg);
   if (d.msg?.role === 'user') drawTop();
+  v.bar.update();
 });
 on('tab:live', (tab) => viewOf(tab)?.renderLive());
 on('tab:tool', (tab, id) => viewOf(tab)?.updateTool(id));
@@ -448,6 +453,7 @@ function paletteItems() {
   ];
   if (t) {
     items.push({ group: 'View', icon: 'panel-right', label: 'Toggle side panel', key: 'Ctrl+J', run: togglePanel });
+    items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: 'Ctrl+Shift+F', run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Session', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Session', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
     for (const [k, l, ic] of [['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
     items.push({ group: 'Session', icon: 'pencil', label: 'Rename session…', run: () => renameTab(t) }, { group: 'Session', icon: 'copy', label: 'Copy conversation as Markdown', run: () => copyConversation(t) }, { group: 'Session', icon: 'x', label: 'Close session', run: () => closeWithCheck(t) });
     for (const c of t.commands) items.push({ group: 'Slash commands', icon: 'command', label: `/${c.name}`, hint: c.description, run: () => emit('insert', `/${c.name} `) });
@@ -484,7 +490,13 @@ addEventListener('keydown', (e) => {
     if (k === ',') return e.preventDefault(), settingsDialog();
     if (k === 'b') return e.preventDefault(), toggleSidebar();
     if (k === 'j') return e.preventDefault(), togglePanel();
+    if (k === 'f' && activeTab() && !document.querySelector('.scrim')) return e.preventDefault(), viewOf(activeTab())?.bar.openFind();
     if (k === 'l') return e.preventDefault(), (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus());
+  }
+  if (mod && e.shiftKey && !e.altKey && activeTab() && !document.querySelector('.scrim')) {
+    const k = e.key.toLowerCase();
+    if (k === 'f') return e.preventDefault(), toggleZen();
+    if (k === 'o') return e.preventDefault(), viewOf(activeTab())?.bar.openOutline();
   }
   // Esc anywhere outside a text field stops the agent (fields, menus and dialogs handle Esc themselves first).
   if (e.key === 'Escape' && !mod && !e.defaultPrevented && !e.target.closest?.('input, textarea, select, .scrim, .menu')) {

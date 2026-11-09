@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- **Session bar.** Every conversation has a bar on top with its state (Ready, Working with a timer, Needs your OK), its name (click to rename), and how many messages and steps it has.
+- **Find in conversation.** Ctrl+F highlights every match and steps through them with Enter and Shift+Enter.
+- **Your messages.** Ctrl+Shift+O lists the messages you sent and jumps to the one you pick.
+- **Focus mode.** Ctrl+Shift+F hides the sidebar, tabs, side panel and status bar so only the conversation is left.
+- **Wide reading column.** A button in the session bar widens the conversation for long diffs and tables.
+- **Home.** Tiles for what is running now, a card to resume the last conversation, a 26-week activity map and ready-made task buttons under the task box.
+
 ## 3.1.0
 - **New themes and controls.** Midnight (cool dark) and Frost (cool light) join Dark and Light, with support for Windows high-contrast mode and the system's more-contrast setting. Buttons have clearer hover, pressed and disabled states, and the focus ring now follows each control's shape.
 - **Steadier ASCII orbit.** Even frame pacing, no squashing in narrow windows, and it stops cleanly when removed.
