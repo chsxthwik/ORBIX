@@ -92,13 +92,14 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `main.js` | start-up, layout, sidebar, tabs, keyboard shortcuts, routing events to views |
 | `store.js` | client state and the reducer that turns session events into UI state |
 | `api.js` | HTTP calls and the SSE connection |
-| `home.js` | the Home dashboard and the new-session box |
+| `home.js` | Home: the task box, what needs you, recent conversations, projects and this week |
 | `session.js`, `tools.js`, `markdown.js`, `highlight.js`, `ansi.js` | the conversation view and how messages and tool steps render |
 | `composer.js` | the message box: attachments, history, `/` and `@` pop-ups |
 | `panels.js` | the side panel: Files, Changes (git), Todos, Agents, Console |
 | `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings |
+| `brands.js` | provider logo marks, drawn inline |
+| `ascii.js` | ASCII effects: the orbit, the decoding headline, typed examples and empty-panel art |
 | `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js`, `chrome.js` | dialogs, the status bar and notifications |
-| `glyphs.js` | the ASCII planet and glyph field behind the workspace |
 | `dom.js` | DOM helpers, icons and the logo |
 
 ## Tests

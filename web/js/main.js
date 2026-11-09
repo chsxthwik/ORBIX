@@ -8,7 +8,6 @@ import { openCleanup, confirmDeleteConversation } from './cleanup.js';
 import { openDiagnostics } from './diagnostics.js';
 import { initNotify } from './notify.js';
 import { initStatusBar } from './chrome.js';
-import { mountGlyphs, setGlyphs } from './glyphs.js';
 import { openHelp } from './help.js';
 import { mountPanel, showTab, viewFile } from './panels.js';
 import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
@@ -28,12 +27,15 @@ const narrowSide = matchMedia('(max-width: 760px)');
 const narrowPanel = matchMedia('(max-width: 1100px)');
 const overlay = { side: false, panel: false };
 
+// Every theme belongs to a mode (dark or light); the mode drives color-scheme and anything that only needs to know which.
+const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light' };
 function applyPrefs() {
   const u = S.ui;
   const root = document.documentElement;
-  const dark = u.theme === 'dark' || (u.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-  root.dataset.theme = dark ? 'dark' : 'light';
-  lsSet('look', { theme: root.dataset.theme });
+  const name = THEMES[u.theme] ? u.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; // 'system' or unknown
+  root.dataset.theme = name;
+  root.dataset.mode = THEMES[name];
+  lsSet('look', { theme: name });
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
   root.style.setProperty('--side-w', Math.min(320, Math.max(220, u.sidebarW || 264)) + 'px');
   root.style.setProperty('--panel-w', (u.panelW || 380) + 'px');
@@ -148,13 +150,16 @@ function drawSidebar() {
   if (sideEl.firstElementChild !== top) replace(sideEl, top);
   while (top.nextSibling) top.nextSibling.remove();
   sideEl.append(
-    h('button', { class: 'side-new' + (S.active ? '' : ' cur'), type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), 'New session', kbd('Ctrl+N')),
-    h('div', { class: 'side-search' }, icon('search', 14), search),
+    h('button', { class: 'side-new', type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), 'New session', kbd('Ctrl+N')),
+    h('nav', { class: 'side-nav', 'aria-label': 'Main' },
+      h('button', { class: 'side-link' + (S.active ? '' : ' cur'), type: 'button', title: 'Home', 'aria-current': S.active ? null : 'page', onclick: () => { if (S.active) setActive(null); } }, icon('layers', 15), h('span', null, 'Home')),
+      h('button', { class: 'side-link', type: 'button', title: 'Search everything (Ctrl+K)', onclick: () => openSearch() }, icon('search', 15), h('span', null, 'Search'), kbd('Ctrl+K'))),
+    h('div', { class: 'side-search' }, icon('list', 14), search),
     h('div', { class: 'side-scroll' },
       runningList(),
       h('div', { class: 'side-h' }, h('span', null, 'Projects'), iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm')),
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No matching conversations.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
-    h('div', { class: 'side-foot' }, footStatus(), iconBtn('search', 'Search everything (Ctrl+K)', () => openSearch()), iconBtn('cog', 'Settings (Ctrl+,)', () => settingsDialog())),
+    h('div', { class: 'side-foot' }, footStatus(), iconBtn('cog', 'Settings (Ctrl+,)', () => settingsDialog())),
   );
   sideEl.querySelector('.side-scroll').scrollTop = scroll;
   if (typing >= 0) {
@@ -211,7 +216,7 @@ function footStatus() {
 }
 
 function toggleTheme() {
-  savePrefs({ theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' });
+  savePrefs({ theme: document.documentElement.dataset.mode === 'dark' ? 'light' : 'dark' });
 }
 
 /** Show the home composer (optionally for one project). Open tabs stay open. */
@@ -316,15 +321,6 @@ const homeHandlers = {
   diagnostics: openDiagnostics,
 };
 const drawWelcome = () => drawHome(homeEl, homeHandlers);
-/** The workspace glyph field follows the two signals: the active session's, or on Home those of every live session. */
-function syncGlyph() {
-  const t = activeTab();
-  const scope = t ? (t.dead ? [] : [t]) : [...S.tabs.values()].filter((x) => !x.dead);
-  const wait = scope.some((x) => x.dialogs.some(isApproval));
-  const busy = scope.some((x) => x.streaming);
-  setGlyphs({ view: t ? 'session' : 'home', mode: wait ? 'wait' : busy ? 'busy' : 'idle', tab: t?.id || '' });
-}
-
 function viewFor(tab) {
   let v = views.get(tab.id);
   if (!v) {
@@ -351,7 +347,6 @@ function showActive() {
     homeEl.hidden = false;
     drawWelcome();
     syncExtDialogs(null);
-    syncGlyph();
     return;
   }
   const v = viewFor(t);
@@ -369,7 +364,6 @@ function showActive() {
   syncExtDialogs(t);
   // A pending approval takes the keyboard (1 / 2 / Esc) unless a message is half typed.
   if (!t.dead && !document.querySelector('.scrim')) v.approvalEl && !v.composer.hasContent() ? v.approvalEl.focus({ preventScroll: true }) : v.focus();
-  syncGlyph();
 }
 
 on('tabs', () => {
@@ -406,7 +400,6 @@ on('tab:tool', (tab, id) => viewOf(tab)?.updateTool(id));
 // The sidebar logo breathes while any session is working.
 const syncBusy = () => {
   document.documentElement.classList.toggle('agent-busy', [...S.tabs.values()].some((t) => t.streaming && !t.dead));
-  syncGlyph();
 };
 on('tab:state', (tab) => (viewOf(tab)?.updateComposer(), syncBusy()));
 on('tabs', syncBusy);
@@ -416,15 +409,13 @@ on('tab:status', (tab) => {
   if (tab.dead && v && !v.deadShown) v.showDead();
   drawTop();
   drawSidebar();
-  if (!activeTab()) drawWelcome(); // Continue shows working / waiting states
-  syncGlyph();
+  if (!activeTab()) drawWelcome(); // Home shows working / waiting states
 });
 on('tab:editor', (tab) => viewOf(tab)?.setText(tab.draft));
 on('tab:dialog', (tab) => {
   viewOf(tab)?.updateApproval();
   if (tab === activeTab()) syncExtDialogs(tab);
   drawSidebar(); // "needs you" in the Running list
-  syncGlyph();
   if (!activeTab()) drawWelcome();
 });
 on('insert', (text) => {
@@ -441,7 +432,7 @@ on('home', (project) => newSession(project));
 
 function paletteItems() {
   const t = activeTab();
-  const dark = document.documentElement.dataset.theme === 'dark';
+  const dark = document.documentElement.dataset.mode === 'dark';
   const items = [
     { group: 'General', icon: 'plus', label: 'New session', key: 'Ctrl+N', run: () => newSession() },
     { group: 'General', icon: 'plus', label: 'New session without saving it', run: () => newSession(undefined, { ephemeral: true }) },
@@ -557,8 +548,6 @@ async function boot() {
   drawSidebar();
   drawTop();
   drawWelcome();
-  mountGlyphs($('.main'));
-  syncGlyph();
   mountPanel($('#panel'));
   initNotify();
   initStatusBar();

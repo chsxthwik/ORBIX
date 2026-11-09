@@ -3,12 +3,13 @@ import { h, icon, toast, replace, spinner, skeleton } from './dom.js';
 import { api } from './api.js';
 import { loadEngine } from './store.js';
 import { confirmDialog } from './dialogs.js';
-import { renderModelRoles } from './models.js';
+import { brandMark } from './brands.js';
 
 const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
 
 let signIn = null; // {state, url, timer} while an OpenRouter sign-in is waiting for the browser
 let view = null; // the open settings screen, so a sign-in that finishes later updates whatever is showing now
+let openId = null; // the provider row showing its form; one at a time keeps a long list short
 const redraw = () => view?.root.isConnected && view.draw();
 
 export async function renderEngineSettings(root) {
@@ -30,7 +31,7 @@ export async function renderEngineSettings(root) {
   const refresh = async (next) => {
     if (next) engine = next;
     await loadEngine().catch(() => {});
-    if (root.isConnected) (draw(), view?.drawRoles?.());
+    if (root.isConnected) draw();
   };
   view = { root, draw: () => draw(), refresh };
 
@@ -126,11 +127,24 @@ export async function renderEngineSettings(root) {
       : null;
     const link = p.keyUrl ? h('button', { class: 'link', type: 'button', title: p.keyUrl, onclick: () => openLink(p.keyUrl) }, local ? 'Download' : 'Get a key', icon('external', 12)) : null;
 
-    return h('div', { class: `pv-card${p.configured ? ' on' : ''}`, dataset: { id: p.id } },
-      h('div', { class: 'pv-head' }, h('strong', { class: 'pv-name' }, p.name), status),
-      h('div', { class: 'pv-note' }, h('span', null, p.note || ''), link),
-      oauthRow,
-      h('div', { class: 'pv-form' }, url, key, save, remove));
+    const open = openId === p.id;
+    const toggleOpen = () => {
+      openId = open ? null : p.id;
+      draw();
+      const again = list.querySelector(`.pv-card[data-id="${CSS.escape(p.id)}"]`);
+      if (openId) again?.querySelector('.pv-oauth .btn, .pv-key, .pv-url, .pv-form .btn')?.focus({ preventScroll: true });
+      else again?.querySelector('.pv-head')?.focus({ preventScroll: true });
+    };
+    return h('div', { class: `pv-card${p.configured ? ' on' : ''}${open ? ' open' : ''}`, dataset: { id: p.id } },
+      h('button', { class: 'pv-head', type: 'button', 'aria-expanded': String(open), onclick: toggleOpen },
+        h('span', { class: 'pv-ic', 'aria-hidden': 'true' }, brandMark(p.id, 20)),
+        h('span', { class: 'pv-main' }, h('strong', { class: 'pv-name' }, p.name), h('span', { class: 'pv-sub ell' }, p.note || '')),
+        status,
+        icon(open ? 'chevron-down' : 'chevron-right', 14, 'pv-chev')),
+      open ? h('div', { class: 'pv-body' },
+        link ? h('div', { class: 'pv-note' }, link) : null,
+        oauthRow,
+        h('div', { class: 'pv-form' }, url, key, save, remove)) : null);
   }
 
   function draw() {
@@ -145,15 +159,6 @@ export async function renderEngineSettings(root) {
     replace(list, ...kids);
   }
 
-  const roles = h('div', { class: 'roles' });
-  view.drawRoles = () => root.isConnected && renderModelRoles(roles, engine);
-  replace(root,
-    roles,
-    // A heading only when the Models section above is shown; on its own the list needs none.
-    engine.providers.some((p) => p.configured) ? h('h4', { class: 'set-sub' }, 'Providers') : '',
-    h('p', { class: 'set-note pv-intro' }, 'Keys are checked with the provider, stored encrypted for your Windows account, and sent only to that provider.'),
-    h('div', { class: 'pv-tools' }, search),
-    list);
+  replace(root, h('div', { class: 'pv-tools' }, search), list);
   draw();
-  view.drawRoles();
 }
