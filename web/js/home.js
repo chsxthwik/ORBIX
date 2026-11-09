@@ -7,7 +7,7 @@ import { S, openTab, sendPrompt, tabForSession, engineReady, savePrefs, groupSes
 import { popMenu, modelPicker, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
 import { asciiOrbit, decodeText, typePlaceholder } from './ascii.js';
-import { heroFx, spotlight, stagger, armEntrance, pulseStrip, resumeCard, heatmapCard, recipes } from './workspace.js';
+import { resumeCard, heatmapCard, recipes } from './workspace.js';
 
 // The home screen is redrawn when sessions or providers change. The message box stays mounted (so typing, IME
 // composition and the caret are never interrupted); only the parts around it are redrawn.
@@ -65,10 +65,6 @@ function shell(root) {
   const keysSlot = h('div');
   const wrap = h('div', { class: 'home' }, hero, boardSlot, firstSlot, keysSlot);
   W = { wrap, orbit, hi, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
-  armEntrance();
-  stagger(hero);
-  heroFx(hero);
-  spotlight(wrap);
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -120,17 +116,14 @@ export function drawHome(root, H) {
     if (w.deckSig !== deckSig || !w.deckSlot.querySelector('.home-connect')) {
       w.deckSig = deckSig;
       const deckEl = connectDeck(H);
-      stagger(deckEl.querySelector('.pv-quick'));
       w.deckSlot.replaceChildren(deckEl);
     }
     w.under.replaceChildren();
     if (boardChanged(w, 'first', projects)) {
-      w.boardSlot.replaceChildren(history ? pulseStrip(H, projects) : '', (history && resumeCard(H)) || '', history ? board(H, projects, false) : '', history ? heatmapCard(projects) : '');
-      stagger(w.boardSlot);
+      w.boardSlot.replaceChildren((history && resumeCard(H)) || '', history ? board(H, projects, false) : '', history ? heatmapCard(projects) : '');
     }
     if (!w.firstSlot.firstChild) {
       const fr = firstRun();
-      stagger(fr.querySelector('.ws-feat'));
       w.firstSlot.replaceChildren(fr);
     }
     // The preview stops on its own when Home is not on screen.
@@ -170,7 +163,7 @@ export function drawHome(root, H) {
   const planBtn = h('button', { class: 'cbtn' + (draft.plan ? ' on' : ''), type: 'button', 'aria-pressed': String(!!draft.plan), title: 'Start in plan mode: it reads and proposes a plan, and changes nothing until you turn plan mode off', onclick: () => ((draft.plan = !draft.plan), redraw()) }, icon('map', 14), 'Plan first');
   const auto = S.engine?.approvals === 'auto';
   const apprBtn = h('button', { class: 'cbtn appr' + (auto ? ' risky' : ''), type: 'button', title: auto ? 'Approvals are off: it edits and runs commands without asking. Click to change.' : 'Edits and commands wait for your OK. Click to change.', onclick: () => H.settings('behavior') }, icon('shield', 14), auto ? 'Approvals off' : 'Asks first');
-  const go = h('button', { class: 'send start', type: 'button', title: 'Start (Enter)', 'aria-label': 'Start session', disabled: starting }, h('span', null, 'Start'), icon('send', 15));
+  const go = h('button', { class: 'send start', type: 'button', title: 'Start (Enter)', 'aria-label': 'Start session', disabled: starting }, h('span', null, 'Start'));
   box.go = go;
   box.start = async () => {
     if (starting) return; // Enter twice, or Enter and a click: one session
@@ -209,8 +202,7 @@ export function drawHome(root, H) {
 
   if (boardChanged(w, 'ready', projects)) {
     const cl = checklist(H, projects);
-    w.boardSlot.replaceChildren(cl || '', history ? pulseStrip(H, projects) : '', (history && resumeCard(H)) || '', history || projects.length ? board(H, projects, true) : '', history ? heatmapCard(projects) : '');
-    stagger(w.boardSlot);
+    w.boardSlot.replaceChildren(cl || '', (history && resumeCard(H)) || '', history || projects.length ? board(H, projects, true) : '', history ? heatmapCard(projects) : '');
   }
   const live = liveTabs();
   w.wrap.classList.toggle('is-busy', live.working.length > 0);

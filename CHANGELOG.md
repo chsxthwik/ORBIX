@@ -6,7 +6,9 @@
 - **Your messages.** Ctrl+Shift+O lists the messages you sent and jumps to the one you pick.
 - **Focus mode.** Ctrl+Shift+F hides the sidebar, tabs, side panel and status bar so only the conversation is left.
 - **Wide reading column.** A button in the session bar widens the conversation for long diffs and tables.
-- **Home.** Tiles for what is running now, a card to resume the last conversation, a 26-week activity map and ready-made task buttons under the task box.
+- **Home.** A card to resume the last conversation, a 26-week activity map and ready-made task buttons under the task box.
+- **Cleaner mark.** The ring is one continuous line around the planet with an even gap, and the orbit and node are lighter at large sizes.
+- **Sharper ASCII orbit.** The planet has a soft edge, dithered shading and a highlight, the ring is drawn as one line that passes in front of the planet, and the picture resolves out of noise when it appears.
 
 ## 3.1.0
 - **New themes and controls.** Midnight (cool dark) and Frost (cool light) join Dark and Light, with support for Windows high-contrast mode and the system's more-contrast setting. Buttons have clearer hover, pressed and disabled states, and the focus ring now follows each control's shape.
