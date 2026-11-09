@@ -3,28 +3,28 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>ORBIX - Windows app for AI coding agents</title>
-  <meta name="description" content="ORBIX is a Windows app for running AI coding agents. It shows each step, asks before it changes a file or runs a command, and can undo any edit. Works with 17 providers and local models.">
-  <meta name="theme-color" content="#0C0C0D">
+  <title>ORBIX - A Windows app where an AI agent works on your code</title>
+  <meta name="description" content="ORBIX is a Windows desktop app where an AI agent works on your code. It asks before it edits a file or runs a command, and every file change can be undone. Works with 17 providers and local models.">
+  <meta name="theme-color" content="#0A0B0D">
   <meta name="color-scheme" content="dark">
   <link rel="canonical" href="https://orbix-agent.vercel.app/">
   <link rel="icon" href="/favicon.ico" sizes="48x48">
-  <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg?v=6">
+  <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg?v=7">
   <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
   <link rel="manifest" href="/site.webmanifest">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://orbix-agent.vercel.app/">
   <meta property="og:site_name" content="ORBIX">
-  <meta property="og:title" content="ORBIX - Windows app for AI coding agents">
-  <meta property="og:description" content="Run AI coding agents on Windows. Approve every change and undo any edit.">
-  <meta property="og:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=4">
+  <meta property="og:title" content="ORBIX - A Windows app where an AI agent works on your code">
+  <meta property="og:description" content="An AI agent for your code that asks before it changes anything, and every file change can be undone.">
+  <meta property="og:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=5">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=4">
+  <meta name="twitter:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=5">
   <link rel="preload" href="assets/fonts/mona-sans-latin-standard-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="assets/css/site.css?v=17">
-  <script src="assets/js/site.js?v=12" defer></script>
+  <link rel="stylesheet" href="assets/css/site.css?v=18">
+  <script src="assets/js/site.js?v=13" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -32,9 +32,9 @@
 
   <header class="nav" id="top">
     <a class="brand" href="#top" aria-label="ORBIX, home">
-      <img src="assets/img/logo.svg?v=6" alt="" width="26" height="26">
+      <img src="assets/img/logo.svg?v=7" alt="" width="26" height="26">
       <span class="brand-name">ORBIX</span>
-      <span class="brand-tag">AI coding agents</span>
+      <span class="brand-tag">AI coding agent</span>
     </a>
     <nav aria-label="Sections" id="nav-links">
       <a href="#problem">Why</a>
@@ -53,10 +53,8 @@
 
     <section class="hero" id="hero">
       <div class="hero-sticky" id="hero-sticky">
-        <p class="eyebrow fx-up"><span class="dot" aria-hidden="true"></span>Windows app for AI coding agents</p>
-
         <h1 class="wordmark">
-          <span class="sr-only">ORBIX - Windows app for AI coding agents</span>
+          <span class="sr-only">ORBIX, a Windows app where an AI agent works on your code</span>
           <span class="wm" id="wm" aria-hidden="true">
             <svg class="wm-ring wm-ring-back" viewBox="0 0 1000 170"><path pathLength="1" d="M20 85 A480 70 0 0 1 980 85"/></svg>
             <span class="ch ch-o">O</span><span class="ch">R</span><span class="ch">B</span><span class="ch">I</span><span class="ch">X</span>
@@ -66,24 +64,23 @@
         </h1>
 
         <div class="hero-sub">
-          <p class="tagline fx-up"><span>Run AI coding agents</span> <span class="dim">without losing track of what they change.</span></p>
+          <p class="tagline fx-up">An AI agent for your code that asks before it changes anything.</p>
           <div class="cta fx-up">
             <a class="btn btn-magnet btn-dl" href="https://github.com/chsxthwik/ORBIX/releases/download/v3.1.0/ORBIX-3.1.0-win-x64.zip" rel="noopener">
               <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path d="M1 2.3 6.6 1.5v5.4H1zM7.3 1.4 15 .3v6.6H7.3zM1 7.6h5.6V13L1 12.2zM7.3 7.6H15v6.5L7.3 13z" fill="currentColor"/></svg>
-              Download for Windows<small>v3.0.0 &middot; 34 MB</small>
+              Download for Windows<small>v3.1.0, 34 MB</small>
             </a>
-            <a class="btn btn-ghost" href="#demo">See it work</a>
+            <a class="btn btn-ghost" href="#demo">Watch the demo</a>
           </div>
-          <p class="fine fx-up">Free to use &middot; Source available &middot; Windows 10 and 11</p>
+          <p class="fine fx-up">Free to use and source available, for Windows 10 and 11.</p>
         </div>
-        <p class="cue" aria-hidden="true"><span></span>scroll</p>
       </div>
     </section>
 
     <section class="stats" aria-label="ORBIX in numbers">
       <ul>
         <li><b data-count="17">17</b><span>AI providers built in</span></li>
-        <li><b data-count="689">689</b><span>automated tests passing</span></li>
+        <li><b data-count="680">680</b><span>automated tests</span></li>
         <li><b data-count="34" data-suffix=" MB">34 MB</b><span>one zip, Node.js included</span></li>
         <li><b data-count="0">0</b><span>accounts to create</span></li>
       </ul>
@@ -92,11 +89,9 @@
     <section class="problem" id="problem" aria-label="Why ORBIX exists">
       <div class="problem-track" id="problem-track">
         <div class="problem-stage" id="problem-stage">
-          <p class="kicker">The problem</p>
-
           <div class="viz">
             <div class="term term-main" id="term-main" aria-hidden="true">
-              <div class="term-bar"><i></i><i></i><i></i><span>agent &mdash; zsh</span></div>
+              <div class="term-bar"><span>Terminal</span></div>
               <div class="log"><div class="log-in" id="log"></div></div>
               <div class="flash" id="flash"><span>&#9656; wrote</span> src/auth/validate.ts <b>applied</b></div>
             </div>
@@ -111,7 +106,7 @@
             </div>
 
             <div class="cockpit" id="cockpit" aria-hidden="true">
-              <div class="ck-bar"><img src="assets/img/logo.svg?v=6" alt="" width="14" height="14"><span>ORBIX</span><i class="on">shop-api</i><i>docs</i><i>infra</i><i>mobile</i></div>
+              <div class="ck-bar"><img src="assets/img/logo.svg?v=7" alt="" width="14" height="14"><span>ORBIX</span><i class="on">shop-api</i><i>docs</i><i>infra</i><i>mobile</i></div>
               <div class="ck-body">
                 <div class="ck-side"><b>Sessions</b><i class="on">Fix login</i><i>Rate limit</i><i>Cart</i><i>Orders</i></div>
                 <div class="ck-main">
@@ -126,10 +121,10 @@
           </div>
 
           <div class="caps">
-            <h2 class="cap" data-cap="0">Agent output <em>scrolls past.</em></h2>
-            <h2 class="cap" data-cap="1">Edits land <em>before you've read them.</em></h2>
-            <h2 class="cap" data-cap="2">Six agents. <em>Six terminals.</em></h2>
-            <h2 class="cap cap-yes" data-cap="3">One window. <em>You approve. You undo.</em></h2>
+            <h2 class="cap" data-cap="0">In a terminal, agent output scrolls past faster than you can read it.</h2>
+            <h2 class="cap" data-cap="1">Edits land in your files before you have seen them.</h2>
+            <h2 class="cap" data-cap="2">Several tasks at once means watching several terminals.</h2>
+            <h2 class="cap cap-yes" data-cap="3">ORBIX keeps your sessions in one window and asks before it changes anything.</h2>
           </div>
           <ol class="dots-nav" aria-hidden="true"><li></li><li></li><li></li><li></li></ol>
         </div>
@@ -138,15 +133,14 @@
 
     <section class="demo" id="demo" aria-labelledby="demo-title">
       <div class="section-head">
-        <p class="kicker">Demo</p>
-        <h2 id="demo-title" class="split">Watch it fix a bug. Then you decide.</h2>
-        <p>Click an approval, or press <kbd>1</kbd> <kbd>2</kbd> <kbd>Esc</kbd>.</p>
+        <h2 id="demo-title">Watch the agent fix a bug and ask before it edits the file.</h2>
+        <p>Answer with the buttons, or press <kbd>1</kbd>, <kbd>2</kbd> or <kbd>Esc</kbd>.</p>
       </div>
 
       <div class="window-wrap" id="win-wrap">
         <div class="window" id="win">
           <div class="titlebar">
-            <img src="assets/img/logo.svg?v=6" alt="" width="16" height="16">
+            <img src="assets/img/logo.svg?v=7" alt="" width="16" height="16">
             <span>ORBIX</span>
             <span class="tb-tab is-on">shop-api</span>
             <span class="tb-tab">docs-site</span>
@@ -155,7 +149,7 @@
           </div>
           <div class="win-body">
             <aside class="win-side" aria-hidden="true">
-              <p class="side-label">Conversations</p>
+              <p class="side-label">shop-api</p>
               <p class="side-item is-on">Fix the login bug</p>
               <p class="side-item">Add rate limiting</p>
               <p class="side-item">Explain the cart service</p>
@@ -175,10 +169,10 @@
                 <div class="approve-btns" id="approve-btns"></div>
               </div>
               <div class="composer" aria-hidden="true">
-                <span class="composer-text">Describe a task, or type / for commands</span>
+                <span class="composer-text">Message ORBIX</span>
                 <span class="chip">claude-sonnet</span>
-                <span class="chip">thinking: medium</span>
-                <span class="chip">plan</span>
+                <span class="chip">Thinking medium</span>
+                <span class="chip">Plan</span>
                 <span class="send"></span>
               </div>
             </div>
@@ -194,36 +188,37 @@
         </div>
       </div>
       <div class="demo-foot">
-        <button class="btn btn-ghost btn-small" id="replay" type="button">&#8634; Play it again</button>
-        <p>Simulated in your browser. The real app is below.</p>
+        <button class="btn btn-ghost btn-small" id="replay" type="button">Play it again</button>
+        <p>This demo is simulated in your browser. Real screenshots are below.</p>
       </div>
     </section>
 
     <section class="gallery" id="app" aria-labelledby="app-title">
       <div class="section-head">
-        <p class="kicker">Screenshots</p>
-        <h2 id="app-title" class="split">Not a mock-up. This is ORBIX.</h2>
-        <p>Version 3.0.0 on Windows 11. Pick a screen.</p>
+        <h2 id="app-title">What the app looks like.</h2>
+        <p>These screenshots use a sample project and a scripted local model, and the tools in them really ran.</p>
       </div>
       <div class="shots" id="shots">
         <div class="shot-tabs" role="tablist" aria-label="Screens" id="shot-tabs">
-          <button type="button" role="tab" aria-selected="true" aria-controls="shot-stage" data-i="0"><b>Home</b><span>Pick a project, describe a task, choose a model.</span><i class="shot-bar"></i></button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="1" tabindex="-1"><b>Asks first</b><span>Edits and commands wait for you. <kbd>1</kbd> <kbd>2</kbd> or <kbd>Esc</kbd>.</span><i class="shot-bar"></i></button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="2" tabindex="-1"><b>Review &amp; undo</b><span>Every change as a diff, each with its own Undo.</span><i class="shot-bar"></i></button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="3" tabindex="-1"><b>Explains code</b><span>Ask about your project. Get tables, steps and code.</span><i class="shot-bar"></i></button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="4" tabindex="-1"><b>Command palette</b><span><kbd>Ctrl</kbd> <kbd>K</kbd> finds any action or chat.</span><i class="shot-bar"></i></button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="5" tabindex="-1"><b>Providers</b><span>Paste a key, check it, done. Stored encrypted.</span><i class="shot-bar"></i></button>
-          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="6" tabindex="-1"><b>Light theme</b><span>Same app, light or dark.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="true" aria-controls="shot-stage" data-i="0"><b>Home</b><span>Pick a project and a model, then describe the task.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="1" tabindex="-1"><b>Asks first</b><span>Edits and commands wait for you. Press <kbd>1</kbd>, <kbd>2</kbd> or <kbd>Esc</kbd>.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="2" tabindex="-1"><b>Review &amp; undo</b><span>Every change as a diff with its own undo, and Undo all for the whole reply.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="3" tabindex="-1"><b>Search</b><span><kbd>Ctrl</kbd> <kbd>K</kbd> searches conversations, files, projects and commands.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="4" tabindex="-1"><b>Providers</b><span>ORBIX checks a key with the provider before it saves it, encrypted.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="5" tabindex="-1"><b>Light theme</b><span>One of five themes: System, Dark, Light, Midnight and Frost.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="6" tabindex="-1"><b>Midnight theme</b><span>A cool dark theme with a blue accent.</span><i class="shot-bar"></i></button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="shot-stage" data-i="7" tabindex="-1"><b>Frost theme</b><span>A cool light theme with a blue accent.</span><i class="shot-bar"></i></button>
         </div>
         <figure class="shot-frame">
           <div class="shot-stage" id="shot-stage" role="tabpanel" aria-live="polite">
-            <img class="is-on" src="assets/img/shots/home.webp" width="1600" height="1012" alt="ORBIX home screen asking what to build in shop-api, with recent sessions and a setup checklist" decoding="async">
-            <img src="assets/img/shots/chat-approval.webp" width="1600" height="1012" alt="The agent proposes a one-line edit to src/auth.js and waits with Allow once, Allow for this session and Deny" loading="lazy" decoding="async">
-            <img src="assets/img/shots/chat-done.webp" width="1600" height="1012" alt="A finished reply: the applied diff with Undo, passing tests and a summary of files changed" loading="lazy" decoding="async">
-            <img src="assets/img/shots/chat-answer.webp" width="1600" height="1012" alt="ORBIX explains how login works with a table of files, numbered steps and a diff" loading="lazy" decoding="async">
-            <img src="assets/img/shots/palette.webp" width="1600" height="1012" alt="The command palette listing new session, settings, AI providers and diagnostics" loading="lazy" decoding="async">
-            <img src="assets/img/shots/providers.webp" width="1600" height="1012" alt="Settings, AI providers: a connected custom server and fields to add Anthropic and OpenAI keys" loading="lazy" decoding="async">
-            <img src="assets/img/shots/light.webp" width="1600" height="1012" alt="The same session in the light theme" loading="lazy" decoding="async">
+            <img class="is-on" src="assets/img/shots/home.webp" width="1600" height="1012" alt="ORBIX home screen asking What should we work on?, with the task box, project and model pickers, suggested tasks, recent conversations and projects" decoding="async">
+            <img src="assets/img/shots/approval.webp" width="1600" height="1012" alt="The agent has searched and read shop-api, explained a login bug and shows a one-line edit to src/auth.js, waiting on Allow once, Allow for this session and Deny" loading="lazy" decoding="async">
+            <img src="assets/img/shots/done.webp" width="1600" height="1012" alt="A finished task: the applied diff with Undo this change, a passing test run, and a summary of one changed file with Review and Undo all" loading="lazy" decoding="async">
+            <img src="assets/img/shots/palette.webp" width="1600" height="1012" alt="The search palette over a session, with tabs for conversations, files, projects and commands above actions such as New session and Settings" loading="lazy" decoding="async">
+            <img src="assets/img/shots/settings.webp" width="1600" height="1012" alt="Settings open on Providers, with a connected custom server and a list of providers to add, starting with Anthropic, OpenAI and Google Gemini" loading="lazy" decoding="async">
+            <img src="assets/img/shots/theme-light.webp" width="1200" height="759" alt="The finished task in the Light theme, with warm pale surfaces and a lime-green accent" loading="lazy" decoding="async">
+            <img src="assets/img/shots/theme-midnight.webp" width="1200" height="759" alt="The finished task in the Midnight theme, with dark blue surfaces and a pale blue accent" loading="lazy" decoding="async">
+            <img src="assets/img/shots/theme-frost.webp" width="1200" height="759" alt="The finished task in the Frost theme, with pale blue surfaces and a blue accent" loading="lazy" decoding="async">
           </div>
         </figure>
       </div>
@@ -231,8 +226,7 @@
 
     <section class="unified" id="unified" aria-labelledby="uni-title">
       <div class="section-head">
-        <p class="kicker">Features</p>
-        <h2 id="uni-title" class="split">Sessions, files, diffs and a console in one window.</h2>
+        <h2 id="uni-title">Sessions, files, diffs and a console in one window.</h2>
       </div>
       <div class="uni-grid">
         <div class="uni-sticky">
@@ -261,14 +255,14 @@
               <i>&gt; npm test -- auth</i><i class="a">14 passed</i>
             </div>
             <div class="map-pane p-models" data-pane="models">
-              <b>Model</b><i>17 providers</i><i>thinking: medium</i>
+              <b>Model</b><i>17 providers</i><i>Thinking medium</i>
             </div>
           </div>
         </div>
         <ol class="scenes">
           <li data-scene="agent">
             <h3>The agent, step by step</h3>
-            <p>Every read, search and edit is a card you can open. Its plan sits beside it.</p>
+            <p>Every read, search and edit is a card you can open, and its plan is in the side panel.</p>
           </li>
           <li data-scene="files">
             <h3>Browse your project</h3>
@@ -276,7 +270,7 @@
           </li>
           <li data-scene="git">
             <h3>Every change, as a diff</h3>
-            <p>Each edit has its own undo. <code>/undo</code> reverts a whole reply.</p>
+            <p>Each edit has its own undo, and <code>/undo</code> reverts a whole reply. The Changes tab can stage, discard and commit.</p>
           </li>
           <li data-scene="console">
             <h3>Commands you can watch</h3>
@@ -296,72 +290,70 @@
 
     <section class="engines" id="engines" aria-labelledby="eng-title">
       <div class="section-head">
-        <p class="kicker">Models</p>
-        <h2 id="eng-title" class="split">Bring your own model.</h2>
+        <h2 id="eng-title">Bring your own API key or run a local model.</h2>
       </div>
 
       <div class="eng-grid">
         <div class="eng-copy">
           <ul class="facts is-on" id="eng-orbix">
-            <li><b>Built in.</b> Nothing else to install.</li>
-            <li><b>17 providers.</b> Paste a key, or sign in with OpenRouter.</li>
-            <li><b>Local models too.</b> Ollama, LM Studio, any OpenAI-compatible server.</li>
-            <li><b>Keys stay yours.</b> Encrypted for your Windows account.</li>
+            <li>The agent is built in, so there is no separate tool to install.</li>
+            <li>17 providers are ready to use. Paste an API key, or sign in with OpenRouter.</li>
+            <li>Local models work through Ollama, LM Studio or any server that speaks the OpenAI chat API.</li>
+            <li>Keys are encrypted for your Windows account and sent only to the provider they belong to.</li>
           </ul>
-          <p class="eng-foot">17 built in. Paste a key or sign in with OpenRouter. Pick per session.</p>
+          <p class="eng-foot">Model lists come live from each provider. Prices and context sizes come from the models.dev catalog.</p>
         </div>
 
         <div class="orbit-stage" id="orbit">
           <svg class="orbit-track" id="orbit-track" aria-hidden="true"><ellipse/><ellipse/></svg>
-          <div class="orbit-core" aria-hidden="true"><span class="pulse"></span><span class="pulse p2"></span><img src="assets/img/logo.svg?v=6" alt="" width="64" height="64"></div>
+          <div class="orbit-core" aria-hidden="true"><img src="assets/img/logo.svg?v=7" alt="" width="64" height="64"></div>
           <ul class="orbit-list" id="orbit-list-orbix" aria-label="Built-in providers">
             <li>Anthropic</li><li>OpenAI</li><li>Google Gemini</li><li>xAI</li><li>Groq</li><li>Mistral</li>
-            <li>DeepSeek</li><li>OpenRouter</li><li>Together</li><li>Fireworks</li><li>Cerebras</li><li>Moonshot</li>
-            <li>Z.ai</li><li>Qwen</li><li>Ollama</li><li>LM Studio</li><li>Any OpenAI-compatible</li>
+            <li>DeepSeek</li><li>OpenRouter</li><li>Together AI</li><li>Fireworks AI</li><li>Cerebras</li><li>Moonshot</li>
+            <li>Z.ai</li><li>Qwen</li><li>Ollama</li><li>LM Studio</li><li>Custom server</li>
           </ul>
         </div>
       </div>
     </section>
 
     <section class="safety" id="safety" aria-labelledby="safe-title">
-      <p class="kicker">Safety</p>
-      <h2 id="safe-title" class="statement" data-scrub>Reading never asks. Writing always does.</h2>
+      <h2 id="safe-title" class="statement">Reading and searching run without asking. Edits and commands wait for you.</h2>
+      <p class="statement-note">Approvals are a checkpoint, not a sandbox. The agent runs with your Windows user permissions, so read what you approve.</p>
       <div class="rules">
         <article>
           <h3>You approve every change</h3>
-          <p><kbd>1</kbd> once, <kbd>2</kbd> this session, <kbd>Esc</kbd> deny.</p>
+          <p>Press <kbd>1</kbd> to allow once, <kbd>2</kbd> to allow for this session or <kbd>Esc</kbd> to deny.</p>
         </article>
         <article>
           <h3>Keys stay on your PC</h3>
-          <p>Encrypted for your Windows account. Sent only to the provider you chose.</p>
+          <p>They are encrypted for your Windows account and sent only to the provider they belong to.</p>
         </article>
         <article>
           <h3>Local server, new token each launch</h3>
-          <p>It listens on <code>127.0.0.1</code> only, so nothing outside your PC can reach it.</p>
+          <p>It listens only on <code>127.0.0.1</code>, so nothing outside your PC can reach it.</p>
         </article>
         <article>
           <h3>Everything in one folder</h3>
-          <p>ORBIX saves its settings and chats in its own <code>data</code> folder.</p>
+          <p>Settings and chats stay in the <code>data</code> folder. Conversations are plain text, so treat it as sensitive.</p>
         </article>
       </div>
     </section>
 
     <section class="keys" id="keys" aria-labelledby="keys-title">
       <div class="section-head">
-        <p class="kicker">Shortcuts</p>
-        <h2 id="keys-title" class="split">Commands and shortcuts.</h2>
+        <h2 id="keys-title">Commands and shortcuts.</h2>
       </div>
       <div class="keys-grid">
         <div>
           <div class="cmds" id="cmds">
-            <button type="button" data-say="Read-only. The agent plans as a checklist and changes nothing." data-out="> plan mode on&#10;  reading src/auth/validate.ts&#10;  proposed 3 steps, no files changed">/plan</button>
-            <button type="button" data-say="Summarises the chat to free up context. Also automatic near the limit." data-out="> context 78% -> 31%&#10;  earlier turns summarised, last 12 kept">/compact</button>
+            <button type="button" data-say="The agent only reads and plans, and changes nothing." data-out="> plan mode on&#10;  reading src/auth/validate.ts&#10;  proposed 3 steps, no files changed">/plan</button>
+            <button type="button" data-say="Summarizes older messages to free up context. It also runs on its own when the context fills up." data-out="> context 78% -> 31%&#10;  earlier turns summarised, last 12 kept">/compact</button>
             <button type="button" data-say="Reverts every file change from the last reply." data-out="> undo: reverted 2 file changes&#10;  src/auth/validate.ts restored">/undo</button>
             <button type="button" data-say="Tokens and cost for this session." data-out="> session  6,790 tokens  $0.021">/cost</button>
             <button type="button" data-say="Switch model mid-conversation." data-out="> model: claude-sonnet  thinking: medium">/model</button>
-            <button type="button" data-say="Helper agents research in parallel." data-out="> 3 helpers started&#10;  done: search auth  done: read tests  done: check deps">task</button>
+            <button type="button" data-say="Runs read-only helper agents side by side." data-out="> 3 helpers started&#10;  done: search auth  done: read tests  done: check deps">task</button>
             <button type="button" data-say="Connect MCP servers from Settings or .mcp.json." data-out="> connected: github, filesystem&#10;  12 tools available to the agent">MCP</button>
-            <button type="button" data-say="Skills from SKILL.md, custom commands from Markdown." data-out="> loaded 4 skills from SKILL.md&#10;  project rules read from AGENTS.md">skills</button>
+            <button type="button" data-say="Loads skills from SKILL.md files and custom commands from Markdown files." data-out="> loaded 4 skills from SKILL.md&#10;  project rules read from AGENTS.md">skills</button>
           </div>
           <div class="cmd-card">
             <p class="cmd-say" id="cmd-say" aria-live="polite">Hover or tap a command to see what it does.</p>
@@ -369,7 +361,8 @@
           </div>
         </div>
         <ul class="kbd-list">
-          <li><span><kbd>Ctrl</kbd><kbd>K</kbd></span> command palette</li>
+          <li><span><kbd>Ctrl</kbd><kbd>K</kbd></span> search conversations, files, projects and commands</li>
+          <li><span><kbd>Ctrl</kbd><kbd>N</kbd></span> new session</li>
           <li><span><kbd>Ctrl</kbd><kbd>,</kbd></span> settings and providers</li>
           <li><span><kbd>@</kbd></span> mention a file</li>
           <li><span><kbd>Enter</kbd></span> send</li>
@@ -379,8 +372,7 @@
 
     <section class="faq" id="faq" aria-labelledby="faq-title">
       <div class="section-head">
-        <p class="kicker">FAQ</p>
-        <h2 id="faq-title" class="split">Common questions.</h2>
+        <h2 id="faq-title">Common questions.</h2>
       </div>
       <div class="faq-list">
         <details>
@@ -389,7 +381,7 @@
         </details>
         <details>
           <summary>Where does my code go?</summary>
-          <p>To the model you choose, and only the files the agent reads for your task. A local model (Ollama or LM Studio) keeps everything on your PC.</p>
+          <p>To the model provider you choose. It receives your messages, the project rules and tool results, including the contents of files the agent reads. A local model (Ollama or LM Studio) keeps all of that on your PC.</p>
         </details>
         <details>
           <summary>Can I undo what the agent changed?</summary>
@@ -397,7 +389,7 @@
         </details>
         <details>
           <summary>Will it change files or run commands without asking?</summary>
-          <p>No. Reading and searching never ask. Edits and commands ask first, unless you switch to &ldquo;Allow everything&rdquo; in Settings.</p>
+          <p>No. Reading and searching run without asking. Edits and commands ask first, unless you turn on &ldquo;Allow everything&rdquo; in Settings, which asks you to confirm.</p>
         </details>
         <details>
           <summary>Does it run on Mac or Linux?</summary>
@@ -413,9 +405,8 @@
     <section class="download" id="download" aria-labelledby="dl-title">
       <div class="dl-card dl-card-main" id="dl-card">
         <div class="dl-main">
-          <p class="kicker">Download</p>
-          <h2 id="dl-title">ORBIX 3.0.0</h2>
-          <p class="dl-lede">A Windows app for AI coding agents. Unzip it and run it. Node.js is included, so there is nothing else to install.</p>
+          <h2 id="dl-title">ORBIX 3.1.0</h2>
+          <p class="dl-lede">A Windows desktop app where an AI agent works on your code. Unzip it and run it. Node.js is included, and the WebView2 Runtime it needs ships with Windows 11 and recent Windows 10 updates.</p>
           <ul class="chips" aria-label="Requirements">
             <li>Windows 10 or 11</li><li>64-bit</li><li>Node.js included</li><li>34 MB</li>
           </ul>
@@ -428,7 +419,7 @@
           </details>
         </div>
         <div class="dl-side">
-          <p class="dl-side-title">Get started in 3 steps</p>
+          <h3 class="dl-side-title">Getting started</h3>
           <ol class="steps">
             <li><b>Unzip</b> and open <code>bin\ORBIX.exe</code></li>
             <li><b>Add a key</b> with <kbd>Ctrl</kbd><kbd>,</kbd> or sign in</li>
@@ -448,8 +439,8 @@
   <footer class="foot">
     <div class="foot-top">
       <div class="foot-brand">
-        <img src="assets/img/logo.svg?v=6" alt="" width="28" height="28">
-        <div><b>ORBIX</b><span>AI coding agents for Windows</span></div>
+        <img src="assets/img/logo.svg?v=7" alt="" width="28" height="28">
+        <div><b>ORBIX</b><span>An AI coding agent for Windows</span></div>
       </div>
       <nav class="foot-nav" aria-label="Footer">
         <a href="#problem">Why</a><a href="#demo">Demo</a><a href="#app">Screenshots</a><a href="#unified">Features</a><a href="#engines">Models</a><a href="#safety">Safety</a><a href="#faq">FAQ</a><a href="#download">Download</a>
