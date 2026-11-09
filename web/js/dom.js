@@ -72,7 +72,6 @@ const P = {
   external: 'M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
   more: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z',
   command: 'M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3',
-  clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 6v6l4 2',
   'arrow-down': 'M12 5v14M19 12l-7 7-7-7',
   alert: 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0ZM12 9v4M12 17h.01',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 16v-4M12 8h.01',
@@ -80,9 +79,7 @@ const P = {
   brain: 'M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18ZM12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18ZM12 5v13',
   globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z',
   eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
-  play: 'm6 3 14 9-14 9Z',
   layers: 'm12 2 10 5-10 5L2 7ZM2 17l10 5 10-5M2 12l10 5 10-5',
-  question: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',
   at: 'M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   circle: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z',
   'folder-plus': 'M12 10v6M9 13h6M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z',
@@ -90,7 +87,6 @@ const P = {
   map: 'M14.1 6.3 9.9 4.2a2 2 0 0 0-1.8 0L3.6 6.4A1 1 0 0 0 3 7.3v12.2a.5.5 0 0 0 .7.4l4.4-2.2a2 2 0 0 1 1.8 0l4.2 2.1a2 2 0 0 0 1.8 0l4.5-2.2a1 1 0 0 0 .6-.9V4.5a.5.5 0 0 0-.7-.4l-4.4 2.2a2 2 0 0 1-1.8 0ZM15 6.8v14M9 3.2v14',
   cpu: 'M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM9 9h6v6H9Z',
   key: 'm15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4M21 2l-9.6 9.6M7.5 21a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11Z',
-  sliders: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
   plug: 'M12 22v-5M9 8V2M15 8V2M18 8v5a6 6 0 0 1-12 0V8Z',
   palette: 'M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-1.8a2 2 0 0 0-1.5 3.3 1.7 1.7 0 0 1-1.3 2.7ZM7.5 10.5h.01M10.5 7.5h.01M15.5 7.5h.01M17.5 11.5h.01',
   compass: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM16.2 7.8l-2.1 6.3-6.3 2.1 2.1-6.3Z',
@@ -150,57 +146,28 @@ let logoN = 0;
  */
 export function logo(size = 20, { alive = false } = {}) {
   const tier = size <= 16 ? 'tiny' : size <= 28 ? 'small' : 'large';
-  const large = tier === 'large';
   const id = `lgm${++logoN}`;
-  const sw = tier === 'tiny' ? 2.1 : tier === 'small' ? 1.7 : 1.4; // orbit stroke
-  const rw = tier === 'tiny' ? 2.7 : tier === 'small' ? 2.3 : 1.9; // ring stroke
-  const hole = tier === 'large' ? 7.3 : 7.6; // the planet's footprint the far orbit hides behind
-  const url = (s) => `url(#${id}${s})`;
+  const sw = tier === 'tiny' ? 2.3 : tier === 'small' ? 1.9 : 1.5; // orbit stroke
+  const url = (x) => `url(#${id}${x})`;
+  const box = { maskUnits: 'userSpaceOnUse', x: -2, y: -2, width: 28, height: 28 };
+  const white = () => svgEl('rect', { x: -2, y: -2, width: 28, height: 28, fill: '#fff' });
   const defs = svgEl('defs', {},
-    svgEl('mask', { id: `${id}b`, maskUnits: 'userSpaceOnUse', x: -2, y: -2, width: 28, height: 28 },
-      svgEl('rect', { x: -2, y: -2, width: 28, height: 28, fill: '#fff' }),
-      svgEl('circle', { cx: 12, cy: 12, r: hole, fill: '#000' })),
-    // The far half of the orbit (above its major axis) is behind the planet; the near half passes in front.
+    // The near half of the orbit cuts a clean gap through the planet.
+    svgEl('mask', { id: `${id}g`, ...box }, white(), svgEl('path', { d: ORBIT_FRONT, fill: 'none', stroke: '#000', 'stroke-width': sw + 1.5, 'stroke-linecap': 'round' })),
+    // The far half stops short of the planet.
+    svgEl('mask', { id: `${id}b`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7.9, fill: '#000' })),
+    // The node and its trail slip behind the planet on the far side only.
     svgEl('clipPath', { id: `${id}h` }, svgEl('polygon', { points: '-2,-2 26,-2 26,5.77 -2,18.23' })),
-    svgEl('mask', { id: `${id}t`, maskUnits: 'userSpaceOnUse', x: -2, y: -2, width: 28, height: 28 },
-      svgEl('rect', { x: -2, y: -2, width: 28, height: 28, fill: '#fff' }),
-      svgEl('circle', { cx: 12, cy: 12, r: hole, fill: '#000', 'clip-path': url('h') })));
-  if (large) {
-    defs.append(
-      // Sphere: lit from the top left, falling into shadow at the bottom right.
-      svgEl('radialGradient', { id: `${id}p`, cx: '34%', cy: '30%', r: '78%' },
-        svgEl('stop', { offset: '0', 'stop-color': 'currentColor', 'stop-opacity': '.30' }),
-        svgEl('stop', { offset: '.55', 'stop-color': 'currentColor', 'stop-opacity': '.08' }),
-        svgEl('stop', { offset: '1', 'stop-color': 'currentColor', 'stop-opacity': '0' })),
-      svgEl('linearGradient', { id: `${id}r`, x1: '0', y1: '0', x2: '1', y2: '1' },
-        svgEl('stop', { offset: '0', 'stop-color': 'currentColor' }),
-        svgEl('stop', { offset: '1', 'stop-color': 'currentColor', 'stop-opacity': '.58' })),
-      svgEl('linearGradient', { id: `${id}o`, gradientUnits: 'userSpaceOnUse', x1: '2', y1: '16.4', x2: '22', y2: '7.6' },
-        svgEl('stop', { offset: '0', class: 'lg-stop-a' }),
-        svgEl('stop', { offset: '1', class: 'lg-stop-b' })),
-      svgEl('clipPath', { id: `${id}c` }, svgEl('circle', { cx: 12, cy: 12, r: 5.25 })));
-  }
-  const planet = large
-    ? svgEl('g', { class: 'lg-planet' },
-        svgEl('circle', { cx: 12, cy: 12, r: 5.25, fill: url('p') }),
-        // An equatorial band at the orbit's tilt, and a thin rim light on the lit side.
-        svgEl('g', { 'clip-path': url('c') },
-          svgEl('ellipse', { class: 'lg-band', cx: 12, cy: 12.4, rx: 7.4, ry: 1.25, transform: 'rotate(-24 12 12)' })),
-        svgEl('path', { class: 'lg-rim', d: 'M8.1 9.6A4.6 4.6 0 0 1 13.6 7.6' }))
-    : '';
+    svgEl('mask', { id: `${id}t`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7.9, fill: '#000', 'clip-path': url('h') })));
   return svgEl('svg', { class: `logo ${tier}` + (alive ? ' alive' : ''), viewBox: '-1 -1 26 26', width: size, height: size, fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
     defs,
-    planet,
-    tier === 'tiny' ? '' : svgEl('path', { class: 'lg-orbit lg-back', d: ORBIT_BACK, mask: url('b'), 'stroke-width': sw }),
-    svgEl('circle', { class: 'lg-ring', cx: 12, cy: 12, r: 6.2, 'stroke-width': rw, stroke: large ? url('r') : null }),
-    svgEl('path', { class: 'lg-orbit lg-front', d: ORBIT_FRONT, 'stroke-width': sw, stroke: large ? url('o') : null }),
-    svgEl('path', { class: 'lg-trail', d: ORBIT_FULL, pathLength: 100, mask: url('t'), 'stroke-width': sw + 0.6 }),
-    // The node rides the same orbit and shares the trail's mask, so it slips behind the planet on the far side.
+    svgEl('path', { class: 'lg-orbit lg-back', d: ORBIT_BACK, mask: url('b'), 'stroke-width': sw }),
+    svgEl('circle', { class: 'lg-planet', cx: 12, cy: 12, r: 7, mask: url('g') }),
+    svgEl('path', { class: 'lg-orbit lg-front', d: ORBIT_FRONT, 'stroke-width': sw }),
+    svgEl('path', { class: 'lg-trail', d: ORBIT_FULL, pathLength: 100, mask: url('t'), 'stroke-width': sw + 0.5 }),
     // The mask sits on a group without a transform; the inner group carries the offset-path and moves.
     svgEl('g', { mask: url('t') },
-      svgEl('g', { class: 'lg-node' },
-        svgEl('circle', { class: 'lg-dot', cx: 0, cy: 0, r: tier === 'tiny' ? 2.6 : tier === 'small' ? 2.4 : 2.15 }),
-        large ? svgEl('circle', { class: 'lg-spec', cx: -0.7, cy: -0.75, r: 0.7 }) : '')));
+      svgEl('g', { class: 'lg-node' }, svgEl('circle', { class: 'lg-dot', cx: 0, cy: 0, r: tier === 'tiny' ? 2.8 : tier === 'small' ? 2.55 : 2.3 }))));
 }
 
 export function iconBtn(name, title, onclick, cls = '') {
@@ -210,7 +177,7 @@ export function iconBtn(name, title, onclick, cls = '') {
 export const kbd = (k) => h('kbd', null, k);
 
 export function spinner(size = 14) {
-  return h('span', { class: 'spin', style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' });
+  return h('span', { class: 'spin', style: { width: size + 'px', height: size + 'px', fontSize: size + 1 + 'px' }, 'aria-hidden': 'true' });
 }
 
 /** Placeholder lines while something loads. They fade in only after 150 ms, so fast loads never flash. */
@@ -231,17 +198,32 @@ export function leave(el, { hide = false, then } = {}) {
     then?.();
   };
   if (reduced.matches || !el.getClientRects().length) return finish();
+  el._leaveCancel?.();
   el.classList.add('leaving');
   let fired = false;
+  let timer;
+  const cleanup = () => {
+    fired = true;
+    clearTimeout(timer);
+    el.removeEventListener('animationend', onEnd);
+    el.removeEventListener('animationcancel', onCancel);
+    delete el._leaveCancel;
+  };
   const fin = () => {
     if (fired) return;
-    fired = true;
+    cleanup();
     if (!el.classList.contains('leaving')) return; // cancelled
     el.classList.remove('leaving');
     finish();
   };
-  el.addEventListener('animationend', (e) => e.target === el && fin(), { once: true });
-  setTimeout(fin, 260);
+  const onEnd = (e) => { if (e.target === el) fin(); };
+  const onCancel = (e) => {
+    if (e.target === el && !el.classList.contains('leaving')) cleanup();
+  };
+  el._leaveCancel = cleanup;
+  el.addEventListener('animationend', onEnd);
+  el.addEventListener('animationcancel', onCancel);
+  timer = setTimeout(fin, 260);
 }
 
 export const fmtTokens = (n) => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(Math.round(n)));

@@ -1,7 +1,8 @@
 // Modals, menus and pickers: modal, confirm, prompt, folder picker, model picker, agent requests, palette.
 import { h, $, icon, iconBtn, replace, toast, fmtTokens, skeleton, kbd, leave } from './dom.js';
 import { api } from './api.js';
-import { replyUi } from './store.js';
+import { replyUi, S } from './store.js';
+import { brandMark } from './brands.js';
 import { fuzzy, marked } from './composer.js';
 
 const FOCUSABLE = 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"],a[href]';
@@ -189,7 +190,7 @@ export function modelPicker({ load, current, onPick, extra }) {
       shown.push(null);
     }
     for (const [p, arr] of byProv) {
-      kids.push(h('div', { class: 'list-h' }, p));
+      kids.push(h('div', { class: 'list-h with-mark' }, brandMark(p, 14), S.engine?.providers?.find((q) => q.id === p)?.name || p));
       for (const x of arr) {
         const isCur = current && current.id === x.id && current.provider === x.provider;
         shown.push(x);

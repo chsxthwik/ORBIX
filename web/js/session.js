@@ -5,6 +5,8 @@ import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
 import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval } from './dialogs.js';
+import { brandMark } from './brands.js';
+import { asciiOrbit } from './ascii.js';
 import { viewFile, reviewChanges } from './panels.js';
 import { conversationToMarkdown } from './exporter.js';
 import { Composer } from './composer.js';
@@ -293,7 +295,7 @@ export class TabView {
     this.updateSend();
 
     this.modelBtn.hidden = dead;
-    this.modelBtn.replaceChildren(icon('cpu', 14), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
+    this.modelBtn.replaceChildren(brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
     const efforts = m?.thinking?.efforts || [];
     const lvl = st?.thinkingLevel || 'off';
     this.thinkBtn.hidden = dead || !(m?.reasoning || efforts.length);
@@ -518,6 +520,7 @@ export class TabView {
     if (!show) return void this.emptyEl?.remove();
     if (this.emptyEl?.isConnected) return;
     this.emptyEl = h('div', { class: 'chat-empty' },
+      asciiOrbit({ cols: 52, rows: 14 }).el,
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
       h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
       h('div', { class: 'ce-keys' }, h('span', null, kbd('/'), ' commands'), h('span', null, kbd('@'), ' mention a file'), h('span', null, kbd('Shift+Enter'), ' new line')));
@@ -529,7 +532,7 @@ export class TabView {
     const t = this.tab;
     const idle = !t.streaming || t.dead || this.approvalDlg || (this.liveEl && this.liveEl.childElementCount);
     if (idle) return void (this.pendingEl?.remove(), (this.pendingEl = null));
-    if (!this.pendingEl) this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-label': 'Working' }, h('span', { class: 'pending-dots' }, h('i'), h('i'), h('i')));
+    if (!this.pendingEl) this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-label': 'Working' }, h('span', { class: 'ascii-bar' }));
     if (this.pendingEl.parentNode !== this.tin || this.pendingEl.nextSibling) this.tin.append(this.pendingEl);
     this.emptyEl?.remove();
   }

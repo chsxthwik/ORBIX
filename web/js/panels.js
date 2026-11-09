@@ -1,5 +1,6 @@
 // Right-hand panel: Files, Changes (git), Todos, Agents, Console.
 import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce } from './dom.js';
+import { asciiArt } from './ascii.js';
 import { api, rpc } from './api.js';
 import { S, activeTab, emit, on, savePrefs } from './store.js';
 import { codeView, renderUnifiedDiff, todoList, agentRow } from './tools.js';
@@ -76,7 +77,7 @@ function draw() {
   ({ files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole })[P.tab](t);
 }
 
-const emptyState = (ic, text) => h('div', { class: 'empty' }, h('span', { class: 'empty-ico' }, icon(ic, 16)), text);
+const emptyState = (kind, text) => h('div', { class: 'empty' }, asciiArt(kind), text);
 
 const joinP = (a, b) => (/^[A-Za-z]:|^\\\\/.test(a) ? a.replace(/[\\/]+$/, '') + '\\' + b.replace(/\//g, '\\') : (a === '/' ? '' : a.replace(/\/+$/, '')) + '/' + b);
 
