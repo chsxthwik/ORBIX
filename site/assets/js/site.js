@@ -15,71 +15,6 @@
   const ease = (t) => 1 - Math.pow(1 - t, 3);
   const TAU = Math.PI * 2;
 
-  function splitWords(el, wrap) {
-    let i = 0;
-    const walk = (node) => {
-      [...node.childNodes].forEach((child) => {
-        if (child.nodeType === 3) {
-          const frag = document.createDocumentFragment();
-          child.textContent.split(/(\s+)/).forEach((part) => {
-            if (!part) return;
-            if (/^\s+$/.test(part)) { frag.appendChild(document.createTextNode(part)); return; }
-            frag.appendChild(wrap(part, i++));
-          });
-          node.replaceChild(frag, child);
-        } else if (child.nodeType === 1 && child.tagName !== "BR") walk(child);
-      });
-    };
-    walk(el);
-  }
-  $$(".split").forEach((h) => splitWords(h, (word, i) => {
-    const w = document.createElement("span");
-    w.className = "w";
-    const wi = document.createElement("span");
-    wi.className = "wi";
-    wi.textContent = word;
-    wi.style.transitionDelay = i * 55 + "ms";
-    w.appendChild(wi);
-    return w;
-  }));
-
-  const statement = $("[data-scrub]");
-  let statementWords = [];
-  if (statement) {
-    splitWords(statement, (word) => {
-      const s = document.createElement("span");
-      s.className = "sw" + (/^(never|always\.?)$/i.test(word) ? " hot-word" : "");
-      s.textContent = word;
-      return s;
-    });
-    statementWords = $$(".sw", statement);
-  }
-
-  const revealables = $$(".section-head > p:not(.kicker), .stats li, .shot-frame, .shot-tabs, .rules article, .kbd-list li, .cmds, .cmd-say, .dl-card, .steps li, .demo-foot, .scene-n, .seg, .eng-foot");
-  if ("IntersectionObserver" in window && !reduced) {
-    revealables.forEach((el) => el.classList.add("reveal"));
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (!e.isIntersecting) return;
-        const sibs = [...e.target.parentElement.children].filter((c) => c.classList.contains("reveal"));
-        e.target.style.transitionDelay = Math.min(6, sibs.indexOf(e.target)) * 70 + "ms";
-        e.target.classList.add("is-in");
-        io.unobserve(e.target);
-      });
-    }, { rootMargin: "0px 0px -10% 0px" });
-    revealables.forEach((el) => io.observe(el));
-    const ioSplit = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (!e.isIntersecting) return;
-        e.target.classList.add("is-in");
-        ioSplit.unobserve(e.target);
-      });
-    }, { rootMargin: "0px 0px -12% 0px" });
-    $$(".split").forEach((el) => ioSplit.observe(el));
-  } else {
-    $$(".split").forEach((el) => el.classList.add("is-in"));
-  }
-
   (function buildLog() {
     const log = $("#log");
     if (!log) return;
@@ -205,15 +140,6 @@
       const wr = winWrap.getBoundingClientRect();
       win.style.setProperty("--t", clamp((wr.top - vh * .18) / (vh * .7)).toFixed(4));
 
-      if (statementWords.length) {
-        const sr = statement.getBoundingClientRect();
-        const s = clamp((vh * .88 - sr.top) / (vh * .55 + sr.height * .3));
-        const lit = Math.round(s * statementWords.length);
-        statementWords.forEach((w, i) => {
-          w.classList.toggle("on", i < lit);
-          w.classList.toggle("hot", i < lit && w.classList.contains("hot-word"));
-        });
-      }
     }
 
     if (map && scenes.length) {
@@ -232,7 +158,6 @@
   window.addEventListener("scroll", queue, { passive: true });
   window.addEventListener("resize", queue, { passive: true });
   if (reduced) {
-    statementWords.forEach((w) => { w.classList.add("on"); if (w.classList.contains("hot-word")) w.classList.add("hot"); });
     caps.forEach((c) => { c.style.opacity = 1; });
   }
 
@@ -363,7 +288,7 @@
     if (cls) li.classList.add(cls);
     planFill.style.width = ($$(".is-done", plan).length / 3 * 100) + "%";
   };
-  const STATES = { idle: "idle", busy: "working", ask: "waiting for you", done: "done" };
+  const STATES = { idle: "Ready", busy: "Working", ask: "Waiting for you", done: "Ready" };
   const setState = (st) => {
     win.dataset.state = st;
     sbState.textContent = STATES[st];
@@ -388,7 +313,7 @@
   const turn = () => {
     const t = el("div", "turn");
     const av = el("img", "avatar");
-    av.src = "assets/img/logo.svg?v=6";
+    av.src = "assets/img/logo.svg?v=7";
     av.alt = "ORBIX";
     t.appendChild(av);
     chat.appendChild(t);
