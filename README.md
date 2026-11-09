@@ -23,7 +23,7 @@ Bring your own API key or run a local model.
 
 <img src="docs/img/shots/approval.png" alt="ORBIX has searched and read the project, explained a login bug, and now shows a one-line diff with Allow once, Allow for this session and Deny" width="100%">
 
-<sub>Screenshots show the current `main` branch, which is ahead of release 3.0.0. They use a sample project and a scripted local model; the tools in them really ran.</sub>
+<sub>Screenshots use a sample project and a scripted local model; the tools in them really ran.</sub>
 
 ## Install
 

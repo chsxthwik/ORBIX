@@ -1,6 +1,6 @@
 {
   "name": "orbix",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "ORBIX - Unified ADE: a Windows desktop agentic development environment with its own AI agent. WSL and native Windows backends.",
   "private": true,
   "type": "module",
