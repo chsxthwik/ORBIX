@@ -7,6 +7,7 @@ import { S, openTab, sendPrompt, tabForSession, engineReady, savePrefs, groupSes
 import { popMenu, modelPicker, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
 import { asciiOrbit, decodeText, typePlaceholder } from './ascii.js';
+import { heroFx, spotlight, stagger, armEntrance, pulseStrip, resumeCard, heatmapCard, recipes } from './workspace.js';
 
 // The home screen is redrawn when sessions or providers change. The message box stays mounted (so typing, IME
 // composition and the caret are never interrupted); only the parts around it are redrawn.
@@ -64,6 +65,10 @@ function shell(root) {
   const keysSlot = h('div');
   const wrap = h('div', { class: 'home' }, hero, boardSlot, firstSlot, keysSlot);
   W = { wrap, orbit, hi, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
+  armEntrance();
+  stagger(hero);
+  heroFx(hero);
+  spotlight(wrap);
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -111,16 +116,30 @@ export function drawHome(root, H) {
   if (!agentOk) {
     // First run: one welcome and one next step. Lists wait until there is something to list.
     if (C?.el.isConnected) C.el.remove();
-    w.deckSlot.replaceChildren(connectDeck(H));
+    const deckSig = 'deck:' + JSON.stringify((S.engine?.providers || []).map((p) => [p.id, p.configured]));
+    if (w.deckSig !== deckSig || !w.deckSlot.querySelector('.home-connect')) {
+      w.deckSig = deckSig;
+      const deckEl = connectDeck(H);
+      stagger(deckEl.querySelector('.pv-quick'));
+      w.deckSlot.replaceChildren(deckEl);
+    }
     w.under.replaceChildren();
-    w.boardSlot.replaceChildren(history ? board(H, projects, false) : '');
-    if (!w.firstSlot.firstChild) w.firstSlot.replaceChildren(firstRun());
+    if (boardChanged(w, 'first', projects)) {
+      w.boardSlot.replaceChildren(history ? pulseStrip(H, projects) : '', (history && resumeCard(H)) || '', history ? board(H, projects, false) : '', history ? heatmapCard(projects) : '');
+      stagger(w.boardSlot);
+    }
+    if (!w.firstSlot.firstChild) {
+      const fr = firstRun();
+      stagger(fr.querySelector('.ws-feat'));
+      w.firstSlot.replaceChildren(fr);
+    }
     // The preview stops on its own when Home is not on screen.
     queueMicrotask(() => DEMO?.play());
     return;
   }
   if (DEMO?.el.isConnected) DEMO.stop();
   w.firstSlot.replaceChildren();
+  w.deckSig = null;
 
   const box = deck();
   const { comp, row } = box;
@@ -185,15 +204,41 @@ export function drawHome(root, H) {
   go.addEventListener('click', () => box.start());
 
   row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, planBtn, apprBtn, unsaved, h('span', { class: 'grow' }), go);
-  w.under.replaceChildren(history ? '' : quickPrompts(comp));
+  const rec = recipes(comp);
+  if (rec.parentNode !== w.under) w.under.replaceChildren(rec);
 
-  const cl = checklist(H, projects);
-  w.boardSlot.replaceChildren(cl || '', history || projects.length ? board(H, projects, true) : '');
+  if (boardChanged(w, 'ready', projects)) {
+    const cl = checklist(H, projects);
+    w.boardSlot.replaceChildren(cl || '', history ? pulseStrip(H, projects) : '', (history && resumeCard(H)) || '', history || projects.length ? board(H, projects, true) : '', history ? heatmapCard(projects) : '');
+    stagger(w.boardSlot);
+  }
+  const live = liveTabs();
+  w.wrap.classList.toggle('is-busy', live.working.length > 0);
+  w.wrap.classList.toggle('is-wait', live.waiting.length > 0);
 
   const active = document.activeElement;
   if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
   });
+}
+
+/**
+ * The lists below the box are rebuilt only when what they show changed. Agents report status many times a minute;
+ * rebuilding on each report restarted every animation and dropped the hover state under the pointer.
+ */
+function boardChanged(w, mode, projects) {
+  const sig = JSON.stringify([
+    mode,
+    draft.project,
+    engineReady(),
+    Math.floor(Date.now() / 60000), // relative times ("2m") stay current
+    projects.map((g) => [g.path, g.sessions.length]),
+    S.sessions.slice(0, 400).map((s) => [s.id, s.mtime, s.title]),
+    [...S.tabs.values()].map((t) => [t.id, !!t.dead, !!t.streaming, t.dialogs.some(isApproval), t.workspace]),
+  ]);
+  if (w.boardSig === sig && w.boardSlot.isConnected) return false;
+  w.boardSig = sig;
+  return true;
 }
 
 const hello = () => {
@@ -205,7 +250,7 @@ const hello = () => {
 function drawHead(w, ready, hasProject) {
   const live = liveTabs();
   w.orbit.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
-  w.hi.textContent = hello();
+  w.hi.replaceChildren(hello(), h('span', { class: 'home-date' }, new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })));
   const text = !ready ? 'Connect a model to get started' : hasProject ? 'What should we work on?' : 'Pick a project to start';
   if (w.titleText !== text) {
     w.titleText = text;
@@ -256,15 +301,6 @@ function checklist(H, projects) {
 const footKeys = () => h('div', { class: 'home-keys' }, [['Ctrl+K', 'search'], ['Ctrl+N', 'new session'], ['/', 'commands'], ['@', 'mention a file'], ['Ctrl+,', 'settings']].map(([k, l]) => h('span', null, kbd(k), ' ', l)));
 
 // ================= first run =================
-
-/** Example tasks under the task box, until there is a history of real ones. A click puts the text in the box. */
-const QUICK = ['Explain how this project is put together', 'Find and fix the failing test', 'Review my uncommitted changes for bugs'];
-function quickPrompts(comp) {
-  return h('div', { class: 'qp', role: 'group', 'aria-label': 'Example tasks' }, ...QUICK.map((q) => h('button', { class: 'qp-b', type: 'button', onclick: () => {
-    comp.value = q;
-    comp.focus();
-  } }, q)));
-}
 
 /** The providers on the first screen, one tile each; a click opens Settings on that provider's form. */
 const PV_SUB = { anthropic: 'Claude models', openai: 'GPT and o-series', google: 'Gemini, free tier', openrouter: 'Sign in, hundreds of models', ollama: 'Runs on this PC, no key', lmstudio: 'Runs on this PC, no key' };

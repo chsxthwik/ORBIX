@@ -281,7 +281,7 @@ export const row = (label, control, hint) => h('div', { class: 'set-row' }, h('d
 export const toggle = (val, onchange, label) => h('label', { class: 'switch' }, h('input', { type: 'checkbox', role: 'switch', checked: val ? true : null, 'aria-label': label || null, onchange: (e) => onchange(e.target.checked) }), h('i'));
 
 export function shortcutsDialog() {
-  const rows = [['Ctrl+N', 'New session'], ['Ctrl+K', 'Search conversations, files and commands'], ['Ctrl+,', 'Settings'], ['Ctrl+B', 'Sidebar'], ['Ctrl+J', 'Side panel'], ['Ctrl+L', 'Focus the message box'], ['Alt+1…9', 'Switch session'], ['Alt+↑ / Alt+↓', 'Previous / next message of yours'], ['Enter', 'Send'], ['Shift+Enter', 'New line'], ['Alt+Enter', 'Queue a message while the agent works'], ['Esc', 'Stop the agent'], ['/', 'Slash commands'], ['@', 'Mention a file'], ['↑', 'Recall your last message (when the box is empty)']];
+  const rows = [['Ctrl+N', 'New session'], ['Ctrl+K', 'Search conversations, files and commands'], ['Ctrl+,', 'Settings'], ['Ctrl+B', 'Sidebar'], ['Ctrl+J', 'Side panel'], ['Ctrl+L', 'Focus the message box'], ['Ctrl+F', 'Find in conversation'], ['Ctrl+Shift+O', 'Jump to one of your messages'], ['Ctrl+Shift+F', 'Focus mode'], ['Alt+1…9', 'Switch session'], ['Alt+↑ / Alt+↓', 'Previous / next message of yours'], ['Enter', 'Send'], ['Shift+Enter', 'New line'], ['Alt+Enter', 'Queue a message while the agent works'], ['Esc', 'Stop the agent'], ['/', 'Slash commands'], ['@', 'Mention a file'], ['↑', 'Recall your last message (when the box is empty)']];
   modal({ title: 'Keyboard shortcuts', size: 'sm', body: h('dl', { class: 'keys' }, rows.map(([k, d]) => [h('dt', null, k.split(/(?<=\S)\+(?=\S)/).map((x, i) => [i ? '+' : null, kbd(x)])), h('dd', null, d)])) });
 }
 

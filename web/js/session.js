@@ -1,4 +1,5 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
+import { SessionBar } from './workbench.js';
 import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
@@ -204,6 +205,8 @@ export class TabView {
     this.root = h('div', { class: 'session-inner' }, this.scroller, this.dock, h('div', { class: 'drop-hint', 'aria-hidden': 'true' }, icon('paperclip', 18), 'Drop images or text files to attach'));
     this.root._view = this;
     this.timeline = new Timeline(this);
+    this.bar = new SessionBar(this);
+    this.root.prepend(this.bar.el);
     this.composer.dropZone(this.root);
 
     // Follow new output only while the reader is at the bottom; any upward scroll stops it until they return.
@@ -254,6 +257,7 @@ export class TabView {
 
   /** The view leaves the screen (another tab): remember where the reader was. */
   detach() {
+    this.bar.closeFind(true);
     this.saved = { top: this.scroller.scrollTop, stick: this.stick };
   }
 
@@ -266,6 +270,7 @@ export class TabView {
     if (this._sb) cancelAnimationFrame(this._sb);
     this._sb = 0;
     this.timeline?.destroy();
+    this.bar?.destroy();
     this.scrollerRo?.disconnect();
     this.composer?.destroy?.();
     if (this.tab.afterUndo) this.tab.afterUndo = null;
@@ -325,6 +330,7 @@ export class TabView {
     this.updateStatus();
     this.updatePending();
     this.refreshActs();
+    this.bar.update();
   }
 
   /** The send button follows the text box: send, steer while working, or stop. Cheap enough for every keystroke. */
