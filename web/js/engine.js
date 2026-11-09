@@ -7,7 +7,7 @@ import { brandMark } from './brands.js';
 
 const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
 
-let signIn = null; // {state, url, timer} while an OpenRouter sign-in is waiting for the browser
+let signIn = null; // {state, url, timer, provider} while a sign-in is waiting for the browser
 let view = null; // the open settings screen, so a sign-in that finishes later updates whatever is showing now
 let openId = null; // the provider row showing its form; one at a time keeps a long list short
 const redraw = () => view?.root.isConnected && view.draw();
@@ -40,12 +40,13 @@ export async function renderEngineSettings(root) {
     signIn = null;
   }
 
-  async function startSignIn() {
+  async function startSignIn(provider) {
     stopSignIn();
     try {
-      const r = await api.post('/api/engine/oauth/start');
+      const r = await api.post('/api/engine/oauth/start', { provider });
       const started = Date.now();
-      signIn = { state: r.state, url: r.url };
+      const name = provider === 'xai' ? 'xAI' : 'OpenRouter';
+      signIn = { state: r.state, url: r.url, provider };
       toast('Complete the sign-in in your browser.', 'info', 5000);
       signIn.timer = setInterval(async () => {
         if (!signIn || Date.now() - started > 10.5 * 60 * 1000) {
@@ -57,7 +58,7 @@ export async function renderEngineSettings(root) {
           const s = await api.get('/api/engine/oauth/status?state=' + encodeURIComponent(r.state));
           if (s.status === 'done') {
             stopSignIn();
-            toast(`OpenRouter: signed in${Number.isFinite(s.models) ? ` (${s.models} model${s.models === 1 ? '' : 's'})` : ''}`, 'ok', 4000);
+            toast(`${name}: signed in${Number.isFinite(s.models) ? ` (${s.models} model${s.models === 1 ? '' : 's'})` : ''}`, 'ok', 4000);
             if (view?.root.isConnected) await view.refresh(s.engine);
             else await loadEngine().catch(() => {});
           } else if (s.status === 'error' || s.status === 'expired' || s.status === 'unknown') {
@@ -111,14 +112,15 @@ export async function renderEngineSettings(root) {
 
     let oauthRow = null;
     if (p.oauth) {
-      if (signIn) {
+      if (signIn && signIn.provider === p.id) {
         oauthRow = h('div', { class: 'pv-oauth' }, spinner(12), h('span', null, 'Complete the sign-in in your browser.'), h('button', { class: 'link', type: 'button', onclick: () => openLink(signIn.url) }, 'Open again'), h('button', { class: 'link', type: 'button', onclick: () => {
           api.post('/api/engine/oauth/cancel', { state: signIn?.state }).catch(() => {});
           stopSignIn();
           draw();
         } }, 'Cancel'));
       } else {
-        oauthRow = h('div', { class: 'pv-oauth' }, h('button', { class: 'btn sm', type: 'button', onclick: startSignIn }, p.via === 'oauth' ? 'Sign in again' : 'Sign in with OpenRouter'), h('span', { class: 'muted small' }, 'or paste a key below'));
+        const label = p.via === 'oauth' ? 'Sign in again' : `Sign in with ${p.name}`;
+        oauthRow = h('div', { class: 'pv-oauth' }, h('button', { class: 'btn sm', type: 'button', onclick: () => startSignIn(p.id) }, label), h('span', { class: 'muted small' }, 'or paste a key below'));
       }
     }
 

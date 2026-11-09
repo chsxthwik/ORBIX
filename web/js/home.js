@@ -61,8 +61,8 @@ function shell(root) {
   const hi = h('p', { class: 'home-hi' });
   const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, orbit.el, logo(36, { alive: true })), hi, title, sub, alertSlot, deckSlot, under);
   const boardSlot = h('div', { class: 'home-board-slot' });
-  const firstSlot = h('div');
-  const keysSlot = h('div');
+  const firstSlot = h('div', { class: 'home-first-slot' });
+  const keysSlot = h('div', { class: 'home-keys-slot' });
   const wrap = h('div', { class: 'home' }, hero, boardSlot, firstSlot, keysSlot);
   W = { wrap, orbit, hi, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
   // One drop handler per screen; it always feeds the current box.
@@ -105,6 +105,7 @@ export function drawHome(root, H) {
   const g = projects.find((x) => x.path === draft.project);
   const history = S.sessions.length > 0;
 
+  w.wrap.classList.toggle('first', !agentOk);
   drawHead(w, agentOk, projects.length > 0);
   w.keysSlot.replaceChildren(footKeys());
   w.alertSlot.replaceChildren(...attention(H));
@@ -242,15 +243,16 @@ const hello = () => {
 function drawHead(w, ready, hasProject) {
   const live = liveTabs();
   w.orbit.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
+  w.hi.hidden = !ready; // the first screen has one job, so it skips the greeting
   w.hi.replaceChildren(hello(), h('span', { class: 'home-date' }, new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })));
-  const text = !ready ? 'Connect a model to get started' : hasProject ? 'What should we work on?' : 'Pick a project to start';
+  const text = !ready ? 'Connect a model' : hasProject ? 'What should we work on?' : 'Pick a project to start';
   if (w.titleText !== text) {
     w.titleText = text;
     w.title.textContent = text;
     // After layout, so the letters can be measured.
     requestAnimationFrame(() => w.titleText === text && decodeText(w.title, text));
   }
-  w.sub.textContent = !ready ? 'ORBIX reads your code first, asks before edits or commands, and keeps every change undoable.' : hasProject ? '' : 'The agent only ever works inside a folder you choose.';
+  w.sub.textContent = !ready ? 'Add an API key, sign in, or use a model that runs on this PC. You can change it at any time.' : hasProject ? '' : 'The agent only ever works inside a folder you choose.';
   w.sub.hidden = !w.sub.textContent;
 }
 
@@ -294,8 +296,9 @@ const footKeys = () => h('div', { class: 'home-keys' }, [['Ctrl+K', 'search'], [
 
 // ================= first run =================
 
-/** The providers on the first screen, one tile each; a click opens Settings on that provider's form. */
-const PV_SUB = { anthropic: 'Claude models', openai: 'GPT and o-series', google: 'Gemini, free tier', openrouter: 'Sign in, hundreds of models', ollama: 'Runs on this PC, no key', lmstudio: 'Runs on this PC, no key' };
+/** The providers on the first screen, one row each; a click opens Settings on that provider's form. */
+const PV_SUB = { anthropic: 'Claude models', openai: 'GPT and o-series', google: 'Gemini models', xai: 'Grok models', openrouter: 'Hundreds of models, one account', ollama: 'Models on this PC', lmstudio: 'Models on this PC' };
+const PV_HOW = { anthropic: 'API key', openai: 'API key', google: 'API key', xai: 'Sign in', openrouter: 'Sign in', ollama: 'No key', lmstudio: 'No key' };
 function focusProvider(H, id) {
   H.settings('engine');
   const t0 = Date.now();
@@ -312,33 +315,24 @@ function focusProvider(H, id) {
   requestAnimationFrame(tick);
 }
 function connectDeck(H) {
-  const list = (S.engine?.providers || []).filter((p) => p.id in PV_SUB);
-  const tiles = list.map((p) => h('button', { class: 'pv-q' + (p.local ? ' local' : '') + (p.configured ? ' on' : ''), type: 'button', title: `Connect ${p.name}`, onclick: () => focusProvider(H, p.id) },
-    h('span', { class: 'pv-q-ic', 'aria-hidden': 'true' }, brandMark(p.id, 20)),
-    h('span', { class: 'pv-q-main' }, h('span', { class: 'pv-q-n' }, p.name), h('span', { class: 'pv-q-s' }, PV_SUB[p.id])),
-    p.configured ? h('span', { class: 'dot ok' }) : icon('chevron-right', 14)));
+  const all = S.engine?.providers || [];
+  const rows = all.filter((p) => p.id in PV_SUB).map((p) => h('li', null, h('button', { class: 'cx-row' + (p.configured ? ' on' : ''), type: 'button', title: `Connect ${p.name}`, onclick: () => focusProvider(H, p.id) },
+    h('span', { class: 'cx-ic', 'aria-hidden': 'true' }, brandMark(p.id, 18)),
+    h('span', { class: 'cx-n' }, p.name),
+    h('span', { class: 'cx-s' }, PV_SUB[p.id]),
+    h('span', { class: 'cx-how' }, p.configured ? 'Connected' : PV_HOW[p.id]))));
   return h('section', { class: 'home-connect', 'aria-label': 'Connect a model' },
-    h('div', { class: 'pv-quick' }, ...tiles),
-    h('div', { class: 'connect-foot' }, h('p', { class: 'setup-note' }, icon('shield', 13), 'Keys are stored encrypted on this PC.'),
-      h('span', { class: 'connect-acts' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => H.settings('engine') }, 'All providers'), h('button', { class: 'btn ghost sm', type: 'button', onclick: H.diagnostics }, 'Check my setup'))));
+    h('ul', { class: 'cx-list' }, ...rows),
+    h('div', { class: 'connect-foot' },
+      h('span', { class: 'connect-acts' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => H.settings('engine') }, all.length ? `All ${all.length} providers` : 'All providers'), h('button', { class: 'btn ghost sm', type: 'button', onclick: H.diagnostics }, 'Check my setup')),
+      h('p', { class: 'setup-note' }, 'Keys are stored encrypted on this PC.')));
 }
 
-/** What the agent does, in six lines. The accent marks the places you decide. */
-const FEATURES = [
-  ['eye', '', 'Reads your code', 'Files, search and git history, before it changes anything.'],
-  ['pencil', 'you', 'Edits with your OK', 'Each change is shown as a diff first. You approve or deny.'],
-  ['terminal', '', 'Runs commands', 'Tests, builds and scripts, in WSL or on Windows.'],
-  ['undo', 'you', 'Undo any edit', 'The previous version of every file is kept. One click restores it.'],
-  ['globe', '', 'Searches the web', 'Reads documentation and looks up facts, when you allow it.'],
-  ['plug', '', 'Adds MCP tools', 'Tools from any MCP server. A project’s servers start only after you say so.'],
-];
-
-/** Below the stage on the first screen: a session that plays itself beside what the agent can do. */
+/** Beside the connect list on the first screen: a session that plays itself, and one line on how the agent behaves. */
 function firstRun() {
-  return h('section', { class: 'ws-first', 'aria-label': 'What a session looks like' },
-    h('div', { class: 'ws-first-demo' }, h('div', { class: 'ws-panel-h' }, h('h2', null, 'A session, start to finish')), demo()),
-    h('div', { class: 'ws-first-feat' }, h('div', { class: 'ws-panel-h' }, h('h2', null, 'Capabilities'), h('span', { class: 'ws-panel-note' }, 'Edits and commands wait for your OK')),
-      h('ul', { class: 'ws-feat' }, ...FEATURES.map(([ic, tone, t, d]) => h('li', { class: 'feat' + (tone ? ' ' + tone : '') }, h('span', { class: 'feat-ic' }, icon(ic, 15)), h('span', { class: 'feat-m' }, h('span', { class: 'feat-t' }, t), h('span', { class: 'feat-d' }, d)))))));
+  return h('section', { class: 'first-demo', 'aria-label': 'What a session looks like' },
+    demo(),
+    h('p', { class: 'first-cap' }, 'An example session. The agent reads without asking. Edits and commands wait for your OK, and every edit can be undone.'));
 }
 
 /**

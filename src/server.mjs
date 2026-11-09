@@ -11,6 +11,7 @@ import { mcpRoutes } from './engine/mcp.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, isAgentSessionPath } from './engine/store.mjs';
 import { clientFor } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
+import * as oauthXai from './engine/oauth-xai.mjs';
 import { webSearch } from './engine/websearch.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
 import { collect as collectDiagnostics } from './diagnostics.mjs';
@@ -461,14 +462,25 @@ export class AppServer {
         await this.engineCfg.setProvider(id, { key: typedKey || undefined, baseUrl, models: models.length });
         return { models: models.length, engine: this.engineCfg.publicView() };
       },
-      'POST /api/engine/oauth/start': async () => {
+      'POST /api/engine/oauth/start': async ({ body }) => {
+        const provider = body.provider || 'openrouter';
+        if (provider === 'xai') {
+          const { url, state } = oauthXai.startXai({ config: this.engineCfg });
+          if (oauthXai.isXaiAuthUrl(url)) openExternal(url);
+          return { url, state, provider };
+        }
         const { url, state } = oauth.startOpenRouter({ port: this.port });
-        if (oauth.isOpenRouterAuthUrl(url)) openExternal(url); // the user's default browser
-        return { url, state };
+        if (oauth.isOpenRouterAuthUrl(url)) openExternal(url);
+        return { url, state, provider };
       },
-      'GET /api/engine/oauth/status': async ({ q }) => ({ ...oauth.oauthStatus(q.state), engine: this.engineCfg.publicView() }),
+      'GET /api/engine/oauth/status': async ({ q }) => {
+        const or = oauth.oauthStatus(q.state);
+        if (or.status !== 'unknown') return { ...or, engine: this.engineCfg.publicView() };
+        return { ...oauthXai.oauthStatus(q.state), engine: this.engineCfg.publicView() };
+      },
       'POST /api/engine/oauth/cancel': async ({ body }) => {
         oauth.cancelOAuth(body.state);
+        oauthXai.cancelOAuth(body.state);
         return {};
       },
       'POST /api/engine/provider/clear': async ({ body }) => {

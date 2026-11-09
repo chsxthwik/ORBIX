@@ -9,7 +9,7 @@ export const PRESETS = [
   { id: 'anthropic', name: 'Anthropic', type: 'anthropic', baseUrl: 'https://api.anthropic.com', note: 'Claude models.', keyUrl: 'https://console.anthropic.com/settings/keys' },
   { id: 'openai', name: 'OpenAI', type: 'openai', baseUrl: 'https://api.openai.com/v1', note: 'GPT and o-series models.', keyUrl: 'https://platform.openai.com/api-keys' },
   { id: 'google', name: 'Google Gemini', type: 'openai', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', note: 'Gemini models. Free tier available.', keyUrl: 'https://aistudio.google.com/apikey' },
-  { id: 'xai', name: 'xAI', type: 'openai', baseUrl: 'https://api.x.ai/v1', note: 'Grok models.', keyUrl: 'https://console.x.ai/' },
+  { id: 'xai', name: 'xAI', type: 'openai', baseUrl: 'https://api.x.ai/v1', note: 'Grok models.', keyUrl: 'https://console.x.ai/', oauth: true },
   { id: 'groq', name: 'Groq', type: 'openai', baseUrl: 'https://api.groq.com/openai/v1', note: 'Very fast open models.', keyUrl: 'https://console.groq.com/keys' },
   { id: 'mistral', name: 'Mistral', type: 'openai', baseUrl: 'https://api.mistral.ai/v1', note: 'Mistral and Codestral models.', keyUrl: 'https://console.mistral.ai/api-keys' },
   { id: 'deepseek', name: 'DeepSeek', type: 'openai', baseUrl: 'https://api.deepseek.com', note: 'DeepSeek models. Low prices.', keyUrl: 'https://platform.deepseek.com/api_keys' },
