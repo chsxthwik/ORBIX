@@ -28,7 +28,7 @@ Bring your own API key or run a local model.
 
 ## Install
 
-With [Node.js 20 or newer](https://nodejs.org/) on Windows 10 or 11, run:
+With [Node.js 22 or newer](https://nodejs.org/) on Windows 10 or 11, run:
 
 ```powershell
 npx github:chsxthwik/ORBIX
@@ -41,7 +41,7 @@ ORBIX starts and opens in your default browser. Run the same command to start it
 
 Settings and conversations are kept in `%LOCALAPPDATA%\ORBIX`, so they stay when ORBIX updates. To work on ORBIX itself, clone the repository and run `npm start`; a clone keeps its data in its own `data` folder.
 
-ORBIX runs on Windows 10 and 11 with Node.js 20 or newer, using WSL or native Windows to run commands. The UI and agent server stay on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
+ORBIX runs on Windows 10 and 11 with Node.js 22 or newer, using WSL or native Windows to run commands. The UI and agent server stay on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
 
 ## How a task runs
 
@@ -198,7 +198,7 @@ System, Dark, Light, Midnight and Frost, under Settings, Appearance.
 
 ## Development
 
-Node.js 20 or newer.
+Node.js 22 or newer.
 
 ```bash
 npm start          # run from source

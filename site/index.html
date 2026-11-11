@@ -49,7 +49,7 @@
       <p class="lead">ORBIX is an AI coding workspace that runs on your own machine, in your browser. The agent reads your project freely. Every file edit and every command waits for your OK, and every edit can be undone.</p>
       <div class="install" aria-label="Install">
         <pre><code>npx github:chsxthwik/ORBIX</code></pre>
-        <p>Needs <a href="https://nodejs.org/">Node.js 20</a> or newer on Windows 10 or 11. No account, and no npm dependencies to install.</p>
+        <p>Needs <a href="https://nodejs.org/">Node.js 22</a> or newer on Windows 10 or 11. No account, and no npm dependencies to install.</p>
       </div>
       <p class="actions">
         <a class="btn" href="https://github.com/chsxthwik/ORBIX">Get ORBIX on GitHub</a>
@@ -130,7 +130,7 @@
         <details><summary>Where does my code go?</summary><p>To the model provider you choose. It receives your messages, the project rules and tool results, including the contents of files the agent reads. A local model (Ollama or LM Studio) keeps all of that on your PC.</p></details>
         <details><summary>Can I undo what the agent changed?</summary><p>Yes. Every file change has its own undo, and <code>/undo</code> reverts a whole reply. Commands cannot be undone.</p></details>
         <details><summary>Will it change files or run commands without asking?</summary><p>No. Reading and searching run without asking. Edits and commands ask first, unless you turn on &ldquo;Allow everything&rdquo; in Settings.</p></details>
-        <details><summary>Which systems does it run on?</summary><p>Windows 10 and 11, with Node.js 20 or newer. It can run commands in Windows or inside WSL.</p></details>
+        <details><summary>Which systems does it run on?</summary><p>Windows 10 and 11, with Node.js 22 or newer. It can run commands in Windows or inside WSL.</p></details>
         <details><summary>Is it free?</summary><p>ORBIX is free to use. The source is available under the Functional Source License and each release turns MIT after two years. Your model provider charges for its own usage.</p></details>
       </div>
     </section>
