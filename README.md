@@ -39,7 +39,7 @@ Bring your own API key or run a local model.
 3. ORBIX opens in your default browser. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Paste an API key and press **Check & save**, sign in with OpenRouter, or connect a local model.
 4. Open a project folder in ORBIX, describe a task and press <kbd>Enter</kbd>.
 
-ORBIX runs on Windows, macOS and Linux with Node.js 20 or newer. The UI and agent server stay on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
+ORBIX runs on Windows 10 and 11 with Node.js 20 or newer, using WSL or native Windows to run commands. The UI and agent server stay on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
 
 ## How a task runs
 

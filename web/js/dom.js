@@ -22,7 +22,7 @@ export function h(tag, props, ...kids) {
   return el;
 }
 
-export function append(el, kids) {
+function append(el, kids) {
   for (const k of kids.flat(Infinity)) {
     if (k == null || k === false) continue;
     el.append(k.nodeType ? k : document.createTextNode(String(k)));

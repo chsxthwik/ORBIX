@@ -20,7 +20,7 @@ export const WEB_SEARCH_DEF = {
   },
 };
 
-export const ENDPOINTS = { brave: 'https://api.search.brave.com/res/v1/web/search', tavily: 'https://api.tavily.com/search' };
+const ENDPOINTS = { brave: 'https://api.search.brave.com/res/v1/web/search', tavily: 'https://api.tavily.com/search' };
 const SEARCH_NAMES = { brave: 'Brave Search', tavily: 'Tavily', searxng: 'SearXNG' };
 
 const cut = (s, n) => {

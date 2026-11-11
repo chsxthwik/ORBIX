@@ -158,7 +158,7 @@ const ANSI = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)?|[PX^_][^
 const SGR = /^\x1b\[[0-9;:]*m$/;
 
 /** Remove ANSI escape sequences; with `keepSgr`, colour/style codes (ESC[...m) stay and everything else goes. */
-export const stripAnsi = (s, { keepSgr = false } = {}) => String(s).replace(ANSI, (m) => (keepSgr && SGR.test(m) ? m : ''));
+const stripAnsi = (s, { keepSgr = false } = {}) => String(s).replace(ANSI, (m) => (keepSgr && SGR.test(m) ? m : ''));
 
 /** Remove only the colour/style codes (what is left after cleanTerminal(s, { keepSgr: true })). */
 export const stripSgr = (s) => String(s).replace(/\x1b\[[0-9;:]*m/g, '');

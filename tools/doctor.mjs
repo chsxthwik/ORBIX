@@ -7,7 +7,7 @@ import { collect } from '../src/diagnostics.mjs';
 
 const store = new Store();
 const backend = new Backend(store.data.backend);
-const report = await collect({ backend, engineCfg: new EngineConfig(), envInfo: {}, port: '-', procs: new Map() });
+const report = await collect({ backend, engineCfg: new EngineConfig(), port: '-', procs: new Map() });
 for (const c of report.checks) {
   console.log(`${c.ok ? 'ok  ' : 'FAIL'}  ${c.label}${c.detail ? `: ${c.detail}` : ''}`);
   if (c.fix) console.log(`      fix: ${c.fix}`);

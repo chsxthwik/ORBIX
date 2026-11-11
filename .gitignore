@@ -1,7 +1,3 @@
 node_modules/
 *.log
 data/
-bin/
-release/
-runtime/
-site/download/

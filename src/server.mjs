@@ -11,7 +11,7 @@ import { mcpRoutes } from './engine/mcp.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, isAgentSessionPath } from './engine/store.mjs';
 import { clientFor } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
-import * as oauthXai from './engine/oauth-xai.mjs';
+import * as pkce from './engine/oauth-pkce.mjs';
 import { webSearch } from './engine/websearch.mjs';
 import { userInstructionsPath } from './engine/context.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
@@ -163,6 +163,7 @@ export class AppServer {
         c.end();
       } catch {}
     }
+    pkce.closeAll(); // sign-in callback servers
     this.server.close();
   }
 
@@ -338,7 +339,7 @@ export class AppServer {
     if (site && site !== 'same-origin' && site !== 'none') return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
     if (!this.authed(req)) {
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...SECURITY_HEADERS });
-      return res.end('ORBIX: open it from the app window or shortcut (token required).');
+      return res.end('ORBIX: open it with the link it printed when it started (token required).');
     }
     if (url.pathname.startsWith('/api/')) {
       // SameSite does not separate ports: a page on another local port would send our cookie. Browsers add Origin to
@@ -464,24 +465,24 @@ export class AppServer {
         return { models: models.length, engine: this.engineCfg.publicView() };
       },
       'POST /api/engine/oauth/start': async ({ body }) => {
-        const provider = body.provider || 'openrouter';
-        if (provider === 'xai') {
-          const { url, state } = oauthXai.startXai({ config: this.engineCfg });
-          if (oauthXai.isXaiAuthUrl(url)) openExternal(url);
+        const provider = String(body.provider || 'openrouter');
+        if (pkce.SPECS[provider]) {
+          const { url, state } = await pkce.startPkce(provider, { config: this.engineCfg });
+          if (pkce.isAuthUrl(provider, url)) openExternal(url); // the user's default browser
           return { url, state, provider };
         }
+        if (provider !== 'openrouter') throw Object.assign(new Error('This provider has no sign-in.'), { status: 400 });
         const { url, state } = oauth.startOpenRouter({ port: this.port });
         if (oauth.isOpenRouterAuthUrl(url)) openExternal(url);
         return { url, state, provider };
       },
       'GET /api/engine/oauth/status': async ({ q }) => {
         const or = oauth.oauthStatus(q.state);
-        if (or.status !== 'unknown') return { ...or, engine: this.engineCfg.publicView() };
-        return { ...oauthXai.oauthStatus(q.state), engine: this.engineCfg.publicView() };
+        return { ...(or.status !== 'unknown' ? or : pkce.pkceStatus(q.state)), engine: this.engineCfg.publicView() };
       },
       'POST /api/engine/oauth/cancel': async ({ body }) => {
         oauth.cancelOAuth(body.state);
-        oauthXai.cancelOAuth(body.state);
+        pkce.cancelPkce(body.state);
         return {};
       },
       'POST /api/engine/provider/clear': async ({ body }) => {
@@ -669,7 +670,6 @@ export class AppServer {
 
       'GET /api/git/status': async ({ q }) => ({ git: await gitapi.status(this.backend, wsPath(q)) }),
       'GET /api/git/diff': async ({ q }) => ({ diff: await gitapi.diff(this.backend, wsPath(q), q.file, { untracked: q.untracked === '1' }) }),
-      'GET /api/git/log': async ({ q }) => ({ log: await gitapi.log(this.backend, wsPath(q)) }),
       'POST /api/git/stage': async ({ body }) => (await gitapi.stage(this.backend, wsPath(body), body.paths), {}),
       'POST /api/git/unstage': async ({ body }) => (await gitapi.unstage(this.backend, wsPath(body), body.paths), {}),
       'POST /api/git/discard': async ({ body }) => (await gitapi.discard(this.backend, wsPath(body), { tracked: body.tracked, untracked: body.untracked }), {}),

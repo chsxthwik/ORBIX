@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **Sign in with ChatGPT.** The OpenAI provider has a Sign in with ChatGPT button. It uses the Codex CLI sign-in (unofficial; OpenAI can change it) and creates an API key on your OpenAI account, so it needs an OpenAI Platform organization; a ChatGPT subscription alone is not enough.
+- **Sturdier sign-ins.** If the sign-in port is busy you are told at once instead of waiting on a page that never loads, and the next port is tried. An xAI sign-in renews itself before it expires; if renewal fails, the provider says the sign-in has expired. Pasting a key replaces a sign-in completely.
+- **Waiting animation.** The bar shown while a reply starts is a soft pulse that travels across the line, drawn with the same characters as the ASCII orbit.
+- **Visible focus everywhere.** The message box, the sidebar filter and the console line show when they have the keyboard, and the top bar's search button no longer has its ring cut off.
+- **One size scale for controls.** Buttons are 36 px, small buttons 30 px, sidebar and Settings rows 34 px, and filters and pins 28 px, each with one corner radius. Opening a tool step no longer makes its row jump. Transitions use the shared timing and easing.
+- **Clean-up.** Removed about 450 lines of styles nothing used or that later rules always replaced, an unused script, the unused `GET /api/git/log` route and a stale event. `--no-window` is now `--no-open` (the old name still works). Sign-in callback servers close when ORBIX stops and no longer crash the process on a late error. The README says Windows, which is where ORBIX runs.
+- **Bigger tab close button** (24 px), and in a narrow window the session bar keeps the conversation's name readable instead of shrinking it to one letter.
 - **Allow edits, ask before commands.** A third permission mode between Ask me first and Allow everything: file edits run without asking (each can be undone) and commands still wait for you. Home shows it as Edits allowed.
 - **Trusted commands.** When a command asks for approval you can choose Always allow this command, and Settings → Permissions lists, adds and removes them. `npm run *` covers any script. A command that chains, pipes, redirects or substitutes (`&&`, `;`, `|`, `>`, `$(`) always asks, even if it starts with a trusted one. PowerShell commands are never trusted automatically.
 - **Instructions for every project.** Settings → Instructions holds what the agent should always know about you and how you work. It is sent in every session before the project's own AGENTS.md or CLAUDE.md, which wins when the two disagree. Stored as `data/AGENTS.md`.

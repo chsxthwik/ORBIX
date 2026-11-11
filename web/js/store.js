@@ -417,7 +417,6 @@ function reduce(tab, ev) {
     case 'stderr':
       tab.stderr.push(ev.line);
       if (tab.stderr.length > 400) tab.stderr.shift();
-      emit('tab:stderr', tab);
       break;
     case 'proc_exit':
       tab.dead = true;

@@ -15,7 +15,7 @@ Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ───�
 2. The server checks `data/instance.json` and reuses a healthy existing server when possible.
 3. A new server creates a random token, binds to port 47821 (or another available local port), and passes the token to the browser in a one-time URL. The server exchanges it for an `HttpOnly`, `SameSite=Strict` cookie, then redirects to `/`.
 4. On first run the server detects where commands run: the first WSL distribution that starts, otherwise Windows.
-5. The browser app keeps the server available when a tab closes. Stop the terminal process to shut it down. `npm run serve` runs headlessly and exits after the server has been idle; `node src/main.mjs --no-window` keeps the server running without opening a browser.
+5. The browser app keeps the server available when a tab closes. Stop the terminal process to shut it down. `npm run serve` runs headlessly and exits after the server has been idle; `node src/main.mjs --no-open` keeps the server running without opening a browser.
 
 ## The server (`src/server.mjs`)
 

@@ -8,6 +8,12 @@ import { brandMark } from './brands.js';
 const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
 
 let signIn = null; // {state, url, timer, provider} while a sign-in is waiting for the browser
+// How each sign-in is offered, and what the user should know before choosing it.
+const SIGN_IN = {
+  openrouter: { name: 'OpenRouter', label: 'Sign in with OpenRouter', note: 'or paste a key below' },
+  openai: { name: 'ChatGPT', label: 'Sign in with ChatGPT', note: 'Creates an API key on your OpenAI account. Needs an OpenAI Platform organization; a ChatGPT subscription alone is not enough. Uses the Codex CLI sign-in, which OpenAI can change at any time.' },
+  xai: { name: 'xAI', label: 'Sign in with xAI', note: 'Uses the Grok CLI sign-in, which xAI can change at any time. The sign-in renews itself.' },
+};
 let view = null; // the open settings screen, so a sign-in that finishes later updates whatever is showing now
 let openId = null; // the provider row showing its form; one at a time keeps a long list short
 const redraw = () => view?.root.isConnected && view.draw();
@@ -45,7 +51,7 @@ export async function renderEngineSettings(root) {
     try {
       const r = await api.post('/api/engine/oauth/start', { provider });
       const started = Date.now();
-      const name = provider === 'xai' ? 'xAI' : 'OpenRouter';
+      const name = SIGN_IN[provider]?.name || provider;
       signIn = { state: r.state, url: r.url, provider };
       toast('Complete the sign-in in your browser.', 'info', 5000);
       signIn.timer = setInterval(async () => {
@@ -119,8 +125,10 @@ export async function renderEngineSettings(root) {
           draw();
         } }, 'Cancel'));
       } else {
-        const label = p.via === 'oauth' ? 'Sign in again' : `Sign in with ${p.name}`;
-        oauthRow = h('div', { class: 'pv-oauth' }, h('button', { class: 'btn sm', type: 'button', onclick: () => startSignIn(p.id) }, label), h('span', { class: 'muted small' }, 'or paste a key below'));
+        const s = SIGN_IN[p.id] || { label: `Sign in with ${p.name}`, note: '' };
+        oauthRow = h('div', { class: 'pv-oauth' },
+          h('button', { class: 'btn sm', type: 'button', onclick: () => startSignIn(p.id) }, p.via === 'oauth' ? 'Sign in again' : s.label),
+          p.signInError ? h('span', { class: 'pv-oauth-err' }, 'The sign-in has expired. Sign in again.') : h('span', { class: 'muted small pv-oauth-note' }, s.note));
       }
     }
 

@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import { collectTurn } from './assemble.mjs';
 
-export const AUTO_COMPACT_RATIO = 0.8;
+const AUTO_COMPACT_RATIO = 0.8;
 
 /**
  * Context tokens above which the next request compacts first. The reply's max_tokens is reserved too: many servers
