@@ -15,6 +15,34 @@ export const MAX_GREP_BYTES = 1024 * 1024;
 const MAX_COUNT = 20000; // matching lines counted before a search stops early
 const LINE_CHARS = 300;
 
+// grep's JS engine keeps the lines of files it searched, keyed by path and checked against size and mtime, so the
+// searches an agent makes one after another read each unchanged file from disk once. Bounded by total size.
+const lineCache = new Map(); // full path -> { mtimeMs, size, lines (null: binary) }
+let lineBytes = 0;
+const LINE_CACHE_BYTES = 48 * 1024 * 1024;
+async function fileLines(full, st) {
+  const hit = lineCache.get(full);
+  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) {
+    lineCache.delete(full); // most recently used last
+    lineCache.set(full, hit);
+    return hit.lines;
+  }
+  if (hit) {
+    lineCache.delete(full);
+    lineBytes -= hit.size;
+  }
+  const buf = await fs.promises.readFile(full);
+  const lines = looksBinary(buf) ? null : buf.toString('utf8').split('\n');
+  lineCache.set(full, { mtimeMs: st.mtimeMs, size: st.size, lines });
+  lineBytes += st.size;
+  while (lineBytes > LINE_CACHE_BYTES && lineCache.size > 1) {
+    const [k, v] = lineCache.entries().next().value;
+    lineCache.delete(k);
+    lineBytes -= v.size;
+  }
+  return lines;
+}
+
 const escapeRe = (c) => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const byPath = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -341,9 +369,8 @@ export async function grepFiles({ hostRoot, single, regex, glob, context = 0, li
       skippedLarge++;
       return null;
     }
-    const buf = await fs.promises.readFile(f.full);
-    if (looksBinary(buf)) return null;
-    const lines = buf.toString('utf8').split('\n');
+    const lines = await fileLines(f.full, st);
+    if (!lines) return null;
     const found = [];
     // Match without the line's \r, so `$` works on CRLF files as it does in an editor.
     for (let i = 0; i < lines.length; i++) if (regex.test(lines[i].endsWith('\r') ? lines[i].slice(0, -1) : lines[i])) found.push(i);

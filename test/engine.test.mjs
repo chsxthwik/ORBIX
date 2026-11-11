@@ -196,6 +196,7 @@ describe('tools: createTools against a real folder', () => {
     });
     test('overwriting says so and carries a diff and the previous content for undo', async () => {
       put('ow.txt', 'one\ntwo\n');
+      await run('read', { path: 'ow.txt' });
       const r = await run('write', { path: 'ow.txt', content: 'one\n2\n' });
       assert.match(r.text, /^Overwrote /);
       assert.ok(r.details.diff.includes('-2|two'));
@@ -314,6 +315,7 @@ describe('tools: createTools against a real folder', () => {
     test('undo of a very large previous version is declined', async () => {
       const big = 'x'.repeat(600 * 1024);
       put('u4.txt', big);
+      await run('read', { path: 'u4.txt' });
       const r = await run('write', { path: 'u4.txt', content: 'small' });
       assert.equal(r.details.undo.skipped, true);
       assert.equal((await T.undo(r.details.undo)).ok, false);
@@ -480,6 +482,7 @@ describe('tools: createTools against a real folder', () => {
     const diffOf = async (before, after) => {
       const name = `diff${++n}.txt`; // a fresh file each time: write refuses files changed behind its back
       put(name, before);
+      await run('read', { path: name }); // write replaces only files the agent has read
       const r = await run('write', { path: name, content: after });
       assert.ok(!r.isError, r.text);
       return r.details;
@@ -1356,6 +1359,13 @@ describe('openai: pure helpers', () => {
       assert.equal(x.max_tokens, 100);
       assert.equal('max_completion_tokens' in x, false);
       assert.deepEqual(x.stream_options, { include_usage: true });
+    });
+    test('OpenAI requests carry one prompt cache key per system prompt; other providers none', () => {
+      const a = buildBody({ ...base, providerId: 'openai', system: 'S1' });
+      assert.match(a.prompt_cache_key, /^orbix-[0-9a-f]{32}$/);
+      assert.equal(buildBody({ ...base, providerId: 'openai', system: 'S1' }).prompt_cache_key, a.prompt_cache_key);
+      assert.notEqual(buildBody({ ...base, providerId: 'openai', system: 'S2' }).prompt_cache_key, a.prompt_cache_key);
+      assert.equal('prompt_cache_key' in buildBody({ ...base, providerId: 'groq', system: 'S1' }), false);
     });
     test('system prompt is the first message; no tools key when there are no tools', () => {
       const b = buildBody({ ...base, providerId: 'xai', system: 'SYS' });

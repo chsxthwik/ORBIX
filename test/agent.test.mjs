@@ -273,13 +273,26 @@ describe('tools: inputs and outputs', () => {
   });
   test('write keeps CRLF line endings and the encoding of the file it replaces', async () => {
     put(at('crlf.txt'), 'a\r\nb\r\n');
+    await run('read', { path: 'crlf.txt' });
     const r = await run('write', { path: 'crlf.txt', content: 'x\ny\n' });
     assert.match(r.text, /CRLF line endings kept/);
     assert.equal(fs.readFileSync(at('crlf.txt'), 'utf8'), 'x\r\ny\r\n');
     put(at('bom.txt'), Buffer.from([0xef, 0xbb, 0xbf, 0x61]));
+    await run('read', { path: 'bom.txt' });
     await run('write', { path: 'bom.txt', content: 'b' });
     assert.deepEqual([...fs.readFileSync(at('bom.txt'))], [0xef, 0xbb, 0xbf, 0x62]);
   });
+  test('write refuses to replace an existing file the agent has not read, and leaves it untouched', async () => {
+    fs.writeFileSync(at('unread.txt'), 'keep me');
+    const r = await run('write', { path: 'unread.txt', content: 'guess' });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /have not read it/);
+    assert.equal(fs.readFileSync(at('unread.txt'), 'utf8'), 'keep me');
+    await run('read', { path: 'unread.txt' });
+    assert.ok(!(await run('write', { path: 'unread.txt', content: 'known' })).isError);
+    assert.ok(!(await run('write', { path: 'brand-new.txt', content: 'new' })).isError, 'a new file needs no read');
+  });
+
   test('write refuses a file that changed on disk after the agent read it, until it is read again', async () => {
     put(at('stale.txt'), 'v1');
     await run('read', { path: 'stale.txt' });
