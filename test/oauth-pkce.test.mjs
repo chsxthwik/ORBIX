@@ -20,8 +20,9 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
   if (u.startsWith('http://127.0.0.1')) return realFetch(url, init);
   const body = typeof init.body === 'string' ? init.body : '';
-  calls.push({ url: u, body: Object.fromEntries(new URLSearchParams(body)), headers: init.headers || {} });
-  return answer(u, Object.fromEntries(new URLSearchParams(body)));
+  const fields = body.startsWith('{') ? {} : Object.fromEntries(new URLSearchParams(body));
+  calls.push({ url: u, body: fields, json: body.startsWith('{') ? JSON.parse(body) : null, headers: init.headers || {} });
+  return answer(u, fields);
 };
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 
@@ -40,60 +41,75 @@ after(() => {
   globalThis.fetch = realFetch;
 });
 
+// A JWT the way OpenAI shapes it; only the claims matter here (nothing verifies the signature).
+const jwt = (claims) => ['e30', Buffer.from(JSON.stringify(claims)).toString('base64url'), 'sig'].join('.');
+const AUTH = 'https://api.openai.com/auth';
+
 describe('Sign in with ChatGPT', () => {
   test('the authorize link carries exactly what the Codex CLI sends', async () => {
     const port = await freePort();
-    const { url, state } = await pkce.startPkce('openai', { config: fakeConfig(), ports: [port] });
+    const { url, state } = await pkce.startPkce('chatgpt', { config: fakeConfig(), ports: [port] });
     const u = new URL(url);
     assert.equal(u.origin + u.pathname, 'https://auth.openai.com/oauth/authorize');
     const q = Object.fromEntries(u.searchParams);
     assert.equal(q.client_id, 'app_EMoamEEZ73f0CkXaXp7hrann');
-    assert.equal(q.redirect_uri, `http://127.0.0.1:${port}/auth/callback`);
+    assert.equal(q.redirect_uri, `http://localhost:${port}/auth/callback`, 'the redirect Codex is registered with');
     assert.equal(q.response_type, 'code');
     assert.equal(q.code_challenge_method, 'S256');
     assert.match(q.code_challenge, /^[A-Za-z0-9_-]{43}$/);
     assert.equal(q.scope, 'openid profile email offline_access');
     assert.deepEqual([q.id_token_add_organizations, q.codex_cli_simplified_flow, q.originator], ['true', 'true', 'codex_cli_rs']);
     assert.equal(q.state, state);
-    assert.equal(pkce.isAuthUrl('openai', url), true);
-    assert.equal(pkce.isAuthUrl('openai', 'https://evil.example/oauth/authorize'), false);
+    assert.equal(pkce.isAuthUrl('chatgpt', url), true);
+    assert.equal(pkce.isAuthUrl('chatgpt', 'https://evil.example/oauth/authorize'), false);
     pkce.cancelPkce(state);
   });
 
-  test('a completed sign-in trades the ID token for an API key, checks it and saves it; the server then closes', async () => {
+  test('an account with a plan but no Platform organization signs in: the ChatGPT tokens are kept, no API key is made', async () => {
     const port = await freePort();
     const config = fakeConfig();
     calls.length = 0;
+    const exp = Math.floor(Date.now() / 1000) + 10 * 24 * 3600;
+    const access = jwt({ exp, [AUTH]: { chatgpt_account_id: 'acct-1', chatgpt_plan_type: 'plus' } });
     answer = (u, b) => {
-      if (u === 'https://auth.openai.com/oauth/token' && b.grant_type === 'authorization_code') return json({ id_token: 'idt', access_token: 'at', refresh_token: 'rt', expires_in: 3600 });
-      if (u === 'https://auth.openai.com/oauth/token' && b.grant_type === 'urn:ietf:params:oauth:grant-type:token-exchange') return json({ access_token: 'sk-from-signin' });
-      if (/\/models/.test(u)) return json({ data: [{ id: 'gpt-a' }, { id: 'gpt-b' }] });
-      return json({}, 500);
+      if (u === 'https://auth.openai.com/oauth/token' && b.grant_type === 'authorization_code') return json({ id_token: jwt({ [AUTH]: { chatgpt_account_id: 'acct-1' } }), access_token: access, refresh_token: 'rt' });
+      if (u.startsWith('https://chatgpt.com/backend-api/codex/models')) return json({ models: [{ slug: 'gpt-6-sol', visibility: 'list' }, { slug: 'hidden-one', visibility: 'hide' }] });
+      return json({ error: 'unexpected' }, 500);
     };
-    const { state } = await pkce.startPkce('openai', { config, ports: [port] });
+    const { state } = await pkce.startPkce('chatgpt', { config, ports: [port] });
     const r = await get(`http://127.0.0.1:${port}/auth/callback?code=the-code&state=${state}`);
     assert.equal(r.status, 200, r.body);
     assert.match(r.body, /Signed in to ChatGPT/);
-    const [codeCall, exchange] = calls;
-    assert.deepEqual({ ...codeCall.body, code_verifier: !!codeCall.body.code_verifier }, { grant_type: 'authorization_code', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann', code: 'the-code', redirect_uri: `http://127.0.0.1:${port}/auth/callback`, code_verifier: true });
-    assert.deepEqual(exchange.body, { grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange', client_id: 'app_EMoamEEZ73f0CkXaXp7hrann', requested_token: 'openai-api-key', subject_token: 'idt', subject_token_type: 'urn:ietf:params:oauth:token-type:id_token' });
-    assert.deepEqual(config.saved, [{ id: 'openai', key: 'sk-from-signin', models: 2, via: 'oauth', refresh: null, expiresAt: null }], 'an API key does not expire, so no refresh token is kept');
-    assert.deepEqual(pkce.pkceStatus(state), { status: 'done', error: '', models: 2 });
+    assert.ok(!calls.some((x) => x.body.grant_type?.includes('token-exchange')), 'no API-key exchange');
+    const models = calls.find((x) => x.url.includes('/models'));
+    assert.equal(models.headers['chatgpt-account-id'], 'acct-1');
+    assert.equal(models.headers.authorization, `Bearer ${access}`);
+    assert.deepEqual(config.saved, [{ id: 'chatgpt', key: access, models: 1, via: 'oauth', refresh: 'rt', expiresAt: exp * 1000 }]);
+    assert.deepEqual(pkce.pkceStatus(state), { status: 'done', error: '', models: 1 });
     const again = await get(`http://127.0.0.1:${port}/auth/callback?code=the-code&state=${state}`).catch(() => ({ status: 'closed' }));
     assert.ok(again.status === 'closed' || again.status === 400, 'the link works once');
     await new Promise((r) => setTimeout(r, 400));
     assert.equal(await portOpen(port), false, 'the callback server is closed');
   });
 
-  test('an account without an OpenAI Platform organization gets a clear message, not a broken key', async () => {
+  test('an account without a ChatGPT workspace gets a clear message', async () => {
     const port = await freePort();
     const config = fakeConfig();
-    answer = (u, b) => (b.grant_type === 'authorization_code' ? json({ id_token: 'idt', access_token: 'at' }) : json({ error: 'invalid_request', error_description: 'no organization' }, 400));
-    const { state } = await pkce.startPkce('openai', { config, ports: [port] });
-    const r = await get(`http://127.0.0.1:${port}/auth/callback?code=c&state=${state}`);
-    assert.equal(r.status, 502);
-    assert.match(pkce.pkceStatus(state).error, /did not create an API key.*no organization.*OpenAI Platform organization/s);
+    answer = () => json({ id_token: jwt({ email: 'x' }), access_token: jwt({}), refresh_token: 'rt' });
+    const { state } = await pkce.startPkce('chatgpt', { config, ports: [port] });
+    assert.equal((await get(`http://127.0.0.1:${port}/auth/callback?code=c&state=${state}`)).status, 502);
+    assert.match(pkce.pkceStatus(state).error, /no ChatGPT workspace/);
     assert.equal(config.saved.length, 0);
+  });
+
+  test('renewing uses a JSON body like Codex and keeps the old refresh token when none comes back', async () => {
+    calls.length = 0;
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    answer = () => json({ access_token: jwt({ exp }) });
+    const got = await pkce.refreshSignIn('chatgpt', 'rt-1');
+    assert.equal(got.refresh, 'rt-1');
+    assert.equal(got.expiresAt, exp * 1000);
+    assert.deepEqual(calls.at(-1).json, { client_id: 'app_EMoamEEZ73f0CkXaXp7hrann', grant_type: 'refresh_token', refresh_token: 'rt-1', scope: 'openid profile email' });
   });
 });
 
@@ -103,7 +119,7 @@ describe('the callback server', () => {
     const blocker = net.createServer().listen(port, '127.0.0.1');
     await new Promise((r) => blocker.on('listening', r));
     try {
-      await assert.rejects(() => pkce.startPkce('xai', { config: fakeConfig(), ports: [port] }), /in use/);
+      await assert.rejects(() => pkce.startPkce('chatgpt', { config: fakeConfig(), ports: [port] }), /in use/);
     } finally {
       blocker.close();
     }
@@ -114,8 +130,8 @@ describe('the callback server', () => {
     const blocker = net.createServer().listen(busy, '127.0.0.1');
     await new Promise((r) => blocker.on('listening', r));
     try {
-      const { url, state } = await pkce.startPkce('openai', { config: fakeConfig(), ports: [busy, spare] });
-      assert.equal(new URL(url).searchParams.get('redirect_uri'), `http://127.0.0.1:${spare}/auth/callback`);
+      const { url, state } = await pkce.startPkce('chatgpt', { config: fakeConfig(), ports: [busy, spare] });
+      assert.equal(new URL(url).searchParams.get('redirect_uri'), `http://localhost:${spare}/auth/callback`);
       pkce.cancelPkce(state);
     } finally {
       blocker.close();
@@ -124,33 +140,60 @@ describe('the callback server', () => {
 
   test('unknown or forged states, other paths and a cancelled sign-in are refused', async () => {
     const port = await freePort();
-    const { state } = await pkce.startPkce('xai', { config: fakeConfig(), ports: [port] });
-    assert.equal((await get(`http://127.0.0.1:${port}/callback?code=x&state=${'A'.repeat(43)}`)).status, 404);
+    const { state } = await pkce.startPkce('chatgpt', { config: fakeConfig(), ports: [port] });
+    assert.equal((await get(`http://127.0.0.1:${port}/auth/callback?code=x&state=${'A'.repeat(43)}`)).status, 404);
     assert.equal((await get(`http://127.0.0.1:${port}/favicon.ico`)).status, 404);
     assert.equal((await get(`http://127.0.0.1:${port}/elsewhere?code=x&state=${state}`)).status, 404);
-    const denied = await get(`http://127.0.0.1:${port}/callback?error=access_denied&state=${state}`);
+    const denied = await get(`http://127.0.0.1:${port}/auth/callback?error=access_denied&state=${state}`);
     assert.equal(denied.status, 400);
     assert.equal(pkce.pkceStatus(state).status, 'error');
     assert.match(pkce.pkceStatus(state).error, /access_denied/);
   });
 });
 
-describe('Sign in with xAI', () => {
-  test('keeps the refresh token and expiry, and refreshes with the same client', async () => {
+describe('Finishing from a pasted address', () => {
+  test('the address the browser landed on finishes the sign-in once; a foreign or empty address is refused', async () => {
     const port = await freePort();
     const config = fakeConfig();
-    calls.length = 0;
+    const access = jwt({ exp: Math.floor(Date.now() / 1000) + 3600, [AUTH]: { chatgpt_account_id: 'acct-9' } });
     answer = (u, b) => {
-      if (u === 'https://auth.x.ai/oauth2/token' && b.grant_type === 'authorization_code') return json({ access_token: 'xai-at', refresh_token: 'xai-rt', expires_in: 1800 });
+      if (u === 'https://auth.openai.com/oauth/token' && b.grant_type === 'authorization_code') return json({ access_token: access, refresh_token: 'rt' });
+      if (u.includes('/models')) return json({ models: [{ slug: 'gpt-x', visibility: 'list' }] });
+      return json({}, 500);
+    };
+    const { state } = await pkce.startPkce('chatgpt', { config, ports: [port] });
+    await assert.rejects(() => pkce.finishFromUrl(state, 'not a url'), /full address/);
+    await assert.rejects(() => pkce.finishFromUrl(state, `http://localhost:${port}/auth/callback?code=c&state=${'B'.repeat(43)}`), /different sign-in/);
+    await assert.rejects(() => pkce.finishFromUrl(state, `http://localhost:${port}/auth/callback?state=${state}`), /no sign-in code/);
+    const r = await pkce.finishFromUrl(state, `http://localhost:${port}/auth/callback?code=the-code&state=${state}`);
+    assert.equal(r.models, 1);
+    assert.equal(config.saved[0].key, access);
+    assert.equal(pkce.pkceStatus(state).status, 'done');
+    await assert.rejects(() => pkce.finishFromUrl(state, `http://localhost:${port}/auth/callback?code=the-code&state=${state}`), /no longer waiting/);
+  });
+});
+
+describe('Sign in with xAI (device code)', () => {
+  test('shows a code, waits while it is pending, keeps the refresh token and expiry, and refreshes with the same client', async () => {
+    const config = fakeConfig();
+    calls.length = 0;
+    let polls = 0;
+    answer = (u, b) => {
+      if (u === 'https://auth.x.ai/oauth2/device/code') return json({ device_code: 'dev-1', user_code: 'ABCD-1234', verification_uri: 'https://accounts.x.ai/oauth2/device', verification_uri_complete: 'https://accounts.x.ai/oauth2/device?user_code=ABCD-1234', expires_in: 1800, interval: 0 });
+      if (u === 'https://auth.x.ai/oauth2/token' && b.grant_type === 'urn:ietf:params:oauth:grant-type:device_code') return ++polls < 2 ? json({ error: 'authorization_pending' }, 400) : json({ access_token: 'xai-at', refresh_token: 'xai-rt', expires_in: 1800 });
       if (u === 'https://auth.x.ai/oauth2/token' && b.grant_type === 'refresh_token') return json({ access_token: 'xai-at-2', expires_in: 1800 });
       if (/\/models/.test(u)) return json({ data: [{ id: 'grok-a' }] });
       return json({}, 500);
     };
-    const { url, state } = await pkce.startPkce('xai', { config, ports: [port] });
-    assert.equal(new URL(url).searchParams.get('plan'), 'generic');
-    assert.ok(new URL(url).searchParams.get('nonce'));
     const t0 = Date.now();
-    assert.equal((await get(`http://127.0.0.1:${port}/callback?code=c&state=${state}`)).status, 200);
+    const { url, state, userCode } = await pkce.startDevice('xai', { config, minInterval: 20 });
+    assert.equal(userCode, 'ABCD-1234');
+    assert.equal(pkce.isAuthUrl('xai', url), true);
+    assert.deepEqual(calls[0].body, { client_id: 'b1a00492-073a-47ea-816f-4c329264a828', scope: 'openid profile email offline_access grok-cli:access api:access' });
+    assert.equal(pkce.pkceStatus(state).userCode, 'ABCD-1234');
+    for (let i = 0; i < 100 && pkce.pkceStatus(state).status !== 'done'; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(pkce.pkceStatus(state).status, 'done');
+    assert.equal(polls, 2, 'kept asking while the code was pending');
     const s = config.saved[0];
     assert.equal(s.key, 'xai-at');
     assert.equal(s.refresh, 'xai-rt');
@@ -159,7 +202,27 @@ describe('Sign in with xAI', () => {
     assert.equal(fresh.key, 'xai-at-2');
     assert.equal(fresh.refresh, 'xai-rt', 'the old refresh token is kept when none is returned');
     assert.deepEqual(calls.at(-1).body, { grant_type: 'refresh_token', refresh_token: 'xai-rt', client_id: 'b1a00492-073a-47ea-816f-4c329264a828' });
-    await assert.rejects(() => pkce.refreshSignIn('openai', 'x'), /do not refresh/);
+    await assert.rejects(() => pkce.refreshSignIn('openrouter', 'x'), /do not refresh|Unknown|sign-ins/);
+  });
+
+  test('a declined code ends the sign-in with a clear message; cancelling stops the polling', async () => {
+    let polls = 0;
+    answer = (u) => {
+      if (u.endsWith('/device/code')) return json({ device_code: 'd', user_code: 'XY', verification_uri: 'https://accounts.x.ai/oauth2/device', interval: 0 });
+      polls++;
+      return json({ error: polls > 1 ? 'access_denied' : 'authorization_pending' }, 400);
+    };
+    const a = await pkce.startDevice('xai', { config: fakeConfig(), minInterval: 20 });
+    for (let i = 0; i < 100 && pkce.pkceStatus(a.state).status === 'pending'; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(pkce.pkceStatus(a.state).status, 'error');
+    assert.match(pkce.pkceStatus(a.state).error, /declined/);
+    polls = -1000;
+    const b = await pkce.startDevice('xai', { config: fakeConfig(), minInterval: 20 });
+    pkce.cancelPkce(b.state);
+    const before = polls;
+    await new Promise((r) => setTimeout(r, 120));
+    assert.ok(polls - before <= 1, 'no polling after cancel');
+    await assert.rejects(() => pkce.startPkce('xai', { config: fakeConfig() }), /Unknown sign-in/);
   });
 
   test('EngineConfig refreshes an expiring sign-in once, and a pasted key clears it', { skip: process.platform !== 'win32' && 'DPAPI is Windows-only', timeout: 60000 }, async () => {

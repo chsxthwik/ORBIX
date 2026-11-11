@@ -11,8 +11,8 @@ let signIn = null; // {state, url, timer, provider} while a sign-in is waiting f
 // How each sign-in is offered, and what the user should know before choosing it.
 const SIGN_IN = {
   openrouter: { name: 'OpenRouter', label: 'Sign in with OpenRouter', note: 'or paste a key below' },
-  openai: { name: 'ChatGPT', label: 'Sign in with ChatGPT', note: 'Creates an API key on your OpenAI account. Needs an OpenAI Platform organization; a ChatGPT subscription alone is not enough. Uses the Codex CLI sign-in, which OpenAI can change at any time.' },
-  xai: { name: 'xAI', label: 'Sign in with xAI', note: 'Uses the Grok CLI sign-in, which xAI can change at any time. The sign-in renews itself.' },
+  chatgpt: { name: 'ChatGPT', label: 'Sign in with ChatGPT', note: 'Uses your ChatGPT Plus or Pro plan and its usage limits; no API key or credits. Works through the Codex CLI sign-in, which OpenAI can change at any time. The sign-in renews itself.' },
+  xai: { name: 'xAI', label: 'Sign in with xAI', note: 'You confirm a short code on x.ai; nothing else to install. Uses the Grok CLI sign-in, which xAI can change at any time. The sign-in renews itself.' },
 };
 let view = null; // the open settings screen, so a sign-in that finishes later updates whatever is showing now
 let openId = null; // the provider row showing its form; one at a time keeps a long list short
@@ -52,8 +52,8 @@ export async function renderEngineSettings(root) {
       const r = await api.post('/api/engine/oauth/start', { provider });
       const started = Date.now();
       const name = SIGN_IN[provider]?.name || provider;
-      signIn = { state: r.state, url: r.url, provider };
-      toast('Complete the sign-in in your browser.', 'info', 5000);
+      signIn = { state: r.state, url: r.url, provider, userCode: r.userCode || '' };
+      toast(r.userCode ? `Confirm the code ${r.userCode} in your browser.` : 'Complete the sign-in in your browser.', 'info', 5000);
       signIn.timer = setInterval(async () => {
         if (!signIn || Date.now() - started > 10.5 * 60 * 1000) {
           stopSignIn();
@@ -82,14 +82,14 @@ export async function renderEngineSettings(root) {
 
   function card(p) {
     const local = p.keyOptional && !p.editableUrl;
-    const key = local
+    const key = local || p.signInOnly
       ? null
       : h('input', { type: 'password', class: 'pv-key', placeholder: p.hasKey ? 'Key saved. Paste a new one to replace it.' : p.keyOptional ? 'API key (optional)' : 'Paste your API key', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${p.name} API key` });
     const url = p.editableUrl ? h('input', { type: 'text', class: 'pv-url', placeholder: 'http://localhost:8000/v1', value: p.baseUrl || '', spellcheck: 'false', 'aria-label': 'Server address' }) : null;
-    const save = h('button', { class: 'btn sm', type: 'button' }, local ? (p.configured ? 'Check again' : 'Connect') : 'Check & save');
+    const save = p.signInOnly && !p.configured ? null : h('button', { class: 'btn sm', type: 'button' }, local || p.signInOnly ? (p.configured ? 'Check again' : 'Connect') : 'Check & save');
     // The button turns primary once there is something to check.
-    for (const el of [key, url]) el?.addEventListener('input', () => save.classList.toggle('primary', !!(key?.value.trim() || (url && url.value.trim() !== (p.baseUrl || '')))));
-    save.addEventListener('click', async () => {
+    for (const el of [key, url]) el?.addEventListener('input', () => save?.classList.toggle('primary', !!(key?.value.trim() || (url && url.value.trim() !== (p.baseUrl || '')))));
+    save?.addEventListener('click', async () => {
       save.disabled = true;
       const label = save.textContent;
       save.textContent = 'Checking…';
@@ -103,7 +103,7 @@ export async function renderEngineSettings(root) {
         save.textContent = label;
       }
     });
-    for (const el of [key, url]) el?.addEventListener('keydown', (e) => e.key === 'Enter' && save.click());
+    for (const el of [key, url]) el?.addEventListener('keydown', (e) => e.key === 'Enter' && save?.click());
 
     const remove = p.configured
       ? h('button', { class: 'btn sm', type: 'button', onclick: async () => {
@@ -119,16 +119,50 @@ export async function renderEngineSettings(root) {
     let oauthRow = null;
     if (p.oauth) {
       if (signIn && signIn.provider === p.id) {
-        oauthRow = h('div', { class: 'pv-oauth' }, spinner(12), h('span', null, 'Complete the sign-in in your browser.'), h('button', { class: 'link', type: 'button', onclick: () => openLink(signIn.url) }, 'Open again'), h('button', { class: 'link', type: 'button', onclick: () => {
+        const cancel = h('button', { class: 'link', type: 'button', onclick: () => {
           api.post('/api/engine/oauth/cancel', { state: signIn?.state }).catch(() => {});
           stopSignIn();
           draw();
-        } }, 'Cancel'));
+        } }, 'Cancel');
+        const again = h('button', { class: 'link', type: 'button', onclick: () => openLink(signIn.url) }, 'Open again');
+        if (signIn.userCode) {
+          // Device code: the code to confirm, large enough to compare at a glance.
+          const code = signIn.userCode;
+          oauthRow = h('div', { class: 'pv-signin' },
+            h('div', { class: 'pv-signin-h' }, spinner(12), h('span', null, 'Confirm this code on x.ai, then come back here.')),
+            h('div', { class: 'pv-code-row' },
+              h('code', { class: 'pv-code', 'aria-label': 'Sign-in code' }, code),
+              h('button', { class: 'btn sm', type: 'button', onclick: (e) => navigator.clipboard?.writeText(code).then(() => { e.currentTarget.textContent = 'Copied'; }, () => toast('Copy failed', 'error')) }, 'Copy code')),
+            h('div', { class: 'pv-signin-acts' }, again, cancel));
+        } else {
+          // Browser sign-in: if the browser cannot reach ORBIX, its address can be pasted here instead.
+          const paste = h('input', { type: 'text', class: 'pv-paste', placeholder: 'http://localhost:1455/auth/callback?code=…', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Address from the browser' });
+          const finish = h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+            if (!paste.value.trim()) return paste.focus();
+            finish.disabled = true;
+            try {
+              const r = await api.post('/api/engine/oauth/paste', { state: signIn?.state, url: paste.value });
+              stopSignIn();
+              toast(`${SIGN_IN[p.id]?.name || p.name}: signed in${Number.isFinite(r.models) ? ` (${r.models} model${r.models === 1 ? '' : 's'})` : ''}`, 'ok', 4000);
+              await refresh(r.engine);
+            } catch (e) {
+              toast(e.message, 'error', 8000);
+              finish.disabled = false;
+            }
+          } }, 'Finish');
+          paste.addEventListener('keydown', (e) => e.key === 'Enter' && finish.click());
+          oauthRow = h('div', { class: 'pv-signin' },
+            h('div', { class: 'pv-signin-h' }, spinner(12), h('span', null, 'Finish signing in in your browser.'), h('span', { class: 'grow' }), again, cancel),
+            h('details', { class: 'pv-paste-d' },
+              h('summary', null, 'The browser showed an error page?'),
+              h('p', { class: 'muted small' }, 'Copy the full address from its address bar and paste it here.'),
+              h('div', { class: 'pv-form' }, paste, finish)));
+        }
       } else {
         const s = SIGN_IN[p.id] || { label: `Sign in with ${p.name}`, note: '' };
         oauthRow = h('div', { class: 'pv-oauth' },
           h('button', { class: 'btn sm', type: 'button', onclick: () => startSignIn(p.id) }, p.via === 'oauth' ? 'Sign in again' : s.label),
-          p.signInError ? h('span', { class: 'pv-oauth-err' }, 'The sign-in has expired. Sign in again.') : h('span', { class: 'muted small pv-oauth-note' }, s.note));
+          p.signInError ? h('span', { class: 'pv-oauth-err', title: p.signInError }, `The sign-in could not be renewed: ${p.signInError.replace(/\.$/, '')}. Sign in again.`) : h('span', { class: 'muted small pv-oauth-note' }, s.note));
       }
     }
 

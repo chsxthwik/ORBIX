@@ -117,6 +117,16 @@ export class EngineConfig {
     this.refreshing.set(id, job);
     return job;
   }
+  /** True when this provider's key came from a sign-in. */
+  isSignIn(id) {
+    return this.data.providers[id]?.via === 'oauth';
+  }
+  /** Renew a sign-in now (the provider rejected its token) and return the new token, or null when it cannot be renewed. */
+  async renewSignIn(id) {
+    if (!this.data.providers[id]?.refresh) return null;
+    await this._refresh(id);
+    return this.getKey(id);
+  }
   async setProvider(id, { key, baseUrl, models, via, refresh, expiresAt } = {}) {
     const p = this.provider(id);
     if (!p) throw new Error('Unknown provider');
@@ -228,7 +238,7 @@ export class EngineConfig {
       search: { provider: s?.provider || '', baseUrl: s?.baseUrl || '', hasKey: !!s?.key, configured: this.searchReady() },
       providers: PRESETS.map((p) => {
         const own = this.data.providers[p.id] || {};
-        return { id: p.id, name: p.name, type: p.type, note: p.note || '', keyUrl: p.keyUrl || '', oauth: !!p.oauth, local: !!p.local, keyOptional: !!p.keyOptional, editableUrl: !!p.editableUrl, hasKey: this.hasKey(p.id), configured: this.configured(p.id), baseUrl: this.baseUrl(p.id), models: Number.isFinite(own.models) ? own.models : null, via: own.via || null, signInError: own.signInError || null };
+        return { id: p.id, name: p.name, type: p.type, note: p.note || '', keyUrl: p.keyUrl || '', oauth: !!p.oauth, signInOnly: !!p.signInOnly, local: !!p.local, keyOptional: !!p.keyOptional, editableUrl: !!p.editableUrl, hasKey: this.hasKey(p.id), configured: this.configured(p.id), baseUrl: this.baseUrl(p.id), models: Number.isFinite(own.models) ? own.models : null, via: own.via || null, signInError: own.signInError || null };
       }),
     };
   }

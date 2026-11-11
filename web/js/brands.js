@@ -17,6 +17,7 @@ function draw([tag, attrs, kids], suffix) {
 
 /** The provider's logo, decorative (its name is always beside it). A provider without a mark, like a custom server, gets a neutral icon. */
 export function brandMark(id, size = 18, cls = '') {
+  if (id === 'chatgpt') id = 'openai'; // the ChatGPT plan and the OpenAI API share the maker's mark
   const m = Object.hasOwn(MARKS, id) ? MARKS[id] : null;
   if (!m) return icon('cpu', size, cls);
   const svg = document.createElementNS(NS, 'svg');

@@ -254,7 +254,7 @@ export async function* streamTurn({ apiKey, baseUrl = 'https://api.anthropic.com
 }
 
 /** Signatures our OpenAI-compatible client stores (OpenRouter reasoning, Gemini tool signatures) are tagged. */
-export const isForeignSignature = (sig) => /^(oc|gx):/.test(sig);
+export const isForeignSignature = (sig) => /^(oc|gx|cx):/.test(sig);
 
 const imageBytes = (data) => Math.floor((String(data).replace(/=+$/, '').length * 3) / 4);
 
