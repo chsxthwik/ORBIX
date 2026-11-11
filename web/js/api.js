@@ -8,7 +8,7 @@ async function call(method, url, body) {
   }
   if (r.status === 401) throw Object.assign(new Error('Session expired. Reopen ORBIX from its shortcut.'), { unauthorized: true });
   const j = await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }));
-  if (!j.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { code: j.code, status: r.status });
+  if (!r.ok || !j?.ok) throw Object.assign(new Error(typeof j?.error === 'string' ? j.error : `Request failed (HTTP ${r.status})`), { code: j?.code, status: r.status });
   return j;
 }
 
@@ -23,7 +23,11 @@ export const rpc = (proc, cmd, timeout) => api.post('/api/rpc', { proc, cmd, tim
 export function connectEvents({ onEvent, onGlobal, onOpen, onClose }) {
   let es;
   let closed = false;
+  let retryTimer;
   const open = () => {
+    if (closed) return;
+    clearTimeout(retryTimer);
+    es?.close();
     es = new EventSource('/api/events');
     es.onopen = () => onOpen?.();
     es.onmessage = (m) => {
@@ -39,12 +43,16 @@ export function connectEvents({ onEvent, onGlobal, onOpen, onClose }) {
     es.onerror = () => {
       onClose?.();
       // EventSource auto-reconnects; if the server answered 401 it stays CLOSED.
-      if (es.readyState === 2 && !closed) setTimeout(open, 2000);
+      if (es.readyState === 2 && !closed) {
+        clearTimeout(retryTimer);
+        retryTimer = setTimeout(open, 2000);
+      }
     };
   };
   open();
   return () => {
     closed = true;
+    clearTimeout(retryTimer);
     es?.close();
   };
 }

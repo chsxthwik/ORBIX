@@ -1,21 +1,8 @@
-import { h, rafThrottle } from './dom.js';
+import { h } from './dom.js';
 
 // Shared icon hints. One tooltip element, positioned outside clipped work surfaces.
 export function initInterface() {
   if(document.getElementById('orbix-control-tooltip'))return;
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
-  const move=rafThrottle((el,x,y)=>{
-    if(!el.isConnected||document.hidden)return;
-    const rect=el.getBoundingClientRect();
-    el.style.setProperty('--pointer-x',`${x-rect.left}px`);
-    el.style.setProperty('--pointer-y',`${y-rect.top}px`);
-  });
-  document.addEventListener('pointermove',e=>{
-    if(reduced.matches||e.pointerType==='touch')return;
-    const el=e.target.closest?.('.home-composer,.ws-recipe,.workspace-action');
-    if(el)move(el,e.clientX,e.clientY);
-  },{passive:true});
-  document.addEventListener('visibilitychange',()=>{if(document.hidden)move.cancel();});
   const tip=h('div',{class:'control-tooltip',id:'orbix-control-tooltip',role:'tooltip',hidden:true});
   document.body.append(tip);
   let target=null,timer=0,previous='';

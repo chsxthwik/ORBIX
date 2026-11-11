@@ -1,0 +1,112 @@
+/* Home. One column: the project, the task box, four suggestions, then sessions beside projects.
+   Page composition lives here; shared controls live in workspace.css. */
+.home.home.workspace-home {
+  display: flex;
+  max-width: 800px;
+  padding: clamp(24px, 6vh, 64px) clamp(16px, 3vw, 40px) 24px;
+  gap: 0;
+}
+.home.workspace-home .home-hero { max-width: none; margin: 0; align-items: stretch; text-align: left; animation: none; }
+
+/* The planet above the task box, and under the box the folder the task runs in. */
+.home.workspace-home .home-art { display: none; justify-content: center; margin-bottom: 6px; opacity: .9; }
+.home.workspace-home.has-project .home-art { display: flex; }
+.home.workspace-home .home-head[hidden], .home.workspace-home .home-where[hidden] { display: none; }
+.home.workspace-home .home-where { margin: 10px 2px 0; overflow: hidden; color: var(--fg-3); font: 12px/1.5 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.home.workspace-home.has-project .home-deck { margin-top: 0; }
+.home.workspace-home.has-project .home-composer .c-ta { min-height: 72px; }
+@media (max-height: 760px) { .home.workspace-home .home-art { display: none !important; } }
+
+/* Setup states: what to do first. */
+.home.workspace-home .home-head { min-width: 0; }
+.home.workspace-home .home-title { max-width: 100%; margin: 0; font-size: clamp(24px, 2.6vw, 30px); font-weight: 600; line-height: 1.2; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.home.workspace-home .home-sub { max-width: 68ch; margin: 6px 0 0; color: var(--fg-2); font-size: 14px; line-height: 1.55; }
+.home.workspace-home .home-sub.path { max-width: 100%; overflow: hidden; color: var(--fg-3); font: 12.5px/1.5 var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.home.workspace-home .home-alerts:not(:empty) { margin-top: 18px; }
+
+/* The task box. */
+.home.workspace-home .home-deck { margin-top: 22px; animation: none; }
+.home.workspace-home .home-composer { padding: 14px 14px 10px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-raise); box-shadow: none; transition: border-color var(--t1) var(--ease); }
+.home.workspace-home .home-composer:focus-within { border-color: var(--line-3); box-shadow: none; }
+.home.workspace-home .home-composer.busy { border-color: var(--live-line); }
+.home.workspace-home .home-composer .c-ta { min-height: 88px; max-height: min(320px, 40vh); padding: 2px 2px 8px; font-size: 15px; line-height: 1.6; }
+.home.workspace-home .home-composer .c-row { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); gap: 2px; }
+.home.workspace-home .c-row .cbtn { max-width: 220px; padding-inline: 8px; font-size: 12.5px; }
+.home.workspace-home .task-modes { display: inline-flex; flex: none; gap: 0; margin-right: 8px; padding: 2px; border: 1px solid var(--line-2); border-radius: 8px; background: transparent; }
+.home.workspace-home .task-mode { min-height: 0; height: 26px; padding: 0 11px; border-radius: 6px; color: var(--fg-2); font-size: 12.5px; font-weight: 500; box-shadow: none; outline: 0; transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
+.home.workspace-home .task-mode:hover { color: var(--fg); }
+.home.workspace-home .task-mode[aria-checked=true] { background: var(--bg-active); color: var(--fg); }
+.home.workspace-home .task-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.home.workspace-home .send.start { height: 32px; padding: 0 16px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+
+/* Suggestions: plain buttons that fill the box. */
+.home.workspace-home .home-under { margin-top: 14px; }
+.home.workspace-home .ws-recipes { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px; border: 0; }
+.home.workspace-home .ws-recipe { display: inline-flex; align-items: center; height: 30px; min-height: 0; padding: 0 12px; border: 1px solid var(--line); border-radius: 15px; background: transparent; color: var(--fg-2); font-size: 12.5px; animation: none; transform: none; transition: border-color var(--t1) var(--ease), color var(--t1) var(--ease); }
+.home.workspace-home .ws-recipe:hover, .home.workspace-home .ws-recipe:focus-visible { border-color: var(--line-3); background: transparent; color: var(--fg); box-shadow: none; transform: none; }
+
+/* Sessions beside projects. */
+.home.workspace-home .home-board-slot { margin-top: 44px; padding-top: 24px; border-top: 1px solid var(--line); gap: 20px; animation: none; }
+.home.workspace-home .home-board { display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 240px); gap: 32px; align-items: start; }
+.home.workspace-home .library-heading { margin-bottom: 10px; }
+.home.workspace-home .library-heading h2, .home.workspace-home .home-card-h h2 { margin: 0; font-size: 13.5px; font-weight: 600; letter-spacing: 0; }
+.home.workspace-home .library-heading .link, .home.workspace-home .home-card-h .link { font-size: 12.5px; }
+.home.workspace-home .library-search-wrap > svg:first-child { top: 50%; left: 11px; transform: translateY(-50%); pointer-events: none; }
+.home.workspace-home .library-search-wrap .library-search { height: 34px; padding-left: 34px; border-radius: 8px; background: transparent; font-size: 13px; }
+.home.workspace-home .library-toolbar { margin: 8px 0 4px; }
+.home.workspace-home .library-filter { padding: 4px 9px; font-size: 12.5px; }
+.home.workspace-home .library-sort { max-width: 130px; font-size: 12px; }
+.home.workspace-home .library-list { max-height: 392px; margin-inline: -8px; }
+.home.workspace-home .library-row { gap: 0; padding: 0; border: 0; border-radius: 8px; }
+.home.workspace-home .library-open { gap: 12px; padding: 8px; }
+.home.workspace-home .library-main { gap: 1px; }
+.home.workspace-home .library-main strong { font-size: 13.5px; font-weight: 500; }
+.home.workspace-home .library-main > span { font-size: 12px; line-height: 1.4; }
+.home.workspace-home .library-when, .home.workspace-home .library-badge { flex: none; color: var(--fg-3); font-size: 12px; }
+.home.workspace-home .library-badge.working { color: var(--live); }
+.home.workspace-home .library-pin { opacity: 0; transition: opacity var(--t1) var(--ease), color var(--t1) var(--ease); }
+.home.workspace-home .library-row:hover .library-pin, .home.workspace-home .library-row:focus-within .library-pin, .home.workspace-home .library-pin.on { opacity: 1; }
+.home.workspace-home .library-pin:hover { background: var(--bg-active); color: var(--fg); }
+.home.workspace-home .library-pin.on { background: transparent; color: var(--accent); }
+.home.workspace-home .library-count:empty { display: none; }
+.home.workspace-home .library-count, .home.workspace-home .library-limit { font-size: 12px; }
+.home.workspace-home .library-empty { min-height: 120px; }
+.home.workspace-home .library-empty strong { font-size: 13.5px; }
+.home.workspace-home .library-empty p, .home.workspace-home .library-empty .link { font-size: 12.5px; }
+.home.workspace-home .home-side { border: 0; padding: 0; }
+.home.workspace-home .home-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.home.workspace-home .home-card-h { padding: 0 0 10px; }
+.home.workspace-home .home-rows { margin-inline: -8px; }
+.home.workspace-home .home-row { min-height: 44px; padding: 6px 8px; border-radius: 8px; }
+.home.workspace-home .home-row.proj.cur { border-color: transparent; background: var(--bg-active); box-shadow: none; }
+.home.workspace-home .home-row.proj.cur .home-row-cur { color: var(--fg-2); }
+.home.workspace-home .home-keys { justify-content: flex-start; margin: 0; padding-top: 28px; gap: 8px 20px; animation: none; }
+
+/* First run: the providers. */
+.home.workspace-home.first { max-width: 720px; }
+.home.workspace-home.first .home-hero { align-self: stretch; }
+.home.workspace-home .cx-list { overflow: hidden; border: 1px solid var(--line-2); border-radius: 10px; }
+.home.workspace-home .cx-row { min-height: 52px; }
+
+:root[data-density=compact] .home.workspace-home .library-open { padding-block: 5px; }
+:root[data-density=compact] .home.workspace-home .home-row { min-height: 38px; }
+
+@container ws (max-width: 760px) {
+  .home.workspace-home .home-board { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+}
+@container ws (max-width: 520px) {
+  .home.workspace-home .home-composer { padding: 12px 12px 8px; }
+  .home.workspace-home .home-composer .c-row { flex-wrap: wrap; row-gap: 6px; }
+  .home.workspace-home .c-row > .grow { flex-basis: 100%; height: 0; }
+  .home.workspace-home .task-modes { margin-left: auto; }
+  .home.workspace-home .c-row .cbtn { max-width: 160px; }
+  .home.workspace-home .cx-s { display: none; }
+}
+@media (pointer: coarse) {
+  .home.workspace-home :is(.task-mode, .ws-recipe) { height: 40px; }
+  .home.workspace-home .library-pin { opacity: 1; }
+}
+@media (forced-colors: active) {
+  .home.workspace-home :is(.home-composer, .task-modes, .ws-recipe) { border-color: ButtonText; }
+  .home.workspace-home .task-mode[aria-checked=true] { outline: 2px solid Highlight; }
+}

@@ -7,8 +7,8 @@ import { clip, makeTitle, uid, textOf } from '../util.mjs';
 import { isWinPath } from '../backend.mjs';
 import * as providers from './providers.mjs';
 import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor, invalidArgsText } from './tools.mjs';
-import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession } from './store.mjs';
-import { loadInstructions, readMentions, promptAttachments, promptImages } from './context.mjs';
+import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession, isTrustedCommand, trustableCommand } from './store.mjs';
+import { loadInstructions, readMentions, promptAttachments, promptImages, loadUserInstructions } from './context.mjs';
 import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, lastMarker, rebuildSession, summarize, tokenScale } from './compact.mjs';
 import { runTasks, SUBAGENT_TOOLS } from './subagent.mjs';
 import { TurnAssembler, collectTurn } from './assemble.mjs';
@@ -810,7 +810,7 @@ export class AgentProc extends EventEmitter {
   }
 
   async _system({ subagent = false, tools } = {}) {
-    const [env, rules, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), loadInstructions(this.backend, this.workspace).catch(() => []), subagent ? [] : this._skills()]);
+    const [env, rules, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null)]).then(([own, mine]) => (mine ? [...own, mine] : own)), subagent ? [] : this._skills()]);
     const model = this.model ? `${this.provider ? this.provider + '/' : ''}${this.model}` : '';
     if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules }), tools);
     return buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode });
@@ -1026,6 +1026,16 @@ export class AgentProc extends EventEmitter {
     });
   }
 
+  /** Whether this call waits for the user, given the approval mode, what was allowed this session and trusted commands. */
+  _mustAsk(call, args) {
+    if (!this._needsApproval(call.name)) return false;
+    const mode = this.config.data.approvals;
+    if (mode === 'auto' || this.allowAlways.has(call.name)) return false;
+    if (mode === 'edits' && (call.name === 'edit' || call.name === 'write')) return false;
+    if (call.name === 'bash' && args?.shell !== 'powershell' && isTrustedCommand(args?.command, this.config.data.trusted)) return false;
+    return true;
+  }
+
   _askTitle(call) {
     const a = call.arguments || {};
     if (this.mcp.has(call.name)) return `Allow MCP tool ${this.mcp.describe(call.name)}?  ${clip(JSON.stringify(a), 200)}`;
@@ -1108,10 +1118,12 @@ export class AgentProc extends EventEmitter {
     // Stop pressed while a hook ran or an approval was open: nothing may run after that.
     const stopped = () => this.abortCtl?.signal.aborted && { text: 'Not run: the agent was stopped before this step.', isError: true };
     if (!result) result = stopped() || undefined;
-    if (!result && this._needsApproval(call.name) && this.config.data.approvals === 'ask' && !this.allowAlways.has(call.name)) {
-      const ans = await this._askUser(this._askTitle(call), ['Allow once', 'Allow for this session', 'Deny']);
+    if (!result && this._mustAsk(call, args)) {
+      const canTrust = call.name === 'bash' && args.shell !== 'powershell' && trustableCommand(args.command);
+      const ans = await this._askUser(this._askTitle(call), canTrust ? ['Allow once', 'Allow for this session', 'Always allow this command', 'Deny'] : ['Allow once', 'Allow for this session', 'Deny']);
       if (!ans || ans === 'Deny') result = { text: 'The user denied this action. Do not retry it; ask what they want instead.', isError: true };
       else if (ans === 'Allow for this session') this.allowAlways.add(call.name);
+      else if (ans === 'Always allow this command' && canTrust) this.config.addTrusted(args.command);
       t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you
     }
     if (!result) result = stopped() || undefined;

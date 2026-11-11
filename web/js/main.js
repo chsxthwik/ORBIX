@@ -40,6 +40,7 @@ function applyPrefs() {
   lsSet('look', { theme: name });
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
   root.classList.toggle('compact', u.density === 'compact');
+  root.dataset.density = u.density === 'compact' ? 'compact' : 'comfortable';
   root.style.setProperty('--side-w', Math.min(320, Math.max(220, u.sidebarW || 264)) + 'px');
   root.style.setProperty('--panel-w', (u.panelW || 380) + 'px');
   const side = narrowSide.matches ? overlay.side : u.sidebar !== false;
@@ -415,9 +416,8 @@ function drawTop() {
       h('span', { class: 'ell' }, x.name),
       h('button', { class: 'tab-x', type: 'button', tabindex: '-1', title: 'Close', 'aria-label': `Close ${x.name}`, onclick: (e) => (e.stopPropagation(), closeWithCheck(x)) }, icon('x', 12))))),
     iconBtn('plus', 'New session (Ctrl+N)', () => newSession(), S.active ? '' : 'on'),
-    !t && !tabs.length ? h('span', { class: 'workspace-location' }, icon('layers', 13), 'Workspace', h('span', { 'aria-hidden': 'true' }, '/'), 'Overview') : null,
     h('span', { class: 'grow' }),
-    h('button', { class: 'workspace-command', type: 'button', 'aria-label': 'Search workspace', onclick: () => openSearch() }, icon('search', 13), h('span', null, 'Search anything'), kbd('Ctrl K')),
+    h('button', { class: 'workspace-command', type: 'button', 'aria-label': 'Search workspace', onclick: () => openSearch() }, icon('search', 13), h('span', null, 'Search'), kbd('Ctrl+K')),
     t ? workspaceChip(t) : null,
     t ? iconBtn('more', 'Session actions', (e) => sessionMenu(t, e.currentTarget, { rename: () => renameTab(t), close: () => closeWithCheck(t) })) : null,
     t ? iconBtn('panel-right', 'Side panel (Ctrl+J)', togglePanel, 'tb-panel' + (panelShown() ? ' on' : '')) : null,

@@ -1,13 +1,13 @@
 // Home: start the next task, or get back to one. One message box, then what needs you, recent conversations and projects.
 // Before a model is connected the same place offers the providers, with a self-playing session below.
-import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd, logo } from './dom.js';
+import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api, rpc } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, engineReady, savePrefs, groupSessions, on, setActive } from './store.js';
 import { popMenu, modelPicker, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
+import { asciiOrbit } from './ascii.js';
 import { recipes } from './workspace.js';
-import { asciiStage } from './ascii-stage.js';
 import { sessionLibrary } from './session-library.js';
 
 // The home screen is redrawn when sessions or providers change. The message box stays mounted (so typing, IME
@@ -68,24 +68,19 @@ async function loadHomeModels(workspace) {
 /** The page's skeleton, built once per mount. */
 function shell(root) {
   if (W && root.contains(W.wrap)) return W;
-  W?.stage.destroy();
   const title = h('h1', { class: 'home-title' });
   const sub = h('p', { class: 'home-sub' });
   const alertSlot = h('div', { class: 'home-alerts' });
   const deckSlot = h('div', { class: 'home-deck' });
   const under = h('div', { class: 'home-under' });
-  const context = h('span', { class: 'workspace-context' });
-  const actions = h('div', {class:'workspace-actions'});
-  const stage = asciiStage();
-  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' },
-    h('div', { class: 'workspace-eyebrow' }, h('span', null, 'WORKSPACE'), context),
-    h('div', { class: 'workspace-heading' }, h('div', null, title, sub), stage.el),
-    actions, alertSlot, deckSlot, under);
+  const orbit = asciiOrbit({ cols: 64, rows: 15 });
+  const where = h('p', { class: 'home-where' });
+  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' }, h('div', { class: 'home-art', 'aria-hidden': 'true' }, orbit.el), h('header', { class: 'home-head' }, title, sub), alertSlot, deckSlot, where, under);
   const boardSlot = h('div', { class: 'home-board-slot' });
   const firstSlot = h('div', { class: 'home-first-slot' });
   const keysSlot = h('div', { class: 'home-keys-slot' });
-  const wrap = h('div', { class: 'home' }, hero, boardSlot, firstSlot, keysSlot);
-  W = { wrap, stage, context, actions, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
+  const wrap = h('div', { class: 'home workspace-home' }, hero, boardSlot, firstSlot, keysSlot);
+  W = { wrap, orbit, where, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -107,25 +102,12 @@ function deck() {
     onSubmit: () => C?.start(),
     onChange: () => {
       if (C?.go) C.go.disabled = starting;
-      if (C?.clearText) C.clearText.disabled = !draft.draft;
       clearTimeout(saveDraftTimer); saveDraftTimer = setTimeout(persistDraft, 250);
-      if (C?.draftCount) C.draftCount.textContent = draft.draft.length ? `${draft.draft.length.toLocaleString()} characters` : 'Draft stays in this tab';
     },
   });
   const row = h('div', { class: 'c-row' });
   comp.el.append(row);
   C = { comp, row, el: comp.el };
-  const draftCount = h('span', null, recovered?.text ? 'Draft restored in this tab' : 'Draft stays in this tab');
-  C.draftCount = draftCount;
-  let cleared = '';
-  const undoClear = h('button', { type: 'button', class: 'draft-link', hidden: true, onclick: () => {
-    if (comp.value) { toast('Your current draft was kept. Clear it before restoring the previous one.', 'info'); return; }
-    comp.value = cleared; undoClear.hidden = true; comp.focus();
-  } }, 'Undo clear');
-  C.clearText = h('button', { type: 'button', class: 'draft-link', disabled:!comp.value, onclick: () => {
-      if (!comp.value) return; cleared = comp.value; comp.value = ''; persistDraft(); undoClear.hidden = false; comp.focus();
-    } }, 'Clear text');
-  comp.el.append(h('div', { class: 'draft-utilities' }, draftCount, h('span', { class: 'grow' }), undoClear, C.clearText));
   return C;
 }
 
@@ -139,16 +121,11 @@ export function drawHome(root, H) {
   const projects = groupSessions().filter((g) => g.path);
   if (!projects.some((g) => g.path === draft.project)) draft.project = projects[0]?.path || '';
   const g = projects.find((x) => x.path === draft.project);
-  w.context.replaceChildren(icon('folder', 12), g?.name || 'No project selected');
-  w.context.title = g?.path || '';
-  if (!w.actions.childElementCount) w.actions.append(...[
-    ['folder-plus','Open project',()=>H.openFolder()],['search','Search workspace',()=>H.search()],['cog','Configure models',()=>H.settings('engine')],
-  ].map(([glyph,label,run])=>h('button',{class:'workspace-action',type:'button',onclick:run},icon(glyph,14),label)));
   const history = S.sessions.length > 0;
 
   const setupOnly = !agentOk && !history && !projects.length;
   w.wrap.classList.toggle('first', setupOnly);
-  drawHead(w, agentOk, g?.name);
+  drawHead(w, agentOk, g);
   w.keysSlot.replaceChildren(footKeys());
   w.alertSlot.replaceChildren(...attention(H));
 
@@ -165,15 +142,9 @@ export function drawHome(root, H) {
     if (boardChanged(w, 'first', projects)) {
       w.boardSlot.replaceChildren(history ? board(H, projects, false) : '');
     }
-    if (!w.firstSlot.firstChild) {
-      const fr = firstRun();
-      w.firstSlot.replaceChildren(fr);
-    }
-    // The preview stops on its own when Home is not on screen.
-    queueMicrotask(() => DEMO?.play());
+    w.firstSlot.replaceChildren();
     return;
   }
-  if (DEMO?.el.isConnected) DEMO.stop();
   w.firstSlot.replaceChildren();
   w.deckSig = null;
 
@@ -181,71 +152,75 @@ export function drawHome(root, H) {
   const { comp, row } = box;
   if (box.el.parentNode !== w.deckSlot) w.deckSlot.replaceChildren(box.el);
 
-  const projBtn = h('button', { class: 'cbtn proj-pick' + (g ? '' : ' need'), type: 'button', title: g ? g.path : 'Choose a project folder', 'aria-haspopup': 'menu' }, icon('folder', 14), h('span', { class: 'ell' }, g ? g.name : 'Choose a folder'), icon('chevron-down', 12, 'cbtn-chev'));
-  projBtn.addEventListener('click', () => {
-    if (!projects.length) return H.openFolder();
-    const items = projects.slice(0, 12).map((x) => ({ label: x.name, hint: x.path, on: x.path === draft.project, run: () => ((draft.project = x.path), redraw()) }));
-    popMenu(projBtn, [...items, '-', { label: 'Open folder…', run: () => H.openFolder() }], { minWidth: 280 });
-  });
+  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, agentOk, S.engine?.approvals, homeModel(), projects.map(p => [p.path, p.name])]);
+  if (box.controlsSig !== controlsSig) {
+    box.controlsSig = controlsSig;
+    const projBtn = h('button', { class: 'cbtn proj-pick' + (g ? '' : ' need'), type: 'button', title: g ? g.path : 'Choose a project folder', 'aria-haspopup': 'menu' }, icon('folder', 14), h('span', { class: 'ell' }, g ? g.name : 'Choose a folder'), icon('chevron-down', 12, 'cbtn-chev'));
+    projBtn.addEventListener('click', () => {
+      if (!projects.length) return H.openFolder();
+      const items = projects.slice(0, 12).map((x) => ({ label: x.name, hint: x.path, on: x.path === draft.project, run: () => ((draft.project = x.path), redraw()) }));
+      popMenu(projBtn, [...items, '-', { label: 'Open folder…', run: () => H.openFolder() }], { minWidth: 280 });
+    });
 
-  const m = homeModel();
-  const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new session' }, brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
-  modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
-    load: () => loadHomeModels(draft.project),
-    current: homeModel(),
-    extra: 'Default model',
-    onPick: (x) => {
-      savePrefs({ homeModel: x ? { provider: x.provider, id: x.id, name: x.name || x.id } : null });
-      redraw();
-    },
-  }));
+    const m = homeModel();
+    const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new session' }, brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
+    modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
+      load: () => loadHomeModels(draft.project),
+      current: homeModel(),
+      extra: 'Default model',
+      onPick: (x) => {
+        savePrefs({ homeModel: x ? { provider: x.provider, id: x.id, name: x.name || x.id } : null });
+        redraw();
+      },
+    }));
 
-  const unsaved = h('button', { class: 'cbtn on', type: 'button', title: 'This conversation will not be saved. Click to save it as usual.', hidden: !draft.ephemeral, onclick: () => ((draft.ephemeral = false), (unsaved.hidden = true)) }, h('span', null, 'Not saved'), icon('x', 12));
+    const unsaved = h('button', { class: 'cbtn on', type: 'button', title: 'This conversation will not be saved. Click to save it as usual.', hidden: !draft.ephemeral, onclick: () => ((draft.ephemeral = false), (unsaved.hidden = true)) }, h('span', null, 'Not saved'), icon('x', 12));
 
-  // Plan first: the session starts in plan mode (reads and proposes, changes nothing), then gets the task.
-  box.modeRow ||= h('div',{class:'task-mode-row'});
-  if (!box.modeRow.isConnected) comp.el.insertBefore(box.modeRow,comp.ta);
-  box.modeRow.replaceChildren(h('div',{class:'task-modes',role:'group','aria-label':'Task mode'},
-    ...[[false,'bolt','Build'],[true,'map','Plan']].map(([plan,glyph,label])=>h('button',{class:'task-mode',type:'button','aria-pressed':String(!!draft.plan===plan),onclick:()=>{draft.plan=plan;redraw();}},icon(glyph,13),label))),
-    h('span',{class:'task-mode-hint'},draft.plan?'Read and propose a plan':'Implement changes'));
-  const auto = S.engine?.approvals === 'auto';
-  const apprBtn = h('button', { class: 'cbtn appr' + (auto ? ' risky' : ''), type: 'button', title: auto ? 'Approvals are off: it edits and runs commands without asking. Click to change.' : 'Edits and commands wait for your OK. Click to change.', onclick: () => H.settings('behavior') }, icon('shield', 14), auto ? 'Approvals off' : 'Asks first');
-  const go = h('button', { class: 'send start', type: 'button', title: agentOk ? 'Start (Enter)' : 'Connect a model to run this task', 'aria-label': agentOk ? 'Start session' : 'Connect a model to start this task', disabled: starting }, h('span', null, agentOk ? 'Start task' : 'Connect model'), icon(agentOk ? 'send' : 'plug', 14));
-  box.go = go;
-  box.start = async () => {
-    if (starting) return; // Enter twice, or Enter and a click: one session
-    if (!draft.project) return H.openFolder();
-    if (!engineReady()) {
-      toast('Connect a model first.', 'error', 4000);
-      return H.settings('engine');
-    }
-    const p = comp.payload();
-    starting = true;
-    go.disabled = true;
-    comp.el.classList.add('busy');
-    try {
-      const mm = homeModel();
-      await api.post('/api/workspaces', { path: draft.project }).then((r) => (S.workspaces = r.workspaces)).catch(() => {});
-      const tab = await openTab({ workspace: draft.project, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: draft.ephemeral || undefined });
-      draft.ephemeral = false;
-      comp.reset(p?.raw);
-      persistDraft();
-      if (draft.plan) await sendPrompt(tab, '/plan');
-      if (p) await sendPrompt(tab, p.text || '(see the attached image)', { images: p.images });
-    } catch (e) {
-      if (p && !comp.hasContent()) { comp.restore(p); persistDraft(); }
-      toast(e.message, 'error', 8000);
-    } finally {
-      starting = false;
-      if (C) {
-        C.go.disabled = false;
-        C.comp.el.classList.remove('busy');
+    // Plan first: the session starts in plan mode (reads and proposes, changes nothing), then gets the task.
+    const modes = h('div', { class: 'task-modes', role: 'radiogroup', 'aria-label': 'Task mode' },
+      ...[[false, 'Build', 'Build: it edits files and runs commands'], [true, 'Plan', 'Plan: it reads and proposes a plan, and changes nothing']].map(([plan, label, title]) => h('button', { class: 'task-mode', type: 'button', role: 'radio', title, 'aria-checked': String(!!draft.plan === plan), onclick: () => {
+        draft.plan = plan;
+        redraw();
+      } }, label)));
+    const auto = S.engine?.approvals === 'auto', editsOnly = S.engine?.approvals === 'edits';
+    const apprBtn = h('button', { class: 'cbtn appr' + (auto ? ' risky' : ''), type: 'button', title: auto ? 'Approvals are off: it edits and runs commands without asking. Click to change.' : editsOnly ? 'File edits run without asking; commands wait for your OK. Click to change.' : 'Edits and commands wait for your OK. Click to change.', onclick: () => H.settings('behavior') }, icon('shield', 14), auto ? 'Approvals off' : editsOnly ? 'Edits allowed' : 'Asks first');
+    const go = h('button', { class: 'send start', type: 'button', title: agentOk ? 'Start (Enter)' : 'Connect a model to run this task', 'aria-label': agentOk ? 'Start session' : 'Connect a model to start this task', disabled: starting }, agentOk ? 'Start' : 'Connect a model');
+    box.go = go;
+    box.start = async () => {
+      if (starting) return; // Enter twice, or Enter and a click: one session
+      if (!draft.project) return H.openFolder();
+      if (!engineReady()) {
+        toast('Connect a model first.', 'error', 4000);
+        return H.settings('engine');
       }
-    }
-  };
-  go.addEventListener('click', () => box.start());
+      const p = comp.payload();
+      starting = true;
+      go.disabled = true;
+      comp.el.classList.add('busy');
+      try {
+        const mm = homeModel();
+        await api.post('/api/workspaces', { path: draft.project }).then((r) => (S.workspaces = r.workspaces)).catch(() => {});
+        const tab = await openTab({ workspace: draft.project, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: draft.ephemeral || undefined });
+        draft.ephemeral = false;
+        comp.reset(p?.raw);
+        persistDraft();
+        if (draft.plan) await sendPrompt(tab, '/plan');
+        if (p) await sendPrompt(tab, p.text || '(see the attached image)', { images: p.images });
+      } catch (e) {
+        if (p && !comp.hasContent()) { comp.restore(p); persistDraft(); }
+        toast(e.message, 'error', 8000);
+      } finally {
+        starting = false;
+        if (C) {
+          C.go.disabled = false;
+          C.comp.el.classList.remove('busy');
+        }
+      }
+    };
+    go.addEventListener('click', () => box.start());
 
-  row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, apprBtn, unsaved, h('span', { class: 'grow' }), go);
+    row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, apprBtn, unsaved, h('span', { class: 'grow' }), modes, go);
+  }
   const rec = recipes(comp);
   if (rec.parentNode !== w.under) w.under.replaceChildren(rec);
 
@@ -286,14 +261,20 @@ function boardChanged(w, mode, projects) {
   return true;
 }
 
-/** The one question on the screen. */
-function drawHead(w, ready, projectName) {
+/** With a project: the planet, the task box and where it will run. Without one: what to do first. */
+function drawHead(w, ready, project) {
   const live = liveTabs();
-  w.stage.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
-  const text = projectName || (!ready ? 'Connect a model' : 'Open a project');
+  w.orbit.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
+  w.wrap.classList.toggle('has-project', !!project);
+  const text = project ? '' : ready ? 'Open a project folder' : 'Connect a model';
   if (w.title.textContent !== text) w.title.textContent = text;
-  w.sub.textContent = !ready ? 'Draft a task, then connect a model to run it.' : projectName ? 'Start a task or resume a conversation.' : 'Choose the folder you want to work in.';
-  w.sub.hidden = !w.sub.textContent;
+  const sub = project ? '' : ready ? 'The agent works only inside a folder you choose.' : 'Add an API key, sign in, or use a model that runs on this PC. You can change it at any time.';
+  if (w.sub.textContent !== sub) w.sub.textContent = sub;
+  w.title.parentNode.hidden = !!project;
+  const where = project ? project.path : '';
+  if (w.where.textContent !== where) w.where.textContent = where;
+  w.where.hidden = !project;
+  w.where.title = where;
 }
 
 /** Sessions working or waiting on you, above everything else: this is what you came back for. */
@@ -313,7 +294,7 @@ function attention(H) {
 
 /** Recent conversations beside the projects and this week's activity. */
 function board(H, projects, canPick) {
-  return h('div', { class: 'home-board' }, sessionLibrary(H), h('div', {class:'home-side'},projectsCard(H, projects, canPick),S.sessions.length ? weekCard(projects) : null));
+  return h('div', { class: 'home-board' }, sessionLibrary(H), h('div', {class:'home-side'},projectsCard(H, projects, canPick)));
 }
 
 /** What is still needed before the first task. Optional extras live in Settings, not here. */
@@ -362,122 +343,11 @@ function connectDeck(H) {
     h('span', { class: 'cx-s' }, PV_SUB[p.id]),
     h('span', { class: 'cx-how' }, p.configured ? 'Connected' : PV_HOW[p.id]))));
   return h('section', { class: 'home-connect', 'aria-label': 'Connect a model' },
-    h('ul', { class: 'cx-list' }, ...rows),
+    rows.length ? h('ul', { class: 'cx-list' }, ...rows) : h('p', { class: 'home-none' }, 'Choose a provider in Settings to connect your first model.'),
     h('div', { class: 'connect-foot' },
       h('span', { class: 'connect-acts' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => H.settings('engine') }, all.length ? `All ${all.length} providers` : 'All providers'), h('button', { class: 'btn ghost sm', type: 'button', onclick: H.diagnostics }, 'Check my setup')),
       h('p', { class: 'setup-note' }, 'Keys are stored encrypted on this PC.')));
 }
-
-/** Beside the connect list on the first screen: a session that plays itself, and one line on how the agent behaves. */
-function firstRun() {
-  return h('section', { class: 'first-demo', 'aria-label': 'What a session looks like' },
-    demo(),
-    h('p', { class: 'first-cap' }, 'An example session. The agent reads without asking. Edits and commands wait for your OK, and every edit can be undone.'));
-}
-
-/**
- * The preview in the first screen's header: a short session that plays itself (a task typed in, the agent's steps,
- * the result), so the first thing you see is what a session looks like. Built once. It loops while it is on screen,
- * pauses while Home is hidden, and under prefers-reduced-motion shows the finished state instead.
- */
-let DEMO = null;
-const DEMO_TASK = 'The login test fails about one run in five. Find out why and fix it.';
-const DEMO_STEPS = [
-  ['read', 'eye', 'read', 'test/login.test.js', '', ''],
-  ['read', 'eye', 'read', 'src/auth/token.js', '', ''],
-  ['cmd', 'terminal', 'bash', 'npm test -- login', 'FAIL · 401', 'err'],
-  ['edit', 'pencil', 'edit', 'src/auth/token.js', '+1 −1', ''],
-  ['cmd', 'terminal', 'bash', 'npm test -- login', 'PASS ×6', 'ok'],
-];
-const DEMO_DONE = 'The token expired before the second request on slow machines. Expiry is now 500 ms, and a new test covers the slow path.';
-function demo() {
-  if (DEMO) return DEMO.el;
-  const txt = h('span', { class: 'demo-txt' });
-  const you = h('div', { class: 'demo-you' }, txt, h('i', { class: 'demo-caret' }));
-  const steps = h('div', { class: 'demo-steps' });
-  const done = h('div', { class: 'demo-done', hidden: true }, logo(16), h('span', null, DEMO_DONE), h('span', { class: 'demo-undo' }, icon('undo', 11), 'Undo'));
-  const st = h('span', { class: 'demo-st' });
-  const el = h('div', { class: 'demo', 'aria-hidden': 'true' },
-    h('div', { class: 'demo-bar' }, h('span', { class: 'dot' }), h('span', null, 'Example session'), st),
-    h('div', { class: 'demo-body' }, you, steps, done));
-  const row = ([k, ic, name, arg, out, tone]) => h('div', { class: `demo-row ${k}` }, icon(ic, 13), h('span', { class: 'demo-name' }, name), h('span', { class: 'demo-arg' }, arg), out ? h('span', { class: 'demo-out ' + tone }, out) : null);
-  const show = (state, label) => {
-    el.className = 'demo ' + state;
-    st.textContent = label;
-  };
-  let timer = 0;
-  const later = (fn, ms) => {
-    timer = setTimeout(() => {
-      timer = 0;
-      if (!el.isConnected) return void (DEMO.playing = false);
-      if (!el.checkVisibility()) return later(fn, 1000);
-      fn();
-    }, ms);
-  };
-  const finish = () => {
-    steps.replaceChildren(...DEMO_STEPS.map(row));
-    txt.textContent = DEMO_TASK;
-    done.hidden = false;
-    show('typed done', 'done · 1 file changed');
-  };
-  const play = () => {
-    if (DEMO.playing || !el.isConnected) return;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return finish();
-    DEMO.playing = true;
-    txt.textContent = '';
-    steps.replaceChildren();
-    done.hidden = true;
-    show('', '');
-    let i = 0;
-    let s = 0;
-    const step = () => {
-      if (s < DEMO_STEPS.length) {
-        const spec = DEMO_STEPS[s++];
-        const r = row(spec);
-        const out = r.querySelector('.demo-out');
-        if (out) {
-          out.textContent = '…';
-          out.className = 'demo-out live';
-        }
-        steps.append(r);
-        return later(() => {
-          if (out) {
-            out.textContent = spec[4];
-            out.className = 'demo-out ' + spec[5];
-          }
-          later(step, 450);
-        }, out ? 900 : 350);
-      }
-      done.hidden = false;
-      show('typed done', 'done · 1 file changed');
-      later(() => {
-        DEMO.playing = false;
-        play();
-      }, 7000);
-    };
-    const type = () => {
-      if (i < DEMO_TASK.length) {
-        txt.textContent = DEMO_TASK.slice(0, ++i);
-        return later(type, i === 1 ? 600 : 18 + Math.random() * 28);
-      }
-      show('typed run', 'working');
-      later(step, 700);
-    };
-    type();
-  };
-  DEMO = { el, play, playing: false, stop: () => {
-    clearTimeout(timer);
-    timer = 0;
-    DEMO.playing = false;
-  } };
-  return el;
-}
-
-// ================= lists =================
-// Everything here is read from real state: the saved conversations and the open tabs. Nothing is invented.
-
-const DAY = 864e5;
-const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
 function liveTabs() {
   const live = [...S.tabs.values()].filter((t) => !t.dead);
@@ -508,18 +378,4 @@ function projectsCard(H, projects, canPick) {
         h('span', { class: 'home-row-m' }, h('span', { class: 'home-row-t ell' }, g.name), h('span', { class: 'home-row-p ell' }, meta)),
         cur ? icon('check', 14, 'home-row-cur') : null);
     })) : h('p', { class: 'home-none' }, 'The agent only works inside folders you open.'));
-}
-
-/** Conversations last active on each of the past seven days. */
-function weekCard(projects) {
-  const today = startOfDay(Date.now());
-  const days = Array.from({ length: 7 }, (_, i) => today - (6 - i) * DAY);
-  const counts = days.map((d) => S.sessions.filter((s) => startOfDay(s.mtime) === d).length);
-  const total = counts.reduce((a, b) => a + b, 0);
-  const max = Math.max(1, ...counts);
-  return h('section', { class: 'home-card home-week', 'aria-label': 'This week' },
-    h('div', { class: 'home-card-h' }, h('h2', null, 'This week')),
-    h('div', { class: 'home-week-b' },
-      h('div', { class: 'home-week-n' }, h('b', { class: 'num' }, String(total)), h('span', null, `conversation${total === 1 ? '' : 's'} in ${projects.length} project${projects.length === 1 ? '' : 's'}`)),
-      h('span', { class: 'home-bars', role: 'img', 'aria-label': `Conversations per day, oldest first: ${counts.join(', ')}` }, ...days.map((d, i) => h('span', { class: 'home-bar' + (i === 6 ? ' today' : ''), title: `${new Date(d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}: ${counts[i]}` }, h('i', { style: { height: `${Math.max(counts[i] ? 18 : 6, (counts[i] / max) * 100)}%` } }), h('small', null, new Date(d).toLocaleDateString(undefined, { weekday: 'narrow' })))))));
 }

@@ -1757,3 +1757,18 @@ button.ov-row:focus-visible { outline-offset: -2px; }
 .compact .tool + .tool { margin-top: -4px; }
 .compact .md { line-height: 1.58; }
 .compact .home-row { min-height: 38px; }
+
+/* ================= settings: trusted commands, instructions ================= */
+.trust-card { padding: 4px 14px 12px; }
+.trust-list { display: flex; flex-direction: column; }
+.trust-row { display: flex; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--line); }
+.trust-row code { flex: 1; min-width: 0; color: var(--fg); font-size: 13px; }
+.trust-list .set-none { padding: 12px 0; }
+.trust-add { display: flex; gap: 8px; padding-top: 12px; }
+.trust-in { flex: 1; min-width: 0; height: 32px; font-family: var(--mono); font-size: 13px; }
+.rules-ta { display: block; width: 100%; min-height: 260px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--bg-raise); color: var(--fg); font: 13.5px/1.6 var(--mono); resize: vertical; }
+.rules-ta:focus { outline: none; border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); }
+.rules-foot { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.rules-n { color: var(--fg-3); font-size: 12px; }
+.rules-n.over { color: var(--err); }
+.rules-status { color: var(--fg-2); font-size: 12.5px; }
