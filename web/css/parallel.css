@@ -1,0 +1,20 @@
+/* Sessions on their own branch: the board rows in the sidebar and the Review view of the side panel. */
+
+/* Board: the branch sits under the session name, in the same quiet ink as what the agent is doing. */
+.run-br { color: var(--fg-2); font-size: 12px; }
+.run-st.idle { color: var(--fg-3); font-weight: 400; }
+.app.rail .run-br { display: none; }
+
+/* Review view */
+.rv-base { color: var(--fg-3); }
+.rv-stat { flex: none; display: inline-flex; gap: 6px; font-size: 12px; }
+.rv-note { display: grid; gap: 4px; margin: 8px 12px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: var(--control-radius-sm); color: var(--fg-2); font-size: 13px; line-height: 1.5; }
+.rv-note p { margin: 0; }
+.rv-note ul { margin: 2px 0; padding-left: 18px; }
+.rv-conflict { border-color: var(--warn-line); background: var(--warn-soft); color: var(--fg); }
+.rv-actions { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); }
+.rv-actions .btn { height: var(--control-small); min-height: var(--control-small); border-radius: var(--control-radius-sm); }
+.rv-actions .grow { flex: 1; }
+
+/* "Separate branch" in the new-session box */
+.c-row .cbtn.branch-pick { height: var(--control-height); min-height: var(--control-height); border-radius: var(--control-radius); }

@@ -8,6 +8,7 @@ import { langFor } from './highlight.js';
 import { ansiFragment } from './ansi.js';
 import { runInspector } from './run-inspector.js';
 import { coalesce } from './coalesce.mjs';
+import { drawReview, loadReview, reviewCount } from './review.js';
 
 const P = { tab: 'files', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
@@ -15,11 +16,17 @@ let body;
 let tabsEl;
 let inspector = null;
 
-const TABS = [['run', 'Run', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']];
+const ALL_TABS = [['run', 'Run', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']];
+// Review is there for a session on its own branch only.
+let TABS = ALL_TABS.filter(([k]) => k !== 'review');
+function syncTabs(t) {
+  TABS = ALL_TABS.filter(([k]) => k !== 'review' || !!t?.worktree);
+  if (!TABS.some(([k]) => k === P.tab)) P.tab = 'changes';
+}
 
 export function mountPanel(el) {
   root = el;
-  if (TABS.some(([k]) => k === S.ui.rightTab)) P.tab = S.ui.rightTab;
+  if (ALL_TABS.some(([k]) => k === S.ui.rightTab)) P.tab = S.ui.rightTab;
   tabsEl = h('div', { class: 'ptabs', role: 'tablist', 'aria-label': 'Side panel' });
   body = h('div', { class: 'pbody' });
   root.append(tabsEl, body);
@@ -31,7 +38,8 @@ export function mountPanel(el) {
       P.tree.clear(); // the agent may have created or removed files
       if (P.tab === 'files' && !P.file) draw();
     }
-    if ((kind === 'todos' && P.tab === 'todos') || (kind === 'agents' && P.tab === 'agents')) draw();
+    if ((kind === 'todos' && P.tab === 'todos') || (kind === 'agents' && P.tab === 'agents') || (kind === 'review' && P.tab === 'review')) draw();
+    if ((kind === 'git' || kind === 'review') && tab.worktree && P.tab === 'review') loadReview(tab, reviewRedraw);
     drawTabs();
   });
   on('tab:state', (tab) => tab === activeTab() && drawTabs());
@@ -41,7 +49,13 @@ export function mountPanel(el) {
   resetFor(activeTab());
 }
 
+const reviewRedraw = () => {
+  if (P.tab === 'review') draw();
+  drawTabs();
+};
+
 function resetFor(tab) {
+  syncTabs(tab);
   const ws = tab?.workspace || null;
   if (ws !== P.ws) {
     Object.assign(P, { ws, file: null, diff: null, git: null, gitErr: null, tree: new Map(), open: new Set() });
@@ -62,6 +76,7 @@ export function showTab(name) {
   drawTabs();
   draw();
   if (name === 'changes') loadGit();
+  if (name === 'review' && activeTab()?.worktree) loadReview(activeTab(), reviewRedraw);
   savePrefs({ rightTab: name, rightPanel: true });
   emit('panel:open');
   if (name === 'console') setTimeout(() => body.querySelector('.console-in input')?.focus(), 0);
@@ -69,10 +84,11 @@ export function showTab(name) {
 
 function drawTabs() {
   const t = activeTab();
+  syncTabs(t);
   const nChanges = P.git?.files?.length || 0;
   const nTodo = (t?.todos || []).flatMap((p) => p.tasks || []).filter((x) => x.status !== 'completed' && x.status !== 'abandoned').length;
   const nAg = [...(t?.subagents?.values() || [])].filter((a) => /running|started|pending/.test(a.progress?.status || a.status || '')).length;
-  const badge = { changes: nChanges, todos: nTodo, agents: nAg };
+  const badge = { changes: nChanges, todos: nTodo, agents: nAg, review: reviewCount(t) };
   replace(tabsEl, TABS.map(([k, l, ic], index) => h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), type: 'button', role: 'tab', 'aria-label':l, tabindex:P.tab===k?'0':'-1', 'aria-selected': String(P.tab === k), title: l, onclick: () => showTab(k), onkeydown:e=>{
     let next;
     if(e.key==='ArrowRight')next=(index+1)%TABS.length;
@@ -88,7 +104,7 @@ function draw() {
   inspector = null;
   if (!t) return;
   if (P.tab === 'run') { inspector = runInspector(t, () => showTab('changes')); body.append(inspector.el); return; }
-  ({ files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole })[P.tab](t);
+  ({ files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole, review: (x) => drawReview(x, body, { redraw: reviewRedraw, viewFile }) })[P.tab](t);
 }
 
 const emptyState = (kind, text) => h('div', { class: 'empty' }, asciiArt(kind), text);
