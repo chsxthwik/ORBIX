@@ -395,7 +395,7 @@ describe('static files', () => {
     const expect = [
       [`/js/${jsFile}`, /^text\/javascript/],
       ['/css/app.css', /^text\/css/],
-      ['/fonts/inter-latin-wght-normal.woff2', /^font\/woff2$/],
+      ['/fonts/ibm-plex-sans-latin-wght-normal.woff2', /^font\/woff2$/],
       ['/assets/icon.png', /^image\/png$/],
       ['/assets/icon.ico', /^image\/x-icon$/],
     ];

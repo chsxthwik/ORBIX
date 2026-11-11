@@ -1,7 +1,7 @@
 {
   "name": "orbix",
   "version": "3.1.0",
-  "description": "ORBIX - Unified ADE: a Windows desktop agentic development environment with its own AI agent. WSL and native Windows backends.",
+  "description": "ORBIX - a local-first AI coding workspace in your browser. WSL and native Windows backends.",
   "private": true,
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
@@ -14,18 +14,13 @@
   "scripts": {
     "start": "node src/main.mjs",
     "test": "node --test",
-    "serve": "node src/main.mjs --no-window",
-    "build": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-host.ps1",
-    "package": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1",
-    "doctor": "node tools/doctor.mjs",
-    "shortcut": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install-shortcut.ps1",
-    "install:app": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/install.ps1"
+    "serve": "node src/main.mjs --serve",
+    "doctor": "node tools/doctor.mjs"
   },
   "keywords": [
     "coding-agent",
-    "desktop",
-    "windows",
-    "webview2",
+    "web-app",
+    "local-first",
     "wsl",
     "ade"
   ],

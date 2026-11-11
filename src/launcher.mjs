@@ -1,8 +1,6 @@
-// Small OS helpers: open web links in the user's default browser, and start the native desktop host.
-import fs from 'node:fs';
-import path from 'node:path';
+// Small OS helper for opening the local web app in the user's default browser.
 import { spawn } from 'node:child_process';
-import { ROOT, log } from './util.mjs';
+import { log } from './util.mjs';
 
 /** Open an http(s) URL in the user's default browser (where they are already signed in). */
 export function openExternal(url) {
@@ -13,13 +11,3 @@ export function openExternal(url) {
   child.unref();
 }
 
-const HOST_EXE = path.join(ROOT, 'bin', 'ORBIX.exe');
-
-/** Start the native Windows desktop app (bin/ORBIX.exe). Returns false when it has not been built yet. */
-export function launchDesktop(extraArgs = []) {
-  if (!fs.existsSync(HOST_EXE)) return false;
-  const child = spawn(HOST_EXE, extraArgs, { detached: true, stdio: 'ignore', cwd: ROOT });
-  child.on('error', (e) => log('desktop host failed', e.message));
-  child.unref();
-  return true;
-}

@@ -482,6 +482,12 @@ export function createTools({ backend, cwd, getSignal }) {
           const hint = first ? occurrences(text, first).map((i) => lineAt(text, i)) : [];
           return { text: `old_string was not found in ${shown}. ${hint.length ? `Its first line appears at line ${listLines(hint)}, but the lines after it differ. ` : ''}Read the file again and copy the exact current text (whitespace matters).`, isError: true };
         }
+        // A whitespace-tolerant match rewrites lines that were not quoted exactly, so it is only applied to text the
+        // agent has actually seen: a file it read (or wrote) in this session that has not changed since.
+        const mtime = await fs.promises.stat(file).then((s) => s.mtimeMs, () => null);
+        if (!seen.has(file) || seen.get(file) !== mtime) {
+          return { text: `old_string was not found exactly in ${shown}; it matches line ${matches[0].line} only when whitespace is ignored, and ${seen.has(file) ? 'the file changed after you last read it' : 'you have not read this file in this session'}. Read it, then copy the exact current text into old_string.`, isError: true };
+        }
         const m = matches[0];
         let repl = (stripLineNumbers(newS) ?? newS).replace(/\r\n/g, '\n');
         repl = reindent(repl, m.oldIndent, m.indent);

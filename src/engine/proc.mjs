@@ -291,6 +291,7 @@ export class AgentProc extends EventEmitter {
       model: m,
       thinkingLevel: this.thinkingLevel,
       isStreaming: this.streaming,
+      turnStartedAt: this.streaming ? this.run?.startedAt || null : null,
       isCompacting: this.compacting,
       sessionId: this.sessionId,
       autoCompactionEnabled: this.autoCompact,

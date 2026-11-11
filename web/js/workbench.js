@@ -1,7 +1,8 @@
-// The bar above a conversation: what the session is doing, its name and size, and four tools for reading it:
+// The bar above a conversation: what the session is doing, its name and size, the message of yours that the reply
+// on screen answers (once that message has scrolled away), and four tools for reading it:
 // find in conversation (Ctrl+F), an outline of your messages (Ctrl+Shift+O), a wider reading column, and focus
 // mode (Ctrl+Shift+F), which hides everything except the conversation.
-import { h, icon, iconBtn, lsGet, lsSet, debounce } from './dom.js';
+import { h, icon, iconBtn, lsGet, lsSet, debounce, rafThrottle } from './dom.js';
 import { on, emit, textOf } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 
@@ -51,6 +52,8 @@ export class SessionBar {
     this.state = h('span', { class: 'sbar-state' });
     this.title = h('button', { class: 'sbar-title', type: 'button', title: 'Rename session', onclick: () => barHandlers.rename?.(view.tab) });
     this.meta = h('span', { class: 'sbar-meta num' });
+    this.ctxText = h('span', { class: 'ell' });
+    this.ctx = h('button', { class: 'sbar-ctx', type: 'button', hidden: true, title: 'Jump to this message', onclick: () => this.jumpCtx() }, icon('message', 12), this.ctxText);
     this.findBtn = iconBtn('search', 'Find in conversation (Ctrl+F)', () => this.toggleFind(), 'sm');
     this.outlineBtn = iconBtn('list', 'Your messages (Ctrl+Shift+O)', () => this.openOutline(), 'sm');
     this.wideBtn = iconBtn('wrap', 'Wide reading column', () => toggleWide(), 'sm');
@@ -72,9 +75,11 @@ export class SessionBar {
     });
 
     this.el = h('div', { class: 'sbar-wrap' },
-      h('header', { class: 'sbar' }, this.state, this.title, this.meta, h('span', { class: 'grow' }), this.findBtn, this.outlineBtn, this.wideBtn, this.zenBtn),
+      h('header', { class: 'sbar' }, this.state, this.title, this.meta, this.ctx, h('span', { class: 'grow' }), h('button', {class:'sbar-zen run-open',type:'button',title:'Run inspector (Ctrl+Shift+R)',onclick:()=>emit('run:open')},icon('activity',14),'Inspect'), this.findBtn, this.outlineBtn, this.wideBtn, this.zenBtn),
       this.findRow);
     this.offZen = on('zen', () => this.el.isConnected && this.update());
+    this.track = rafThrottle(() => this.trackCtx());
+    view.scroller.addEventListener('scroll', this.track, { passive: true });
     this.update();
   }
 
@@ -116,6 +121,37 @@ export class SessionBar {
     this.zenBtn.setAttribute('aria-pressed', String(zen));
     this.zenBtn.title = zen ? 'Leave focus mode (Ctrl+Shift+F)' : 'Focus mode: only the conversation (Ctrl+Shift+F)';
     this.zenBtn.replaceChildren(icon('eye', 14), zen ? 'Exit focus' : 'Focus');
+  }
+
+  // ---- what you asked, for the reply on screen ----
+
+  /** The last message of yours above the top of the view. Shown only once it has scrolled out of sight. */
+  trackCtx() {
+    const sc = this.view.scroller;
+    const top = sc.getBoundingClientRect().top;
+    let cur = null;
+    for (const el of this.view.tin.querySelectorAll('.msg.user')) {
+      if (el.getBoundingClientRect().top > top + 8) break;
+      cur = el;
+    }
+    const show = !!cur && cur.getBoundingClientRect().bottom < top;
+    this.ctxEl = show ? cur : null;
+    if (show) {
+      const text = (cur.querySelector('.b-text')?.textContent || 'Attachment').trim().split('\n')[0];
+      if (this.ctxText.textContent !== text) this.ctxText.textContent = text;
+    }
+    if (this.ctx.hidden === show) {
+      this.ctx.hidden = !show;
+      this.meta.hidden = show;
+    }
+  }
+
+  jumpCtx() {
+    const v = this.view;
+    if (!this.ctxEl?.isConnected) return;
+    v.stick = false;
+    v.timeline.jumpTo(this.ctxEl);
+    v.showJump(true);
   }
 
   // ---- outline ----
@@ -241,6 +277,8 @@ export class SessionBar {
   destroy() {
     clearInterval(this.timer);
     this.offZen?.();
+    this.track.cancel?.();
+    this.view.scroller.removeEventListener('scroll', this.track);
     if (!this.findRow.hidden) clearHighlights();
   }
 }

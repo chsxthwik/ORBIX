@@ -167,6 +167,8 @@ export async function attach(tab) {
 function applyState(tab, d) {
   tab.state = d;
   tab.streaming = !!d.isStreaming;
+  // The agent knows when its turn began; a reload must not restart the timers at 0.
+  if (tab.streaming && d.turnStartedAt) tab.turnStartedAt = d.turnStartedAt;
   tab.compacting = !!d.isCompacting;
   tab.todos = d.todoPhases || [];
   tab.queued = d.queuedMessages || { steering: [], followUp: [] };
@@ -577,7 +579,7 @@ export function onProcs(procs) {
     const t = S.tabs.get(p.id);
     if (t && t.streaming !== p.streaming && t.ready) {
       t.streaming = p.streaming;
-      if (p.streaming && !t.turnStartedAt) t.turnStartedAt = Date.now();
+      if (p.streaming && !t.turnStartedAt) t.turnStartedAt = p.turnStartedAt || Date.now();
       emit('tab:status', t);
     }
   }

@@ -13,6 +13,7 @@ import { mountPanel, showTab, viewFile } from './panels.js';
 import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { barHandlers, toggleZen, toggleWide, zenOn } from './workbench.js';
+import { initInterface } from './interface.js';
 
 const views = new Map();
 const sideEl = $('#sidebar');
@@ -38,6 +39,7 @@ function applyPrefs() {
   root.dataset.mode = THEMES[name];
   lsSet('look', { theme: name });
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
+  root.classList.toggle('compact', u.density === 'compact');
   root.style.setProperty('--side-w', Math.min(320, Math.max(220, u.sidebarW || 264)) + 'px');
   root.style.setProperty('--panel-w', (u.panelW || 380) + 'px');
   const side = narrowSide.matches ? overlay.side : u.sidebar !== false;
@@ -99,16 +101,94 @@ resizer('#rs-side', '--side-w', 'sidebarW', 220, 320, false);
 resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true);
 
 const dotCls = (t) => 'dot' + (t.dead ? ' dead' : t.streaming ? ' run' : t.unread ? ' unread' : ' open');
+const fmtSecs = (sec) => (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`);
+
+// Pinned conversations, by session file, saved with the other UI preferences.
+const pinned = () => (Array.isArray(S.ui.pinned) ? S.ui.pinned : []);
+function togglePin(s) {
+  const list = pinned();
+  savePrefs({ pinned: list.includes(s.path) ? list.filter((p) => p !== s.path) : [s.path, ...list].slice(0, 20) });
+}
+
+function rowMenu(s, anchor) {
+  const tab = tabForSession(s);
+  const isPinned = pinned().includes(s.path);
+  popMenu(anchor, [
+    { header: s.title },
+    { label: tab ? 'Show' : 'Open', run: () => openSession(s) },
+    { label: isPinned ? 'Unpin' : 'Pin to the top', run: () => togglePin(s) },
+    tab ? { label: 'Rename…', run: () => renameTab(tab) } : null,
+    { label: 'New session in this project', run: () => newSession(s.cwdDisplay || s.cwd) },
+    { label: 'Show folder in Explorer', run: () => api.post('/api/fs/reveal', { path: s.cwdDisplay || s.cwd }).catch((e) => toast(e.message, 'error')) },
+    '-',
+    { label: 'Delete conversation…', danger: true, run: () => confirmDeleteConversation(s) },
+  ].filter(Boolean), { minWidth: 230 });
+}
+
+/** One saved conversation in the sidebar. `where` shows its project (in Pinned, where rows from many projects mix). */
+function sessionRow(s, where) {
+  const tab = tabForSession(s);
+  const cur = !!tab && tab.id === S.active;
+  const more = iconBtn('more', 'More', (e) => rowMenu(s, e.currentTarget), 'sm');
+  return h('div', { class: 's-row' + (cur ? ' cur' : '') },
+    h('button', { class: 's-btn', type: 'button', title: (where ? `${s.title}\n${where}` : s.preview || s.title), 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
+      tab ? h('span', { class: dotCls(tab) }) : null,
+      h('span', { class: 'ell grow' }, s.title),
+      where ? h('span', { class: 's-where ell' }, where) : h('span', { class: 's-when' }, timeAgo(s.mtime))),
+    h('span', { class: 'row-acts' }, more));
+}
+
+/** Pinned conversations, above the projects. */
+function pinnedList(term) {
+  const by = new Map(S.sessions.map((x) => [x.path, x]));
+  const list = pinned().map((p) => by.get(p)).filter(Boolean).filter((x) => !term || `${x.title} ${x.preview || ''}`.toLowerCase().includes(term));
+  if (!list.length) return null;
+  return h('div', { class: 'pin-sec' }, h('div', { class: 'side-h' }, h('span', null, 'Pinned')), list.map((x) => sessionRow(x, baseName(x.cwdDisplay || x.cwd))));
+}
+
+/** Arrow keys move between the rows of the sidebar list; Home and End go to the ends. */
+function listKeys(e) {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) || e.altKey || e.ctrlKey) return;
+  const rows = [...sideEl.querySelectorAll('.side-scroll .run-row, .side-scroll .proj-btn, .side-scroll .s-btn')].filter((x) => x.getClientRects().length);
+  const i = rows.indexOf(document.activeElement);
+  if (i < 0) return;
+  e.preventDefault();
+  const n = e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
+  rows[n].focus();
+}
+
+/**
+ * What the sidebar shows, as one string. Status events arrive many times a minute while agents work; rebuilding on
+ * each one dropped the hover, the keyboard focus and any open row menu, so it is rebuilt only when this changes.
+ */
+let sideSig = '';
+function sidebarSig() {
+  return JSON.stringify([
+    searchTerm, [...collapsed], pinned(), S.active, S.ui.rail === true, Math.floor(Date.now() / 60000),
+    S.sessions.map((s) => [s.path, s.mtime, s.title]),
+    [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '']),
+    S.workspaces.map((w) => [w.id, w.path, w.name]),
+    (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name),
+  ]);
+}
 
 function drawSidebar() {
+  const sig = sidebarSig();
+  if (sig === sideSig && sideEl.querySelector('.side-scroll')) return;
+  sideSig = sig;
   const groups = groupSessions();
   const term = searchTerm.toLowerCase().trim();
   // The sidebar is rebuilt on every change; keep the search box focused (with its caret) and the list scroll.
   const typing = document.activeElement?.matches?.('.side-search input') ? document.activeElement.selectionStart : -1;
   const scroll = sideEl.querySelector('.side-scroll')?.scrollTop || 0;
-  const search = h('input', { type: 'search', placeholder: 'Filter conversations', value: searchTerm, 'aria-label': 'Filter conversations', spellcheck: 'false', oninput: (e) => ((searchTerm = e.target.value), drawSidebar()), onkeydown: (e) => e.key === 'Escape' && searchTerm && (e.stopPropagation(), (searchTerm = ''), drawSidebar()) });
+  const search = h('input', { type: 'search', placeholder: 'Filter conversations', value: searchTerm, 'aria-label': 'Filter conversations', spellcheck: 'false', oninput: (e) => ((searchTerm = e.target.value), drawSidebar()), onkeydown: (e) => {
+    if (e.key === 'Escape' && searchTerm) return e.stopPropagation(), (searchTerm = ''), drawSidebar();
+    if (e.key === 'Enter') return e.preventDefault(), sideEl.querySelector('.side-scroll .s-btn')?.click();
+    if (e.key === 'ArrowDown') return e.preventDefault(), sideEl.querySelector('.side-scroll .s-btn, .side-scroll .proj-btn')?.focus();
+  } });
+  const pins = new Set(pinned());
   const projects = groups.map((g) => {
-    const sess = g.sessions.filter((s) => !term || `${s.title} ${g.name} ${s.preview || ''}`.toLowerCase().includes(term));
+    const sess = g.sessions.filter((s) => !pins.has(s.path) && (!term || `${s.title} ${g.name} ${s.preview || ''}`.toLowerCase().includes(term)));
     const fresh = unlistedTabs(g).filter((t) => !term || `${t.name} ${g.name}`.toLowerCase().includes(term));
     if (term && !sess.length && !fresh.length && !g.name.toLowerCase().includes(term)) return null;
     const open = !!term || !collapsed.has(g.key);
@@ -134,15 +214,9 @@ function drawSidebar() {
             }
           }, 'sm') : null)),
       open ? fresh.map((t) => h('div', { class: 's-row' + (t.id === S.active ? ' cur' : '') },
-        h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, h('span', { class: dotCls(t) }), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when' }, 'now')))) : null,
-      shown.map((s) => {
-        const tab = tabForSession(s);
-        const cur = !!tab && tab.id === S.active;
-        return h('div', { class: 's-row' + (cur ? ' cur' : '') },
-          h('button', { class: 's-btn', type: 'button', title: s.preview || s.title, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s) }, tab ? h('span', { class: dotCls(tab) }) : null, h('span', { class: 'ell grow' }, s.title), h('span', { class: 's-when' }, timeAgo(s.mtime))),
-          h('span', { class: 'row-acts' }, iconBtn('trash', 'Delete conversation', () => confirmDeleteConversation(s), 'sm')));
-      }),
-      open && !term && !sess.length && !fresh.length ? h('div', { class: 's-none' }, 'No conversations yet') : null,
+        h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, h('span', { class: dotCls(t) }), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
+      shown.map((s) => sessionRow(s)),
+      open && !term && !sess.length && !fresh.length ? h('div', { class: 's-none' }, g.sessions.length ? 'All pinned' : 'No conversations yet') : null,
       open && !term && sess.length > shown.length ? h('button', { class: 's-more', type: 'button', onclick: () => ((searchTerm = g.name), drawSidebar(), sideEl.querySelector('.side-search input')?.focus()) }, `${sess.length - shown.length} more`) : null);
   }).filter(Boolean);
   // The brand row stays in the document across redraws (re-inserting it would restart the logo's orbit); only the
@@ -153,11 +227,12 @@ function drawSidebar() {
   sideEl.append(
     h('button', { class: 'side-new', type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), 'New session', kbd('Ctrl+N')),
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
-      h('button', { class: 'side-link' + (S.active ? '' : ' cur'), type: 'button', title: 'Home', 'aria-current': S.active ? null : 'page', onclick: () => { if (S.active) setActive(null); } }, icon('layers', 15), h('span', null, 'Home')),
+      h('button', { class: 'side-link' + (S.active ? '' : ' cur'), type: 'button', title: 'Home', 'aria-current': S.active ? null : 'page', onclick: () => newSession() }, icon('layers', 15), h('span', null, 'Home')),
       h('button', { class: 'side-link', type: 'button', title: 'Search everything (Ctrl+K)', onclick: () => openSearch() }, icon('search', 15), h('span', null, 'Search'), kbd('Ctrl+K'))),
     h('div', { class: 'side-search' }, icon('list', 14), search),
-    h('div', { class: 'side-scroll' },
+    h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
+      pinnedList(term),
       h('div', { class: 'side-h' }, h('span', null, 'Projects'), iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm')),
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No matching conversations.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
     h('div', { class: 'side-foot' }, footStatus(), iconBtn('cog', 'Settings (Ctrl+,)', () => settingsDialog())),
@@ -177,8 +252,8 @@ let BRAND_TOP = null;
 function brandTop() {
   // Built once: a new logo would restart its orbit. The button itself is Home.
   BRAND_TOP ||= h('div', { class: 'side-top' },
-    h('button', { class: 'brand', type: 'button', onclick: () => { if (S.active) setActive(null); } },
-      h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, logo(20, { alive: true })),
+    h('button', { class: 'brand', type: 'button', onclick: () => newSession() },
+      h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, logo(28, { alive: true })),
       h('span', { class: 'wordmark' }, 'ORBIX')),
     iconBtn('chevron-left', 'Collapse to icons', () => savePrefs({ rail: S.ui.rail !== true }), 'sm rail-btn'));
   const b = BRAND_TOP.firstChild;
@@ -201,11 +276,39 @@ function runningList() {
     h('div', { class: 'side-h' }, h('span', null, 'Running')),
     live.map((t) => {
       const waiting = t.dialogs.some(isApproval);
-      return h('button', { class: 'run-row' + (t.id === S.active ? ' cur' : ''), type: 'button', title: `${t.name}\n${t.workspace}`, onclick: () => setActive(t.id) },
+      return h('button', { class: 'run-row' + (t.id === S.active ? ' cur' : ''), type: 'button', title: `${t.name}\n${t.workspace}`, dataset: { id: t.id }, onclick: () => setActive(t.id) },
         h('span', { class: 'dot' + (waiting ? ' warn' : ' run') }),
-        h('span', { class: 'ell grow' }, t.name),
-        h('span', { class: 'run-st' + (waiting ? ' you' : '') }, waiting ? 'needs you' : 'working'));
+        h('span', { class: 'run-m' }, h('span', { class: 'ell' }, t.name), h('span', { class: 'run-now ell' }, runNow(t, waiting))),
+        h('span', { class: 'run-st num' + (waiting ? ' you' : '') }, waiting ? 'needs you' : runTime(t)));
     }));
+}
+
+const runTime = (t) => fmtSecs(Math.max(0, Math.floor((Date.now() - (t.turnStartedAt || Date.now())) / 1000)));
+function runNow(t, waiting) {
+  if (waiting) return t.dialogs.find(isApproval)?.title || 'Waiting for your OK';
+  const now = views.get(t.id)?.nowDoing?.();
+  return now ? `${now[0]} ${now[1]}`.trim() : 'Working';
+}
+
+// Once a second: running times and steps in the sidebar, and the window title (it shows on the taskbar).
+setInterval(() => {
+  for (const row of sideEl.querySelectorAll('.run-row[data-id]')) {
+    const t = S.tabs.get(row.dataset.id);
+    if (!t || t.dead) continue;
+    const waiting = t.dialogs.some(isApproval);
+    const st = row.querySelector('.run-st');
+    const now = row.querySelector('.run-now');
+    if (st && !waiting) st.textContent = runTime(t);
+    if (now) now.textContent = runNow(t, waiting);
+  }
+  syncTitle();
+}, 1000);
+function syncTitle() {
+  const live = [...S.tabs.values()].filter((t) => !t.dead);
+  const wait = live.filter((t) => t.dialogs.some(isApproval)).length;
+  const run = live.filter((t) => t.streaming).length;
+  const title = wait ? `(${wait}) Needs your OK · ORBIX` : run ? `Working (${run}) · ORBIX` : 'ORBIX';
+  if (document.title !== title) document.title = title;
 }
 
 /** Sidebar footer: whether the agent can work, and with which provider. */
@@ -221,7 +324,9 @@ function toggleTheme() {
 }
 
 /** Show the home composer (optionally for one project). Open tabs stay open. */
+let homeRequested = false;
 function newSession(project, opts) {
+  homeRequested = true;
   setHomeProject(project, opts);
   if (narrowSide.matches) overlay.side = false;
   if (S.active) setActive(null);
@@ -283,9 +388,15 @@ function workspaceChip(t) {
   return chip;
 }
 
+let topSig = '';
 function drawTop() {
   const t = activeTab();
   const tabs = [...S.tabs.values()];
+  topEl.classList.toggle('busy', !!t?.streaming && !t.dead);
+  // Rebuilt only when what it shows changed, so a tab under the pointer or the keyboard is not replaced mid-gesture.
+  const sig = JSON.stringify([S.active, sideShown(), panelShown(), t?.workspace, tabs.map((x) => [x.id, x.name, x.workspace, !!x.streaming, !!x.dead, !!x.unread])]);
+  if (sig === topSig && topEl.querySelector('.tabs')) return;
+  topSig = sig;
   const focusedTab = document.activeElement?.closest?.('.tab') ? document.activeElement.dataset.id : null;
   replace(
     topEl,
@@ -304,7 +415,9 @@ function drawTop() {
       h('span', { class: 'ell' }, x.name),
       h('button', { class: 'tab-x', type: 'button', tabindex: '-1', title: 'Close', 'aria-label': `Close ${x.name}`, onclick: (e) => (e.stopPropagation(), closeWithCheck(x)) }, icon('x', 12))))),
     iconBtn('plus', 'New session (Ctrl+N)', () => newSession(), S.active ? '' : 'on'),
+    !t && !tabs.length ? h('span', { class: 'workspace-location' }, icon('layers', 13), 'Workspace', h('span', { 'aria-hidden': 'true' }, '/'), 'Overview') : null,
     h('span', { class: 'grow' }),
+    h('button', { class: 'workspace-command', type: 'button', 'aria-label': 'Search workspace', onclick: () => openSearch() }, icon('search', 13), h('span', null, 'Search anything'), kbd('Ctrl K')),
     t ? workspaceChip(t) : null,
     t ? iconBtn('more', 'Session actions', (e) => sessionMenu(t, e.currentTarget, { rename: () => renameTab(t), close: () => closeWithCheck(t) })) : null,
     t ? iconBtn('panel-right', 'Side panel (Ctrl+J)', togglePanel, 'tb-panel' + (panelShown() ? ' on' : '')) : null,
@@ -315,6 +428,7 @@ function drawTop() {
 }
 
 const homeHandlers = {
+  search: openSearch,
   openFolder,
   openSession,
   settings: (tab) => settingsDialog(tab),
@@ -433,6 +547,17 @@ on('insert', (text) => {
   }
 });
 on('settings', (tab) => settingsDialog(tab));
+on('run:open', () => showTab('run'));
+on('run:file', (tab, path) => { if (tab === activeTab()) viewFile(tab, path); });
+on('run:reveal', (tab, id) => {
+  if (tab !== activeTab()) return;
+  const v = viewOf(tab); if (!v) return;
+  const index = tab.messages.findIndex(m => m.role === 'assistant' && Array.isArray(m.content) && m.content.some(c => c.type === 'toolCall' && c.id === id));
+  if (index >= 0 && index < tab.messages.length - v.limit) { v.limit = tab.messages.length-index; v.renderAll(); }
+  const card = v.tin.querySelector(`.tool[data-id="${CSS.escape(id)}"]`);
+  if (card) { card.classList.add('open'); card._fill?.(); v.timeline.jumpTo(card); v.showJump(true); }
+  else toast('This tool is not available in the loaded transcript.', 'info');
+});
 on('home', (project) => newSession(project));
 
 function paletteItems() {
@@ -454,7 +579,7 @@ function paletteItems() {
   if (t) {
     items.push({ group: 'View', icon: 'panel-right', label: 'Toggle side panel', key: 'Ctrl+J', run: togglePanel });
     items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: 'Ctrl+Shift+F', run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Session', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Session', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
-    for (const [k, l, ic] of [['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
+    for (const [k, l, ic] of [['run', 'Run inspector', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
     items.push({ group: 'Session', icon: 'pencil', label: 'Rename session…', run: () => renameTab(t) }, { group: 'Session', icon: 'copy', label: 'Copy conversation as Markdown', run: () => copyConversation(t) }, { group: 'Session', icon: 'x', label: 'Close session', run: () => closeWithCheck(t) });
     for (const c of t.commands) items.push({ group: 'Slash commands', icon: 'command', label: `/${c.name}`, hint: c.description, run: () => emit('insert', `/${c.name} `) });
   }
@@ -493,8 +618,26 @@ addEventListener('keydown', (e) => {
     if (k === 'f' && activeTab() && !document.querySelector('.scrim')) return e.preventDefault(), viewOf(activeTab())?.bar.openFind();
     if (k === 'l') return e.preventDefault(), (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus());
   }
+  // Ctrl+= / Ctrl+- / Ctrl+0: conversation text size (the same setting as Appearance → Message text size).
+  if (mod && !e.altKey && ['=', '+', '-', '0'].includes(e.key)) {
+    e.preventDefault();
+    const cur = S.ui.fontSize || 14;
+    const next = e.key === '0' ? 14 : Math.max(12, Math.min(18, cur + (e.key === '-' ? -1 : 1)));
+    if (next !== cur) savePrefs({ fontSize: next });
+    return toast(next === cur && e.key !== '0' ? `Text size is at its ${next === 18 ? 'largest' : 'smallest'} (${next}px)` : `Text size ${next}px`, 'info', 1400);
+  }
+  // Ctrl+Tab / Ctrl+Shift+Tab: the next / previous open session.
+  if (e.ctrlKey && !e.altKey && e.key === 'Tab') {
+    const list = [...S.tabs.values()];
+    if (!list.length) return;
+    e.preventDefault();
+    const i = list.findIndex((t) => t.id === S.active);
+    const n = i < 0 ? (e.shiftKey ? list.length - 1 : 0) : (i + (e.shiftKey ? -1 : 1) + list.length) % list.length;
+    return setActive(list[n].id);
+  }
   if (mod && e.shiftKey && !e.altKey && activeTab() && !document.querySelector('.scrim')) {
     const k = e.key.toLowerCase();
+    if (k === 'r') return e.preventDefault(), showTab('run');
     if (k === 'f') return e.preventDefault(), toggleZen();
     if (k === 'o') return e.preventDefault(), viewOf(activeTab())?.bar.openOutline();
   }
@@ -544,12 +687,13 @@ async function adoptRunning(procs) {
     tab.ready = true;
     for (const ev of tab.buffer.splice(0)) routeEvent(p.id, ev);
   }
-  if (!S.active && S.tabs.size) setActive([...S.tabs.keys()][0]);
+  if (!S.active && S.tabs.size && !homeRequested) setActive([...S.tabs.keys()][0]);
   else emit('tabs');
   return fresh;
 }
 
 async function boot() {
+  initInterface();
   try {
     await loadEnv();
   } catch (e) {

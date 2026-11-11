@@ -181,7 +181,7 @@ export class AppServer {
     for (const c of this.clients) c.write(': ping\n\n');
   }
   procList() {
-    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin' }));
+    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin' }));
   }
   broadcastProcs() {
     this.broadcast({ g: 'procs', procs: this.procList() });
@@ -512,7 +512,7 @@ export class AppServer {
       'POST /api/engine/models': async ({ body }) => {
         const bad = (m) => Object.assign(new Error(m), { status: 400 });
         const next = {};
-        for (const role of ['fast', 'plan']) {
+        for (const role of ['fast', 'plan', 'default']) {
           if (body[role] === undefined) continue;
           const spec = String(body[role] || '').trim();
           if (spec) {
@@ -532,6 +532,10 @@ export class AppServer {
           next[role] = spec;
         }
         this.engineCfg.setRoles(next);
+        if (next.default !== undefined) {
+          this.engineCfg.data.defaultModel = next.default;
+          this.engineCfg.save();
+        }
         return { engine: this.engineCfg.publicView() };
       },
       // Web search service for the web_search tool. The service is tried once before anything is saved.

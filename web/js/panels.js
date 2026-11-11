@@ -6,13 +6,16 @@ import { S, activeTab, emit, on, savePrefs } from './store.js';
 import { codeView, renderUnifiedDiff, todoList, agentRow } from './tools.js';
 import { langFor } from './highlight.js';
 import { ansiFragment } from './ansi.js';
+import { runInspector } from './run-inspector.js';
+import { coalesce } from './coalesce.mjs';
 
 const P = { tab: 'files', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
 let body;
 let tabsEl;
+let inspector = null;
 
-const TABS = [['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']];
+const TABS = [['run', 'Run', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']];
 
 export function mountPanel(el) {
   root = el;
@@ -32,6 +35,9 @@ export function mountPanel(el) {
     drawTabs();
   });
   on('tab:state', (tab) => tab === activeTab() && drawTabs());
+  const refreshRun = coalesce((tab) => { if (!document.hidden && tab === activeTab() && P.tab === 'run') inspector?.update(tab); });
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&P.tab==='run'&&activeTab())inspector?.update(activeTab());});
+  for (const event of ['tab:tool','tab:state','tab:status','tab:messages']) on(event, refreshRun);
   resetFor(activeTab());
 }
 
@@ -67,13 +73,21 @@ function drawTabs() {
   const nTodo = (t?.todos || []).flatMap((p) => p.tasks || []).filter((x) => x.status !== 'completed' && x.status !== 'abandoned').length;
   const nAg = [...(t?.subagents?.values() || [])].filter((a) => /running|started|pending/.test(a.progress?.status || a.status || '')).length;
   const badge = { changes: nChanges, todos: nTodo, agents: nAg };
-  replace(tabsEl, TABS.map(([k, l, ic]) => h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), type: 'button', role: 'tab', 'aria-selected': String(P.tab === k), title: l, onclick: () => showTab(k) }, icon(ic, 14), h('span', { class: 'lbl' }, l), badge[k] ? h('span', { class: 'badge num' }, badge[k]) : null)));
+  replace(tabsEl, TABS.map(([k, l, ic], index) => h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), type: 'button', role: 'tab', 'aria-label':l, tabindex:P.tab===k?'0':'-1', 'aria-selected': String(P.tab === k), title: l, onclick: () => showTab(k), onkeydown:e=>{
+    let next;
+    if(e.key==='ArrowRight')next=(index+1)%TABS.length;
+    else if(e.key==='ArrowLeft')next=(index+TABS.length-1)%TABS.length;
+    else if(e.key==='Home')next=0;else if(e.key==='End')next=TABS.length-1;
+    if(next==null)return;e.preventDefault();showTab(TABS[next][0]);tabsEl.children[next]?.focus();
+  } }, icon(ic, 14), h('span', { class: 'lbl' }, l), badge[k] ? h('span', { class: 'badge num' }, badge[k]) : null)));
 }
 
 function draw() {
   const t = activeTab();
   clear(body);
+  inspector = null;
   if (!t) return;
+  if (P.tab === 'run') { inspector = runInspector(t, () => showTab('changes')); body.append(inspector.el); return; }
   ({ files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole })[P.tab](t);
 }
 

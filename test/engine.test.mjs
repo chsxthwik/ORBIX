@@ -251,6 +251,7 @@ describe('tools: createTools against a real folder', () => {
     });
     test('whitespace-only differences fall back to a unique whole-line match and say so', async () => {
       put('e5.txt', '  indented\n');
+      await run('read', { path: 'e5.txt' });
       const r = await run('edit', { path: 'e5.txt', old_string: 'indented\n  ', new_string: '' });
       assert.ok(!r.isError, r.text);
       assert.match(r.text, /ignoring whitespace/);

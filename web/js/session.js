@@ -1,6 +1,7 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo } from './dom.js';
+import { quoteOnSelect } from './quote.js';
+import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
@@ -154,6 +155,38 @@ function splitAttachments(text, onPath) {
   return { body, files, rest, items };
 }
 
+/** What a step is doing, in a few words: [verb, object]. */
+function stepLabel(call, workspace) {
+  const a = call.arguments && typeof call.arguments === 'object' ? call.arguments : {};
+  const cut = (x, n = 60) => {
+    const v = String(x || '').replace(/\s+/g, ' ').trim();
+    return v.length > n ? v.slice(0, n - 1) + '…' : v;
+  };
+  const rel = (p) => {
+    const x = String(p || '').replace(/\\/g, '/');
+    const w = String(workspace || '').replace(/\\/g, '/').replace(/\/+$/, '');
+    return cut(w && x.toLowerCase().startsWith(w.toLowerCase() + '/') ? x.slice(w.length + 1) : x);
+  };
+  switch (call.name) {
+    case 'read': return ['Reading', rel(a.path)];
+    case 'edit': case 'ast_edit': return ['Editing', rel(a.path)];
+    case 'write': return ['Writing', rel(a.path)];
+    case 'bash': case 'eval': return ['Running', cut(a.command || a.code)];
+    case 'grep': case 'ast_grep': return ['Searching for', cut(a.pattern)];
+    case 'glob': case 'find': return ['Looking for', cut(a.pattern || a.query)];
+    case 'web_search': return ['Searching the web for', cut(a.query)];
+    case 'web_fetch': {
+      try {
+        return ['Fetching', new URL(a.url).host];
+      } catch {
+        return ['Fetching', cut(a.url)];
+      }
+    }
+    case 'task': return ['Helper agent:', cut(a.description || a.prompt)];
+    default: return ['Using', call.name];
+  }
+}
+
 const clock = (ts) => (ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
 export class TabView {
@@ -207,6 +240,7 @@ export class TabView {
     this.timeline = new Timeline(this);
     this.bar = new SessionBar(this);
     this.root.prepend(this.bar.el);
+    this.quote = quoteOnSelect(this);
     this.composer.dropZone(this.root);
 
     // Follow new output only while the reader is at the bottom; any upward scroll stops it until they return.
@@ -264,6 +298,7 @@ export class TabView {
   /** The tab is closed for good: release observers and callbacks that would keep this view and its DOM alive. */
   destroy() {
     this.dead = true;
+    clearInterval(this.statusTimer);
     this.renderLive?.cancel?.();
     if (this._tq) cancelAnimationFrame(this._tq);
     this._tq = 0;
@@ -271,6 +306,7 @@ export class TabView {
     this._sb = 0;
     this.timeline?.destroy();
     this.bar?.destroy();
+    this.quote?.destroy();
     this.scrollerRo?.disconnect();
     this.composer?.destroy?.();
     if (this.tab.afterUndo) this.tab.afterUndo = null;
@@ -356,8 +392,48 @@ export class TabView {
     if (t.retry) bits.push(h('span', { class: 'warn-text' }, 'Retrying…'));
     for (const [k, v] of t.statuses) if (!(k === 'plan' && !this.planBtn.hidden)) bits.push(h('span', null, v));
     if (t.streaming && t.state?.tokensPerSecond) bits.push(h('span', { class: 'num' }, `${t.state.tokensPerSecond.toFixed(0)} tok/s`));
-    if (t.streaming && !bits.length && !this.approvalDlg) bits.push(h('span', null, kbd('Enter'), ' steer  ', kbd('Alt+Enter'), ' queue  ', kbd('Esc'), ' stop'));
+    const now = t.streaming && !t.dead && !this.approvalDlg ? this.nowDoing() : null;
+    if (now) {
+      const secs = Math.floor((Date.now() - now[2]) / 1000);
+      bits.unshift(h('span', { class: 'c-now', title: now[1] ? `${now[0]} ${now[1]}` : now[0] }, spinner(11), h('b', null, now[0]), now[1] ? h('span', { class: 'c-now-a ell' }, now[1]) : null, secs >= 3 ? h('span', { class: 'c-now-t num' }, secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`) : null));
+      if (bits.length === 1) bits.push(h('span', { class: 'c-keys' }, kbd('Enter'), ' steer  ', kbd('Alt+Enter'), ' queue  ', kbd('Esc'), ' stop'));
+    }
     replace(this.statusLine, bits);
+    // While the agent works the line ticks once a second, so the step and its time stay current.
+    if (t.streaming && !t.dead && !this.statusTimer) {
+      this.statusTimer = setInterval(() => {
+        if (this.tab.streaming && !this.tab.dead && this.root.isConnected && !this.dead) return this.updateStatus();
+        clearInterval(this.statusTimer);
+        this.statusTimer = 0;
+        if (!this.dead) this.updateStatus();
+      }, 1000);
+    }
+  }
+
+  /** The step in progress: a tool call without a result, else whether the model is thinking or writing. */
+  nowDoing() {
+    const t = this.tab;
+    const id = this.unansweredCall();
+    let call = null;
+    if (id) for (const m of [t.live?.message, ...t.messages.slice(-6).reverse()]) {
+      call = Array.isArray(m?.content) ? m.content.find((c) => c.type === 'toolCall' && c.id === id) : null;
+      if (call) break;
+    }
+    let key;
+    let label;
+    if (call) {
+      key = id;
+      label = stepLabel(call, t.workspace);
+    } else {
+      const last = Array.isArray(t.live?.message?.content) ? t.live.message.content.at(-1) : null;
+      key = last?.type === 'thinking' ? 'think' : last?.type === 'text' ? 'text' : 'wait';
+      label = [key === 'think' ? 'Thinking' : key === 'text' ? 'Writing the reply' : 'Waiting for the model', ''];
+    }
+    if (this.stepKey !== key) {
+      this.stepKey = key;
+      this.stepAt = Date.now();
+    }
+    return [label[0], label[1], this.stepAt];
   }
 
   pickModel() {
