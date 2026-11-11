@@ -80,10 +80,12 @@ export class Tab {
     this.buffer = [];
     this.unread = false;
     this.turnStartedAt = 0;
+    this.lastRunMs = 0; // how long the last finished turn took (the board shows it once the agent is done)
+    this.worktree = opts.worktree || null; // { branch, baseBranch, base, slug, state, hash } for a session on its own branch
     this.retry = null;
   }
   get name() {
-    return makeTitle(this.title) || makeTitle(this.firstUserText()) || baseName(this.workspace) || 'Session';
+    return makeTitle(this.title) || makeTitle(this.firstUserText()) || baseName(this.worktree?.source || this.workspace) || 'Session';
   }
   firstUserText() {
     const m = this.messages.find((x) => x.role === 'user');
@@ -100,9 +102,10 @@ export const textOf = (content) => (typeof content === 'string' ? content : Arra
 
 const msgKey = (m) => `${m.role}:${m.timestamp ?? ''}:${m.toolCallId ?? ''}:${typeof m.content === 'string' ? m.content.length : Array.isArray(m.content) ? m.content.length : 0}`;
 
-export async function openTab({ workspace, resume, noSession, model, title }) {
-  const j = await api.post('/api/proc/start', { workspace, resume, noSession, model });
-  const tab = new Tab(j.id, workspace, { resume, title });
+export async function openTab({ workspace, resume, noSession, model, title, branch }) {
+  const j = await api.post('/api/proc/start', { workspace, resume, noSession, model, branch: branch === true || undefined });
+  // A session on its own branch works in its worktree: the server says which folder that is.
+  const tab = new Tab(j.id, j.workspace || workspace, { resume, title, worktree: j.worktree });
   tab.commands = j.commands || [];
   if (j.notice) toast(j.notice, 'info', 10000);
   S.tabs.set(tab.id, tab);
@@ -170,6 +173,7 @@ function applyState(tab, d) {
   // The agent knows when its turn began; a reload must not restart the timers at 0.
   if (tab.streaming && d.turnStartedAt) tab.turnStartedAt = d.turnStartedAt;
   tab.compacting = !!d.isCompacting;
+  if (d.worktree !== undefined) tab.worktree = d.worktree;
   tab.todos = d.todoPhases || [];
   tab.queued = d.queuedMessages || { steering: [], followUp: [] };
   if (d.contextUsage) tab.stats = { ...(tab.stats || {}), contextUsage: d.contextUsage };
@@ -271,6 +275,7 @@ function reduce(tab, ev) {
     case 'agent_end':
       if (ev.isTerminal === false) break;
       tab.streaming = false;
+      if (tab.turnStartedAt) tab.lastRunMs = Date.now() - tab.turnStartedAt;
       tab.turnStartedAt = 0;
       tab.live = null;
       emit('tab:live', tab);
@@ -429,6 +434,11 @@ function reduce(tab, ev) {
       emit('tab:dialog', tab);
       emit('tabs');
       loadSessions();
+      break;
+    case 'worktree_update':
+      tab.worktree = ev.worktree || null;
+      emit('tab:worktree', tab);
+      emit('tabs');
       break;
     default:
       break;
@@ -607,7 +617,7 @@ export function tabForSession(s) {
 /** Open tabs of a project that the session list does not have yet (a new conversation is listed once it is saved). */
 export function unlistedTabs(g) {
   const listed = new Set(g.sessions.map(tabForSession).filter(Boolean));
-  return [...S.tabs.values()].filter((t) => !t.dead && t.workspace && keyPath(t.workspace) === g.key && !listed.has(t));
+  return [...S.tabs.values()].filter((t) => !t.dead && t.workspace && keyPath(t.worktree?.source || t.workspace) === g.key && !listed.has(t));
 }
 
 export function groupSessions() {
