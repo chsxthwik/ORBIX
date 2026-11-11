@@ -4,6 +4,7 @@ import { ansiFragment, hasAnsi, stripAnsi } from './ansi.js';
 import { codeBlock, renderMarkdown } from './markdown.js';
 import { highlight, langFor } from './highlight.js';
 import { rpc } from './api.js';
+import { toolTitle } from './tool-title.mjs';
 
 const ICONS = { bash: 'terminal', read: 'eye', write: 'file', edit: 'pencil', grep: 'search', glob: 'search', todo: 'list', task: 'users', web_search: 'globe', web_fetch: 'globe' };
 const OPEN_BY_DEFAULT = new Set(['edit', 'write', 'todo', 'task']);
@@ -336,14 +337,16 @@ export function renderToolCard(tab, call, run, open) {
 
   const dur = run?.startedAt && run?.endedAt ? run.endedAt - run.startedAt : finalRes?.details?.wallTimeMs;
   const summary = toolSummary(call, result, tab.workspace);
+  const title = toolTitle(call, result, status, { rel: (p) => relPath(p || '', tab.workspace), summary });
   const exit = call.name === 'bash' ? result?.details?.exitCode : null;
   const extra = call.name === 'edit' ? diffStat(result?.details) : exit ? h('span', { class: 'tool-exit num', title: 'Exit code' }, `exit ${exit}`) : result?.details?.timedOut ? h('span', { class: 'tool-exit' }, 'timed out') : null;
   const head = h(
     'button',
-    { class: 'tool-head', type: 'button', 'aria-expanded': String(isOpen) },
+    // The plain title is for reading; the tool's own name and arguments stay one hover away.
+    { class: 'tool-head', type: 'button', 'aria-expanded': String(isOpen), title: `${call.name}${summary ? `: ${summary}` : ''}` },
     h('span', { class: 'tool-ico' }, icon(ICONS[call.name] || 'wrench', 14)),
-    h('span', { class: 'tool-name' }, call.name),
-    h('span', { class: 'tool-sum', title: summary }, summary),
+    h('span', { class: 'tool-name' }, title.verb),
+    title.subject ? h('span', { class: 'tool-sum' }, title.subject) : h('span', { class: 'grow' }),
     extra,
     dur >= 0 ? h('span', { class: 'tool-dur' }, fmtDuration(dur)) : null,
     statusBadge(status),

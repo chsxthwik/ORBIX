@@ -2,7 +2,7 @@
 // A search box finds any setting by name and jumps to it.
 import { h, icon, toast, replace, clear, logo } from './dom.js';
 import { api } from './api.js';
-import { S, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions } from './store.js';
+import { S, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { toggleWide } from './workbench.js';
 import { modal, btn, confirmDialog, row, toggle, SHORTCUTS, keyCaps } from './dialogs.js';
 import { renderEngineSettings } from './engine.js';
@@ -19,6 +19,7 @@ const TABS = [
   ['engine', 'Providers', 'key', 'Connect an API key or a local model. Keys are checked, stored encrypted for your Windows account, and sent only to that provider.'],
   ['models', 'Models', 'cpu', 'Choose which model does which job.'],
   ['behavior', 'Permissions', 'shield', 'What the agent may do without asking, the commands you trust, and where it runs commands.'],
+  ['checks', 'Checks', 'check', 'How the agent checks its own work before it replies.'],
   ['rules', 'Instructions', 'file', 'What the agent should always know about you and how you work. It follows these in every project.'],
   ['tools', 'Tools & MCP', 'plug', 'What the agent can use, and the extra tools you add.'],
   { group: 'App' },
@@ -36,6 +37,9 @@ const FIND = [
   ['Plan model', 'models', 'plan mode'],
   ['File edits and commands', 'behavior', 'approval ask allow permission auto edits'],
   ['Trusted commands', 'behavior', 'allow always command npm test run trust'],
+  ['Run the project’s check', 'checks', 'verify test tests lint build typecheck after edits'],
+  ['Review the changes', 'checks', 'review diff self-review defects bugs'],
+  ['Check command', 'checks', 'npm test pytest cargo go make verify project'],
   ['Instructions for every project', 'rules', 'agents.md rules memory preferences custom prompt'],
   ['Run commands in', 'behavior', 'shell wsl windows powershell kali'],
   ['Follow new output', 'behavior', 'scroll auto'],
@@ -83,7 +87,7 @@ export function openSettings(initial = 'start') {
     const page = PAGES.find(([k]) => k === name);
     const body = h('div', { class: 'set-body' });
     content.append(h('header', { class: 'set-head' }, h('h3', { class: 'set-title' }, page[1]), h('p', { class: 'set-lead' }, page[3])), body);
-    ({ start: tabStart, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, tools: renderMcpSettings, rules: tabRules, keys: tabKeys, about: tabAbout })[name](body, show, m);
+    ({ start: tabStart, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, checks: tabChecks, tools: renderMcpSettings, rules: tabRules, keys: tabKeys, about: tabAbout })[name](body, show, m);
     if (focusNav) list.querySelector('.cur')?.focus();
   };
 
@@ -163,6 +167,7 @@ function tabStart(el, show, m) {
     card('Safety',
       line('shield', 'File edits and commands', auto ? 'Run without asking' : eng.approvals === 'edits' ? 'Edits run, commands ask' : 'Ask me first', 'behavior', auto ? 'warn' : 'ok'),
       line('check', 'Trusted commands', (eng.trusted || []).length ? `${eng.trusted.length} command${eng.trusted.length === 1 ? '' : 's'}` : 'None', 'behavior'),
+      line('check', 'Checks after edits', [{ off: 'Off', ask: 'Ask first', always: 'Always' }[eng.verify || 'ask'], eng.review === false ? 'no review' : 'with a review'].join(', '), 'checks'),
       line('terminal', 'Commands run in', b.kind === 'wsl' ? (b.distro ? `WSL · ${b.distro}` : 'WSL') : 'Windows', 'behavior')),
     card('Tools',
       line('globe', 'Web search', eng.search?.configured ? eng.search.provider || 'Connected' : 'Off', 'tools'),
@@ -327,6 +332,53 @@ function trustedGroup() {
   return h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Trusted commands'),
     h('p', { class: 'set-note' }, 'These run without asking, in any mode. End with * to allow any arguments. A command that chains, pipes or redirects always asks.'),
     h('div', { class: 'set-card trust-card' }, list, h('div', { class: 'trust-add' }, input, btn('Trust', add, 'sm'))));
+}
+
+// ================= checks =================
+
+function tabChecks(el) {
+  const eng = S.engine || {};
+  const save = async (body) => {
+    try {
+      await api.post('/api/engine/settings', body);
+      await loadEngine();
+      toast('Saved', 'ok', 1200);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+  el.append(
+    group('After the agent changes files', 'The check runs when the agent says it is done. If it fails, the agent gets the output and fixes the cause before it replies.',
+      row('Run the project’s check', seg('Run the project’s check', [['off', 'Off'], ['ask', 'Ask'], ['always', 'Always']], eng.verify || 'ask', (v) => save({ verify: v })), 'Ask: you choose each time. Always: it runs like any other command, so it still waits for approval unless you trust the command.'),
+      row('Review the changes', toggle(eng.review !== false, (v) => save({ review: v }), 'Review the changes'), 'Before the reply, the fast model (or the session’s model) reads the diff once and reports real defects for the agent to fix. Skipped when fewer than 5 lines changed.')),
+    checkCommandGroup(activeTab()?.workspace || ''));
+}
+
+/** The check command of the open project: the one found in its files, or one you set (or none). */
+function checkCommandGroup(ws) {
+  const head = h('h4', { class: 'set-sub' }, 'Check command');
+  if (!ws) return h('section', { class: 'set-group' }, head, h('p', { class: 'set-note' }, 'Open a project to see or change its check command.'));
+  const input = h('input', { type: 'text', class: 'trust-in', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Check command for this project' });
+  const found = h('p', { class: 'set-none' }, 'Looking at the project…');
+  const show = (j) => {
+    input.value = j.command && j.command !== 'off' ? j.command : '';
+    input.placeholder = j.detected?.command || 'npm test';
+    const d = j.detected ? `${j.detected.command}, from ${j.detected.source}` : '';
+    found.textContent = j.command === 'off' ? 'No check runs in this project.' : j.command ? `Your command runs${d ? ` instead of ${d}` : ''}.` : d ? `Found ${d}.` : 'Nothing found: no test, typecheck, lint or build script, Cargo.toml, go.mod, pytest setup or Makefile target. Type a command to use one.';
+  };
+  const save = async (command) => {
+    try {
+      show(await api.post('/api/engine/check', { ws, command }));
+      toast('Saved', 'ok', 1200);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+  api.get(`/api/engine/check?ws=${encodeURIComponent(ws)}`).then(show).catch((e) => (found.textContent = e.message));
+  input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), save(input.value)));
+  return h('section', { class: 'set-group' }, head,
+    h('p', { class: 'set-note' }, 'For ', h('bdi', null, ws), '. Leave it empty to use the command found in the project.'),
+    h('div', { class: 'set-card trust-card' }, found, h('div', { class: 'trust-add' }, input, btn('Save', () => save(input.value), 'sm'), btn('No check here', () => save('off'), 'sm ghost'))));
 }
 
 // ================= instructions =================
