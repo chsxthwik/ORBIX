@@ -706,6 +706,32 @@ export function createTools({ backend, cwd, getSignal }) {
       return { ok: true, text: `Restored ${u.path}` };
     },
 
+    /**
+     * What changed in a file since a recorded checkpoint: { path, diff, added, removed }, or null when nothing did
+     * or the file cannot be read as text. `u.before` null means the file was created.
+     */
+    async diffSince(u) {
+      if (!u || u.skipped) return null;
+      let now = '';
+      try {
+        const r = await readText(host(u.path));
+        if (!r) return null;
+        now = r.text;
+      } catch (e) {
+        if (e.code !== 'ENOENT') return null;
+      }
+      const before = u.before ?? '';
+      if (before === now) return null;
+      const d = makeDiff(before.replace(/\r\n/g, '\n'), now.replace(/\r\n/g, '\n'));
+      let added = 0;
+      let removed = 0;
+      for (const l of d.diff.split('\n')) {
+        if (l[0] === '+') added++;
+        else if (l[0] === '-') removed++;
+      }
+      return { path: u.path, diff: d.diff, added, removed, created: u.before == null };
+    },
+
     /** Run a tool. `hooks`: { onUpdate(text), allowHost(host), signal, vision }. */
     async run(name, input, hooks = {}) {
       const fn = Object.hasOwn(impl, name) ? impl[name] : undefined; // not impl["constructor"] and friends

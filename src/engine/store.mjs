@@ -10,6 +10,7 @@ import { protect, unprotect } from './secrets.mjs';
 import { PRESETS } from './providers.mjs';
 import { setProviderOrg } from './openai.mjs';
 import { refreshSignIn } from './oauth-pkce.mjs';
+import { VERIFY_MODES } from './verify.mjs';
 
 const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
 /** ask: edits and commands ask. edits: edits run, commands ask. auto: nothing asks. */
@@ -54,6 +55,12 @@ export class EngineConfig {
       models: { fast: str(d.models?.fast), plan: str(d.models?.plan) },
       // Web search: { provider: 'brave' | 'tavily' | 'searxng', key (DPAPI), baseUrl (SearXNG only) }
       search: SEARCH_PROVIDERS.includes(sr.provider) ? { provider: sr.provider, ...(sr.key ? { key: String(sr.key) } : {}), ...(sr.baseUrl ? { baseUrl: String(sr.baseUrl) } : {}) } : null,
+      // Run-end checks after edits. verify: run the project's check command (off / ask / always); review: one pass
+      // over the run's diff by the fast model. checkCommands: the check command chosen for a project, by key path
+      // ('off' = this project has none).
+      verify: VERIFY_MODES.includes(d.verify) ? d.verify : 'ask',
+      review: d.review !== false,
+      checkCommands: d.checkCommands && typeof d.checkCommands === 'object' ? Object.fromEntries(Object.entries(d.checkCommands).filter(([k, v]) => k && typeof v === 'string' && v.trim())) : {},
     };
     // Decrypted keys by their stored (encrypted) form: each DPAPI call starts PowerShell (~250 ms), so a key is
     // decrypted once per run instead of on every prompt. Plain keys stay in this process only.
@@ -185,6 +192,24 @@ export class EngineConfig {
   addTrusted(command) {
     this.setTrusted([...(this.data.trusted || []), command]);
   }
+  setChecks({ verify, review }) {
+    if (verify !== undefined) this.data.verify = VERIFY_MODES.includes(verify) ? verify : 'ask';
+    if (review !== undefined) this.data.review = !!review;
+    this.save();
+  }
+  /** The check command chosen for a project ('' = find it from the project's files, 'off' = none). */
+  checkCommand(keyPath) {
+    return this.data.checkCommands?.[keyPath] || '';
+  }
+  setCheckCommand(keyPath, command) {
+    // One line, like a trusted command: the check runs through the same shell and approvals as any command.
+    const c = String(command ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 300);
+    const all = { ...(this.data.checkCommands || {}) };
+    if (c) all[keyPath] = c;
+    else delete all[keyPath];
+    this.data.checkCommands = all;
+    this.save();
+  }
   /** Model roles: { fast, plan } as "provider/model" strings ('' = use the session's model). */
   roles() {
     return { fast: this.data.models?.fast || '', plan: this.data.models?.plan || '' };
@@ -240,6 +265,8 @@ export class EngineConfig {
     return {
       approvals: this.data.approvals,
       trusted: this.data.trusted || [],
+      verify: this.data.verify,
+      review: this.data.review,
       defaultModel: this.data.defaultModel,
       models: this.roles(),
       search: { provider: s?.provider || '', baseUrl: s?.baseUrl || '', hasKey: !!s?.key, configured: this.searchReady() },
