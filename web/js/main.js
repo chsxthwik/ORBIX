@@ -11,6 +11,7 @@ import { initStatusBar } from './chrome.js';
 import { openHelp } from './help.js';
 import { mountPanel, showTab, viewFile } from './panels.js';
 import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
+import { onBoard, boardState } from './review.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { barHandlers, toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
@@ -167,7 +168,7 @@ function sidebarSig() {
   return JSON.stringify([
     searchTerm, [...collapsed], pinned(), S.active, S.ui.rail === true, Math.floor(Date.now() / 60000),
     S.sessions.map((s) => [s.path, s.mtime, s.title]),
-    [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '']),
+    [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '', t.worktree?.branch || '', t.worktree?.state || '']),
     S.workspaces.map((w) => [w.id, w.path, w.name]),
     (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name),
   ]);
@@ -269,24 +270,37 @@ function brandTop() {
   return BRAND_TOP;
 }
 
-/** Sessions that are working or waiting on you, at the top of the sidebar: teal = working, orange = needs you. */
+/**
+ * The board of agents at the top of the sidebar: sessions working or waiting on you, and every session on its own
+ * branch (with its branch) until it is closed. Each says what it is doing: working, needs you or done, and for how long.
+ */
 function runningList() {
-  const live = [...S.tabs.values()].filter((t) => !t.dead && (t.streaming || t.dialogs.some(isApproval)));
+  const live = [...S.tabs.values()].filter(onBoard);
   if (!live.length) return null;
   return h('div', { class: 'run-sec' },
     h('div', { class: 'side-h' }, h('span', null, 'Running')),
     live.map((t) => {
-      const waiting = t.dialogs.some(isApproval);
-      return h('button', { class: 'run-row' + (t.id === S.active ? ' cur' : ''), type: 'button', title: `${t.name}\n${t.workspace}`, dataset: { id: t.id }, onclick: () => setActive(t.id) },
-        h('span', { class: 'dot' + (waiting ? ' warn' : ' run') }),
-        h('span', { class: 'run-m' }, h('span', { class: 'ell' }, t.name), h('span', { class: 'run-now ell' }, runNow(t, waiting))),
-        h('span', { class: 'run-st num' + (waiting ? ' you' : '') }, waiting ? 'needs you' : runTime(t)));
+      const st = boardState(t);
+      const waiting = st === 'needs you';
+      return h('button', { class: 'run-row' + (t.id === S.active ? ' cur' : '') + (t.worktree ? ' has-branch' : ''), type: 'button', title: `${t.name}\n${t.worktree ? t.worktree.branch + '\n' : ''}${t.workspace}`, dataset: { id: t.id }, onclick: () => setActive(t.id) },
+        h('span', { class: 'dot' + (waiting ? ' warn' : t.streaming ? ' run' : ' ok') }),
+        h('span', { class: 'run-m' }, h('span', { class: 'ell' }, t.name), t.worktree ? h('span', { class: 'run-br ell' }, h('bdi', null, t.worktree.branch)) : null, h('span', { class: 'run-now ell' }, runNow(t, st))),
+        h('span', { class: 'run-st num' + (waiting ? ' you' : t.streaming ? '' : ' idle') }, runLabel(t, st)));
     }));
 }
 
 const runTime = (t) => fmtSecs(Math.max(0, Math.floor((Date.now() - (t.turnStartedAt || Date.now())) / 1000)));
-function runNow(t, waiting) {
-  if (waiting) return t.dialogs.find(isApproval)?.title || 'Waiting for your OK';
+/** Right side of a board row: the running time while it works, how long the last turn took once it is done. */
+function runLabel(t, st) {
+  if (st === 'needs you') return 'Needs you';
+  if (st === 'working') return runTime(t);
+  const took = t.lastRunMs ? fmtSecs(Math.max(0, Math.round(t.lastRunMs / 1000))) : '';
+  const word = st === 'merged' ? 'Merged' : st === 'kept' ? 'Kept' : 'Done';
+  return took ? `${word} · ${took}` : word;
+}
+function runNow(t, st) {
+  if (st === 'needs you') return t.dialogs.find(isApproval)?.title || 'Waiting for your OK';
+  if (st !== 'working') return t.worktree && st === 'done' ? 'Ready to review' : st === 'merged' ? `In ${t.worktree?.baseBranch || 'the base branch'}` : 'Idle';
   const now = views.get(t.id)?.nowDoing?.();
   return now ? `${now[0]} ${now[1]}`.trim() : 'Working';
 }
@@ -296,11 +310,11 @@ setInterval(() => {
   for (const row of sideEl.querySelectorAll('.run-row[data-id]')) {
     const t = S.tabs.get(row.dataset.id);
     if (!t || t.dead) continue;
-    const waiting = t.dialogs.some(isApproval);
+    const state = boardState(t);
     const st = row.querySelector('.run-st');
     const now = row.querySelector('.run-now');
-    if (st && !waiting) st.textContent = runTime(t);
-    if (now) now.textContent = runNow(t, waiting);
+    if (st && state === 'working') st.textContent = runTime(t);
+    if (now) now.textContent = runNow(t, state);
   }
   syncTitle();
 }, 1000);

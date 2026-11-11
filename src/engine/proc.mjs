@@ -75,11 +75,14 @@ const sleep = (ms, signal) =>
   });
 
 export class AgentProc extends EventEmitter {
-  constructor({ id, backend, workspace, resume, model, noSession, config }) {
+  constructor({ id, backend, workspace, resume, model, noSession, config, worktree }) {
     super();
     this.id = id;
     this.backend = backend;
     this.workspace = workspace;
+    // A session on its own branch: { repo, slug, path, branch, base, baseBranch, source } (see gitapi.worktreeAdd).
+    this.worktree = worktree || null;
+    this.worktreeState = null; // { state: 'merged' | 'kept' | 'discarded', hash, at } once you reviewed it
     this.opts = { resume, model, noSession };
     this.config = config;
     this.engine = 'builtin';
@@ -149,6 +152,9 @@ export class AgentProc extends EventEmitter {
       this.title = s.title;
       this.session = { id: s.header.id, file: this.opts.resume };
       this.sessionId = s.header.id;
+      if (s.header.worktree) this.worktree = s.header.worktree;
+      this.worktreeState = s.worktreeState || null;
+      if (this.worktreeState?.state === 'discarded') throw new Error(`This session worked on ${this.worktree?.branch || 'its own branch'}, which was discarded with its folder, so it cannot be opened again.`);
       for (const c of s.checkpoints || []) this.checkpoints.set(c.toolCallId, c.undo);
       for (const id of s.undone || []) this.undone.add(id);
       for (const m of this.messages) if (m.role === 'toolResult') {
@@ -311,6 +317,7 @@ export class AgentProc extends EventEmitter {
       messageCount: this.messages.length,
       tools: this._toolDefs().map((t) => t.name),
       approvals: this.config.data.approvals,
+      worktree: this.worktreeView(),
       features: FEATURES,
     };
   }
@@ -614,10 +621,25 @@ export class AgentProc extends EventEmitter {
 
   _ensureSession() {
     if (this.session) return;
-    this.session = createSession({ cwd: this.workspace, keyPath: this.backend.keyPath(this.workspace), model: this.model, provider: this.provider });
+    this.session = createSession({ cwd: this.workspace, keyPath: this.backend.keyPath(this.workspace), model: this.model, provider: this.provider, worktree: this.worktree || undefined });
     this.sessionId = this.session.id;
     if (this.thinkingLevel !== 'off') appendEntry(this.session.file, { type: 'thinking', level: this.thinkingLevel });
     if (this.planMode) appendEntry(this.session.file, { type: 'plan', on: true });
+  }
+
+  /** The branch of a session on its own branch, for the UI (null otherwise). */
+  worktreeView() {
+    if (!this.worktree) return null;
+    const { branch, baseBranch, base, slug, source } = this.worktree;
+    return { branch, baseBranch, base, slug, source, state: this.worktreeState?.state || '', hash: this.worktreeState?.hash || '' };
+  }
+
+  /** Record what you did with the branch (merged, kept, discarded): in the session file and in every open window. */
+  setWorktreeState(state, extra = {}) {
+    if (!this.worktree) return;
+    this.worktreeState = { state, hash: extra.hash || '', at: Date.now() };
+    if (this.session && !this.opts.noSession) appendEntry(this.session.file, { type: 'worktree', ...this.worktreeState });
+    this._emit({ type: 'worktree_update', worktree: this.worktreeView() });
   }
 
   /** Add a message to the conversation: memory, session file, UI. */
