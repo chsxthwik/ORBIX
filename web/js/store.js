@@ -627,7 +627,9 @@ export function groupSessions() {
   for (const s of S.sessions) {
     let g = groups.get(s.cwdKey);
     if (!g) {
-      g = { key: s.cwdKey, path: s.cwdDisplay || s.cwd, name: baseName(s.cwdDisplay || s.cwd), saved: false, sessions: [] };
+      // A session on its own branch belongs to the project it came from: name the group after that, not its worktree.
+      const where = s.projectDisplay || s.cwdDisplay || s.cwd;
+      g = { key: s.cwdKey, path: where, name: baseName(where), saved: false, sessions: [] };
       groups.set(s.cwdKey, g);
     }
     g.sessions.push(s);
