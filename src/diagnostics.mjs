@@ -26,7 +26,7 @@ export async function collect(app) {
   const add = (id, label, ok, detail, fix) => checks.push({ id, label, ok: !!ok, detail: detail || '', fix: ok ? '' : fix || '' });
 
   const nodeMajor = Number(process.versions.node.split('.')[0]);
-  add('node', 'Node.js 20 or newer', nodeMajor >= 20, `v${process.versions.node}`, 'Install Node.js 20+ from https://nodejs.org');
+  add('node', 'Node.js 22 or newer', nodeMajor >= 22, `v${process.versions.node}`, 'Install Node.js 22+ from https://nodejs.org');
   add('data', 'App data folder is writable', writable(DATA_DIR), DATA_DIR, 'Move ORBIX to a folder you can write to, or set ORBIX_DATA.');
 
   let distros = [];
