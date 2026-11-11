@@ -20,6 +20,8 @@ const MODELS_DEV_ID = {
   mistral: 'mistral',
   deepseek: 'deepseek',
   openrouter: 'openrouter',
+  opencode: 'opencode',
+  'opencode-go': null, // the Go plan's models are matched by id
   together: 'togetherai',
   fireworks: 'fireworks-ai',
   cerebras: 'cerebras',

@@ -1,5 +1,5 @@
-// Provider sign-ins: "Sign in with ChatGPT" (browser, calls back to a fixed local port) and "Sign in with xAI"
-// (device code: the user confirms a short code on x.ai, nothing listens locally).
+// Provider sign-ins: "Sign in with ChatGPT" (browser, calls back to a fixed local port), and "Sign in with xAI" and
+// "Sign in with OpenCode" (device code: the user confirms a short code on the provider's site, nothing listens locally).
 //
 // Neither OpenAI nor xAI registers third-party apps for OAuth. Both flows use the public client registration of the
 // vendor's own command-line tool, so they can stop working whenever the vendor changes it:
@@ -8,6 +8,9 @@
 //            OpenAI Platform organization are needed.
 //   xAI:     the Grok CLI client, with the OAuth device flow opencode uses (auth.x.ai/oauth2/device/code). The access
 //            token is used as the API key and refreshed before it expires.
+//   OpenCode: the opencode CLI's Console client ("opencode-cli", github.com/anomalyco/opencode,
+//            packages/core/src/plugin/provider/opencode.ts). JSON bodies, rotating refresh tokens, and the
+//            organization the sign-in chose is sent as x-org-id. An oc_sk_ API key works without any of this.
 // The ChatGPT callback uses the redirect Codex registers (http://localhost:1455/auth/callback) and listens on the
 // loopback addresses only (127.0.0.1, and ::1 when the system has it), for one sign-in at a time, closing when done.
 // If the browser cannot reach it, the address the browser landed on can be pasted into ORBIX instead.
@@ -24,6 +27,12 @@ async function postForm(url, fields, what) {
   const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body: form(fields), signal: AbortSignal.timeout(30000) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`${what}: ${j.error_description || j.error?.message || j.error || `the server answered ${r.status}`}`);
+  return j;
+}
+async function postJson(url, body, what) {
+  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(`${what}: ${j.error_description || j.error?.message || j.error || `the server answered ${r.status}`}`), { status: r.status, code: j.error });
   return j;
 }
 const expiresAt = (tokens) => (Number(tokens.expires_in) > 0 ? Date.now() + Number(tokens.expires_in) * 1000 : null);
@@ -72,6 +81,40 @@ export const SPECS = {
       const t = await postForm(spec.token, { grant_type: 'refresh_token', refresh_token: refreshToken, client_id: spec.clientId }, 'Refreshing the xAI sign-in');
       if (!t.access_token) throw new Error('xAI did not return a new access token.');
       return { key: t.access_token, refresh: t.refresh_token || refreshToken, expiresAt: expiresAt(t) };
+    },
+  },
+  opencode: {
+    name: 'OpenCode',
+    clientId: 'opencode-cli',
+    server: 'https://opencode.ai/console',
+    device: 'https://opencode.ai/console/auth/device/code',
+    token: 'https://opencode.ai/console/auth/device/token',
+    host: 'opencode.ai', // where the user confirms the code
+    json: true, // the Console takes JSON bodies
+    deviceBody: { supports_org_scope: true },
+    async finish(tokens, spec) {
+      if (typeof tokens.access_token !== 'string' || !tokens.access_token) throw new Error('OpenCode did not return an access token.');
+      // The organization the sign-in chose, else the first one (sorted by name), like the opencode CLI.
+      let orgId = tokens.org_id || null;
+      if (!orgId) {
+        const r = await fetch(`${spec.server}/api/orgs`, { headers: { authorization: `Bearer ${tokens.access_token}`, accept: 'application/json' }, signal: AbortSignal.timeout(30000) }).catch(() => null);
+        const orgs = r?.ok ? await r.json().catch(() => []) : [];
+        const first = (Array.isArray(orgs) ? orgs : []).filter((o) => o?.id).sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.id).localeCompare(String(b.id)))[0];
+        orgId = first?.id || null;
+      }
+      return { key: tokens.access_token, refresh: tokens.refresh_token || null, expiresAt: expiresAt(tokens), orgId };
+    },
+    async refresh(refreshToken, spec) {
+      let t;
+      try {
+        t = await postJson(spec.token, { grant_type: 'refresh_token', refresh_token: refreshToken, client_id: spec.clientId }, 'Renewing the OpenCode sign-in');
+      } catch (e) {
+        if (e.code === 'invalid_grant') throw new Error('The OpenCode sign-in was signed out. Sign in with OpenCode again.');
+        throw e;
+      }
+      if (!t.access_token) throw new Error('OpenCode did not return a new access token.');
+      // Refresh tokens rotate: the old one stops working once this answer arrives.
+      return { key: t.access_token, refresh: t.refresh_token || refreshToken, expiresAt: expiresAt(t), ...(t.org_id ? { orgId: t.org_id } : {}) };
     },
   },
 };
@@ -177,8 +220,8 @@ async function exchange(p, code) {
 }
 async function save(p, got) {
   const pr = presetById(p.id);
-  const models = await clientFor(pr.type).listModels({ apiKey: got.key, baseUrl: p.config.baseUrl(p.id) || pr.baseUrl, providerId: p.id }).then((m) => m.length, () => undefined);
-  await p.config.setProvider(p.id, { key: got.key, models, via: 'oauth', refresh: got.refresh || null, expiresAt: got.expiresAt || null });
+  const models = await clientFor(pr.type).listModels({ apiKey: got.key, baseUrl: p.config.baseUrl(p.id) || pr.baseUrl, providerId: p.id, orgId: got.orgId }).then((m) => m.length, () => undefined);
+  await p.config.setProvider(p.id, { key: got.key, models, via: 'oauth', refresh: got.refresh || null, expiresAt: got.expiresAt || null, ...(got.orgId ? { orgId: got.orgId } : {}) });
   Object.assign(p, { status: 'done', models });
 }
 
@@ -226,9 +269,11 @@ export async function startDevice(id, { config, minInterval = 1000 } = {}) {
       pending.delete(k);
     }
   }
-  const d = await postForm(spec.device, { client_id: spec.clientId, scope: spec.scope }, `Starting the ${spec.name} sign-in`);
+  const start = { client_id: spec.clientId, scope: spec.scope, ...spec.deviceBody };
+  const d = spec.json ? await postJson(spec.device, start, `Starting the ${spec.name} sign-in`) : await postForm(spec.device, start, `Starting the ${spec.name} sign-in`);
   if (!d.device_code || !d.user_code) throw new Error(`${spec.name} did not return a sign-in code. Try again.`);
   const url = d.verification_uri_complete || d.verification_uri;
+  if (!isAuthUrl(id, new URL(url, spec.device).href)) throw new Error(`${spec.name} sent a sign-in page on an unexpected site. Try again.`);
   const state = b64url(crypto.randomBytes(32));
   const ttl = Math.min(TTL, (Number(d.expires_in) || 600) * 1000);
   const p = { id, kind: 'device', created: Date.now(), ttl, status: 'pending', error: '', config, userCode: d.user_code, url, deviceCode: d.device_code };
@@ -245,7 +290,8 @@ async function poll(p, spec, wait) {
     if (Date.now() - p.created > p.ttl) return Object.assign(p, { status: 'expired', error: 'The code expired before it was confirmed. Start the sign-in again.' });
     let r, t;
     try {
-      r = await fetch(spec.token, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body: form({ grant_type: DEVICE_GRANT, device_code: p.deviceCode, client_id: spec.clientId }), signal: AbortSignal.timeout(30000) });
+      const fields = { grant_type: DEVICE_GRANT, device_code: p.deviceCode, client_id: spec.clientId };
+      r = await fetch(spec.token, { method: 'POST', headers: { 'content-type': spec.json ? 'application/json' : 'application/x-www-form-urlencoded', accept: 'application/json' }, body: spec.json ? JSON.stringify(fields) : form(fields), signal: AbortSignal.timeout(30000) });
       t = await r.json().catch(() => ({}));
     } catch {
       continue; // a network blip: ask again on the next tick
@@ -324,7 +370,7 @@ export const isAuthUrl = (id, u) => {
   }
 };
 
-/** Refresh a provider's sign-in (ChatGPT, xAI). */
+/** Refresh a provider's sign-in (ChatGPT, xAI, OpenCode). */
 export async function refreshSignIn(id, refreshToken) {
   const spec = SPECS[id];
   if (!spec?.refresh) throw new Error(`${spec?.name || id} sign-ins do not refresh.`);

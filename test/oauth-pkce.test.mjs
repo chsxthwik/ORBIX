@@ -20,7 +20,7 @@ globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
   if (u.startsWith('http://127.0.0.1')) return realFetch(url, init);
   const body = typeof init.body === 'string' ? init.body : '';
-  const fields = body.startsWith('{') ? {} : Object.fromEntries(new URLSearchParams(body));
+  const fields = body.startsWith('{') ? JSON.parse(body) : Object.fromEntries(new URLSearchParams(body));
   calls.push({ url: u, body: fields, json: body.startsWith('{') ? JSON.parse(body) : null, headers: init.headers || {} });
   return answer(u, fields);
 };
@@ -247,5 +247,50 @@ describe('Sign in with xAI (device code)', () => {
     answer = () => json({ error: 'invalid_grant' }, 400);
     assert.equal(await cfg.getKey('xai'), 'xai-old');
     assert.match(cfg.publicView().providers.find((p) => p.id === 'xai').signInError, /invalid_grant/);
+  });
+});
+
+describe('Sign in with OpenCode', () => {
+  test('device code with JSON bodies, the first organization when none was chosen, and rotating refresh', async () => {
+    const config = fakeConfig();
+    calls.length = 0;
+    let polls = 0;
+    answer = (u, b) => {
+      if (u === 'https://opencode.ai/console/auth/device/code') return json({ device_code: 'dc', user_code: 'WXYZ-9876', verification_uri_complete: 'https://opencode.ai/console/device?code=WXYZ-9876', expires_in: 900, interval: 0 });
+      if (u === 'https://opencode.ai/console/auth/device/token' && b.grant_type === 'urn:ietf:params:oauth:grant-type:device_code') return ++polls < 2 ? json({ error: 'authorization_pending' }, 400) : json({ access_token: 'oc-at', refresh_token: 'oc-rt', expires_in: 3600 });
+      if (u === 'https://opencode.ai/console/api/orgs') return json([{ id: 'org-z', name: 'Zeta' }, { id: 'org-a', name: 'Acme' }]);
+      if (u === 'https://opencode.ai/console/auth/device/token' && b.grant_type === 'refresh_token') return json({ access_token: 'oc-at-2', refresh_token: 'oc-rt-2', expires_in: 3600 });
+      if (u.endsWith('/chat/completions')) return json({ error: { message: 'model is required' } }, 400);
+      if (u.endsWith('/models')) return json({ data: [{ id: 'claude-haiku-5-5', type: 'chat', cost: { text: { input: { price: 0.1 }, output: { price: 0.5 } } } }, { id: 'big-pickle', type: 'chat', cost: { text: { input: { price: 0 }, output: { price: 0 } } } }, { id: 'glm-5.3-flash-free', type: 'chat' }] });
+      return json({}, 500);
+    };
+    const { url, state, userCode } = await pkce.startDevice('opencode', { config, minInterval: 20 });
+    assert.equal(userCode, 'WXYZ-9876');
+    assert.equal(pkce.isAuthUrl('opencode', url), true);
+    assert.deepEqual(calls[0].json, { client_id: 'opencode-cli', supports_org_scope: true }, 'JSON, no scope');
+    for (let i = 0; i < 100 && pkce.pkceStatus(state).status !== 'done'; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(pkce.pkceStatus(state).status, 'done', pkce.pkceStatus(state).error);
+    assert.equal(pkce.pkceStatus(state).models, 1, 'free models are left out: OpenCode refuses them to other clients');
+    const s = config.saved[0];
+    assert.deepEqual([s.key, s.refresh, s.orgId], ['oc-at', 'oc-rt', 'org-a']);
+    const models = calls.find((x) => x.url.endsWith('/models'));
+    assert.equal(models.headers['x-org-id'], 'org-a');
+    assert.match(models.headers['user-agent'], /^orbix\//);
+    const fresh = await pkce.refreshSignIn('opencode', 'oc-rt');
+    assert.deepEqual([fresh.key, fresh.refresh], ['oc-at-2', 'oc-rt-2']);
+    assert.deepEqual(calls.at(-1).json, { grant_type: 'refresh_token', refresh_token: 'oc-rt', client_id: 'opencode-cli' });
+  });
+
+  test('a revoked sign-in says to sign in again; a code page on another site is refused', async () => {
+    answer = () => json({ error: 'invalid_grant' }, 400);
+    await assert.rejects(() => pkce.refreshSignIn('opencode', 'old'), /signed out\. Sign in with OpenCode again/);
+    answer = (u) => (u.endsWith('/device/code') ? json({ device_code: 'd', user_code: 'C', verification_uri_complete: 'https://evil.example/device' }) : json({}, 500));
+    await assert.rejects(() => pkce.startDevice('opencode', { config: fakeConfig(), minInterval: 20 }), /unexpected site/);
+  });
+
+  test('a rejected key is reported before the model list is read', async () => {
+    const { clientFor } = await import('../src/engine/providers.mjs');
+    answer = (u) => (u.endsWith('/chat/completions') ? json({ error: { message: 'Invalid API key' } }, 401) : json({ data: [] }));
+    await assert.rejects(() => clientFor('openai').listModels({ apiKey: 'oc_sk_bad', baseUrl: 'https://opencode.ai/inference/openai/v1', providerId: 'opencode' }), /401|rejected|Invalid/i);
   });
 });
