@@ -8,7 +8,7 @@ import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
 import { Backend } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
-import { EngineConfig, listAgentSessions, deleteAgentSessions, isAgentSessionPath } from './engine/store.mjs';
+import { EngineConfig, listAgentSessions, deleteAgentSessions, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
 import { clientFor } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import * as pkce from './engine/oauth-pkce.mjs';
@@ -184,7 +184,7 @@ export class AppServer {
     for (const c of this.clients) c.write(': ping\n\n');
   }
   procList() {
-    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin' }));
+    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin', waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null }));
   }
   broadcastProcs() {
     this.broadcast({ g: 'procs', procs: this.procList() });
@@ -227,15 +227,23 @@ export class AppServer {
     this.broadcast({ p: id, e: out });
   }
 
-  async startProc({ workspace, resume, model, noSession }) {
+  async startProc({ workspace, resume, model, noSession, branch }) {
     if (!workspace) throw new Error('A workspace folder is required');
     // Two agents appending to one saved conversation would interleave it.
     if (resume && [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume)) {
       throw Object.assign(new Error('That conversation is already open in another tab.'), { status: 409 });
     }
     this.backend.update(this.store.data.backend);
+    // "Separate branch": the session works in its own git worktree, on a new branch cut from the current commit.
+    let worktree = null;
+    if (branch && !resume) {
+      const wt = await gitapi.worktreeAdd(this.backend, workspace);
+      worktree = { repo: wt.repo, slug: wt.slug, path: wt.path, branch: wt.branch, base: wt.base, baseBranch: wt.baseBranch, source: workspace };
+      workspace = wt.workspace;
+      log('worktree added', wt.branch, wt.path);
+    }
     const id = uid('p');
-    const proc = new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg });
+    const proc = new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg, worktree });
     proc.cache = { commands: [] };
     // Questions waiting for the user (approvals, inputs): a window that reloads or reconnects gets them again.
     proc.openUi = new Map();
@@ -248,6 +256,7 @@ export class AppServer {
     proc.on('stderr', (line) => this.broadcast({ p: id, e: { type: 'stderr', line } }));
     proc.on('exit', (code, msg) => {
       this.flushUpdates(id);
+      this.dropUnusedWorktree(proc);
       this.broadcast({ p: id, e: { type: 'proc_exit', code, message: msg || '', stderr: proc.stderrTail.slice(-15) } });
       this.procs.delete(id);
       this.broadcastProcs();
@@ -258,11 +267,37 @@ export class AppServer {
       try {
         await proc.stop(500);
       } catch {}
+      if (worktree) await gitapi.worktreeRemove(this.backend, worktree).catch((er) => log('worktree cleanup failed', er));
       throw e;
     }
     this.procs.set(id, proc);
     this.broadcastProcs();
     return proc;
+  }
+
+  /**
+   * A branch session closed before anything was saved or changed (no conversation file, no edit, no commit): its
+   * worktree and branch are removed, so starting and closing sessions leaves no empty branches behind. Anything with
+   * work in it stays until you merge or discard it.
+   */
+  async dropUnusedWorktree(proc) {
+    const wt = proc.worktree;
+    if (!wt || proc.session || proc.worktreeState) return;
+    try {
+      const d = await gitapi.branchDiff(this.backend, wt.path, wt.base);
+      if (d.files.length || d.commits || d.pending) return;
+      await gitapi.worktreeRemove(this.backend, wt);
+      log('unused worktree removed', wt.branch);
+    } catch (e) {
+      log('unused worktree check failed', e);
+    }
+  }
+
+  /** The running branch session `id` (410 when it stopped, 400 when it has no branch of its own). */
+  branchProc(id) {
+    const p = this.proc(id);
+    if (!p.worktree) throw Object.assign(new Error('This session works in the project folder, not on its own branch.'), { status: 400 });
+    return p;
   }
 
   proc(id) {
@@ -639,8 +674,53 @@ export class AppServer {
       },
 
       'POST /api/proc/start': async ({ body }) => {
-        const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession });
-        return { engine: 'builtin', id: proc.id, workspace: proc.workspace, protocol: proc.protocol, commands: proc.cache.commands, notice: null };
+        const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession, branch: body.branch === true });
+        return { engine: 'builtin', id: proc.id, workspace: proc.workspace, protocol: proc.protocol, commands: proc.cache.commands, notice: null, worktree: proc.worktreeView() };
+      },
+
+      // Review of a session on its own branch: what it changed, then merge, keep or discard. Merge and discard need
+      // `confirm: true`, which the UI sends only after you said yes in its dialog.
+      'GET /api/branch': async ({ q }) => {
+        const p = this.branchProc(q.proc);
+        const wt = p.worktree;
+        const [d, main] = await Promise.all([gitapi.branchDiff(this.backend, wt.path, wt.base, { baseBranch: wt.baseBranch }), gitapi.mainState(this.backend, wt.repo).catch(() => null)]);
+        return { worktree: p.worktreeView(), ...d, main };
+      },
+      'GET /api/branch/diff': async ({ q }) => {
+        const wt = this.branchProc(q.proc).worktree;
+        return { diff: await gitapi.branchFileDiff(this.backend, wt.path, wt.base, q.file, { untracked: q.untracked === '1' }) };
+      },
+      'POST /api/branch/merge': async ({ body }) => {
+        const p = this.branchProc(body.proc);
+        if (body.confirm !== true) throw Object.assign(new Error('Merging needs your confirmation.'), { status: 400 });
+        if (p.streaming) throw Object.assign(new Error('The agent is still working. Stop it or wait until it is done, then merge.'), { status: 409 });
+        const wt = p.worktree;
+        const r = await gitapi.merge(this.backend, { repo: wt.repo, wt: wt.path, slug: wt.slug, baseBranch: wt.baseBranch, message: `${p.title || 'ORBIX session'} (ORBIX session ${wt.slug})` });
+        if (r.merged) p.setWorktreeState('merged', { hash: r.hash });
+        this.broadcastProcs();
+        return { result: r, worktree: p.worktreeView() };
+      },
+      'POST /api/branch/keep': async ({ body }) => {
+        const p = this.branchProc(body.proc);
+        p.setWorktreeState('kept');
+        this.broadcastProcs();
+        return { worktree: p.worktreeView() };
+      },
+      'POST /api/branch/discard': async ({ body }) => {
+        const p = this.branchProc(body.proc);
+        if (body.confirm !== true) throw Object.assign(new Error('Discarding needs your confirmation.'), { status: 400 });
+        if (p.streaming) throw Object.assign(new Error('The agent is still working. Stop it first, then discard.'), { status: 409 });
+        const wt = p.worktree;
+        const file = p.session?.file;
+        p.worktreeState = { state: 'discarded', hash: '', at: Date.now() }; // the exit handler must not look at the folder
+        await p.stop(3000); // nothing may run in the folder while it is removed
+        await gitapi.worktreeRemove(this.backend, wt);
+        if (file) {
+          appendEntry(file, { type: 'worktree', ...p.worktreeState });
+          closeSession(file);
+        }
+        log('worktree discarded', wt.branch);
+        return { removed: true };
       },
       'POST /api/proc/stop': async ({ body }) => {
         const p = this.procs.get(body.proc);
