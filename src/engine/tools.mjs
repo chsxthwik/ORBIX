@@ -47,7 +47,7 @@ const BASE_DEFS = [
   },
   {
     name: 'write',
-    description: 'Create a file, or replace a whole file, with `content` (parent folders are created). To change part of an existing file use edit. An existing file keeps its encoding and CRLF line endings. Refused when the file changed on disk after you last read it: read it again first.',
+    description: 'Create a file, or replace a whole file, with `content` (parent folders are created). To change part of an existing file use edit. An existing file must be read first in this session, and keeps its encoding and CRLF line endings. Refused when the file changed on disk after you last read it: read it again first.',
     input_schema: { type: 'object', properties: { path: PATH, content: { type: 'string', description: 'The complete new file content.' } }, required: ['path', 'content'] },
   },
   {
@@ -355,7 +355,10 @@ export function createTools({ backend, cwd, getSignal }) {
         return { text: ents.slice(0, MAX_LIST).join('\n') + more || '(empty folder)', details: { path: shown, entries: ents.length } };
       }
       if (!st.isFile()) return { text: `${shown} is not a regular file (a device or pipe), so it is not read.`, isError: true };
-      if (!st.size) return { text: '(empty file)', details: { path: shown, totalLines: 0 } };
+      if (!st.size) {
+        await remember(file); // seen: an empty file can be written over
+        return { text: '(empty file)', details: { path: shown, totalLines: 0 } };
+      }
       const head = Buffer.alloc(Math.min(st.size, 64));
       const fh = await fs.promises.open(file, 'r');
       try {
@@ -412,7 +415,9 @@ export function createTools({ backend, cwd, getSignal }) {
       } catch {}
       if (st?.isDirectory()) return { text: `${shown} is a folder; give a file path.`, isError: true };
       if (st) {
-        if (seen.has(file) && seen.get(file) !== st.mtimeMs) return { text: `${shown} was changed on disk after you last read it (by the user or another program). Read it again, then write.`, isError: true };
+        // Replacing a whole file the agent has not seen would rest on a guess of what is in it.
+        if (!seen.has(file)) return { text: `${shown} already exists and you have not read it in this session. Read it first; then change it with edit, or write the complete new content.`, isError: true };
+        if (seen.get(file) !== st.mtimeMs) return { text: `${shown} was changed on disk after you last read it (by the user or another program). Read it again, then write.`, isError: true };
         old = await readText(file).catch(() => null);
       }
       let text = content;

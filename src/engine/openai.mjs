@@ -1,6 +1,7 @@
 // OpenAI-compatible chat client (streaming + tool calls). Works with OpenAI, Gemini, xAI, Groq, Mistral, DeepSeek,
 // OpenRouter, Together, Fireworks, Cerebras, Kimi, GLM, Qwen, Ollama, LM Studio and any server with the same API.
 // Emits the same normalised events as anthropic.mjs.
+import crypto from 'node:crypto';
 import { parseSSE, httpError, post, streamError, imageBlock } from './anthropic.mjs';
 
 const join = (base, p) => base.replace(/\/+$/, '') + p;
@@ -126,6 +127,9 @@ export function buildBody({ providerId, model, system, messages, tools, maxToken
   if (providerId === 'openai') body.max_completion_tokens = maxTokens;
   else body.max_tokens = maxTokens;
   if (tools?.length) body.tools = tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.input_schema } }));
+  // OpenAI routes requests with the same key to the same prompt cache: one key per system prompt (one per session),
+  // so every step of the agent loop re-reads the conversation so far from the cache.
+  if (providerId === 'openai' && system) body.prompt_cache_key = 'orbix-' + crypto.createHash('sha256').update(system).digest('hex').slice(0, 32);
   const kind = style?.kind || 'none';
   if (providerId === 'openrouter') {
     if (thinking !== 'off') body.reasoning = { effort: thinking };
