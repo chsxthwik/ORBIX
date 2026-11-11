@@ -551,6 +551,7 @@ pre.code.view:not(.codeview pre) { border: 1px solid var(--line); border-radius:
 .tool-name { flex: none; color: var(--fg); font-size: 13.5px; font-weight: 580; }
 .tool-sum { flex: 1; min-width: 0; color: var(--fg-3); font-family: var(--mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool.running .tool-sum, .tool.pending .tool-sum { color: var(--fg-2); }
+.check-issues { margin: 0 0 6px; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; color: var(--fg); }
 .tool-stat { display: inline-flex; gap: 6px; flex: none; font-family: var(--mono); font-size: 12px; font-weight: 550; }
 .tool-exit { flex: none; height: 18px; padding: 0 6px; border-radius: 4px; background: var(--err-soft); color: var(--err); font-family: var(--mono); font-size: 11.5px; font-weight: 550; line-height: 18px; }
 .tool-dur { flex: none; color: var(--fg-3); font-size: 12px; font-variant-numeric: tabular-nums; }

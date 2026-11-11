@@ -1,7 +1,7 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
@@ -185,6 +185,39 @@ function stepLabel(call, workspace) {
     case 'task': return ['Helper agent:', cut(a.description || a.prompt)];
     default: return ['Using', call.name];
   }
+}
+
+/** "Tests" when the check command runs tests, else "Checks" (a lint, type check or build). */
+const checkWord = (command) => (/\btest/i.test(command || '') ? 'Tests' : 'Checks');
+
+/**
+ * The run-end check or review as a step card: what ran and how it went, with the output or the issues inside.
+ * A failure opens by itself, since the agent is about to act on it.
+ */
+function checkCard(m) {
+  const d = m.details || {};
+  const verify = m.customType === 'verify';
+  const bad = d.status === 'failed' || d.status === 'issues';
+  const n = d.issues?.length || 0;
+  const verb = verify ? `${checkWord(d.command)} ${bad ? 'failed' : 'passed'}` : bad ? `Review found ${n} issue${n === 1 ? '' : 's'}` : 'Review found no issues';
+  const subject = verify ? `${d.command || ''}${d.by === 'agent' ? '  (run by the agent)' : ''}` : d.lines ? `${d.files} file${d.files === 1 ? '' : 's'}, ${d.lines} changed lines` : '';
+  const head = h('button', { class: 'tool-head', type: 'button', 'aria-expanded': String(bad), title: verify ? 'The project check ORBIX runs after the agent changes files' : `A review of this reply's changes${d.model ? ` by ${d.model}` : ''}` },
+    h('span', { class: 'tool-ico' }, icon(verify ? 'terminal' : 'eye', 14)),
+    h('span', { class: 'tool-name' }, verb),
+    subject ? h('span', { class: 'tool-sum' }, subject) : h('span', { class: 'grow' }),
+    verify && d.durationMs >= 0 ? h('span', { class: 'tool-dur' }, fmtDuration(d.durationMs)) : null,
+    h('span', { class: `st ${bad ? 'err' : 'ok'}`, title: bad ? 'Found problems' : 'Done' }, icon(bad ? (verify ? 'x' : 'alert') : 'check', 14)),
+    icon('chevron-right', 12, 'chev'));
+  const body = h('div', { class: 'tool-body' });
+  const card = h('div', { class: `tool ${bad ? 'error open' : 'done'}`, dataset: { id: `check-${m.timestamp}`, tool: m.customType } }, head, body);
+  card._fill = () => {
+    if (body.firstChild) return;
+    if (verify) body.append(d.output?.trim() ? output(d.output, { tail: true, cls: bad ? 'err' : '' }) : h('div', { class: 'muted small' }, d.by === 'agent' ? 'The agent ran this check itself after its last change, so ORBIX did not run it again.' : 'No output.'));
+    else body.append(n ? h('ul', { class: 'check-issues' }, d.issues.map((i) => h('li', null, i))) : h('div', { class: 'muted small' }, 'Nothing to fix was found in the changes.'));
+    if (bad && d.by !== 'agent') body.append(h('div', { class: 'muted small' }, 'Sent to the agent to fix.'));
+  };
+  if (bad) card._fill();
+  return card;
 }
 
 const clock = (ts) => (ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
@@ -642,6 +675,8 @@ export class TabView {
       case 'branchSummary':
         return h('details', { class: 'fold' }, h('summary', null, icon('chevron-right', 12, 'chev'), m.role === 'compactionSummary' ? 'Earlier messages were summarized' : 'Branch summary'), renderMarkdown(m.summary || textOf(m.content) || '', { onPath }));
       case 'custom':
+        if (m.customType === 'verify' || m.customType === 'review') return checkCard(m);
+      // falls through
       case 'hookMessage':
       case 'developer': {
         const txt = textOf(m.content);
@@ -776,9 +811,24 @@ export class TabView {
     const read = new Set();
     const n = { search: 0, run: 0, help: 0, failed: 0 };
     let lastAsst = null;
+    let lastEl = null; // the last thing drawn in this reply: the summary goes under it
+    let check = null; // the last run-end check, and how many failed before it
+    let checkFails = 0;
+    let review = null;
+    let edits = 0;
     for (const m of t.messages.slice(start + 1)) {
+      if (m.role === 'custom' && (m.customType === 'verify' || m.customType === 'review')) {
+        lastEl = m;
+        if (m.customType === 'review') review = { ...m.details, editsBefore: edits };
+        else {
+          if (check?.status === 'failed') checkFails++;
+          check = m.details || {};
+        }
+        continue;
+      }
       if (m.role !== 'assistant') continue;
       lastAsst = m;
+      lastEl = m;
       for (const b of Array.isArray(m.content) ? m.content : []) {
         if (b.type !== 'toolCall') continue;
         const r = t.results.get(b.id);
@@ -800,11 +850,12 @@ export class TabView {
         const f = files.get(path) || { add: 0, del: 0, ids: [] };
         const c = diffCounts(d);
         if (c) (f.add += c.add), (f.del += c.del);
+        edits++;
         if (undoable && d?.undoable) f.ids.push(b.id);
         files.set(path, f);
       }
     }
-    const anchor = lastAsst && this.els.get(lastAsst);
+    const anchor = lastEl && this.els.get(lastEl);
     const did = read.size + n.search + n.run + n.help + files.size + n.failed;
     if (!anchor || !did) return;
     // What the agent looked at and did in this reply, in one line (the transparency the tool steps give, summed up).
@@ -817,9 +868,11 @@ export class TabView {
       n.run ? [icon('terminal', 12), `Ran ${pl(n.run, 'command')}`] : null,
       n.help ? [icon('users', 12), pl(n.help, 'helper')] : null,
       files.size ? [icon('pencil', 12), `Changed ${pl(files.size, 'file')}`] : null,
-      n.failed ? [icon('alert', 12), pl(n.failed, 'failed step')] : null,
+      check ? (check.status === 'passed' ? [icon('check', 12), `${checkWord(check.command)} passed${checkFails ? ` after ${pl(checkFails, 'fix', 'fixes')}` : ''}`] : [icon('alert', 12), `${checkWord(check.command)} failed`, true]) : null,
+      review ? (review.status === 'issues' ? [icon('eye', 12), `Review found ${pl(review.issues?.length || 0, 'issue')}${edits > review.editsBefore ? ', fixed' : ''}`] : [icon('eye', 12), 'Review found no issues']) : null,
+      n.failed ? [icon('alert', 12), pl(n.failed, 'failed step'), true] : null,
     ].filter(Boolean);
-    const line = h('div', { class: 'ts-line' }, facts.map(([ic, txt], i) => h('span', { class: 'ts-fact' + (i === facts.length - 1 && n.failed ? ' bad' : '') }, ic, txt)), secs ? h('span', { class: 'ts-time num' }, secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`) : null);
+    const line = h('div', { class: 'ts-line' }, facts.map(([ic, txt, bad]) => h('span', { class: 'ts-fact' + (bad ? ' bad' : '') }, ic, txt)), secs ? h('span', { class: 'ts-time num' }, secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`) : null);
     if (!files.size) {
       this.summaryEl = h('div', { class: 'turn-sum lite enter' }, line);
       anchor.after(this.summaryEl);

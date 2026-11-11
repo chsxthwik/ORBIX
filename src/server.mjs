@@ -13,6 +13,7 @@ import { clientFor } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import * as pkce from './engine/oauth-pkce.mjs';
 import { webSearch } from './engine/websearch.mjs';
+import { detectCheck } from './engine/verify.mjs';
 import { userInstructionsPath } from './engine/context.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
 import { collect as collectDiagnostics } from './diagnostics.mjs';
@@ -503,7 +504,18 @@ export class AppServer {
       'POST /api/engine/settings': async ({ body }) => {
         if (body.approvals !== undefined) this.engineCfg.setApprovals(body.approvals);
         if (body.trusted !== undefined) this.engineCfg.setTrusted(body.trusted);
+        if (body.verify !== undefined || body.review !== undefined) this.engineCfg.setChecks({ verify: body.verify, review: body.review });
         return { engine: this.engineCfg.publicView() };
+      },
+      // The check command of one project: the one you chose (or 'off'), and the one ORBIX finds in its files.
+      'GET /api/engine/check': async ({ q }) => {
+        if (!q.ws) throw Object.assign(new Error('Open a project first.'), { status: 400 });
+        return { command: this.engineCfg.checkCommand(this.backend.keyPath(q.ws)), detected: detectCheck(this.backend.hostPath(q.ws), { wsl: !!this.backend.isWsl }) };
+      },
+      'POST /api/engine/check': async ({ body }) => {
+        if (!body.ws) throw Object.assign(new Error('Open a project first.'), { status: 400 });
+        this.engineCfg.setCheckCommand(this.backend.keyPath(String(body.ws)), body.command);
+        return { command: this.engineCfg.checkCommand(this.backend.keyPath(String(body.ws))), detected: detectCheck(this.backend.hostPath(String(body.ws)), { wsl: !!this.backend.isWsl }) };
       },
       // Your instructions for every project (data/AGENTS.md).
       'GET /api/instructions': async () => {
