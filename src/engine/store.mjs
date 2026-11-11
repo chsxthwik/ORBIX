@@ -284,12 +284,17 @@ function projectFolder(keyPath) {
   return crypto.createHash('sha1').update(keyPath).digest('hex').slice(0, 10);
 }
 
-export function createSession({ cwd, keyPath, model, provider }) {
+/**
+ * Start a session file. `worktree` ({ repo, slug, path, branch, base, baseBranch, source }) is set for a session that
+ * works on its own branch: it goes into the header, so a reopened session still knows its branch and where it came from.
+ */
+export function createSession({ cwd, keyPath, model, provider, worktree }) {
   const id = uid('b');
   const dir = path.join(sessionsDir(), projectFolder(keyPath));
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${id}.jsonl`);
   const header = { type: 'session', engine: 'builtin', version: 1, id, cwd, model: model || '', provider: provider || '', timestamp: new Date().toISOString() };
+  if (worktree) header.worktree = worktree;
   fs.writeFileSync(file, JSON.stringify(header) + '\n');
   return { id, file, header };
 }
@@ -344,6 +349,7 @@ export function loadSession(file) {
   let title = '';
   const undone = [];
   const checkpoints = [];
+  let worktreeState = null; // last { state: 'merged' | 'kept' | 'discarded', hash, at } of a branch session
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
     let o;
@@ -356,9 +362,10 @@ export function loadSession(file) {
     else if (o.type === 'title') title = o.title;
     else if (o.type === 'undone') undone.push(o.toolCallId);
     else if (o.type === 'checkpoint') checkpoints.push({ toolCallId: o.toolCallId, undo: o.undo });
+    else if (o.type === 'worktree') worktreeState = { state: o.state, hash: o.hash || '', at: o.at || 0 };
     else if (o.type === 'message' && o.message) messages.push(o.message);
   }
-  return { header, messages, title, undone, checkpoints };
+  return { header, messages, title, undone, checkpoints, worktreeState };
 }
 
 /** Header facts of a saved conversation from its first bytes: { header, title, first } (first user text). */
@@ -403,7 +410,9 @@ export async function listAgentSessions(backend) {
     }
     const { header, title, first } = hit.head;
     if (!header) return null;
-    return { id: header.id, path: file, engine: 'builtin', cwd: header.cwd, cwdKey: backend.keyPath(header.cwd), cwdDisplay: backend.displayPath(header.cwd), title: makeTitle(title || first) || 'Untitled', preview: clip(first, 140), mtime: st.mtimeMs, size: st.size, chain: [file], chainIds: [header.id], resumes: 0 };
+    // A session on its own branch is listed under the project it was started from, not under its worktree folder.
+    const wt = header.worktree;
+    return { id: header.id, path: file, engine: 'builtin', cwd: header.cwd, cwdKey: backend.keyPath(wt?.source || header.cwd), branch: wt?.branch || '', cwdDisplay: backend.displayPath(header.cwd), title: makeTitle(title || first) || 'Untitled', preview: clip(first, 140), mtime: st.mtimeMs, size: st.size, chain: [file], chainIds: [header.id], resumes: 0 };
   });
   const live = new Set(files);
   for (const k of listCache.keys()) if (!live.has(k)) listCache.delete(k);

@@ -9,6 +9,7 @@ import { brandMark } from './brands.js';
 import { asciiOrbit } from './ascii.js';
 import { recipes } from './workspace.js';
 import { sessionLibrary } from './session-library.js';
+import { branchToggle } from './review.js';
 
 // The home screen is redrawn when sessions or providers change. The message box stays mounted (so typing, IME
 // composition and the caret are never interrupted); only the parts around it are redrawn.
@@ -152,7 +153,7 @@ export function drawHome(root, H) {
   const { comp, row } = box;
   if (box.el.parentNode !== w.deckSlot) w.deckSlot.replaceChildren(box.el);
 
-  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, agentOk, S.engine?.approvals, homeModel(), projects.map(p => [p.path, p.name])]);
+  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, !!draft.branch, agentOk, S.engine?.approvals, homeModel(), projects.map(p => [p.path, p.name])]);
   if (box.controlsSig !== controlsSig) {
     box.controlsSig = controlsSig;
     const projBtn = h('button', { class: 'cbtn proj-pick' + (g ? '' : ' need'), type: 'button', title: g ? g.path : 'Choose a project folder', 'aria-haspopup': 'menu' }, icon('folder', 14), h('span', { class: 'ell' }, g ? g.name : 'Choose a folder'), icon('chevron-down', 12, 'cbtn-chev'));
@@ -200,7 +201,7 @@ export function drawHome(root, H) {
       try {
         const mm = homeModel();
         await api.post('/api/workspaces', { path: draft.project }).then((r) => (S.workspaces = r.workspaces)).catch(() => {});
-        const tab = await openTab({ workspace: draft.project, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: draft.ephemeral || undefined });
+        const tab = await openTab({ workspace: draft.project, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: draft.ephemeral || undefined, branch: !!draft.branch });
         draft.ephemeral = false;
         comp.reset(p?.raw);
         persistDraft();
@@ -219,7 +220,8 @@ export function drawHome(root, H) {
     };
     go.addEventListener('click', () => box.start());
 
-    row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, apprBtn, unsaved, h('span', { class: 'grow' }), modes, go);
+    const branchBtn = branchToggle(draft, draft.project, () => ((box.controlsSig = null), drawHome(root, H)));
+    row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, apprBtn, branchBtn || '', unsaved, h('span', { class: 'grow' }), modes, go);
   }
   const rec = recipes(comp);
   if (rec.parentNode !== w.under) w.under.replaceChildren(rec);
