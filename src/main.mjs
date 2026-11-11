@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ORBIX entry point. Starts the local web app and opens it in the default browser.
-// --serve and --no-window run the server without opening a browser.
+// --serve and --no-open run the server without opening a browser.
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -23,7 +23,7 @@ if (flag('--help') || flag('-h')) {
 Usage: node src/main.mjs [options]
   (no options)       start ORBIX and open it in your browser
   --serve            start the local web server without opening a browser
-  --no-window        server only; keep it running until stopped
+  --no-open          server only; keep it running until stopped
   --port <n>         preferred port (default 47821; falls back to a random one)
   --version`);
   process.exit(0);
@@ -33,7 +33,7 @@ if (flag('--version')) {
   process.exit(0);
 }
 
-const headless = flag('--serve') || flag('--no-window');
+const headless = flag('--serve') || flag('--no-open') || flag('--no-window'); // --no-window: the old name
 
 initLog(path.join(DATA_DIR, 'logs', 'server.log'));
 process.on('uncaughtException', (e) => log('uncaughtException', e));
@@ -79,7 +79,7 @@ async function main() {
   } catch {
     await h.listen(0);
   }
-  // Backend detection runs in the background so the window can load at once (/api/state waits for it). The model
+  // Backend detection runs in the background so the page can load at once (/api/state waits for it). The model
   // catalog (a 2.6 MB cache file) is read after the handshake, off the startup path.
   h.startEnv();
   const url = `http://127.0.0.1:${h.port}/?t=${token}`;

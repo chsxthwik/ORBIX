@@ -40,7 +40,7 @@ function braceAlternations(glob) {
 }
 
 /** Glob -> RegExp: `*` and `?` stay inside one path segment, `**` crosses folders, `{a,b}` is an alternation. Case-insensitive. */
-export function globToRegExp(glob) {
+function globToRegExp(glob) {
   const alt = braceAlternations(glob);
   let re = '';
   for (let i = 0; i < glob.length; i++) {

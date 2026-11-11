@@ -7,7 +7,7 @@ import { modelRecord, catalogModels } from './catalog.mjs';
 // note: one plain line for the settings screen. keyUrl: where the user gets a key.
 export const PRESETS = [
   { id: 'anthropic', name: 'Anthropic', type: 'anthropic', baseUrl: 'https://api.anthropic.com', note: 'Claude models.', keyUrl: 'https://console.anthropic.com/settings/keys' },
-  { id: 'openai', name: 'OpenAI', type: 'openai', baseUrl: 'https://api.openai.com/v1', note: 'GPT and o-series models.', keyUrl: 'https://platform.openai.com/api-keys' },
+  { id: 'openai', name: 'OpenAI', type: 'openai', baseUrl: 'https://api.openai.com/v1', note: 'GPT and o-series models.', keyUrl: 'https://platform.openai.com/api-keys', oauth: true },
   { id: 'google', name: 'Google Gemini', type: 'openai', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', note: 'Gemini models. Free tier available.', keyUrl: 'https://aistudio.google.com/apikey' },
   { id: 'xai', name: 'xAI', type: 'openai', baseUrl: 'https://api.x.ai/v1', note: 'Grok models.', keyUrl: 'https://console.x.ai/', oauth: true },
   { id: 'groq', name: 'Groq', type: 'openai', baseUrl: 'https://api.groq.com/openai/v1', note: 'Very fast open models.', keyUrl: 'https://console.groq.com/keys' },

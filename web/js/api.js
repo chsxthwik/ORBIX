@@ -6,7 +6,7 @@ async function call(method, url, body) {
   } catch (e) {
     throw Object.assign(new Error('Lost connection to the ORBIX server'), { offline: true });
   }
-  if (r.status === 401) throw Object.assign(new Error('Session expired. Reopen ORBIX from its shortcut.'), { unauthorized: true });
+  if (r.status === 401) throw Object.assign(new Error('Session expired. Open ORBIX again from the link it printed when it started.'), { unauthorized: true });
   const j = await r.json().catch(() => ({ ok: false, error: `HTTP ${r.status}` }));
   if (!r.ok || !j?.ok) throw Object.assign(new Error(typeof j?.error === 'string' ? j.error : `Request failed (HTTP ${r.status})`), { code: j?.code, status: r.status });
   return j;

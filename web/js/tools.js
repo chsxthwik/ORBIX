@@ -97,10 +97,10 @@ export function output(text, { maxLines = 300, cls = '', copy = true, tail = fal
   return wrap;
 }
 
-export function codeView(text, lang, { startLine = 1, lineNumbers = true, maxHeight = '360px' } = {}) {
+export function codeView(text, lang, { startLine = 1, maxHeight = '360px' } = {}) {
   const pre = h('pre', { class: 'code view' }, h('code', null, highlight(text, lang)));
   const lines = text.split('\n');
-  if (lineNumbers && lines.length < 4000) {
+  if (lines.length < 4000) {
     // One scroll box for numbers and code, so they never drift apart.
     const wrap = h('div', { class: 'codeview' }, h('div', { class: 'gutter', 'aria-hidden': 'true' }, lines.map((_, i) => String(startLine + i)).join('\n')), pre);
     if (maxHeight !== 'none') wrap.style.maxHeight = maxHeight;

@@ -38,9 +38,9 @@ export function fuzzy(q, s) {
 }
 
 /** Text with the matched characters wrapped in <mark>. */
-export function marked(text, hits = [], offset = 0) {
+export function marked(text, hits = []) {
   if (!hits.length) return text;
-  const set = new Set(hits.map((x) => x - offset));
+  const set = new Set(hits);
   const out = [];
   let run = '';
   let inMark = false;

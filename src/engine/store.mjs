@@ -8,10 +8,11 @@ import { DATA_DIR } from '../store.mjs';
 import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, textOf } from '../util.mjs';
 import { protect, unprotect } from './secrets.mjs';
 import { PRESETS } from './providers.mjs';
+import { refreshSignIn } from './oauth-pkce.mjs';
 
 const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
 /** ask: edits and commands ask. edits: edits run, commands ask. auto: nothing asks. */
-export const APPROVAL_MODES = ['ask', 'edits', 'auto'];
+const APPROVAL_MODES = ['ask', 'edits', 'auto'];
 
 /** A tidy trusted-command list: trimmed, single-spaced, no control characters, no duplicates, at most 100. */
 export function cleanTrusted(list) {
@@ -84,6 +85,9 @@ export class EngineConfig {
     return PRESETS.filter((p) => this.configured(p.id)).map((p) => p.id);
   }
   async getKey(id) {
+    const own = this.data.providers[id];
+    // A sign-in that expires is refreshed five minutes early, once at a time per provider.
+    if (own?.refresh && own.expiresAt && Date.now() > own.expiresAt - 5 * 60 * 1000) await this._refresh(id).catch(() => {});
     const k = this.data.providers[id]?.key;
     if (!k) return null;
     if (!this.plain.has(k)) this.plain.set(k, await unprotect(k));
@@ -93,7 +97,27 @@ export class EngineConfig {
    * Save a provider. `key` and `baseUrl` are optional; the caller verifies them with the provider first.
    * `models`: how many models the provider listed. `via`: 'oauth' when the key came from a sign-in.
    */
-  async setProvider(id, { key, baseUrl, models, via } = {}) {
+  _refresh(id) {
+    this.refreshing ||= new Map();
+    if (this.refreshing.has(id)) return this.refreshing.get(id);
+    const job = (async () => {
+      const cur = this.data.providers[id];
+      try {
+        const got = await refreshSignIn(id, await unprotect(cur.refresh));
+        await this.setProvider(id, { key: got.key, via: 'oauth', refresh: got.refresh, expiresAt: got.expiresAt });
+      } catch (e) {
+        // The sign-in can no longer be renewed: say so, so Settings can ask for a new sign-in.
+        const now = this.data.providers[id];
+        if (now) { now.signInError = String(e.message || e).slice(0, 300); this.save(); }
+        throw e;
+      } finally {
+        this.refreshing.delete(id);
+      }
+    })();
+    this.refreshing.set(id, job);
+    return job;
+  }
+  async setProvider(id, { key, baseUrl, models, via, refresh, expiresAt } = {}) {
     const p = this.provider(id);
     if (!p) throw new Error('Unknown provider');
     const cur = { ...(this.data.providers[id] || {}) };
@@ -111,7 +135,18 @@ export class EngineConfig {
     }
     if (p.keyOptional) cur.enabled = true;
     if (Number.isFinite(models)) cur.models = models;
-    if (key != null && String(key).trim()) cur.via = via === 'oauth' ? 'oauth' : 'key';
+    if (key != null && String(key).trim()) {
+      cur.via = via === 'oauth' ? 'oauth' : 'key';
+      // A new key replaces any earlier sign-in: keep a refresh token only if this key came with one.
+      delete cur.signInError;
+      if (refresh) {
+        cur.refresh = await protect(String(refresh));
+        cur.expiresAt = Number(expiresAt) || null;
+      } else {
+        delete cur.refresh;
+        delete cur.expiresAt;
+      }
+    }
     cur.savedAt = Date.now();
     this.data.providers[id] = cur;
     this.save();
@@ -193,7 +228,7 @@ export class EngineConfig {
       search: { provider: s?.provider || '', baseUrl: s?.baseUrl || '', hasKey: !!s?.key, configured: this.searchReady() },
       providers: PRESETS.map((p) => {
         const own = this.data.providers[p.id] || {};
-        return { id: p.id, name: p.name, type: p.type, note: p.note || '', keyUrl: p.keyUrl || '', oauth: !!p.oauth, local: !!p.local, keyOptional: !!p.keyOptional, editableUrl: !!p.editableUrl, hasKey: this.hasKey(p.id), configured: this.configured(p.id), baseUrl: this.baseUrl(p.id), models: Number.isFinite(own.models) ? own.models : null, via: own.via || null };
+        return { id: p.id, name: p.name, type: p.type, note: p.note || '', keyUrl: p.keyUrl || '', oauth: !!p.oauth, local: !!p.local, keyOptional: !!p.keyOptional, editableUrl: !!p.editableUrl, hasKey: this.hasKey(p.id), configured: this.configured(p.id), baseUrl: this.baseUrl(p.id), models: Number.isFinite(own.models) ? own.models : null, via: own.via || null, signInError: own.signInError || null };
       }),
     };
   }

@@ -172,13 +172,12 @@ describe('programs named by a repository\'s own config never run', { skip: !gitA
   });
   after(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  test('status, diff, log, stage, unstage, discard and commit run no repo filter, hook or signing program', async () => {
+  test('status, diff, stage, unstage, discard and commit run no repo filter, hook or signing program', async () => {
     fs.writeFileSync(path.join(repo, 'a.txt'), 'one\ntwo\n');
     fs.writeFileSync(path.join(repo, 'b.txt'), 'b\n');
     const st = await gitapi.status(backend, repo);
     assert.deepEqual(st.files.map((f) => f.path).sort(), ['a.txt', 'b.txt']);
     assert.match((await gitapi.diff(backend, repo, 'a.txt')).text, /\+two/);
-    assert.equal((await gitapi.log(backend, repo))[0].subject, 'signed');
     await gitapi.stage(backend, repo, ['a.txt', 'b.txt']);
     await gitapi.unstage(backend, repo, ['b.txt']);
     await gitapi.discard(backend, repo, { untracked: ['b.txt'] });

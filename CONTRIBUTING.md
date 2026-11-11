@@ -20,7 +20,7 @@ Thanks for helping. The project is small on purpose: no npm dependencies, no bun
 
 ## Try your change
 
-`npm start` starts the local server and opens the browser. `npm run serve` runs headlessly and exits when idle. `node src/main.mjs --no-window` keeps the server running without opening a browser. `npm run doctor` prints the Diagnostics checks.
+`npm start` starts the local server and opens the browser. `npm run serve` runs headlessly and exits when idle. `node src/main.mjs --no-open` keeps the server running without opening a browser. `npm run doctor` prints the Diagnostics checks.
 
 ## Tests
 

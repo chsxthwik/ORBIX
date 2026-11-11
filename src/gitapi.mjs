@@ -1,4 +1,4 @@
-// Git for the Changes panel: status, diffs, log, and the small write set (stage, unstage, discard, commit).
+// Git for the Changes panel: status, diffs, and the small write set (stage, unstage, discard, commit).
 // Also `git ls-files` for @-mention search.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -139,18 +139,6 @@ export async function diff(backend, ws, file, { untracked = false } = {}) {
   return { text: r.stdout.toString('utf8') };
 }
 
-export async function log(backend, ws, n = 20) {
-  const r = await git(backend, ws, ['log', `-n${n}`, '--pretty=format:%h%x1f%an%x1f%ar%x1f%s']);
-  if (r.code !== 0) return [];
-  return r.stdout
-    .toString('utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => {
-      const [hash, author, when, subject] = l.split('\x1f');
-      return { hash, author, when, subject };
-    });
-}
 
 
 const bad = (msg) => Object.assign(new Error(msg), { status: 400 });

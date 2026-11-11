@@ -52,7 +52,7 @@ const FIND = [
 ];
 
 /** Rows that belong together, in one framed list. */
-export const group = (title, note, ...rows) => h('section', { class: 'set-group' }, title ? h('h4', { class: 'set-sub' }, title) : null, note ? h('p', { class: 'set-note' }, note) : null, h('div', { class: 'set-card' }, ...rows));
+const group = (title, note, ...rows) => h('section', { class: 'set-group' }, title ? h('h4', { class: 'set-sub' }, title) : null, note ? h('p', { class: 'set-note' }, note) : null, h('div', { class: 'set-card' }, ...rows));
 
 /** Open Settings on a page: start, engine, models, behavior, tools, look, about. */
 export function openSettings(initial = 'start') {
