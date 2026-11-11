@@ -12,6 +12,7 @@ let signIn = null; // {state, url, timer, provider} while a sign-in is waiting f
 const SIGN_IN = {
   openrouter: { name: 'OpenRouter', label: 'Sign in with OpenRouter', note: 'or paste a key below' },
   chatgpt: { name: 'ChatGPT', label: 'Sign in with ChatGPT', note: 'Uses your ChatGPT Plus or Pro plan and its usage limits; no API key or credits. Works through the Codex CLI sign-in, which OpenAI can change at any time. The sign-in renews itself.' },
+  opencode: { name: 'OpenCode', label: 'Sign in with OpenCode', note: 'You confirm a short code on opencode.ai; paid models are billed to your OpenCode account. Uses the opencode CLI sign-in, which OpenCode can change at any time; an oc_sk_ key below always works. Free models are only available inside OpenCode itself.' },
   xai: { name: 'xAI', label: 'Sign in with xAI', note: 'You confirm a short code on x.ai; nothing else to install. Uses the Grok CLI sign-in, which xAI can change at any time. The sign-in renews itself.' },
 };
 let view = null; // the open settings screen, so a sign-in that finishes later updates whatever is showing now

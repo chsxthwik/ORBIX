@@ -3,13 +3,26 @@
 // Emits the same normalised events as anthropic.mjs.
 import crypto from 'node:crypto';
 import { parseSSE, httpError, post, streamError, imageBlock } from './anthropic.mjs';
+import { VERSION } from '../util.mjs';
 
 const join = (base, p) => base.replace(/\/+$/, '') + p;
-const headers = (apiKey, providerId) => ({
+const isOpencode = (id) => id === 'opencode' || id === 'opencode-go';
+// The OpenCode organization a sign-in chose, per provider (set by EngineConfig; a pasted key has none).
+const ORGS = new Map();
+export function setProviderOrg(providerId, orgId) {
+  if (orgId) ORGS.set(providerId, String(orgId));
+  else ORGS.delete(providerId);
+}
+const headers = (apiKey, providerId, { orgId = ORGS.get(providerId), session } = {}) => ({
   'content-type': 'application/json',
   ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
   ...(providerId === 'openrouter' ? { 'x-title': 'ORBIX' } : {}), // OpenRouter app name (optional)
+  // OpenCode asks other clients to name themselves and keep one session id per conversation (Go plan rules), and
+  // a Console sign-in sends the organization it chose.
+  ...(isOpencode(providerId) ? { 'user-agent': 'orbix/' + VERSION, ...(session ? { 'x-opencode-session': session } : {}), ...(orgId ? { 'x-org-id': orgId } : {}) } : {}),
 });
+// A model OpenCode serves for free answers 403 to every client but its own, so it is not offered.
+const isFreeOpencode = (m) => m && typeof m === 'object' && (/(^|-)free$/.test(String(m.id)) || (m.cost?.text?.input?.price === 0 && m.cost?.text?.output?.price === 0));
 
 // Not chat models: hidden from the model picker when the provider lists everything together.
 const NOT_CHAT = /(^|[-_/])(embed|embedding|whisper|tts|dall-e|moderation|rerank|transcribe|audio|realtime|speech|sora|veo|imagen|image-gen|guard)([-_./:]|$)|text-embedding|gpt-image|-image(-|$)/i;
@@ -36,15 +49,22 @@ export function modelRows(j) {
   return list.filter((m) => !seen.has(m.id) && seen.add(m.id)).sort((a, b) => a.id.localeCompare(b.id));
 }
 
-export async function listModels({ apiKey, baseUrl, signal, providerId }) {
+export async function listModels({ apiKey, baseUrl, signal, providerId, orgId = ORGS.get(providerId) }) {
   if (providerId === 'openrouter' && apiKey) {
     // OpenRouter's model list is public, so check the key itself first.
     const k = await post(join(baseUrl, '/key'), { headers: headers(apiKey, providerId), signal }, baseUrl);
     if (!k.ok) throw await httpError(k);
   }
-  const r = await post(join(baseUrl, '/models'), { headers: headers(apiKey, providerId), signal }, baseUrl);
+  if (isOpencode(providerId) && apiKey) {
+    // OpenCode's model list is public, so check the sign-in or key itself with a request that costs nothing.
+    const k = await post(join(baseUrl, '/chat/completions'), { method: 'POST', headers: headers(apiKey, providerId, { orgId }), body: '{}', signal }, baseUrl);
+    if (k.status === 401 || k.status === 403) throw await httpError(k);
+  }
+  const r = await post(join(baseUrl, '/models'), { headers: headers(apiKey, providerId, { orgId }), signal }, baseUrl);
   if (!r.ok) throw await httpError(r);
-  return modelRows(await r.json());
+  const j = await r.json();
+  if (isOpencode(providerId) && Array.isArray(j?.data)) j.data = j.data.filter((m) => !isFreeOpencode(m));
+  return modelRows(j);
 }
 
 // Signatures this client stores on content items, tagged so the Anthropic client never sends them:
@@ -163,9 +183,11 @@ function mergeDetails(acc, chunk) {
   }
 }
 
-export async function* streamTurn({ apiKey, baseUrl, signal, ...rest }) {
+export async function* streamTurn({ apiKey, baseUrl, signal, orgId: org, ...rest }) {
+  const orgId = org || ORGS.get(rest.providerId);
   const body = buildBody(rest);
-  const r = await post(join(baseUrl, '/chat/completions'), { method: 'POST', headers: headers(apiKey, rest.providerId), body: JSON.stringify(body), signal }, baseUrl);
+  const session = isOpencode(rest.providerId) && rest.system ? 'orbix-' + crypto.createHash('sha256').update(rest.system).digest('hex').slice(0, 24) : null;
+  const r = await post(join(baseUrl, '/chat/completions'), { method: 'POST', headers: headers(apiKey, rest.providerId, { orgId, session }), body: JSON.stringify(body), signal }, baseUrl);
   if (!r.ok) throw await httpError(r);
   yield { type: 'start' };
   // Tool calls by stream key: { idx (block index), id, name, extra (Gemini extra_content), buf (arguments before

@@ -15,6 +15,8 @@ export const PRESETS = [
   { id: 'groq', name: 'Groq', type: 'openai', baseUrl: 'https://api.groq.com/openai/v1', note: 'Very fast open models.', keyUrl: 'https://console.groq.com/keys' },
   { id: 'mistral', name: 'Mistral', type: 'openai', baseUrl: 'https://api.mistral.ai/v1', note: 'Mistral and Codestral models.', keyUrl: 'https://console.mistral.ai/api-keys' },
   { id: 'deepseek', name: 'DeepSeek', type: 'openai', baseUrl: 'https://api.deepseek.com', note: 'DeepSeek models. Low prices.', keyUrl: 'https://platform.deepseek.com/api_keys' },
+  { id: 'opencode', name: 'OpenCode', type: 'openai', baseUrl: 'https://opencode.ai/inference/openai/v1', note: 'Claude, GPT, Gemini and open models, pay as you go. Sign in or paste an oc_sk_ key.', keyUrl: 'https://opencode.ai/console', oauth: true },
+  { id: 'opencode-go', name: 'OpenCode Go', type: 'openai', baseUrl: 'https://opencode.ai/inference/go/openai/v1', note: 'Open models on your OpenCode Go plan. Paste your Go API key.', keyUrl: 'https://opencode.ai/console' },
   { id: 'openrouter', name: 'OpenRouter', type: 'openai', baseUrl: 'https://openrouter.ai/api/v1', note: 'One account for hundreds of models.', keyUrl: 'https://openrouter.ai/settings/keys', oauth: true },
   { id: 'together', name: 'Together AI', type: 'openai', baseUrl: 'https://api.together.xyz/v1', note: 'Open models (Llama, Qwen, DeepSeek...).', keyUrl: 'https://api.together.ai/settings/api-keys' },
   { id: 'fireworks', name: 'Fireworks AI', type: 'openai', baseUrl: 'https://api.fireworks.ai/inference/v1', note: 'Fast open models.', keyUrl: 'https://app.fireworks.ai/settings/users/api-keys' },

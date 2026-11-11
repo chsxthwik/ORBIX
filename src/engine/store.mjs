@@ -8,6 +8,7 @@ import { DATA_DIR } from '../store.mjs';
 import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, textOf } from '../util.mjs';
 import { protect, unprotect } from './secrets.mjs';
 import { PRESETS } from './providers.mjs';
+import { setProviderOrg } from './openai.mjs';
 import { refreshSignIn } from './oauth-pkce.mjs';
 
 const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
@@ -57,6 +58,7 @@ export class EngineConfig {
     // Decrypted keys by their stored (encrypted) form: each DPAPI call starts PowerShell (~250 ms), so a key is
     // decrypted once per run instead of on every prompt. Plain keys stay in this process only.
     this.plain = new Map();
+    for (const [id, p] of Object.entries(this.data.providers)) if (p?.orgId) setProviderOrg(id, p.orgId);
   }
   save() {
     writeJson(this.file, this.data);
@@ -104,7 +106,7 @@ export class EngineConfig {
       const cur = this.data.providers[id];
       try {
         const got = await refreshSignIn(id, await unprotect(cur.refresh));
-        await this.setProvider(id, { key: got.key, via: 'oauth', refresh: got.refresh, expiresAt: got.expiresAt });
+        await this.setProvider(id, { key: got.key, via: 'oauth', refresh: got.refresh, expiresAt: got.expiresAt, orgId: got.orgId || cur.orgId });
       } catch (e) {
         // The sign-in can no longer be renewed: say so, so Settings can ask for a new sign-in.
         const now = this.data.providers[id];
@@ -127,7 +129,7 @@ export class EngineConfig {
     await this._refresh(id);
     return this.getKey(id);
   }
-  async setProvider(id, { key, baseUrl, models, via, refresh, expiresAt } = {}) {
+  async setProvider(id, { key, baseUrl, models, via, refresh, expiresAt, orgId } = {}) {
     const p = this.provider(id);
     if (!p) throw new Error('Unknown provider');
     const cur = { ...(this.data.providers[id] || {}) };
@@ -147,6 +149,10 @@ export class EngineConfig {
     if (Number.isFinite(models)) cur.models = models;
     if (key != null && String(key).trim()) {
       cur.via = via === 'oauth' ? 'oauth' : 'key';
+      // The organization a sign-in chose (OpenCode); a pasted key carries its own.
+      if (via === 'oauth' && orgId) cur.orgId = String(orgId);
+      else delete cur.orgId;
+      setProviderOrg(id, cur.orgId);
       // A new key replaces any earlier sign-in: keep a refresh token only if this key came with one.
       delete cur.signInError;
       if (refresh) {
@@ -165,6 +171,7 @@ export class EngineConfig {
     const k = this.data.providers[id]?.key;
     if (k) this.plain.delete(k);
     delete this.data.providers[id];
+    setProviderOrg(id, null);
     this.save();
   }
   setApprovals(mode) {
