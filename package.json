@@ -1,16 +1,31 @@
 {
-  "name": "orbix",
-  "version": "3.1.0",
-  "description": "ORBIX - a local-first AI coding workspace in your browser. WSL and native Windows backends.",
-  "private": true,
+  "name": "orbix-agent",
+  "version": "3.2.0",
+  "description": "ORBIX - a local-first AI coding workspace in your browser. Asks before it edits or runs anything; every change can be undone.",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=20"
   },
+  "os": [
+    "win32"
+  ],
   "bin": {
-    "orbix": "src/main.mjs"
+    "orbix": "src/main.mjs",
+    "orbix-agent": "src/main.mjs"
   },
+  "files": [
+    "src/",
+    "web/",
+    "assets/icon.png",
+    "assets/icon.ico",
+    "tools/doctor.mjs",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
   "scripts": {
     "start": "node src/main.mjs",
     "test": "node --test",
@@ -19,15 +34,24 @@
   },
   "keywords": [
     "coding-agent",
+    "ai",
+    "llm",
+    "agent",
     "web-app",
     "local-first",
     "wsl",
-    "ade"
+    "claude",
+    "chatgpt",
+    "openrouter",
+    "ollama"
   ],
   "author": "chsxthwik",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/chsxthwik/ORBIX.git"
   },
-  "homepage": "https://github.com/chsxthwik/ORBIX"
+  "bugs": {
+    "url": "https://github.com/chsxthwik/ORBIX/issues"
+  },
+  "homepage": "https://orbix-agent.vercel.app"
 }

@@ -1,10 +1,15 @@
 // App settings (data/config.json). All app state (config, logs and sessions) lives in <app>/data;
 // set ORBIX_DATA to use a different folder (e.g. for testing).
 import path from 'node:path';
+import os from 'node:os';
 import { ROOT, readJson, writeJson, uid } from './util.mjs';
 import { Backend } from './backend.mjs';
 
-export const DATA_DIR = process.env.ORBIX_DATA || path.join(ROOT, 'data');
+// A copy run from a package install (npx, npm install -g) sits in node_modules, which an update replaces, so its
+// data lives in the user's profile instead. A cloned repository keeps using <repo>/data.
+const installed = /[\\/]node_modules[\\/]/.test(ROOT);
+const profileData = () => (process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'ORBIX') : path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'orbix'));
+export const DATA_DIR = process.env.ORBIX_DATA || (installed ? profileData() : path.join(ROOT, 'data'));
 const FILE = path.join(DATA_DIR, 'config.json');
 
 const DEFAULTS = {

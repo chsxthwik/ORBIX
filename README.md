@@ -11,11 +11,12 @@ It asks before it edits a file or runs a command, and every file change can be u
 Bring your own API key or run a local model.
 
 [![Latest release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=4D6B00&labelColor=151514)](https://github.com/chsxthwik/ORBIX/releases/latest)
+[![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=151514)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-4D6B00?style=flat-square&labelColor=151514)](#install)
 [![No npm dependencies](https://img.shields.io/badge/npm%20dependencies-0-4D6B00?style=flat-square&labelColor=151514)](package.json)
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-4D6B00?style=flat-square&labelColor=151514)](LICENSE)
 
-[Download](https://github.com/chsxthwik/ORBIX/releases/latest) · [Website](https://orbix-agent.vercel.app) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
+[Install](#install) · [Website](https://orbix-agent.vercel.app) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
 
 </div>
 
@@ -27,17 +28,18 @@ Bring your own API key or run a local model.
 
 ## Install
 
-1. Install [Node.js 20 or newer](https://nodejs.org/).
-2. Clone the repository, then start ORBIX:
+With [Node.js 20 or newer](https://nodejs.org/) on Windows 10 or 11, run:
 
-   ```powershell
-   git clone https://github.com/chsxthwik/ORBIX.git
-   cd ORBIX
-   npm start
-   ```
+```powershell
+npx github:chsxthwik/ORBIX
+```
 
-3. ORBIX opens in your default browser. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Paste an API key and press **Check & save**, sign in with OpenRouter, or connect a local model.
-4. Open a project folder in ORBIX, describe a task and press <kbd>Enter</kbd>.
+ORBIX starts and opens in your default browser. Run the same command to start it again.
+
+1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in with ChatGPT, xAI or OpenRouter, paste an API key and press **Check & save**, or connect a local model.
+2. Open a project folder, describe a task and press <kbd>Enter</kbd>.
+
+Settings and conversations are kept in `%LOCALAPPDATA%\ORBIX`, so they stay when ORBIX updates. To work on ORBIX itself, clone the repository and run `npm start`; a clone keeps its data in its own `data` folder.
 
 ORBIX runs on Windows 10 and 11 with Node.js 20 or newer, using WSL or native Windows to run commands. The UI and agent server stay on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
 
@@ -71,7 +73,7 @@ When the reply ends, a summary lists every changed file with line counts. Each e
 | Area | Details |
 | --- | --- |
 | **Agent** | Tools for `read`, `write`, `edit`, `glob`, `grep`, `bash`, `todo`, `web_fetch` and `web_search`, plus `task`, which runs read-only helper agents side by side. Plan mode only reads. `/goal` keeps working for up to 6 rounds. Older messages are summarized when the context fills up. |
-| **Models** | 17 providers, live model lists, thinking levels, and separate fast and plan models. Tokens and context show in the interface, and cost when the model's pricing is known. |
+| **Models** | 18 providers, including your ChatGPT plan without an API key, live model lists, thinking levels, and separate fast and plan models. Tokens and context show in the interface, and cost when the model's pricing is known. |
 | **Workspace** | Session tabs, and a side panel with Files, Changes (stage, unstage, discard, commit), Plan, Agents and Console. Branch from any of your messages, attach images and files, mention files with `@`, export a conversation to HTML. |
 | **Windows or WSL** | Commands, tools, MCP servers, git and hooks all run in one place: a WSL distribution, or Windows with `cmd.exe` or PowerShell. Paths are translated between the two. |
 | **Project context** | Follows `AGENTS.md` or `CLAUDE.md`, and supports MCP, skills, custom slash commands and hooks. |
@@ -83,6 +85,8 @@ When the reply ends, a summary lists every changed file with line counts. Each e
   <source media="(prefers-color-scheme: light)" srcset="docs/img/providers-light.png">
   <img src="docs/img/providers-light.png" alt="Anthropic, OpenAI, Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenRouter, Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, Ollama, LM Studio, and a custom server for any OpenAI-compatible endpoint" width="100%">
 </picture>
+
+**ChatGPT** uses the models on your ChatGPT Plus or Pro plan: sign in, no API key. It goes through the same sign-in and endpoint as the OpenAI Codex CLI, which is unofficial and can change. **xAI** and **OpenRouter** also offer a sign-in; sign-ins renew themselves.
 
 Model lists come live from each provider. Prices, context sizes and thinking support come from the [models.dev](https://models.dev) catalog, refreshed at most once a day. The custom server slot works with vLLM, llama.cpp, a company gateway or anything else that speaks the OpenAI chat API.
 
@@ -102,8 +106,8 @@ Approvals are a checkpoint, not a sandbox. The agent runs with your Windows user
 - **Local server:** listens only on `127.0.0.1`, behind a per-launch token held in an `HttpOnly`, `SameSite=Strict` cookie. It checks `Host` and `Origin`, and serves the UI with a strict Content Security Policy.
 - **API keys:** encrypted for your Windows account with DPAPI, sent only to the provider they belong to, and never written to the log.
 - **What goes to your provider:** your messages, tool definitions, project rules and tool results, including the contents of files the agent reads.
-- **Other network use:** the models.dev catalog, OpenRouter sign-in if you use it, and `web_fetch` and `web_search` when the agent calls them. ORBIX has no telemetry.
-- **On disk:** conversations are stored as plain text in the `data` folder and can contain anything that appeared in a chat, so treat that folder as sensitive.
+- **Other network use:** the models.dev catalog, the ChatGPT, xAI and OpenRouter sign-ins if you use them, and `web_fetch` and `web_search` when the agent calls them. ORBIX has no telemetry.
+- **On disk:** conversations are stored as plain text in the data folder (`%LOCALAPPDATA%\ORBIX`, or `data` in a clone) and can contain anything that appeared in a chat, so treat that folder as sensitive.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -199,7 +203,7 @@ Node.js 20 or newer.
 ```bash
 npm start          # run from source
 npm run serve      # the server only, in any browser
-npm test           # 680 tests, with no network and no API keys
+npm test           # 700+ tests, with no network and no API keys
 npm run doctor     # the Diagnostics checks, in the console
 ```
 
