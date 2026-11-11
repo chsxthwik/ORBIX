@@ -1,5 +1,5 @@
 // Diagnostics: a measured health report of the whole stack, with a one-click "copy report" for bug reports.
-import { h, icon, copyText, replace, skeleton } from './dom.js';
+import { h, icon, copyText, replace, skeleton, errorState } from './dom.js';
 import { api } from './api.js';
 import { modal, btn } from './dialogs.js';
 
@@ -25,7 +25,7 @@ export function openDiagnostics() {
     try {
       report = (await api.get('/api/diagnostics')).report;
     } catch (e) {
-      return replace(body, h('div', { class: 'callout bad' }, e.message));
+      return replace(body, errorState(e.message, { title: 'Couldn’t run the checks.', retry: run }));
     }
     copy.disabled = false;
     const failed = report.checks.filter((c) => !c.ok);

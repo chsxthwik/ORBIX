@@ -270,16 +270,19 @@
 @media(max-width:560px) { .sbar-title { max-width:95px; } .run-open { font-size:0; gap:0; } }
 @media(prefers-reduced-motion:reduce) { .ws-recipe { transition:none; } }
 
-/* Final edge pass: use stroke contrast to carry hierarchy, not glow. */
-:root[data-theme=dark],:root[data-theme=midnight] {
-  --line:rgba(228,234,224,.10);
-  --line-2:rgba(228,234,224,.18);
-  --line-3:rgba(228,234,224,.28);
-}
-:root[data-theme=light],:root[data-theme=frost] {
-  --line:#D8D7D0;
-  --line-2:#C7C6BE;
-  --line-3:#AAA99F;
+/* Final edge pass: use stroke contrast to carry hierarchy, not glow.
+   It stays out of the way of a system that asks for more contrast, so the stronger hairlines in app.css still apply. */
+@media not all and (prefers-contrast: more) {
+  :root[data-theme=dark],:root[data-theme=midnight] {
+    --line:rgba(228,234,224,.10);
+    --line-2:rgba(228,234,224,.18);
+    --line-3:rgba(228,234,224,.28);
+  }
+  :root[data-theme=light],:root[data-theme=frost] {
+    --line:#D8D7D0;
+    --line-2:#C7C6BE;
+    --line-3:#AAA99F;
+  }
 }
 /* The sidebar sits on the window frame; a frame-wide gap, not a second hairline, separates it from the sheet. */
 .app:not(.overlay-side):not(.no-side) #rs-side { width:var(--frame); }

@@ -187,6 +187,43 @@ export function skeleton(lines = 4, cls = '') {
   return h('div', { class: `skel ${cls}`.trim(), role: 'status', 'aria-label': 'Loading' }, Array.from({ length: lines }, (_, i) => h('i', { class: 'skel-l', style: { width: `${[92, 74, 84, 58, 88, 66][i % 6]}%` } })));
 }
 
+/**
+ * Something that can take more than a moment: a plain label over placeholder lines. Like skeleton(), it shows only
+ * after 150 ms, so fast loads never flash.
+ */
+export function loadingState(label, lines = 3) {
+  return h('div', { class: 'loading-state', role: 'status' },
+    h('div', { class: 'loading-l' }, spinner(12), h('span', null, label)),
+    h('div', { class: 'skel', 'aria-hidden': 'true' }, Array.from({ length: lines }, (_, i) => h('i', { class: 'skel-l', style: { width: `${[88, 64, 76, 52][i % 4]}%` } }))));
+}
+
+/**
+ * The one error state: what failed, why, an optional hint, and Retry when it can be tried again. `retry` may return a
+ * promise (the button waits for it); `action` is an optional second button, { label, run }.
+ */
+export function errorState(message, { title, hint, retry, retryLabel = 'Retry', action, cls = '' } = {}) {
+  const acts = [];
+  if (retry) {
+    const b = h('button', { class: 'btn sm err-retry', type: 'button' }, retryLabel);
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        await retry();
+      } finally {
+        b.disabled = false;
+      }
+    });
+    acts.push(b);
+  }
+  if (action) acts.push(h('button', { class: 'btn sm ghost', type: 'button', onclick: action.run }, action.label));
+  return h('div', { class: `errbox ${cls}`.trim(), role: 'alert' }, icon('alert', 14),
+    h('div', { class: 'err-main' },
+      title ? h('strong', { class: 'err-title' }, title) : null,
+      message ? h('span', { class: 'err-msg' }, String(message)) : null,
+      hint ? h('span', { class: 'err-hint' }, hint) : null,
+      acts.length ? h('div', { class: 'err-acts' }, acts) : null));
+}
+
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 /**
  * Play the exit animation (class `leaving`, see app.css), then remove the element (or hide it with `hide`).
