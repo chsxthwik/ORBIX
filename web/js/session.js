@@ -1,10 +1,10 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner, errorState } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
-import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi } from './store.js';
+import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi, openTab, closeTab } from './store.js';
 import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
@@ -13,6 +13,7 @@ import { viewFile, reviewChanges } from './panels.js';
 import { conversationToMarkdown } from './exporter.js';
 import { Composer } from './composer.js';
 import { Timeline } from './timeline.js';
+import { projectTasks, sessionTasks } from './workspace.js';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -634,12 +635,25 @@ export class TabView {
     const show = !t.messages.length && !t.live && !t.dead && !t.streaming;
     if (!show) return void this.emptyEl?.remove();
     if (this.emptyEl?.isConnected) return;
+    // Suggested first tasks for this project; the row keeps its height while the folder is read, so nothing jumps.
+    const tasks = h('div', { class: 'ce-tasks-slot' });
     this.emptyEl = h('div', { class: 'chat-empty' },
       asciiOrbit({ cols: 52, rows: 14 }).el,
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
       h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
+      tasks,
       h('div', { class: 'ce-keys' }, h('span', null, kbd('/'), ' commands'), h('span', null, kbd('@'), ' mention a file'), h('span', null, kbd('Shift+Enter'), ' new line')));
-    this.tin.append(this.emptyEl);
+    const empty = this.emptyEl;
+    this.tin.append(empty);
+    if (!t.workspace) return;
+    const ws = encodeURIComponent(t.workspace);
+    Promise.all([
+      api.get(`/api/fs/list?path=${ws}`).then((r) => r.listing.entries),
+      api.get(`/api/git/status?ws=${ws}`).then((r) => !!r.git?.files?.length).catch(() => false),
+    ])
+      .then(([entries, changed]) => projectTasks(entries, { changed }))
+      .catch(() => projectTasks([{ name: 'readme.md' }]))
+      .then((list) => this.emptyEl === empty && tasks.replaceChildren(sessionTasks(this.composer, list)));
   }
 
   /** Three dots at the end while the agent works but nothing streams yet (between steps). */
@@ -756,7 +770,8 @@ export class TabView {
       copy.addEventListener('click', () => copyButtonFeedback(copy, text));
       acts.append(copy);
     }
-    if (m.stopReason === 'error' || m.stopReason === 'aborted' || this.tab.state?.features?.includes('regenerate')) {
+    // A failed reply has Retry in its error box.
+    if (m.stopReason === 'aborted' || (m.stopReason !== 'error' && this.tab.state?.features?.includes('regenerate'))) {
       const retry = h('button', { class: 'msg-act retry', type: 'button', title: 'Regenerate this reply' }, icon('refresh', 13), 'Retry');
       retry.addEventListener('click', () => this.retry());
       acts.append(retry);
@@ -781,11 +796,16 @@ export class TabView {
     return h('div', { class: 'msg-by asst-by' }, logo(14), h('span', null, 'ORBIX'), model ? h('span', { class: 'by-model' }, model) : null);
   }
 
+  /** A failed reply: the provider's message, what to do about it, and Retry (shown on the latest reply only). */
   errorBox(msg) {
     const help = errorHelp(msg);
-    const act = help?.act ? h('button', { class: 'btn sm', type: 'button' }, help.act) : null;
-    act?.addEventListener('click', () => (help.run === 'model' ? this.pickModel() : help.run()));
-    return h('div', { class: 'errbox', role: 'alert' }, icon('alert', 14), h('div', { class: 'err-main' }, h('span', { class: 'err-msg' }, msg), help ? h('span', { class: 'err-hint' }, help.hint) : null, act ? h('div', { class: 'err-acts' }, act) : null));
+    const el = errorState(msg, {
+      hint: help?.hint,
+      retry: () => this.retry(),
+      action: help?.act ? { label: help.act, run: () => (help.run === 'model' ? this.pickModel() : help.run()) } : null,
+    });
+    el.querySelector('.err-retry').classList.add('retry');
+    return el;
   }
 
   /** Retry is offered only on the latest reply, and only while the agent is idle. */
@@ -793,7 +813,7 @@ export class TabView {
     const t = this.tab;
     const last = t.messages[t.messages.length - 1];
     const can = !t.streaming && !t.dead;
-    this.tin.querySelectorAll('.msg-act.retry').forEach((b) => (b.hidden = !can || b.closest('.msg') !== this.els.get(last)));
+    this.tin.querySelectorAll('.retry').forEach((b) => (b.hidden = !can || b.closest('.msg') !== this.els.get(last)));
     this.refreshSummary();
   }
 
@@ -1096,10 +1116,23 @@ export class TabView {
     this.deadShown = true;
     this.pendingEl?.remove();
     this.pendingEl = null;
-    this.tin.append(h('div', { class: 'errbox enter' }, icon('alert', 14), h('span', null, `This session ended${d.code != null ? ` (exit code ${d.code})` : ''}.${d.message ? '\n' + d.message : ''}${d.stderr?.length ? '\n\n' + d.stderr.join('\n') : ''}`)));
+    const detail = [d.message, d.stderr?.length ? d.stderr.join('\n') : ''].filter(Boolean).join('\n\n');
+    this.tin.append(errorState(detail, { title: `This session ended${d.code != null ? ` (exit code ${d.code})` : ''}.`, retry: () => this.reopen(), retryLabel: 'Reopen session', cls: 'enter' }));
     this.updateComposer();
     this.refreshActs();
     if (scroll) this.scrollBottom(true);
+  }
+
+  /** Start the conversation again in a fresh process, in place of the one that ended. */
+  async reopen() {
+    const t = this.tab;
+    const file = t.state?.sessionFile || t.resume;
+    try {
+      await openTab({ workspace: t.workspace, resume: file || undefined, title: t.name });
+      closeTab(t.id);
+    } catch (e) {
+      toast(e.message, 'error', 8000);
+    }
   }
 
   scrollBottom(force) {

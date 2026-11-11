@@ -30,7 +30,8 @@
     "start": "node src/main.mjs",
     "test": "node --test",
     "serve": "node src/main.mjs --serve",
-    "doctor": "node tools/doctor.mjs"
+    "doctor": "node tools/doctor.mjs",
+    "shots": "node tools/shots.mjs"
   },
   "keywords": [
     "coding-agent",

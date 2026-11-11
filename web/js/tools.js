@@ -5,6 +5,7 @@ import { codeBlock, renderMarkdown } from './markdown.js';
 import { highlight, langFor } from './highlight.js';
 import { rpc } from './api.js';
 import { toolTitle } from './tool-title.mjs';
+import { wordDiff } from './word-diff.mjs';
 
 const ICONS = { bash: 'terminal', read: 'eye', write: 'file', edit: 'pencil', grep: 'search', glob: 'search', todo: 'list', task: 'users', web_search: 'globe', web_fetch: 'globe' };
 const OPEN_BY_DEFAULT = new Set(['edit', 'write', 'todo', 'task']);
@@ -111,63 +112,144 @@ export function codeView(text, lang, { startLine = 1, maxHeight = '360px' } = {}
   return pre;
 }
 
-/** Render a unified git diff string. */
-export function renderUnifiedDiff(text) {
-  const root = h('div', { class: 'diffview' });
+/*
+ * Diffs. Lines are parsed into rows first, then drawn: every line gets syntax colour for its file type, and a removed
+ * line and the added line that replaced it get the exact words that changed marked.
+ */
+const BIG_DIFF = 3000; // past this many lines, rows are drawn plain: no syntax colour, no word marks
+const extOf = (p) => (/\.([A-Za-z0-9]+)$/.exec(p || '') || [])[1] || '';
+const metaRow = (cls, raw) => ({ el: h('div', { class: `dl ${cls}` }, h('span', { class: 'ln' }), h('span', { class: 'ln' }), h('span', { class: 'tx' }, raw)) });
+
+/** Render a unified git diff string. `path` names the file when the diff has no header for it. */
+export function renderUnifiedDiff(text, path = '') {
+  const rows = [];
+  let lang = langFor(extOf(path));
   let oldN = 0;
   let newN = 0;
-  let file = null;
   for (const raw of text.split('\n')) {
     if (raw.startsWith('diff --git')) {
-      file = h('div', { class: 'diff-file' }, raw.replace(/^diff --git a\/(.*) b\/.*$/, '$1'));
-      root.append(file);
+      const name = raw.replace(/^diff --git a\/(.*) b\/.*$/, '$1');
+      lang = langFor(extOf(name));
+      rows.push({ el: h('div', { class: 'diff-file' }, name) });
       continue;
     }
+    if (raw.startsWith('+++ ') && !raw.startsWith('+++ /dev/null')) lang = langFor(extOf(raw.slice(4).replace(/^b\//, '').trim()));
     const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(raw);
     if (hunk) {
       oldN = +hunk[1];
       newN = +hunk[2];
-      root.append(h('div', { class: 'dl hunk' }, h('span', { class: 'ln' }), h('span', { class: 'ln' }), h('span', { class: 'tx' }, raw)));
+      rows.push(metaRow('hunk', raw));
       continue;
     }
     if (/^(index |--- |\+\+\+ |new file|deleted file|similarity|rename |old mode|new mode|Binary)/.test(raw)) {
-      if (!/^(--- |\+\+\+ |index )/.test(raw)) root.append(h('div', { class: 'dl meta' }, h('span', { class: 'ln' }), h('span', { class: 'ln' }), h('span', { class: 'tx' }, raw)));
+      if (!/^(--- |\+\+\+ |index )/.test(raw)) rows.push(metaRow('meta', raw));
       continue;
     }
-    if (raw === '' ) continue;
+    if (raw === '') continue;
     const c = raw[0];
-    if (c === '+') root.append(dl('add', '', newN++, raw.slice(1)));
-    else if (c === '-') root.append(dl('del', oldN++, '', raw.slice(1)));
-    else if (c === '\\') root.append(dl('meta', '', '', raw));
-    else root.append(dl('eq', oldN++, newN++, raw.slice(1)));
+    if (c === '+') rows.push({ cls: 'add', a: '', b: newN++, text: raw.slice(1), lang });
+    else if (c === '-') rows.push({ cls: 'del', a: oldN++, b: '', text: raw.slice(1), lang });
+    else if (c === '\\') rows.push({ cls: 'meta', a: '', b: '', text: raw });
+    else rows.push({ cls: 'eq', a: oldN++, b: newN++, text: raw.slice(1), lang });
   }
+  return drawRows(h('div', { class: 'diffview' }), rows);
+}
+
+/** One diff line: old number, new number, sign, and the text (syntax-coloured, changed words marked). */
+function dl(cls, a, b, text, lang, marks) {
+  const tx = h('span', { class: 'tx' }, lang && cls !== 'meta' ? highlight(text, lang) : text);
+  if (marks?.length) markRanges(tx, marks, cls);
+  return h('div', { class: `dl ${cls}` }, h('span', { class: 'ln' }, a === '' ? '' : String(a)), h('span', { class: 'ln' }, b === '' ? '' : String(b)), h('span', { class: 'sg' }, cls === 'add' ? '+' : cls === 'del' ? '−' : ''), tx);
+}
+
+function drawRows(root, rows) {
+  const plain = rows.length > BIG_DIFF;
+  if (!plain) pairChanges(rows);
+  const frag = document.createDocumentFragment();
+  for (const r of rows) frag.append(r.el || dl(r.cls, r.a, r.b, r.text, plain ? null : r.lang, r.marks));
+  root.append(frag);
   return root;
 }
-const dl = (cls, a, b, text) => h('div', { class: `dl ${cls}` }, h('span', { class: 'ln' }, a === '' ? '' : String(a)), h('span', { class: 'ln' }, b === '' ? '' : String(b)), h('span', { class: 'sg' }, cls === 'add' ? '+' : cls === 'del' ? '−' : ''), h('span', { class: 'tx' }, text));
+
+/** A run of removed lines followed by a run of added ones: the n-th removed line pairs with the n-th added one. */
+function pairChanges(rows) {
+  for (let i = 0; i < rows.length; ) {
+    if (rows[i].cls !== 'del') {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < rows.length && rows[j].cls === 'del') j++;
+    let k = j;
+    while (k < rows.length && rows[k].cls === 'add') k++;
+    for (let p = 0; p < Math.min(j - i, k - j); p++) {
+      const w = wordDiff(rows[i + p].text, rows[j + p].text);
+      if (w) [rows[i + p].marks, rows[j + p].marks] = w;
+    }
+    i = k;
+  }
+}
+
+/** Wrap character ranges of `el`'s text in <mark>, splitting text nodes inside syntax spans where needed. */
+function markRanges(el, ranges, cls) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
+  let pos = 0;
+  let r = 0;
+  for (let node of nodes) {
+    let at = pos;
+    const end = pos + node.data.length;
+    pos = end;
+    while (r < ranges.length && ranges[r][0] < end) {
+      const [rs, re] = ranges[r];
+      if (re <= at) {
+        r++;
+        continue;
+      }
+      const s = Math.max(rs, at);
+      const e = Math.min(re, end);
+      if (s > at) {
+        node = node.splitText(s - at);
+        at = s;
+      }
+      const rest = e < end ? node.splitText(e - at) : null;
+      const mk = document.createElement('mark');
+      // A range can span several syntax spans; only its first and last piece get rounded ends.
+      mk.className = `wd ${cls}${s === rs ? ' wd-s' : ''}${e === re ? ' wd-e' : ''}`;
+      node.replaceWith(mk);
+      mk.append(node);
+      if (!rest) break;
+      node = rest;
+      at = e;
+      if (re <= e) r++;
+    }
+  }
+}
 
 /**
  * Edit diff format: " 1|text" (context, old line number), "-2|old" (old number), "+2|new" (new number).
  * The new-side number of a context line after the change is shifted by the lines added minus removed.
  */
-function renderNumberedDiff(text) {
-  const root = h('div', { class: 'diffview' });
+function renderNumberedDiff(text, lang) {
+  const rows = [];
   let shift = 0;
   for (const raw of text.split('\n')) {
     const m = /^([ +\-])\s*(\d*)\|(.*)$/.exec(raw);
     if (!m) {
-      if (raw.trim()) root.append(h('div', { class: 'dl meta' }, h('span', { class: 'ln' }), h('span', { class: 'ln' }), h('span', { class: 'tx' }, raw)));
+      if (raw.trim()) rows.push(metaRow('meta', raw));
       continue;
     }
     const n = +m[2];
     if (m[1] === '+') {
       shift++;
-      root.append(dl('add', '', m[2], m[3]));
+      rows.push({ cls: 'add', a: '', b: m[2], text: m[3], lang });
     } else if (m[1] === '-') {
       shift--;
-      root.append(dl('del', m[2], '', m[3]));
-    } else root.append(dl('eq', m[2], m[2] ? String(n + shift) : '', m[3]));
+      rows.push({ cls: 'del', a: m[2], b: '', text: m[3], lang });
+    } else rows.push({ cls: 'eq', a: m[2], b: m[2] ? String(n + shift) : '', text: m[3], lang });
   }
-  return root;
+  return drawRows(h('div', { class: 'diffview' }), rows);
 }
 
 /** Lines added and removed by an edit (from its diff), for the card header. */
@@ -241,13 +323,16 @@ const BODY = {
   },
   edit(call, res) {
     const d = res?.details;
-    if (d?.diff) return renderNumberedDiff(d.diff);
     const a = call.arguments || {};
+    const lang = langFor(extOf(d?.path || a.path));
+    if (d?.diff) return renderNumberedDiff(d.diff, lang);
     // Not applied yet (waiting for approval, or denied): show the proposed change from the arguments.
     if (typeof a.old_string === 'string' && typeof a.new_string === 'string') {
-      const root = h('div', { class: 'diffview proposed' });
-      for (const ln of a.old_string.split('\n')) root.append(dl('del', '', '', ln));
-      for (const ln of a.new_string.split('\n')) root.append(dl('add', '', '', ln));
+      const rows = [
+        ...a.old_string.split('\n').map((text) => ({ cls: 'del', a: '', b: '', text, lang })),
+        ...a.new_string.split('\n').map((text) => ({ cls: 'add', a: '', b: '', text, lang })),
+      ];
+      const root = drawRows(h('div', { class: 'diffview proposed' }), rows);
       const t = resultText(res);
       return h('div', null, root, t && res?.isError ? output(t) : null);
     }

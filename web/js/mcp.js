@@ -1,6 +1,6 @@
 // Settings → "Tools & MCP": the agent's tools, and the MCP servers it can start.
 // Your servers live in the app's data/mcp.json; a project can add its own in .mcp.json (shown read-only here).
-import { h, toast, replace, spinner, skeleton } from './dom.js';
+import { h, toast, replace, spinner, skeleton, errorState } from './dom.js';
 import { api } from './api.js';
 import { activeTab } from './store.js';
 import { btn, confirmDialog } from './dialogs.js';
@@ -37,7 +37,7 @@ async function runTest(name, config, out, ws) {
     const { result } = await api.post('/api/mcp/test', { name, config, ws });
     replace(out, h('div', { class: 'callout ok' }, `Connected${result.serverInfo?.name ? ` to ${result.serverInfo.name}${result.serverInfo.version ? ' ' + result.serverInfo.version : ''}` : ''} in ${(result.ms / 1000).toFixed(1)}s.`), toolList(result.tools));
   } catch (e) {
-    replace(out, h('div', { class: 'callout bad prewrap' }, e.message));
+    replace(out, errorState(e.message, { title: 'The server didn’t start.', retry: () => runTest(name, config, out, ws) }));
   }
 }
 
@@ -67,7 +67,7 @@ function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) 
     try {
       cfg = parse();
     } catch (e) {
-      return replace(out, h('div', { class: 'callout bad' }, e.message));
+      return replace(out, errorState(e.message));
     }
     test.disabled = true;
     await runTest(nameIn.value.trim() || 'test', cfg, out, activeTab()?.workspace);
@@ -94,7 +94,7 @@ export async function renderMcpSettings(root) {
   try {
     data = await api.get(`/api/mcp${ws ? `?ws=${encodeURIComponent(ws)}` : ''}`);
   } catch (e) {
-    return replace(root, h('div', { class: 'callout bad' }, e.message));
+    return replace(root, errorState(e.message, { title: 'Couldn’t load your tools.', retry: () => renderMcpSettings(root) }));
   }
   const edit = h('div');
   const searchBox = h('div');
@@ -124,7 +124,7 @@ export async function renderMcpSettings(root) {
     return h('div', { class: 'card' },
       h('div', { class: 'card-h' }, h('strong', null, s.name), statusChip(s)),
       h('code', { class: 'mcp-cmd ell', title: summary(s.config) }, summary(s.config)),
-      s.error ? h('div', { class: 'callout bad prewrap' }, s.error) : null,
+      s.error ? errorState(s.error, { retry: () => runTest(s.name, s.config, out, ws) }) : null,
       s.status === 'running' && s.tools?.length ? h('p', null, s.tools.join(', ')) : null,
       h('div', { class: 'card-f' }, actions),
       out,
