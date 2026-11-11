@@ -811,3 +811,97 @@ describe('server routes: models, search, hooks', () => {
     assert.equal((await call('GET', '/api/hooks')).json.project, null);
   });
 });
+
+// =====================================================================================================
+describe('permissions: three modes, trusted commands, and your instructions', () => {
+  const asks = (p, from) => p.events.slice(from).filter((e) => e.type === 'extension_ui_request' && e.method === 'select');
+  /** Run a prompt and answer each approval with the next value from `answers`. */
+  async function runAnswering(p, message, answers) {
+    const from = p.events.length;
+    const done = send(p, message);
+    let handled = 0;
+    const timer = setInterval(() => {
+      for (const q of asks(p, from).slice(handled)) {
+        handled++;
+        p.send({ type: 'extension_ui_response', id: q.id, value: answers.shift() ?? 'Deny' });
+      }
+    }, 5);
+    try { await done; } finally { clearInterval(timer); }
+    return asks(p, from);
+  }
+  const editsConfig = () => {
+    const cfg = makeConfig();
+    cfg.data.approvals = 'edits';
+    cfg.data.trusted = [];
+    cfg.addTrusted = (c) => (cfg.data.trusted = store.cleanTrusted([...cfg.data.trusted, c]));
+    return cfg;
+  };
+
+  test('a trusted command never matches when it chains, pipes, redirects or substitutes', () => {
+    const R = ['npm test', 'npm run *'];
+    for (const c of ['npm test', 'npm  test ', 'npm run build', 'npm run']) assert.equal(store.isTrustedCommand(c, R), true, c);
+    for (const c of ['npm test --watch', 'npm runx', 'npm test && rm -rf x', 'npm test; rm x', 'npm test | tee', 'npm test > f', 'npm run $(id)', 'npm run `id`', 'npm test\nrm x', 'npm test & calc', '']) assert.equal(store.isTrustedCommand(c, R), false, c);
+    assert.deepEqual(store.cleanTrusted([' a  b ', 'a b', '*', '', 'x\u0007y']), ['a b', 'x y']);
+  });
+
+  test('EngineConfig keeps the mode and the trusted list, and shows both to the UI', () => {
+    const dir = path.join(TMP, 'perm-cfg');
+    fs.mkdirSync(dir, { recursive: true });
+    const cfg = new store.EngineConfig(dir);
+    assert.equal(cfg.data.approvals, 'ask');
+    cfg.setApprovals('edits');
+    cfg.addTrusted('npm test');
+    cfg.addTrusted('npm test');
+    const again = new store.EngineConfig(dir);
+    assert.equal(again.data.approvals, 'edits');
+    assert.deepEqual(again.publicView().trusted, ['npm test']);
+    cfg.setApprovals('nonsense');
+    assert.equal(new store.EngineConfig(dir).data.approvals, 'ask');
+  });
+
+  test('"Allow edits": edits run without asking, commands ask, and "Always allow this command" trusts exactly that command', async () => {
+    const cfg = editsConfig();
+    const p = await make(cfg);
+    script = [sse(turn({ tools: [{ id: 'w1', name: 'write', args: { path: 'perm-a.txt', content: 'one\n' } }], stop: 'tool_use' })), sse(turn({ text: 'wrote it' }))];
+    assert.equal((await runAnswering(p, 'write', [])).length, 0, 'an edit does not ask in this mode');
+    assert.equal(fs.readFileSync(path.join(ws, 'perm-a.txt'), 'utf8'), 'one\n');
+
+    script = [sse(turn({ tools: [{ id: 'b1', name: 'bash', args: { command: 'echo trusted-ok' } }], stop: 'tool_use' })), sse(turn({ text: 'ran' }))];
+    const first = await runAnswering(p, 'run', ['Always allow this command']);
+    assert.equal(first.length, 1, 'a command asks');
+    assert.deepEqual(first[0].options, ['Allow once', 'Allow for this session', 'Always allow this command', 'Deny']);
+    assert.deepEqual(cfg.data.trusted, ['echo trusted-ok']);
+
+    script = [sse(turn({ tools: [{ id: 'b2', name: 'bash', args: { command: 'echo trusted-ok' } }], stop: 'tool_use' })), sse(turn({ text: 'ran again' }))];
+    assert.equal((await runAnswering(p, 'again', [])).length, 0, 'the trusted command runs without asking');
+
+    script = [sse(turn({ tools: [{ id: 'b3', name: 'bash', args: { command: 'echo trusted-ok && echo sneaky' } }], stop: 'tool_use' })), sse(turn({ text: 'denied' }))];
+    const chained = await runAnswering(p, 'chain', ['Deny']);
+    assert.equal(chained.length, 1, 'a chained command still asks');
+    assert.deepEqual(chained[0].options, ['Allow once', 'Allow for this session', 'Deny'], 'and cannot be trusted');
+  });
+
+  test('your instructions reach the agent before the project\'s own, which win on conflict; an empty file is ignored', async () => {
+    const mine = path.join(DATA, 'AGENTS.md'), theirs = path.join(ws, 'AGENTS.md');
+    fs.writeFileSync(mine, 'MY-RULE: answer briefly.');
+    fs.writeFileSync(theirs, 'PROJECT-RULE: use pnpm.');
+    try {
+      const p = await make();
+      const n = requests.length;
+      script = [sse(turn({ text: 'ok' }))];
+      await send(p, 'hello');
+      const sys = JSON.stringify(bodies(n).find((b) => JSON.stringify(b.system || '').includes('PROJECT-RULE')).system);
+      assert.ok(sys.includes('MY-RULE') && sys.indexOf('MY-RULE') < sys.indexOf('PROJECT-RULE'), 'yours first, the project last');
+      assert.match(sys, /Your instructions for every project/);
+      fs.writeFileSync(mine, '   \n');
+      const n2 = requests.length;
+      const p2 = await make();
+      script = [sse(turn({ text: 'ok' }))];
+      await send(p2, 'hello');
+      assert.doesNotMatch(JSON.stringify(bodies(n2).map((b) => b.system)), /Your instructions for every project/);
+    } finally {
+      fs.rmSync(mine, { force: true });
+      fs.rmSync(theirs, { force: true });
+    }
+  });
+});

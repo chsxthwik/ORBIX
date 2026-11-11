@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **Allow edits, ask before commands.** A third permission mode between Ask me first and Allow everything: file edits run without asking (each can be undone) and commands still wait for you. Home shows it as Edits allowed.
+- **Trusted commands.** When a command asks for approval you can choose Always allow this command, and Settings → Permissions lists, adds and removes them. `npm run *` covers any script. A command that chains, pipes, redirects or substitutes (`&&`, `;`, `|`, `>`, `$(`) always asks, even if it starts with a trusted one. PowerShell commands are never trusted automatically.
+- **Instructions for every project.** Settings → Instructions holds what the agent should always know about you and how you work. It is sent in every session before the project's own AGENTS.md or CLAUDE.md, which wins when the two disagree. Stored as `data/AGENTS.md`.
+- **New website.** One page with no script: what ORBIX is, the install commands, real screenshots, the feature list as text, the 17 providers, safety, questions and how to start. The count-up numbers, the scrolling terminal and the simulated demo are gone. It uses IBM Plex Sans and JetBrains Mono like the app.
+- **Simpler Home.** One column: the ASCII planet, the task box, the folder it runs in, four suggestions, then your sessions beside your projects. Build and Plan are one switch next to Start. The WORKSPACE label, status line, action toolbar, Compact and Motion toggles, starter cards, constraint chips and draft footer are gone; density stays in Settings → Appearance. The session search icon no longer overlaps its text, and the sidebar section label is in sentence case.
 - **Web-only app.** ORBIX now starts as an authenticated local web app in your default browser. The native Windows shell and its build, install, and packaging paths have been removed; existing chats, settings, and provider data remain in `data/`.
 - **Session bar.** Every conversation has a bar on top with its state (Ready, Working with a timer, Needs your OK), its name (click to rename), and how many messages and steps it has.
 - **Find in conversation.** Ctrl+F highlights every match and steps through them with Enter and Shift+Enter.

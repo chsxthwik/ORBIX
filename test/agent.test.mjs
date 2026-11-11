@@ -504,6 +504,7 @@ describe('system prompt', () => {
     const planned = prompt.buildSystemPrompt({ env, approvals: 'ask', planMode: true });
     assert.match(planned, /# PLAN MODE IS ON/);
     assert.match(prompt.buildSystemPrompt({ env, approvals: 'auto' }), /run without asking/);
+    assert.match(prompt.buildSystemPrompt({ env, approvals: 'edits' }), /write and edit run without asking.*bash asks/s);
     assert.doesNotMatch(prompt.buildSystemPrompt({ env, approvals: null }), /# Approvals/);
     assert.equal(prompt.buildSystemPrompt({ env, approvals: 'ask' }), prompt.buildSystemPrompt({ env, approvals: 'ask' }), 'deterministic');
   });

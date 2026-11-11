@@ -13,6 +13,7 @@ import { clientFor } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import * as oauthXai from './engine/oauth-xai.mjs';
 import { webSearch } from './engine/websearch.mjs';
+import { userInstructionsPath } from './engine/context.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
 import { collect as collectDiagnostics } from './diagnostics.mjs';
 import * as fsapi from './fsapi.mjs';
@@ -488,8 +489,23 @@ export class AppServer {
         return { engine: this.engineCfg.publicView() };
       },
       'POST /api/engine/settings': async ({ body }) => {
-        this.engineCfg.setApprovals(body.approvals);
+        if (body.approvals !== undefined) this.engineCfg.setApprovals(body.approvals);
+        if (body.trusted !== undefined) this.engineCfg.setTrusted(body.trusted);
         return { engine: this.engineCfg.publicView() };
+      },
+      // Your instructions for every project (data/AGENTS.md).
+      'GET /api/instructions': async () => {
+        const file = userInstructionsPath();
+        const text = await fs.promises.readFile(file, 'utf8').catch(() => '');
+        return { text, file };
+      },
+      'POST /api/instructions': async ({ body }) => {
+        const text = String(body.text ?? '');
+        if (text.length > 24000) throw Object.assign(new Error('Keep your instructions under 24,000 characters.'), { status: 400 });
+        const file = userInstructionsPath();
+        if (text.trim()) await fs.promises.writeFile(file, text.replace(/\r\n/g, '\n'), 'utf8');
+        else await fs.promises.rm(file, { force: true });
+        return { text: text.trim() ? text : '', file };
       },
       // Models of every connected provider, for the "Models" section of Settings.
       'GET /api/engine/models': async () => {

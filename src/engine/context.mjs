@@ -6,6 +6,7 @@ import path from 'node:path';
 import { isWinPath } from '../backend.mjs';
 import { cachedText, decodeText, prepareImage, sniffImage, base64Bytes, formatBytes } from './files.mjs';
 import { SKIP_DIRS } from './search.mjs';
+import { DATA_DIR } from '../store.mjs';
 
 const MENTION_FILE_CAP = 100 * 1024;
 const MENTION_TOTAL_CAP = 300 * 1024;
@@ -14,6 +15,18 @@ const FOLDER_ENTRIES = 300;
 
 const NAMES = ['AGENTS.md', 'CLAUDE.md', path.join('.omp', 'AGENTS.md')];
 const CAP = 24000;
+
+/** Where your instructions for every project live. */
+export const userInstructionsPath = (dir = DATA_DIR) => path.join(dir, 'AGENTS.md');
+
+/** Your instructions for every project, or null. They come before any project's own files, which win on conflict. */
+export async function loadUserInstructions(dir = DATA_DIR) {
+  const file = userInstructionsPath(dir);
+  const text = ((await cachedText(file, CAP * 4).catch(() => null)) || '').trim();
+  if (!text) return null;
+  const clipped = text.slice(0, CAP);
+  return { path: 'Your instructions for every project', text: clipped, truncated: clipped.length < text.length };
+}
 
 /** Instruction files from the project folder up to its repository root, nearest first (reads are mtime-cached). */
 export async function loadInstructions(backend, workspace) {

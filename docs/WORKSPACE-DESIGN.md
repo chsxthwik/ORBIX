@@ -13,8 +13,9 @@ References: OpenCode's [desktop product](https://opencode.ai/desktop), its offic
 - Stable Home content without staggered visibility delays; consistent focus rings, touch targets, menus, dialogs and toast surfaces.
 - Explicit clear-search controls preserve input focus. Empty drafts disable the clear action. Closed dialogs cannot steal focus through a delayed callback.
 - Session library with word-based search across titles, projects and preview text; Open and Pinned filters; recency and alphabetical sorting. Search state survives Home redraws.
-- Explicit Build and Plan task modes, preserving the draft while switching.
-- Project, search, and model actions beside the task box. Existing projects can be drafted against before a provider is connected.
+- Home is one column: the project name and its folder, the task box, four suggestions, then sessions beside projects. No eyebrow label, status line, toolbar or icon cards.
+- Build and Plan are one two-way switch in the task box, next to Start; the draft is kept while switching.
+- Project and model are chosen in the task box. Existing projects can be drafted against before a provider is connected.
 - Run inspector search combines command, path, and tool queries with the selected activity filter.
 - A Run inspector backed by restored transcript results and live tool events. No fabricated progress or inferred verification.
 - All, running, and failure filters; measured duration when available; usage and task counts from recorded state.
@@ -23,7 +24,7 @@ References: OpenCode's [desktop product](https://opencode.ai/desktop), its offic
 - Inspect toolbar action, command palette entry, and Ctrl+Shift+R shortcut.
 - Keyboard navigation for side-panel tabs, accessible names when compact labels are hidden.
 - Header ASCII artwork sizes automatically, supports reduced motion, and stops rendering while hidden.
-- Tab-scoped draft recovery, reversible clearing, and restored drafts after failed submission.
+- Tab-scoped draft recovery, and restored drafts after failed submission.
 
 ## Boundaries
 

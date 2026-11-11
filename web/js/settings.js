@@ -18,7 +18,8 @@ const TABS = [
   { group: 'Agent' },
   ['engine', 'Providers', 'key', 'Connect an API key or a local model. Keys are checked, stored encrypted for your Windows account, and sent only to that provider.'],
   ['models', 'Models', 'cpu', 'Choose which model does which job.'],
-  ['behavior', 'Permissions', 'shield', 'What the agent may do without asking, and where it runs commands.'],
+  ['behavior', 'Permissions', 'shield', 'What the agent may do without asking, the commands you trust, and where it runs commands.'],
+  ['rules', 'Instructions', 'file', 'What the agent should always know about you and how you work. It follows these in every project.'],
   ['tools', 'Tools & MCP', 'plug', 'What the agent can use, and the extra tools you add.'],
   { group: 'App' },
   ['look', 'Appearance', 'palette', 'Theme, text size and layout.'],
@@ -33,7 +34,9 @@ const FIND = [
   ['Local models', 'engine', 'ollama lm studio offline server custom'],
   ['Fast model', 'models', 'titles summaries helper agents cheap'],
   ['Plan model', 'models', 'plan mode'],
-  ['File edits and commands', 'behavior', 'approval ask allow permission auto'],
+  ['File edits and commands', 'behavior', 'approval ask allow permission auto edits'],
+  ['Trusted commands', 'behavior', 'allow always command npm test run trust'],
+  ['Instructions for every project', 'rules', 'agents.md rules memory preferences custom prompt'],
   ['Run commands in', 'behavior', 'shell wsl windows powershell kali'],
   ['Follow new output', 'behavior', 'scroll auto'],
   ['Web search', 'tools', 'brave tavily searxng'],
@@ -80,7 +83,7 @@ export function openSettings(initial = 'start') {
     const page = PAGES.find(([k]) => k === name);
     const body = h('div', { class: 'set-body' });
     content.append(h('header', { class: 'set-head' }, h('h3', { class: 'set-title' }, page[1]), h('p', { class: 'set-lead' }, page[3])), body);
-    ({ start: tabStart, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, tools: renderMcpSettings, keys: tabKeys, about: tabAbout })[name](body, show, m);
+    ({ start: tabStart, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, tools: renderMcpSettings, rules: tabRules, keys: tabKeys, about: tabAbout })[name](body, show, m);
     if (focusNav) list.querySelector('.cur')?.focus();
   };
 
@@ -158,7 +161,8 @@ function tabStart(el, show, m) {
       line('bolt', 'Fast model', roles.fast ? short(roles.fast) : 'Same as the session', 'models'),
       line('map', 'Plan model', roles.plan ? short(roles.plan) : 'Same as the session', 'models')),
     card('Safety',
-      line('shield', 'File edits and commands', auto ? 'Run without asking' : 'Ask me first', 'behavior', auto ? 'warn' : 'ok'),
+      line('shield', 'File edits and commands', auto ? 'Run without asking' : eng.approvals === 'edits' ? 'Edits run, commands ask' : 'Ask me first', 'behavior', auto ? 'warn' : 'ok'),
+      line('check', 'Trusted commands', (eng.trusted || []).length ? `${eng.trusted.length} command${eng.trusted.length === 1 ? '' : 's'}` : 'None', 'behavior'),
       line('terminal', 'Commands run in', b.kind === 'wsl' ? (b.distro ? `WSL · ${b.distro}` : 'WSL') : 'Windows', 'behavior')),
     card('Tools',
       line('globe', 'Web search', eng.search?.configured ? eng.search.provider || 'Connected' : 'Off', 'tools'),
@@ -252,7 +256,7 @@ function tabKeys(el) {
 // ================= permissions =================
 
 function tabBehavior(el) {
-  const auto = S.engine?.approvals === 'auto';
+  const mode = S.engine?.approvals || 'ask';
   const set = async (value, card) => {
     if (value === 'auto' && !(await confirmDialog('Allow everything', 'The agent will edit files and run commands without asking. Every file edit can still be undone, but commands cannot.', { ok: 'Allow everything', danger: true }))) return;
     try {
@@ -264,16 +268,92 @@ function tabBehavior(el) {
       toast(e.message, 'error');
     }
   };
-  const choice = (value, ic, title, text, on, tag) => h('button', { class: `perm is-${value}`, type: 'button', role: 'radio', 'aria-checked': String(on), onclick: (e) => e.currentTarget.getAttribute('aria-checked') !== 'true' && set(value, e.currentTarget) },
+  const choice = (value, ic, title, text, tag) => h('button', { class: `perm is-${value}`, type: 'button', role: 'radio', 'aria-checked': String(mode === value), onclick: (e) => e.currentTarget.getAttribute('aria-checked') !== 'true' && set(value, e.currentTarget) },
     h('span', { class: 'perm-ic' }, icon(ic, 16)),
     h('span', { class: 'perm-m' }, h('span', { class: 'perm-h' }, h('span', { class: 'perm-t' }, title), tag ? h('span', { class: 'tag' }, tag) : null), h('span', { class: 'perm-d' }, text)),
     h('span', { class: 'perm-r', 'aria-hidden': 'true' }));
   el.append(
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'File edits and commands'), h('p', { class: 'set-note' }, 'Reading and searching never ask.'),
       h('div', { class: 'perms', role: 'radiogroup', 'aria-label': 'File edits and commands' },
-        choice('ask', 'shield', 'Ask me first', 'Each edit and command waits for your OK.', !auto, 'Recommended'),
-        choice('auto', 'bolt', 'Allow everything', 'Edits and commands run without asking.', auto))),
+        choice('ask', 'shield', 'Ask me first', 'Each edit and command waits for your OK.', 'Recommended'),
+        choice('edits', 'pencil', 'Allow edits, ask before commands', 'File edits run without asking and each can be undone. Commands still wait for you.'),
+        choice('auto', 'bolt', 'Allow everything', 'Edits and commands run without asking.'))),
+    trustedGroup(),
     group('Running', null, whereRow(), row('Follow new output', toggle(S.ui.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Scroll to the newest text while it streams, unless you scrolled up.')));
+}
+
+/**
+ * Commands that run without asking. Added from an approval ("Always allow this command") or here. "npm run *" also
+ * covers "npm run build". A command that chains, pipes or redirects (&&, ;, |, >) never matches, whatever is listed.
+ */
+function trustedGroup() {
+  const list = h('div', { class: 'trust-list' });
+  const input = h('input', { type: 'text', class: 'trust-in', placeholder: 'npm test, or npm run * for any script', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Command to trust' });
+  const save = async (next, done) => {
+    try {
+      await api.post('/api/engine/settings', { trusted: next });
+      await loadEngine();
+      draw();
+      done?.();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  };
+  const add = () => {
+    const c = input.value.trim().replace(/\s+/g, ' ');
+    if (!c) return input.focus();
+    if (/[;&|`<>]|\$\(/.test(c)) return toast('A trusted command cannot chain, pipe or redirect (; & | < >).', 'error', 5000);
+    save([...(S.engine?.trusted || []), c], () => { input.value = ''; input.focus(); });
+  };
+  input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), add()));
+  function draw() {
+    const items = S.engine?.trusted || [];
+    replace(list, items.length
+      ? items.map((c) => h('div', { class: 'trust-row' }, h('code', { class: 'ell', title: c }, c), h('button', { class: 'btn sm ghost', type: 'button', 'aria-label': `Stop trusting ${c}`, onclick: () => save(items.filter((x) => x !== c)) }, 'Remove')))
+      : h('p', { class: 'set-none' }, 'None yet. When a command asks for approval, choose Always allow this command, or add one below.'));
+  }
+  draw();
+  return h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Trusted commands'),
+    h('p', { class: 'set-note' }, 'These run without asking, in any mode. End with * to allow any arguments. A command that chains, pipes or redirects always asks.'),
+    h('div', { class: 'set-card trust-card' }, list, h('div', { class: 'trust-add' }, input, btn('Trust', add, 'sm'))));
+}
+
+// ================= instructions =================
+
+function tabRules(el) {
+  const ta = h('textarea', { class: 'rules-ta', rows: 14, spellcheck: 'true', 'aria-label': 'Instructions for every project', placeholder: 'For example:\n- Answer briefly; show the change, then how you checked it.\n- Use pnpm, never npm.\n- Run the tests before saying something works.\n- Never commit unless I ask.' });
+  const count = h('span', { class: 'rules-n num' });
+  const saveBtn = btn('Save', () => save(), 'primary sm');
+  const status = h('span', { class: 'rules-status', role: 'status' });
+  let saved = '';
+  const sync = () => {
+    count.textContent = `${ta.value.length.toLocaleString()} / 24,000`;
+    count.classList.toggle('over', ta.value.length > 24000);
+    saveBtn.disabled = ta.value === saved || ta.value.length > 24000;
+  };
+  async function save() {
+    try {
+      const r = await api.post('/api/instructions', { text: ta.value });
+      saved = ta.value = r.text;
+      status.textContent = r.text ? 'Saved. New messages in every session follow it.' : 'Cleared.';
+      sync();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+  ta.addEventListener('input', () => { status.textContent = ''; sync(); });
+  ta.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (!saveBtn.disabled) save(); } });
+  el.append(
+    h('section', { class: 'set-group' },
+      h('p', { class: 'set-note' }, 'Plain text or Markdown. A project\'s own AGENTS.md or CLAUDE.md comes after this and wins when the two disagree.'),
+      ta,
+      h('div', { class: 'rules-foot' }, count, h('span', { class: 'grow' }), status, saveBtn)));
+  sync();
+  api.get('/api/instructions').then((r) => {
+    saved = ta.value = r.text || '';
+    sync();
+    ta.focus({ preventScroll: true });
+  }).catch((e) => toast(e.message, 'error'));
 }
 
 /** Where the agent runs shell commands: Windows, or one of the installed WSL distributions. */

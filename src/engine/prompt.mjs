@@ -89,7 +89,8 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], skills = 
       .join('\n'),
   );
   if (approvals === 'auto') parts.push('# Approvals\nTool calls run without asking the user, so double-check commands and edits before you make them.');
-  else if (approvals) parts.push('# Approvals\nwrite, edit and bash ask the user for approval each time (read-only tools do not). A denied call means: do not do that; ask the user how to proceed if unsure.');
+  else if (approvals === 'edits') parts.push('# Approvals\nwrite and edit run without asking (each can be undone); bash asks the user each time, except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
+  else if (approvals) parts.push('# Approvals\nwrite, edit and bash ask the user for approval each time (read-only tools do not), except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   if (rules.length) {
     const ordered = [...rules].reverse(); // repository root first, the folder closest to the project last (it wins)
     parts.push(`# Project instructions\nFollow these instructions from the project. When they conflict, the later (more specific) file wins.\n\n${ordered.map((r) => `<instructions path="${r.path}"${r.truncated ? ' truncated="true"' : ''}>\n${r.text}\n</instructions>`).join('\n\n')}`);

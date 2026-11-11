@@ -10,6 +10,31 @@ import { protect, unprotect } from './secrets.mjs';
 import { PRESETS } from './providers.mjs';
 
 const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
+/** ask: edits and commands ask. edits: edits run, commands ask. auto: nothing asks. */
+export const APPROVAL_MODES = ['ask', 'edits', 'auto'];
+
+/** A tidy trusted-command list: trimmed, single-spaced, no control characters, no duplicates, at most 100. */
+export function cleanTrusted(list) {
+  const out = [];
+  for (const x of Array.isArray(list) ? list : []) {
+    const c = String(x ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 300);
+    if (c && c !== '*' && !out.includes(c)) out.push(c);
+    if (out.length >= 100) break;
+  }
+  return out;
+}
+
+/**
+ * Whether a shell command may run without asking because the user trusts it. A command that chains, pipes,
+ * redirects or substitutes (; & | ` < > $( or a line break) never matches, so "npm test && rm -rf x" is not "npm test".
+ */
+export function isTrustedCommand(command, trusted) {
+  const c = String(command ?? '').trim().replace(/\s+/g, ' ');
+  if (!c || /[;&|`<>\r\n]|\$\(/.test(c)) return false;
+  return (trusted || []).some((r) => (r.endsWith(' *') ? c === r.slice(0, -2) || c.startsWith(r.slice(0, -1)) : c === r));
+}
+/** A command that could be trusted at all (nothing chained, piped, redirected or substituted). */
+export const trustableCommand = (command) => isTrustedCommand(command, [String(command ?? '').trim().replace(/\s+/g, ' ')]);
 
 export class EngineConfig {
   constructor(dir = DATA_DIR) {
@@ -18,7 +43,9 @@ export class EngineConfig {
     const str = (x) => (typeof x === 'string' ? x.trim() : '');
     const sr = d.search && typeof d.search === 'object' ? d.search : {};
     this.data = {
-      approvals: d.approvals === 'auto' ? 'auto' : 'ask',
+      approvals: APPROVAL_MODES.includes(d.approvals) ? d.approvals : 'ask',
+      // Commands that run without asking: exact text, or a prefix ending in " *" ("npm run *").
+      trusted: cleanTrusted(d.trusted),
       providers: d.providers && typeof d.providers === 'object' ? d.providers : {},
       defaultModel: d.defaultModel || '',
       // Model roles (defaults for every session): "provider/model" or '' (= the session's current model).
@@ -96,8 +123,15 @@ export class EngineConfig {
     this.save();
   }
   setApprovals(mode) {
-    this.data.approvals = mode === 'auto' ? 'auto' : 'ask';
+    this.data.approvals = APPROVAL_MODES.includes(mode) ? mode : 'ask';
     this.save();
+  }
+  setTrusted(list) {
+    this.data.trusted = cleanTrusted(list);
+    this.save();
+  }
+  addTrusted(command) {
+    this.setTrusted([...(this.data.trusted || []), command]);
   }
   /** Model roles: { fast, plan } as "provider/model" strings ('' = use the session's model). */
   roles() {
@@ -153,6 +187,7 @@ export class EngineConfig {
     const s = this.data.search;
     return {
       approvals: this.data.approvals,
+      trusted: this.data.trusted || [],
       defaultModel: this.data.defaultModel,
       models: this.roles(),
       search: { provider: s?.provider || '', baseUrl: s?.baseUrl || '', hasKey: !!s?.key, configured: this.searchReady() },
