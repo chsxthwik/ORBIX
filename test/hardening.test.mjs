@@ -150,6 +150,17 @@ describe('agent session storage', () => {
     await store.deleteAgentSessions([s.file]);
     assert.equal((await store.listAgentSessions(b)).some((r) => r.id === s.id), false);
   });
+  test('a session on its own branch is listed under the project it came from, by that project\'s name', async () => {
+    const b = new Backend({ kind: 'native' });
+    const wt = { repo: 'C:\\shop', slug: '20261111-2300-rep', path: 'C:\\shop\\.orbix\\worktrees\\20261111-2300-rep', branch: 'orbix/20261111-2300-rep', base: 'a'.repeat(40), baseBranch: 'main', source: 'C:\\shop' };
+    const s = store.createSession({ cwd: wt.path, keyPath: wt.path, model: '', provider: '', worktree: wt });
+    store.closeSession(s.file);
+    const row = (await store.listAgentSessions(b)).find((r) => r.id === s.id);
+    assert.equal(row.cwdKey, b.keyPath('C:\\shop'));
+    assert.equal(row.projectDisplay, b.displayPath('C:\\shop'), 'the group is named after the project, not the worktree folder');
+    assert.equal(row.branch, 'orbix/20261111-2300-rep');
+    await store.deleteAgentSessions([s.file]);
+  });
   test('parseAgentHead ignores a cut last line', () => {
     const text = `${JSON.stringify({ type: 'session', id: 'b1', cwd: '/x' })}\n${JSON.stringify({ type: 'title', title: 'T' })}\n{"type":"mess`;
     const h = store.parseAgentHead(text);

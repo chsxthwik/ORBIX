@@ -412,7 +412,7 @@ export async function listAgentSessions(backend) {
     if (!header) return null;
     // A session on its own branch is listed under the project it was started from, not under its worktree folder.
     const wt = header.worktree;
-    return { id: header.id, path: file, engine: 'builtin', cwd: header.cwd, cwdKey: backend.keyPath(wt?.source || header.cwd), branch: wt?.branch || '', cwdDisplay: backend.displayPath(header.cwd), title: makeTitle(title || first) || 'Untitled', preview: clip(first, 140), mtime: st.mtimeMs, size: st.size, chain: [file], chainIds: [header.id], resumes: 0 };
+    return { id: header.id, path: file, engine: 'builtin', cwd: header.cwd, cwdKey: backend.keyPath(wt?.source || header.cwd), branch: wt?.branch || '', cwdDisplay: backend.displayPath(header.cwd), projectDisplay: backend.displayPath(wt?.source || header.cwd), title: makeTitle(title || first) || 'Untitled', preview: clip(first, 140), mtime: st.mtimeMs, size: st.size, chain: [file], chainIds: [header.id], resumes: 0 };
   });
   const live = new Set(files);
   for (const k of listCache.keys()) if (!live.has(k)) listCache.delete(k);
