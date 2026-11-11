@@ -1,5 +1,5 @@
 // Modals, menus and pickers: modal, confirm, prompt, folder picker, model picker, agent requests, palette.
-import { h, $, icon, iconBtn, replace, toast, fmtTokens, skeleton, kbd, leave } from './dom.js';
+import { h, $, icon, iconBtn, replace, toast, fmtTokens, skeleton, kbd, leave, errorState, loadingState } from './dom.js';
 import { api } from './api.js';
 import { replyUi, S } from './store.js';
 import { brandMark } from './brands.js';
@@ -150,7 +150,7 @@ export function folderPicker(start = '') {
           !listing.entries.length ? h('div', { class: 'empty' }, 'No sub-folders') : null,
         );
       } catch (e) {
-        replace(list, h('div', { class: 'empty err-text' }, e.message));
+        replace(list, errorState(e.message, { title: 'Couldn’t open this folder.', retry: () => load(p) }));
       }
     };
     pathIn.addEventListener('keydown', (e) => e.key === 'Enter' && load(pathIn.value.trim()));
@@ -164,9 +164,12 @@ export function folderPicker(start = '') {
   });
 }
 
-/** Searchable model list. `load()` returns the models; `onPick(model)` applies one (throw to keep the list open). */
-export function modelPicker({ load, current, onPick, extra }) {
-  const list = h('div', { class: 'list mp-list', role: 'listbox', 'aria-label': 'Models' }, skeleton(8, 'pad'));
+/**
+ * Searchable model list. `load()` returns the models; `onPick(model)` applies one (throw to keep the list open).
+ * `loading` is the line shown while `load()` runs.
+ */
+export function modelPicker({ load, current, onPick, extra, loading = 'Loading models…' }) {
+  const list = h('div', { class: 'list mp-list', role: 'listbox', 'aria-label': 'Models' });
   const q = h('input', { type: 'search', placeholder: 'Search models', 'aria-label': 'Search models', spellcheck: 'false' });
   const m = modal({ title: 'Choose a model', body: h('div', { class: 'stack' }, q, list), initialFocus: q });
   let models = [];
@@ -217,15 +220,19 @@ export function modelPicker({ load, current, onPick, extra }) {
     else if (e.key === 'ArrowUp') (e.preventDefault(), (sel = Math.max(0, sel - 1)), mark());
     else if (e.key === 'Enter' && shown.length) (e.preventDefault(), choose(shown[sel]));
   });
-  Promise.resolve()
-    .then(load)
-    .then((ms) => {
-      models = ms || [];
-      const i = models.findIndex((x) => current && x.id === current.id && x.provider === current.provider);
-      sel = i >= 0 ? i + (extra ? 1 : 0) : 0;
-      draw();
-    })
-    .catch((e) => replace(list, h('div', { class: 'empty err-text' }, e.message)));
+  const fetchModels = () => {
+    replace(list, loadingState(loading, 6));
+    return Promise.resolve()
+      .then(load)
+      .then((ms) => {
+        models = ms || [];
+        const i = models.findIndex((x) => current && x.id === current.id && x.provider === current.provider);
+        sel = i >= 0 ? i + (extra ? 1 : 0) : 0;
+        draw();
+      })
+      .catch((e) => list.isConnected && replace(list, errorState(e.message, { title: 'Couldn’t load the models.', retry: fetchModels })));
+  };
+  fetchModels();
   return m;
 }
 
@@ -311,6 +318,7 @@ export function palette(getItems, opts = {}) {
   let fileTimer = 0;
   let fileSeq = 0;
   let filesBusy = false;
+  let filesErr = null; // why the last file search failed: shown with Retry, never as "No matches"
   const askFiles = (f) => {
     clearTimeout(fileTimer);
     const seq = ++fileSeq; // any answer already in flight belongs to an older query
@@ -318,18 +326,26 @@ export function palette(getItems, opts = {}) {
       files = [];
       fileQ = '';
       filesBusy = false;
+      filesErr = null;
       return;
     }
-    if (f === fileQ) {
+    if (f === fileQ && !filesErr) {
       filesBusy = false;
       return;
     }
     filesBusy = true;
     fileTimer = setTimeout(async () => {
-      const got = await opts.files(f).catch(() => []);
+      let got = [];
+      let err = null;
+      try {
+        got = await opts.files(f);
+      } catch (e) {
+        err = e;
+      }
       if (seq !== fileSeq || !list.isConnected) return; // a newer query is on its way, or the palette closed
-      files = got;
+      files = got || [];
       fileQ = f;
+      filesErr = err;
       filesBusy = false;
       draw();
     }, 140);
@@ -373,8 +389,11 @@ export function palette(getItems, opts = {}) {
     } else items = pool.slice(0, 80);
     sel = Math.min(sel, Math.max(0, items.length - 1));
     let lastG = '';
+    const fileErr = filesErr && inScope({ scope: 'files' }) && f.length >= 2 && !filesBusy
+      ? errorState(filesErr.message, { title: 'File search failed.', cls: 'pal-err', retry: () => { fileQ = ''; askFiles(q.value.trim()); draw(); q.focus(); } })
+      : null;
     const empty = scope === 'files' && f.length < 2 ? 'Type at least 2 characters to search files' : filesBusy && !items.length ? 'Searching files…' : f ? `No matches${scope === 'all' ? '' : ' in ' + SCOPES.find(([k]) => k === scope)[1].toLowerCase()}` : scope === 'files' ? 'Type at least 2 characters to search files' : 'Nothing here yet';
-    replace(list, items.map((it, i) => [it.group !== lastG ? h('div', { class: 'list-h' }, (lastG = it.group)) : null, h('button', { class: 'list-it', id: `pal-${i}`, type: 'button', tabindex: '-1', role: 'option', onclick: () => run(it), onmousemove: () => sel !== i && ((sel = i), mark()) }, it.icon ? h('span', { class: 'pal-ico' }, icon(it.icon, 14)) : null, h('span', { class: 'grow ell' }, marked(it.label, it.hits)), it.hint ? h('span', { class: 'pal-hint ell' }, it.hint) : null, it.key ? kbd(it.key) : null)]), !items.length ? h('div', { class: 'empty' }, empty) : null, filesBusy && items.length ? h('div', { class: 'pal-busy' }, 'Searching files…') : null);
+    replace(list, items.map((it, i) => [it.group !== lastG ? h('div', { class: 'list-h' }, (lastG = it.group)) : null, h('button', { class: 'list-it', id: `pal-${i}`, type: 'button', tabindex: '-1', role: 'option', onclick: () => run(it), onmousemove: () => sel !== i && ((sel = i), mark()) }, it.icon ? h('span', { class: 'pal-ico' }, icon(it.icon, 14)) : null, h('span', { class: 'grow ell' }, marked(it.label, it.hits)), it.hint ? h('span', { class: 'pal-hint ell' }, it.hint) : null, it.key ? kbd(it.key) : null)]), fileErr, !items.length && !fileErr ? h('div', { class: 'empty' }, empty) : null, filesBusy && items.length ? h('div', { class: 'pal-busy' }, 'Searching files…') : null);
     mark();
   };
   const run = (it) => {

@@ -1,6 +1,6 @@
 // Settings: a full-size sheet. Overview, then the agent (providers, models, permissions, tools), then the app.
 // A search box finds any setting by name and jumps to it.
-import { h, icon, toast, replace, clear, logo } from './dom.js';
+import { h, icon, toast, replace, clear, logo, errorState, loadingState } from './dom.js';
 import { api } from './api.js';
 import { S, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { toggleWide } from './workbench.js';
@@ -188,18 +188,19 @@ function tabStart(el, show, m) {
 // ================= models =================
 
 async function tabModels(el, show) {
+  replace(el, loadingState('Loading your models…'));
+  let engine;
   try {
-    const { engine } = await api.get('/api/engine');
-    if (!engine.providers.some((p) => p.configured)) {
-      el.append(h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'No model connected yet'), h('p', null, 'Connect a provider first, then choose models here.')), btn('Open providers', () => show('engine'), 'primary')));
-      return;
-    }
-    const roles = h('div', { class: 'roles' });
-    el.append(roles);
-    renderModelRoles(roles, engine);
+    ({ engine } = await api.get('/api/engine'));
   } catch (e) {
-    el.append(h('div', { class: 'callout bad' }, e.message));
+    return replace(el, errorState(e.message, { title: 'Couldn’t load your models.', retry: () => tabModels(el, show) }));
   }
+  if (!engine.providers.some((p) => p.configured)) {
+    return replace(el, h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'No model connected yet'), h('p', null, 'Connect a provider first, then choose models here.')), btn('Open providers', () => show('engine'), 'primary')));
+  }
+  const roles = h('div', { class: 'roles' });
+  replace(el, roles);
+  renderModelRoles(roles, engine);
 }
 
 // ================= appearance =================
@@ -406,17 +407,31 @@ function tabRules(el) {
   }
   ta.addEventListener('input', () => { status.textContent = ''; sync(); });
   ta.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (!saveBtn.disabled) save(); } });
+  const failed = h('div', { class: 'rules-err' });
   el.append(
     h('section', { class: 'set-group' },
       h('p', { class: 'set-note' }, 'Plain text or Markdown. A project\'s own AGENTS.md or CLAUDE.md comes after this and wins when the two disagree.'),
+      failed,
       ta,
       h('div', { class: 'rules-foot' }, count, h('span', { class: 'grow' }), status, saveBtn)));
   sync();
-  api.get('/api/instructions').then((r) => {
-    saved = ta.value = r.text || '';
-    sync();
-    ta.focus({ preventScroll: true });
-  }).catch((e) => toast(e.message, 'error'));
+  // Nothing can be typed until the saved text is in, so an early keystroke never overwrites it.
+  function load() {
+    ta.disabled = true;
+    replace(failed);
+    status.textContent = 'Loading…';
+    return api.get('/api/instructions').then((r) => {
+      saved = ta.value = r.text || '';
+      ta.disabled = false;
+      status.textContent = '';
+      sync();
+      ta.focus({ preventScroll: true });
+    }).catch((e) => {
+      status.textContent = '';
+      replace(failed, errorState(e.message, { title: 'Couldn’t load your instructions.', retry: load }));
+    });
+  }
+  load();
 }
 
 /** Where the agent runs shell commands: Windows, or one of the installed WSL distributions. */

@@ -1,5 +1,5 @@
 // Settings → Tools & MCP: the "Web search" service and the read-only "Hooks" overview.
-import { h, toast, replace, spinner } from './dom.js';
+import { h, toast, replace, spinner, errorState } from './dom.js';
 import { api } from './api.js';
 import { loadEngine, S } from './store.js';
 import { btn, confirmDialog } from './dialogs.js';
@@ -70,14 +70,14 @@ export async function renderHooksSettings(root, ws) {
   try {
     data = await api.get(`/api/hooks${ws ? `?ws=${encodeURIComponent(ws)}` : ''}`);
   } catch (e) {
-    return replace(root, h('h4', { class: 'set-sub' }, 'Hooks'), h('div', { class: 'callout bad' }, e.message));
+    return replace(root, h('h4', { class: 'set-sub' }, 'Hooks'), errorState(e.message, { title: 'Couldn’t load your hooks.', retry: () => renderHooksSettings(root, ws) }));
   }
   const block = (title, d, scope, note) =>
     h('div', { class: 'card' },
       h('div', { class: 'card-h' }, h('strong', null, title), d.exists ? h('span', { class: `tag${d.errors.length ? ' warn' : d.hooks.length ? ' ok' : ''}` }, `${d.hooks.length} hook${d.hooks.length === 1 ? '' : 's'}`) : h('span', { class: 'tag' }, 'No file')),
       h('code', { class: 'mcp-cmd ell', title: d.file }, d.file),
       note ? h('p', { class: 'muted small' }, note) : null,
-      d.errors.map((e) => h('div', { class: 'callout bad prewrap' }, e)),
+      d.errors.map((e) => errorState(e)),
       d.hooks.length ? h('div', { class: 'mcp-tools' }, d.hooks.map((x) => h('div', { class: 'mcp-tool' }, h('span', { class: 'tag' }, x.event), x.matcher ? h('code', null, x.matcher) : h('span', { class: 'muted small' }, 'all'), h('code', { class: 'ell hk-cmd', title: x.command }, x.command)))) : null,
       h('div', { class: 'card-f' }, btn(d.exists ? 'Show the file' : scope === 'user' ? 'Create and open the file' : 'Show the folder', () => api.post('/api/hooks/reveal', { scope, ws }).catch((e) => toast(e.message, 'error')))));
   const proj = data.project;

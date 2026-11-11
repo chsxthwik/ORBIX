@@ -1,5 +1,5 @@
 // Right-hand panel: Files, Changes (git), Todos, Agents, Console.
-import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce, errorState } from './dom.js';
 import { asciiArt } from './ascii.js';
 import { api, rpc } from './api.js';
 import { S, activeTab, emit, on, savePrefs } from './store.js';
@@ -113,7 +113,7 @@ function drawFiles(t) {
       ents = await loadDir(dir);
     } catch (e) {
       sk?.remove();
-      host.append(h('div', { class: 'empty err-text' }, e.message));
+      host.append(errorState(e.message, { title: 'Couldn’t list this folder.', retry: () => { P.tree.delete(dir); draw(); } }));
       return;
     } finally {
       sk?.remove();
@@ -160,7 +160,7 @@ function drawViewer(t) {
   const c = h('div', { class: 'p-scroll' });
   body.append(c);
   if (f.loading) c.append(skeleton(14, 'pad'));
-  else if (f.error) c.append(h('div', { class: 'err-text' }, f.error));
+  else if (f.error) c.append(errorState(f.error, { title: 'Couldn’t open this file.', retry: () => viewFile(t, f.path) }));
   else if (f.image) c.append(f.dataUrl ? h('img', { class: 'p-img', src: f.dataUrl, alt: baseName(f.path) }) : h('div', { class: 'empty' }, 'Image too large to preview.'));
   else if (f.binary) c.append(h('div', { class: 'empty' }, `Binary file (${f.size} bytes).`));
   else {
@@ -217,7 +217,7 @@ function drawChanges(t) {
   const g = P.git;
   body.append(h('div', { class: 'p-bar' }, icon('branch', 14), h('span', { class: 'grow ell mono' }, g?.repo ? `${g.branch}${g.upstream ? ' → ' + g.upstream : ''}${g.ahead ? ` ↑${g.ahead}` : ''}${g.behind ? ` ↓${g.behind}` : ''}` : 'Changes'), iconBtn('refresh', 'Refresh', () => loadGit(), 'sm')));
   if (P.busy && !g) return body.append(skeleton(6, 'pad'));
-  if (P.gitErr) return body.append(h('div', { class: 'empty err-text' }, P.gitErr));
+  if (P.gitErr) return body.append(errorState(P.gitErr, { title: 'Couldn’t read the changes.', retry: () => loadGit() }));
   if (!g) return loadGit();
   if (g.gitMissing) return body.append(emptyState('branch', 'Git is not installed, so changes cannot be shown.'));
   if (!g.repo) return body.append(emptyState('branch', 'This folder is not a git repository.'));
@@ -314,9 +314,9 @@ function drawDiff(t) {
   const c = h('div', { class: 'p-scroll' });
   body.append(c);
   if (d.loading) c.append(skeleton(12, 'pad'));
-  else if (d.error) c.append(h('div', { class: 'err-text' }, d.error));
+  else if (d.error) c.append(errorState(d.error, { title: 'Couldn’t load this diff.', retry: () => openDiff(t, d.file) }));
   else if (!d.text.trim()) c.append(h('div', { class: 'empty' }, 'No text changes.'));
-  else c.append(renderUnifiedDiff(d.text));
+  else c.append(renderUnifiedDiff(d.text, d.file.path));
 }
 
 function drawTodos(t) {

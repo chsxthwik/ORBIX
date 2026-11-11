@@ -22,7 +22,7 @@ Bring your own API key or run a local model.
 
 <br>
 
-<img src="docs/img/shots/approval.png" alt="ORBIX has searched and read the project, explained a login bug, and now shows a one-line diff with Allow once, Allow for this session and Deny" width="100%">
+<img src="docs/img/shots/approval.png" alt="ORBIX has read the project, explained why password reset links expire too soon, and waits with a one-line diff, the changed words marked, and Allow once, Allow for this session and Deny" width="100%">
 
 <sub>Screenshots use a sample project and a scripted local model; the tools in them really ran.</sub>
 

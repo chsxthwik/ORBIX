@@ -1,5 +1,5 @@
 // "AI providers": add a key (or a local server) for the ORBIX agent. Each provider is checked before it is saved.
-import { h, icon, toast, replace, spinner, skeleton } from './dom.js';
+import { h, icon, toast, replace, spinner, skeleton, errorState } from './dom.js';
 import { api } from './api.js';
 import { loadEngine } from './store.js';
 import { confirmDialog } from './dialogs.js';
@@ -25,7 +25,7 @@ export async function renderEngineSettings(root) {
   try {
     engine = (await api.get('/api/engine')).engine;
   } catch (e) {
-    return replace(root, h('div', { class: 'callout bad' }, e.message));
+    return replace(root, errorState(e.message, { title: 'Couldn’t load the providers.', retry: () => renderEngineSettings(root) }));
   }
   let query = '';
   const list = h('div', { class: 'pv-list' });
