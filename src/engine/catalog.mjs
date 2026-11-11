@@ -13,6 +13,7 @@ const cacheFile = () => path.join(DATA_DIR, 'cache', 'models-dev.json');
 const MODELS_DEV_ID = {
   anthropic: 'anthropic',
   openai: 'openai',
+  chatgpt: 'openai', // the same models, used through a ChatGPT plan
   google: 'google',
   xai: 'xai',
   groq: 'groq',

@@ -769,7 +769,7 @@ describe('providers: thinking levels and effort mapping', () => {
     assert.equal(presetById('anthropic').type, 'anthropic');
     assert.equal(presetById('nope'), undefined);
     for (const x of PRESETS) {
-      assert.ok(['anthropic', 'openai'].includes(x.type), x.id);
+      assert.ok(['anthropic', 'openai', 'chatgpt'].includes(x.type), x.id);
       if (x.id !== 'custom') assert.match(x.baseUrl, x.local ? /^http:\/\/localhost:\d+\/v1$/ : /^https:\/\//, x.id);
     }
   });

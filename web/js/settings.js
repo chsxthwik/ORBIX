@@ -208,7 +208,7 @@ function tabLook(el) {
     if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(apply);
     else apply();
     for (const b of e.currentTarget.parentElement.children) b.setAttribute('aria-checked', String(b === e.currentTarget));
-  } }, h('span', { class: `theme-p ${v}`, 'aria-hidden': 'true' }, h('i'), h('b'), h('u')), h('span', { class: 'theme-n' }, l))));
+  } }, themePreview(v), h('span', { class: 'theme-n' }, h('span', null, l), icon('check', 13, 'theme-ok')))));
   const val = h('span', { class: 'num range-v' }, `${u.fontSize || 14}px`);
   const size = h('input', { type: 'range', min: 12, max: 18, step: 1, value: u.fontSize || 14, 'aria-label': 'Message text size', oninput: () => ((val.textContent = size.value + 'px'), savePrefs({ fontSize: +size.value })) });
   el.append(
@@ -220,6 +220,17 @@ function tabLook(el) {
     group('Layout', null,
       row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on screen.'),
       row('Reading column', seg('Reading column', [['normal', 'Normal'], ['wide', 'Wide']], document.documentElement.classList.contains('wide') ? 'wide' : 'normal', (v) => (v === 'wide') !== document.documentElement.classList.contains('wide') && toggleWide()), 'Wide suits long diffs and tables. The session bar has the same switch.')));
+}
+
+/** A small drawing of the app in a theme: sidebar, a reply, your message and the message box. System shows dark and light side by side. */
+function themePreview(v) {
+  const win = (t) => h('span', { class: `tp-win tp-${t}` },
+    h('span', { class: 'tp-side' }, h('b', { class: 'tp-brand' }), h('b', { class: 'tp-row cur' }), h('b', { class: 'tp-row' }), h('b', { class: 'tp-row short' })),
+    h('span', { class: 'tp-sheet' },
+      h('b', { class: 'tp-you' }),
+      h('b', { class: 'tp-line' }), h('b', { class: 'tp-line mid' }), h('b', { class: 'tp-line short' }),
+      h('span', { class: 'tp-box' }, h('b', { class: 'tp-ph' }), h('b', { class: 'tp-send' }))));
+  return h('span', { class: `theme-p ${v}`, 'aria-hidden': 'true' }, ...(v === 'system' ? [win('dark'), win('light')] : [win(v)]));
 }
 
 /** A row of two or three choices, one selected. */

@@ -2,12 +2,14 @@
 // Every client here gets: default max tokens from the catalog, thinking levels, and safe retries.
 import * as anthropic from './anthropic.mjs';
 import * as openai from './openai.mjs';
+import * as chatgpt from './chatgpt.mjs';
 import { modelRecord, catalogModels } from './catalog.mjs';
 
 // note: one plain line for the settings screen. keyUrl: where the user gets a key.
 export const PRESETS = [
   { id: 'anthropic', name: 'Anthropic', type: 'anthropic', baseUrl: 'https://api.anthropic.com', note: 'Claude models.', keyUrl: 'https://console.anthropic.com/settings/keys' },
-  { id: 'openai', name: 'OpenAI', type: 'openai', baseUrl: 'https://api.openai.com/v1', note: 'GPT and o-series models.', keyUrl: 'https://platform.openai.com/api-keys', oauth: true },
+  { id: 'chatgpt', name: 'ChatGPT', type: 'chatgpt', baseUrl: 'https://chatgpt.com/backend-api/codex', note: 'GPT models on your ChatGPT Plus or Pro plan. No API key.', oauth: true, signInOnly: true },
+  { id: 'openai', name: 'OpenAI', type: 'openai', baseUrl: 'https://api.openai.com/v1', note: 'GPT and o-series models.', keyUrl: 'https://platform.openai.com/api-keys' },
   { id: 'google', name: 'Google Gemini', type: 'openai', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', note: 'Gemini models. Free tier available.', keyUrl: 'https://aistudio.google.com/apikey' },
   { id: 'xai', name: 'xAI', type: 'openai', baseUrl: 'https://api.x.ai/v1', note: 'Grok models.', keyUrl: 'https://console.x.ai/', oauth: true },
   { id: 'groq', name: 'Groq', type: 'openai', baseUrl: 'https://api.groq.com/openai/v1', note: 'Very fast open models.', keyUrl: 'https://console.groq.com/keys' },
@@ -74,6 +76,7 @@ export function thinkingStyle(providerId, modelId) {
   }
   // Unknown model: well-known reasoning families.
   if (providerId === 'openai' && /^(o\d|gpt-5)/.test(id)) return { kind: 'effort', efforts: ['minimal', 'low', 'medium', 'high'] };
+  if (providerId === 'chatgpt') return { kind: 'effort', efforts: ['low', 'medium', 'high', 'xhigh'] }; // every model in Codex's catalog
   if (providerId === 'openrouter') return { kind: 'effort', efforts: null };
   return { kind: 'none' };
 }
@@ -141,7 +144,7 @@ export async function* withRetries(make, signal) {
 
 /** A uniform {listModels, stream} for a provider type. */
 export function clientFor(type) {
-  const impl = type === 'anthropic' ? anthropic : openai;
+  const impl = type === 'anthropic' ? anthropic : type === 'chatgpt' ? chatgpt : openai;
   return {
     async listModels(a) {
       const providerId = a.providerId || presetByUrl(a.baseUrl)?.id || '';
@@ -162,6 +165,7 @@ export function clientFor(type) {
       const effort = thinking === 'off' ? null : style.kind === 'effort' ? nearestEffort(thinking, style.efforts) : thinking;
       const args = { ...a, providerId, maxTokens, thinking, style, effort, maxOutput };
       if (type === 'anthropic') return withRetries(() => anthropic.streamTurn({ ...args, messages: anthropic.toAnthropicMessages(a.messages) }), a.signal);
+      if (type === 'chatgpt') return withRetries(() => chatgpt.streamTurn(args), a.signal);
       const interleaved = modelRecord(providerId, a.model)?.interleaved || null;
       return withRetries(() => openai.streamTurn({ ...args, interleaved }), a.signal);
     },

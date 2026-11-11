@@ -474,10 +474,33 @@ export class AgentProc extends EventEmitter {
     const base = { apiKey: key, baseUrl: this.config.baseUrl(this.provider), model: this.model, providerId: this.provider, maxTokens: this._maxTokens() };
     const thinking = this.thinkingLevel !== 'off' ? this.thinkingLevel : undefined;
     const args = (a) => ({ ...base, thinking, ...a });
-    const main = { client, args, stream: (a) => client.stream(args(a)), provider: this.provider, model: this.model, info: this.meta?.info || null, contextWindow: this.meta?.contextWindow, thinking };
+    const main = { client, args, stream: this._signedIn(client, args, this.provider), provider: this.provider, model: this.model, info: this.meta?.info || null, contextWindow: this.meta?.contextWindow, thinking };
     // Plan mode thinks with the "plan" model when one is chosen (Settings → AI providers → Models, or /model plan).
     if (this.planMode) return (await this._roleConnSafe('plan')) || main;
     return main;
+  }
+
+  /**
+   * client.stream for a provider, with sign-in recovery: when a signed-in provider rejects its token before anything
+   * streamed, the sign-in is renewed once and the request repeated. A sign-in that cannot be renewed asks for a new one.
+   */
+  _signedIn(client, args, provider) {
+    const config = this.config;
+    return async function* (a) {
+      let started = false;
+      try {
+        for await (const ev of client.stream(args(a))) {
+          if (ev.type !== 'start' && ev.type !== 'retry') started = true;
+          yield ev;
+        }
+      } catch (e) {
+        if (started || !(e?.status === 401 || e?.status === 403) || !config.isSignIn?.(provider)) throw e;
+        const fresh = await config.renewSignIn(provider).catch(() => null);
+        const name = config.provider(provider)?.name || provider;
+        if (!fresh) throw Object.assign(new Error(`${name} no longer accepts this sign-in. Sign in with ${name} again in Settings → AI providers.`), { status: e.status });
+        yield* client.stream(args({ ...a, apiKey: fresh }));
+      }
+    };
   }
 
   /** "provider/model" chosen for a role: this session's override, else the saved default, else '' (current model). */
@@ -504,7 +527,7 @@ export class AgentProc extends EventEmitter {
     const client = providers.clientFor(info.type);
     const base = { apiKey: key, baseUrl: this.config.baseUrl(provider), model: s.model, providerId: provider, maxTokens: mi?.maxOutput ? Math.min(mi.maxOutput, 32000) : undefined };
     const args = (a) => ({ ...base, thinking, ...a });
-    return { client, args, stream: (a) => client.stream(args(a)), provider, model: s.model, info: mi, contextWindow: mi?.contextWindow || (info.type === 'anthropic' ? 200000 : 128000), thinking, role };
+    return { client, args, stream: this._signedIn(client, args, provider), provider, model: s.model, info: mi, contextWindow: mi?.contextWindow || (info.type === 'anthropic' ? 200000 : 128000), thinking, role };
   }
 
   /** Like _roleConn, but a role that cannot be used is reported once as a note and the caller falls back to the current model. */

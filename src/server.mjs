@@ -454,6 +454,7 @@ export class AppServer {
         const id = String(body.id || '');
         const p = this.engineCfg.provider(id);
         if (!p) throw Object.assign(new Error('Unknown provider'), { status: 400 });
+        if (p.signInOnly && body.key) throw Object.assign(new Error(`${p.name} has no API key. Use Sign in with ${p.name}.`), { status: 400 });
         const typedKey = body.key ? String(body.key).trim() : '';
         const key = typedKey || (await this.engineCfg.getKey(id));
         const baseUrl = p.editableUrl ? String(body.baseUrl || '').trim() : this.engineCfg.baseUrl(id);
@@ -466,6 +467,11 @@ export class AppServer {
       },
       'POST /api/engine/oauth/start': async ({ body }) => {
         const provider = String(body.provider || 'openrouter');
+        if (pkce.SPECS[provider]?.device) {
+          const { url, state, userCode } = await pkce.startDevice(provider, { config: this.engineCfg });
+          if (pkce.isAuthUrl(provider, url)) openExternal(url); // the provider's code page, in the user's default browser
+          return { url, state, provider, userCode };
+        }
         if (pkce.SPECS[provider]) {
           const { url, state } = await pkce.startPkce(provider, { config: this.engineCfg });
           if (pkce.isAuthUrl(provider, url)) openExternal(url); // the user's default browser
@@ -479,6 +485,11 @@ export class AppServer {
       'GET /api/engine/oauth/status': async ({ q }) => {
         const or = oauth.oauthStatus(q.state);
         return { ...(or.status !== 'unknown' ? or : pkce.pkceStatus(q.state)), engine: this.engineCfg.publicView() };
+      },
+      // The browser could not reach ORBIX's local sign-in port: finish from the address it ended on.
+      'POST /api/engine/oauth/paste': async ({ body }) => {
+        const r = await pkce.finishFromUrl(String(body.state || ''), String(body.url || ''));
+        return { ...r, engine: this.engineCfg.publicView() };
       },
       'POST /api/engine/oauth/cancel': async ({ body }) => {
         oauth.cancelOAuth(body.state);

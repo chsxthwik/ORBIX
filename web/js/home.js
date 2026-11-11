@@ -318,8 +318,8 @@ const footKeys = () => h('div', { class: 'home-keys' }, [['Ctrl+K', 'search'], [
 // ================= first run =================
 
 /** The providers on the first screen, one row each; a click opens Settings on that provider's form. */
-const PV_SUB = { anthropic: 'Claude models', openai: 'GPT and o-series', google: 'Gemini models', xai: 'Grok models', openrouter: 'Hundreds of models, one account', ollama: 'Models on this PC', lmstudio: 'Models on this PC' };
-const PV_HOW = { anthropic: 'API key', openai: 'Sign in', google: 'API key', xai: 'Sign in', openrouter: 'Sign in', ollama: 'No key', lmstudio: 'No key' };
+const PV_SUB = { anthropic: 'Claude models', chatgpt: 'Your Plus or Pro plan', openai: 'GPT and o-series', google: 'Gemini models', xai: 'Grok models', openrouter: 'Hundreds of models, one account', ollama: 'Models on this PC', lmstudio: 'Models on this PC' };
+const PV_HOW = { anthropic: 'API key', chatgpt: 'Sign in', openai: 'API key', google: 'API key', xai: 'Sign in', openrouter: 'Sign in', ollama: 'No key', lmstudio: 'No key' };
 function focusProvider(H, id) {
   H.settings('engine');
   const t0 = Date.now();
