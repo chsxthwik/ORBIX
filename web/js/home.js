@@ -167,6 +167,8 @@ export function drawHome(root, H) {
     const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new session' }, brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
     modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
       load: () => loadHomeModels(draft.project),
+      // Without an open session the list comes from a short-lived agent, which takes a moment to start.
+      loading: models || [...S.tabs.values()].some((t) => !t.dead && t.ready) ? 'Loading models…' : 'Asking your providers for their models…',
       current: homeModel(),
       extra: 'Default model',
       onPick: (x) => {
