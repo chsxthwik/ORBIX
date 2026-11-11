@@ -293,6 +293,22 @@ describe('tools: inputs and outputs', () => {
     await run('read', { path: 'stale.txt' });
     assert.ok(!(await run('write', { path: 'stale.txt', content: 'agent' })).isError);
   });
+  test('edit: a whitespace-tolerant match needs a current read of the file', async () => {
+    put(at('fz.js'), 'function f() {\n    if (a) {\n        go();\n    }\n}\n');
+    const unread = await run('edit', { path: 'fz.js', old_string: 'if (a) {\n    go();\n}', new_string: 'if (a) {\n    stop();\n}' });
+    assert.equal(unread.isError, true);
+    assert.match(unread.text, /not read this file/);
+    await run('read', { path: 'fz.js' });
+    await new Promise((r) => setTimeout(r, 30));
+    fs.writeFileSync(at('fz.js'), 'function f() {\n    if (a) {\n        go();\n    }\n}\n// user\n');
+    fs.utimesSync(at('fz.js'), new Date(), new Date(Date.now() + 5000));
+    const stale = await run('edit', { path: 'fz.js', old_string: 'if (a) {\n    go();\n}', new_string: 'if (a) {\n    stop();\n}' });
+    assert.equal(stale.isError, true);
+    assert.match(stale.text, /changed after you last read it/);
+    assert.match(fs.readFileSync(at('fz.js'), 'utf8'), /go\(\);/);
+    // An exact match is grounded in the file itself and needs no read.
+    assert.ok(!(await run('edit', { path: 'fz.js', old_string: '// user', new_string: '// done' })).isError);
+  });
   test('edit: line-number prefixes copied from read output are removed', async () => {
     put(at('num.txt'), 'one\ntwo\nthree\n');
     const r = await run('edit', { path: 'num.txt', old_string: '2\ttwo\n3\tthree', new_string: '2\tTWO\n3\tthree' });
@@ -302,6 +318,7 @@ describe('tools: inputs and outputs', () => {
   });
   test('edit: an indentation mismatch matches uniquely and the new text is re-indented', async () => {
     put(at('ind.js'), 'function f() {\n    if (a) {\n        go();\n    }\n}\n');
+    await run('read', { path: 'ind.js' });
     const r = await run('edit', { path: 'ind.js', old_string: 'if (a) {\n    go();\n}', new_string: 'if (a) {\n    go();\n    stop();\n}' });
     assert.ok(!r.isError, r.text);
     assert.match(r.text, /ignoring whitespace differences; new text re-indented/);

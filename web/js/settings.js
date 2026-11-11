@@ -2,8 +2,9 @@
 // A search box finds any setting by name and jumps to it.
 import { h, icon, toast, replace, clear, logo } from './dom.js';
 import { api } from './api.js';
-import { S, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit } from './store.js';
-import { modal, btn, confirmDialog, shortcutsDialog, row, toggle } from './dialogs.js';
+import { S, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions } from './store.js';
+import { toggleWide } from './workbench.js';
+import { modal, btn, confirmDialog, row, toggle, SHORTCUTS, keyCaps } from './dialogs.js';
 import { renderEngineSettings } from './engine.js';
 import { brandMark } from './brands.js';
 import { renderModelRoles } from './models.js';
@@ -20,8 +21,9 @@ const TABS = [
   ['behavior', 'Permissions', 'shield', 'What the agent may do without asking, and where it runs commands.'],
   ['tools', 'Tools & MCP', 'plug', 'What the agent can use, and the extra tools you add.'],
   { group: 'App' },
-  ['look', 'Appearance', 'palette', 'Theme and text size.'],
-  ['about', 'About', 'info', 'Version, help and shortcuts.'],
+  ['look', 'Appearance', 'palette', 'Theme, text size and layout.'],
+  ['keys', 'Shortcuts', 'keyboard', 'Every keyboard shortcut. Type to filter.'],
+  ['about', 'About', 'info', 'Version and help.'],
 ];
 const PAGES = TABS.filter((t) => Array.isArray(t));
 
@@ -38,9 +40,12 @@ const FIND = [
   ['MCP servers', 'tools', 'server tools mcp'],
   ['Hooks', 'tools', 'before after tool'],
   ['Theme', 'look', 'dark light system midnight frost color'],
-  ['Message text size', 'look', 'font zoom'],
+  ['Message text size', 'look', 'font zoom bigger smaller'],
+  ['Density', 'look', 'compact comfortable spacing rows'],
+  ['Reading column', 'look', 'wide width'],
   ['Show model thinking', 'look', 'reasoning'],
-  ['Keyboard shortcuts', 'about', 'keys hotkeys'],
+  ['Keyboard shortcuts', 'keys', 'keys hotkeys'],
+  ['Default model for new sessions', 'start', 'model home'],
 ];
 
 /** Rows that belong together, in one framed list. */
@@ -75,7 +80,7 @@ export function openSettings(initial = 'start') {
     const page = PAGES.find(([k]) => k === name);
     const body = h('div', { class: 'set-body' });
     content.append(h('header', { class: 'set-head' }, h('h3', { class: 'set-title' }, page[1]), h('p', { class: 'set-lead' }, page[3])), body);
-    ({ start: tabStart, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, tools: renderMcpSettings, about: tabAbout })[name](body, show, m);
+    ({ start: tabStart, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, tools: renderMcpSettings, keys: tabKeys, about: tabAbout })[name](body, show, m);
     if (focusNav) list.querySelector('.cur')?.focus();
   };
 
@@ -86,7 +91,7 @@ export function openSettings(initial = 'start') {
     show(page);
     const t0 = Date.now();
     const seek = () => {
-      const el = [...content.querySelectorAll('.set-l, .set-sub, .perm-t')].find((x) => x.textContent === label);
+      const el = [...content.querySelectorAll('.set-l, .set-sub, .perm-t, .ov-l')].find((x) => x.textContent === label);
       if (el) {
         const box = el.closest('.set-row, .set-group, .perm') || el;
         box.scrollIntoView({ block: 'center' });
@@ -123,22 +128,45 @@ export function openSettings(initial = 'start') {
 
 function tabStart(el, show, m) {
   const ready = engineReady();
-  const connected = (S.engine?.providers || []).filter((p) => p.configured);
-  const on = connected.map((p) => p.name);
-  const auto = S.engine?.approvals === 'auto';
+  const eng = S.engine || {};
+  const connected = (eng.providers || []).filter((p) => p.configured);
+  const auto = eng.approvals === 'auto';
   const b = S.env.backend;
-  const search = !!S.engine?.search?.configured;
-  const tile = (ic, name, value, tone, page) => h('button', { class: 'ov-tile', type: 'button', onclick: () => show(page) },
-    h('span', { class: 'ov-ic' }, typeof ic === 'string' ? icon(ic, 16) : ic),
-    h('span', { class: 'ov-m' }, h('span', { class: 'ov-k' }, name), h('span', { class: 'ov-v ell' }, value)),
-    h('span', { class: `dot ${tone}`.trim() }));
+  const roles = eng.models || {};
+  const hm = S.ui.homeModel;
+  const projects = groupSessions().filter((g) => g.path).length;
+  const pins = (Array.isArray(S.ui.pinned) ? S.ui.pinned : []).filter((p) => S.sessions.some((x) => x.path === p)).length;
+  const short = (v) => (v ? String(v).split('/').slice(1).join('/') || v : '');
+  /** One line: what it is, how it is set now, and the page that changes it. */
+  const line = (ic, label, value, page, tone = '') => h(page ? 'button' : 'div', { class: 'ov-row' + (page ? '' : ' static'), ...(page ? { type: 'button', onclick: () => show(page) } : {}) },
+    h('span', { class: 'ov-ic' }, typeof ic === 'string' ? icon(ic, 15) : ic),
+    h('span', { class: 'ov-l' }, label),
+    h('span', { class: `ov-val ell ${tone}`.trim() }, value),
+    page ? icon('chevron-right', 14, 'ov-go') : null);
+  const card = (title, ...rows) => h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, title), h('div', { class: 'ov-card' }, ...rows));
+  const mcp = line('plug', 'MCP servers', '…', 'tools');
+  api.get('/api/mcp').then((j) => {
+    const n = Object.keys(j.servers || {}).length;
+    mcp.querySelector('.ov-val').textContent = n ? `${n} server${n === 1 ? '' : 's'}` : 'None added';
+  }).catch(() => (mcp.querySelector('.ov-val').textContent = 'Not available'));
+
   el.append(
-    ready ? '' : h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'Connect a model to start'), h('p', null, 'An API key or a local model. Nothing else to install.')), btn('Connect a model', () => show('engine'), 'primary')),
-    h('div', { class: 'ov-grid' },
-      tile(connected[0] ? brandMark(connected[0].id, 18) : 'key', 'Model', ready ? on.join(', ') : 'Not connected', ready ? 'ok' : 'warn', 'engine'),
-      tile('shield', 'Permissions', auto ? 'Allows everything' : 'Asks first', auto ? 'warn' : 'ok', 'behavior'),
-      tile('terminal', 'Commands run in', b.kind === 'wsl' ? (b.distro ? `WSL · ${b.distro}` : 'WSL') : 'Windows', '', 'behavior'),
-      tile('globe', 'Web search', search ? 'Connected' : 'Optional, not set up', search ? 'ok' : '', 'tools')),
+    ready ? '' : h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'Connect a model to start'), h('p', null, 'An API key, a sign-in, or a model on this PC. Nothing else to install.')), btn('Connect a model', () => show('engine'), 'primary')),
+    card('Agent',
+      line(connected[0] ? brandMark(connected[0].id, 16) : 'key', 'Providers', ready ? connected.map((p) => (p.models != null ? `${p.name} · ${p.models} model${p.models === 1 ? '' : 's'}` : p.name)).join(', ') : 'None connected', 'engine', ready ? '' : 'warn'),
+      line('message', 'Default model for new sessions', hm?.id ? hm.name || hm.id : 'Chosen on Home, under the task box', null),
+      line('bolt', 'Fast model', roles.fast ? short(roles.fast) : 'Same as the session', 'models'),
+      line('map', 'Plan model', roles.plan ? short(roles.plan) : 'Same as the session', 'models')),
+    card('Safety',
+      line('shield', 'File edits and commands', auto ? 'Run without asking' : 'Ask me first', 'behavior', auto ? 'warn' : 'ok'),
+      line('terminal', 'Commands run in', b.kind === 'wsl' ? (b.distro ? `WSL · ${b.distro}` : 'WSL') : 'Windows', 'behavior')),
+    card('Tools',
+      line('globe', 'Web search', eng.search?.configured ? eng.search.provider || 'Connected' : 'Off', 'tools'),
+      mcp),
+    card('Your work',
+      line('message', 'Conversations', String(S.sessions.length), null),
+      line('folder', 'Projects', String(projects), null),
+      line('check', 'Pinned in the sidebar', pins ? String(pins) : 'None. Right-click a conversation to pin it.', null)),
     h('div', { class: 'set-actions' },
       btn('New session', () => {
         m.close();
@@ -184,7 +212,41 @@ function tabLook(el) {
     group('Reading', null,
       row('Message text size', h('div', { class: 'row' }, size, val)),
       h('p', { class: 'fs-sample' }, 'The quick brown fox: this is how replies will read.'),
-      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'Show the model’s reasoning in replies, collapsed.')));
+      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'Show the model’s reasoning in replies, collapsed.')),
+    group('Layout', null,
+      row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on screen.'),
+      row('Reading column', seg('Reading column', [['normal', 'Normal'], ['wide', 'Wide']], document.documentElement.classList.contains('wide') ? 'wide' : 'normal', (v) => (v === 'wide') !== document.documentElement.classList.contains('wide') && toggleWide()), 'Wide suits long diffs and tables. The session bar has the same switch.')));
+}
+
+/** A row of two or three choices, one selected. */
+function seg(label, options, value, onPick) {
+  const wrap = h('div', { class: 'seg', role: 'radiogroup', 'aria-label': label });
+  for (const [v, l] of options) {
+    wrap.append(h('button', { type: 'button', role: 'radio', 'aria-checked': String(v === value), onclick: (e) => {
+      for (const x of wrap.children) x.setAttribute('aria-checked', String(x === e.currentTarget));
+      onPick(v);
+    } }, l));
+  }
+  return wrap;
+}
+
+// ================= shortcuts =================
+
+function tabKeys(el) {
+  const q = h('input', { type: 'search', class: 'keys-q', placeholder: 'Filter shortcuts', 'aria-label': 'Filter shortcuts', spellcheck: 'false', autocomplete: 'off' });
+  const list = h('dl', { class: 'keys keys-page' });
+  const none = h('p', { class: 'set-none', hidden: true }, 'No shortcut matches.');
+  const draw = () => {
+    const t = q.value.trim().toLowerCase();
+    const hits = SHORTCUTS.filter(([k, d]) => !t || `${k} ${d}`.toLowerCase().includes(t));
+    replace(list, hits.map(([k, d]) => [h('dt', null, keyCaps(k)), h('dd', null, d)]));
+    none.hidden = !!hits.length;
+  };
+  q.addEventListener('input', draw);
+  q.addEventListener('keydown', (e) => e.key === 'Escape' && q.value && (e.stopPropagation(), e.preventDefault(), (q.value = ''), draw()));
+  draw();
+  el.append(q, h('div', { class: 'set-card keys-card' }, list, none));
+  setTimeout(() => q.focus({ preventScroll: true }), 0);
 }
 
 // ================= permissions =================
@@ -243,18 +305,17 @@ function whereRow() {
 
 // ================= about =================
 
-function tabAbout(el) {
+function tabAbout(el, show) {
   const b = S.env.backend;
   el.append(
     h('div', { class: 'about-h' }, logo(38), h('div', null, h('strong', null, 'ORBIX'), h('p', null, `Version ${S.env.app.version}`))),
     group(null, null,
       row('Commands run in', b.kind === 'wsl' ? `WSL (${b.distro})` : 'Windows'),
-      row('Keyboard shortcuts', btn('Show', () => shortcutsDialog(), 'sm')),
       row('How ORBIX works', btn('Open', () => openHelp(), 'sm')),
+      row('Keyboard shortcuts', btn('Show', () => show('keys'), 'sm')),
       row('Quit ORBIX', btn('Quit', async () => {
         if (await confirmDialog('Quit ORBIX', 'Stop all sessions and close ORBIX?', { ok: 'Quit', danger: true })) {
           await api.post('/api/quit').catch(() => {});
-          window.chrome?.webview?.postMessage('quit'); // the native window closes itself
         }
       }, 'sm danger'), 'Stops every running session.')));
 }

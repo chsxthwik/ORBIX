@@ -3,11 +3,11 @@
 import { on } from './store.js';
 
 const was = new Map(); // tab id -> was streaming
+const started = new Map(); // tab id -> when the current turn began
 let asked = false;
 
 function attention(title, body) {
   try {
-    window.chrome?.webview?.postMessage('attention');
   } catch {}
   try {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body, silent: false, tag: 'orbix' });
@@ -29,7 +29,12 @@ export function initNotify() {
   on('tab:status', (tab) => {
     const before = was.get(tab.id);
     was.set(tab.id, tab.streaming);
-    if (before && !tab.streaming && !tab.dead && away()) attention('Agent finished', tab.name);
+    if (tab.streaming && !before) started.set(tab.id, tab.turnStartedAt || Date.now());
+    if (before && !tab.streaming) {
+      const secs = Math.round((Date.now() - (started.get(tab.id) || Date.now())) / 1000);
+      started.delete(tab.id);
+      if (!tab.dead && away()) attention('Agent finished', secs >= 5 ? `${tab.name} · worked ${secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`}` : tab.name);
+    }
   });
   on('tab:dialog', (tab) => {
     if (tab.dialogs.length && away()) attention('The agent needs your input', tab.dialogs[0].title || tab.name);

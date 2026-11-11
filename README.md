@@ -6,7 +6,7 @@
   <img alt="ORBIX" src="docs/img/logo-light.svg" width="207" height="72">
 </picture>
 
-**A Windows desktop app where an AI agent works on your code.**<br>
+**A local-first coding workspace that runs in your browser.**<br>
 It asks before it edits a file or runs a command, and every file change can be undone.<br>
 Bring your own API key or run a local model.
 
@@ -27,17 +27,19 @@ Bring your own API key or run a local model.
 
 ## Install
 
-1. Download the zip from the [latest release](https://github.com/chsxthwik/ORBIX/releases/latest). It is about 34 MB and carries its own Node.js.
-2. Unzip it anywhere and run `bin\ORBIX.exe`. To install it with Desktop and Start Menu shortcuts instead, run:
+1. Install [Node.js 20 or newer](https://nodejs.org/).
+2. Clone the repository, then start ORBIX:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File tools\install.ps1
+   git clone https://github.com/chsxthwik/ORBIX.git
+   cd ORBIX
+   npm start
    ```
 
-3. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Paste an API key and press **Check & save**, sign in with OpenRouter, or connect a local model.
-4. Open a project folder, describe a task and press <kbd>Enter</kbd>.
+3. ORBIX opens in your default browser. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Paste an API key and press **Check & save**, sign in with OpenRouter, or connect a local model.
+4. Open a project folder in ORBIX, describe a task and press <kbd>Enter</kbd>.
 
-You need Windows 10 or 11 (x64) and the WebView2 Runtime, which ships with Windows 11 and recent Windows 10 updates. There is no account and no subscription: you pay your provider directly, or nothing with a local model.
+ORBIX runs on Windows, macOS and Linux with Node.js 20 or newer. The UI and agent server stay on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
 
 ## How a task runs
 
@@ -110,10 +112,10 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/img/architecture-light.png">
-  <img src="docs/img/architecture-light.png" alt="A native window shows the web interface and talks over HTTP and SSE to a local Node.js server. The server runs one agent loop per conversation, which calls the selected model provider and runs tools, MCP servers and hooks in WSL or on Windows. Conversations, settings and encrypted keys live in the data folder." width="100%">
+  <img src="docs/img/architecture-light.png" alt="A browser shows the ORBIX interface and talks over HTTP and SSE to a local Node.js server. The server runs one agent loop per conversation, which calls the selected model provider and runs tools, MCP servers and hooks. Conversations, settings and encrypted keys live in the data folder." width="100%">
 </picture>
 
-Three pieces run on one PC: a small C# window, a local Node.js server and a web interface written in plain ES modules. There is no bundler, framework or npm dependency. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools and storage.
+ORBIX is a local Node.js server and a browser interface written in plain ES modules. There is no bundler, framework or npm dependency. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools and storage.
 
 ## Extending ORBIX
 
@@ -192,24 +194,21 @@ System, Dark, Light, Midnight and Frost, under Settings, Appearance.
 
 ## Development
 
-Node.js 20 or newer. The window is compiled with the C# compiler that ships with Windows.
+Node.js 20 or newer.
 
 ```bash
 npm start          # run from source
 npm run serve      # the server only, in any browser
 npm test           # 680 tests, with no network and no API keys
 npm run doctor     # the Diagnostics checks, in the console
-npm run build      # bin\ORBIX.exe
-npm run package    # release\ORBIX-<version>-win-x64.zip, with a checksum-verified Node.js
 ```
 
 ```text
-host/      the native window (C#, WinForms, WebView2)
 src/       the local server: HTTP API, event stream, WSL and Windows backend
 src/engine the agent: loop, model clients, tools, MCP, hooks, sessions
 web/       the interface: plain ES modules and one stylesheet
 test/      regression tests on Node's built-in runner
-tools/     build, package, install and doctor scripts
+tools/     environment diagnostics
 ```
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.

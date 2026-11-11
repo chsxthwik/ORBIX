@@ -1,4 +1,4 @@
-// App settings (data/config.json). All app state (config, logs, sessions, WebView2 profile) lives in <app>/data;
+// App settings (data/config.json). All app state (config, logs and sessions) lives in <app>/data;
 // set ORBIX_DATA to use a different folder (e.g. for testing).
 import path from 'node:path';
 import { ROOT, readJson, writeJson, uid } from './util.mjs';

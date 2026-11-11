@@ -1,12 +1,24 @@
 # Changelog
 
 ## Unreleased
+- **Web-only app.** ORBIX now starts as an authenticated local web app in your default browser. The native Windows shell and its build, install, and packaging paths have been removed; existing chats, settings, and provider data remain in `data/`.
 - **Session bar.** Every conversation has a bar on top with its state (Ready, Working with a timer, Needs your OK), its name (click to rename), and how many messages and steps it has.
 - **Find in conversation.** Ctrl+F highlights every match and steps through them with Enter and Shift+Enter.
 - **Your messages.** Ctrl+Shift+O lists the messages you sent and jumps to the one you pick.
 - **Focus mode.** Ctrl+Shift+F hides the sidebar, tabs, side panel and status bar so only the conversation is left.
 - **Wide reading column.** A button in the session bar widens the conversation for long diffs and tables.
-- **Home.** A card to resume the last conversation, a 26-week activity map and ready-made task buttons under the task box.
+- **Calmer Home.** Four task suggestions under the task box as plain buttons. The greeting, the animated headline, the typing placeholder, the resume card and the activity map are gone; Recent and This week already show the same things.
+- **New interface font.** IBM Plex Sans (with italics) replaces Inter; JetBrains Mono stays for code, paths and commands.
+- **Ask about a selection.** Select text in a conversation and a small bar offers Ask about this, which puts it in the message box as a quote, or Copy.
+- **Where you are in a long reply.** Once your message scrolls out of sight, the session bar shows it; click it to jump back.
+- **Keys.** Ctrl+= and Ctrl+- change the conversation text size (Ctrl+0 resets). Ctrl+Tab and Ctrl+Shift+Tab move between open sessions.
+- **See what the agent is doing.** Under the message box, the step in progress (Reading src/auth.js, Running npm test, Thinking, Writing the reply) with its own timer. The window title shows Working or Needs your OK, so the taskbar does too, and the finish notification says how long it worked.
+- **Sidebar.** Running sessions show their current step and time. Pin conversations to a Pinned section at the top. Each conversation has a menu (the ⋯ button or a right-click) to open, pin, rename, start a new session in its project, show the folder or delete. In the filter, Enter opens the first match and the arrow keys move through the list.
+- **Settings.** Overview is now one page that shows how everything is set: providers and their model counts, the default, fast and plan models, permissions, where commands run, web search, MCP servers, and your conversations, projects and pins. Each line opens its page. Appearance adds Density (Comfortable or Compact) and the reading column width. Shortcuts has its own page with a filter.
+- **Safer edits.** An edit whose text matches only when whitespace is ignored is applied only to a file the agent has read in this session and that has not changed since; otherwise it is asked to read the file and quote it exactly.
+- **Steadier sidebar and tabs.** They are rebuilt only when what they show changes, not on every status event, so hover, keyboard focus and an open row menu stay put while agents work. A new conversation not yet in the list says "new" instead of "now".
+- **Timers survive a reload.** Working times in the session bar, status bar and sidebar come from the agent's own turn start, so reloading the window no longer resets them to 0.
+- **Quieter interface.** Flat primary buttons without glow, no light behind the page, live dots that stay still, no running light on the session bar or the task box, no hover lifts or sliding arrows, and section labels in sentence case.
 - **New first screen.** Before a model is connected, Home is one screen: the providers as a short list on the left, each marked API key, Sign in or No key, and an example session on the right. The six-item feature list is gone.
 - **Cleaner mark.** The ring is one continuous line around the planet with an even gap, and the orbit and node are lighter at large sizes.
 - **Sharper ASCII orbit.** The planet has a soft edge, dithered shading and a highlight, the ring is drawn as one line that passes in front of the planet, and the picture resolves out of noise when it appears.

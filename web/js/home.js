@@ -6,12 +6,27 @@ import { api, rpc } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, engineReady, savePrefs, groupSessions, on, setActive } from './store.js';
 import { popMenu, modelPicker, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
-import { asciiOrbit, decodeText, typePlaceholder } from './ascii.js';
-import { resumeCard, heatmapCard, recipes } from './workspace.js';
+import { recipes } from './workspace.js';
+import { asciiStage } from './ascii-stage.js';
+import { sessionLibrary } from './session-library.js';
 
 // The home screen is redrawn when sessions or providers change. The message box stays mounted (so typing, IME
 // composition and the caret are never interrupted); only the parts around it are redrawn.
-const draft = { draft: '', attach: [], project: '', ephemeral: false };
+const DRAFT_KEY = 'orbix-home-draft';
+function recoveredDraft() {
+  try { const d = JSON.parse(sessionStorage.getItem(DRAFT_KEY)); return typeof d?.text === 'string' && d.text.length <= 100000 ? d : null; } catch { return null; }
+}
+const recovered = recoveredDraft();
+const draft = { draft: recovered?.text || '', attach: [], project: recovered?.project || '', ephemeral: false };
+let saveDraftTimer = 0;
+function persistDraft() {
+  clearTimeout(saveDraftTimer);
+  try {
+    if (!draft.ephemeral && draft.draft.trim() && draft.draft.length <= 100000) sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ text: draft.draft, project: draft.project }));
+    else sessionStorage.removeItem(DRAFT_KEY);
+  } catch { /* Storage restrictions must never interrupt typing or sending. */ }
+}
+addEventListener('pagehide', persistDraft);
 let models = null; // models of the configured providers, fetched once per provider change
 let W = null; // the mounted page: its persistent slots
 let C = null; // the mounted task box: { comp, el, row, go, start }
@@ -22,6 +37,7 @@ on('engine', () => (models = null));
 export function setHomeProject(path, { ephemeral } = {}) {
   if (path) draft.project = path;
   if (ephemeral != null) draft.ephemeral = ephemeral;
+  if (draft.ephemeral) { clearTimeout(saveDraftTimer); try { sessionStorage.removeItem(DRAFT_KEY); } catch {} }
 }
 
 /** The saved model choice for new sessions, if its provider is still set up. */
@@ -52,19 +68,24 @@ async function loadHomeModels(workspace) {
 /** The page's skeleton, built once per mount. */
 function shell(root) {
   if (W && root.contains(W.wrap)) return W;
+  W?.stage.destroy();
   const title = h('h1', { class: 'home-title' });
   const sub = h('p', { class: 'home-sub' });
   const alertSlot = h('div', { class: 'home-alerts' });
   const deckSlot = h('div', { class: 'home-deck' });
   const under = h('div', { class: 'home-under' });
-  const orbit = asciiOrbit();
-  const hi = h('p', { class: 'home-hi' });
-  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, orbit.el, logo(36, { alive: true })), hi, title, sub, alertSlot, deckSlot, under);
+  const context = h('span', { class: 'workspace-context' });
+  const actions = h('div', {class:'workspace-actions'});
+  const stage = asciiStage();
+  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' },
+    h('div', { class: 'workspace-eyebrow' }, h('span', null, 'WORKSPACE'), context),
+    h('div', { class: 'workspace-heading' }, h('div', null, title, sub), stage.el),
+    actions, alertSlot, deckSlot, under);
   const boardSlot = h('div', { class: 'home-board-slot' });
   const firstSlot = h('div', { class: 'home-first-slot' });
   const keysSlot = h('div', { class: 'home-keys-slot' });
   const wrap = h('div', { class: 'home' }, hero, boardSlot, firstSlot, keysSlot);
-  W = { wrap, orbit, hi, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
+  W = { wrap, stage, context, actions, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -78,18 +99,33 @@ function shell(root) {
 function deck() {
   if (C) return C;
   const comp = new Composer({
-    placeholder: 'Describe a task, and ORBIX gets to work.',
+    placeholder: 'Describe a task. Type @ to mention a file, / for commands.',
     label: 'Task for the new session',
     cls: 'home-composer',
     state: draft,
     workspace: () => draft.project,
     onSubmit: () => C?.start(),
-    onChange: () => C?.go && (C.go.disabled = starting),
+    onChange: () => {
+      if (C?.go) C.go.disabled = starting;
+      if (C?.clearText) C.clearText.disabled = !draft.draft;
+      clearTimeout(saveDraftTimer); saveDraftTimer = setTimeout(persistDraft, 250);
+      if (C?.draftCount) C.draftCount.textContent = draft.draft.length ? `${draft.draft.length.toLocaleString()} characters` : 'Draft stays in this tab';
+    },
   });
   const row = h('div', { class: 'c-row' });
   comp.el.append(row);
-  typePlaceholder(comp.ta, ['find why the login test fails and fix it', 'explain how this project is put together', 'review my uncommitted changes for bugs', 'add a dark mode switch to the settings page'], 'Try: ');
   C = { comp, row, el: comp.el };
+  const draftCount = h('span', null, recovered?.text ? 'Draft restored in this tab' : 'Draft stays in this tab');
+  C.draftCount = draftCount;
+  let cleared = '';
+  const undoClear = h('button', { type: 'button', class: 'draft-link', hidden: true, onclick: () => {
+    if (comp.value) { toast('Your current draft was kept. Clear it before restoring the previous one.', 'info'); return; }
+    comp.value = cleared; undoClear.hidden = true; comp.focus();
+  } }, 'Undo clear');
+  C.clearText = h('button', { type: 'button', class: 'draft-link', disabled:!comp.value, onclick: () => {
+      if (!comp.value) return; cleared = comp.value; comp.value = ''; persistDraft(); undoClear.hidden = false; comp.focus();
+    } }, 'Clear text');
+  comp.el.append(h('div', { class: 'draft-utilities' }, draftCount, h('span', { class: 'grow' }), undoClear, C.clearText));
   return C;
 }
 
@@ -103,14 +139,20 @@ export function drawHome(root, H) {
   const projects = groupSessions().filter((g) => g.path);
   if (!projects.some((g) => g.path === draft.project)) draft.project = projects[0]?.path || '';
   const g = projects.find((x) => x.path === draft.project);
+  w.context.replaceChildren(icon('folder', 12), g?.name || 'No project selected');
+  w.context.title = g?.path || '';
+  if (!w.actions.childElementCount) w.actions.append(...[
+    ['folder-plus','Open project',()=>H.openFolder()],['search','Search workspace',()=>H.search()],['cog','Configure models',()=>H.settings('engine')],
+  ].map(([glyph,label,run])=>h('button',{class:'workspace-action',type:'button',onclick:run},icon(glyph,14),label)));
   const history = S.sessions.length > 0;
 
-  w.wrap.classList.toggle('first', !agentOk);
-  drawHead(w, agentOk, projects.length > 0);
+  const setupOnly = !agentOk && !history && !projects.length;
+  w.wrap.classList.toggle('first', setupOnly);
+  drawHead(w, agentOk, g?.name);
   w.keysSlot.replaceChildren(footKeys());
   w.alertSlot.replaceChildren(...attention(H));
 
-  if (!agentOk) {
+  if (setupOnly) {
     // First run: one welcome and one next step. Lists wait until there is something to list.
     if (C?.el.isConnected) C.el.remove();
     const deckSig = 'deck:' + JSON.stringify((S.engine?.providers || []).map((p) => [p.id, p.configured]));
@@ -121,7 +163,7 @@ export function drawHome(root, H) {
     }
     w.under.replaceChildren();
     if (boardChanged(w, 'first', projects)) {
-      w.boardSlot.replaceChildren((history && resumeCard(H)) || '', history ? board(H, projects, false) : '', history ? heatmapCard(projects) : '');
+      w.boardSlot.replaceChildren(history ? board(H, projects, false) : '');
     }
     if (!w.firstSlot.firstChild) {
       const fr = firstRun();
@@ -148,7 +190,7 @@ export function drawHome(root, H) {
 
   const m = homeModel();
   const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new session' }, brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
-  modelBtn.addEventListener('click', () => modelPicker({
+  modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
     load: () => loadHomeModels(draft.project),
     current: homeModel(),
     extra: 'Default model',
@@ -161,10 +203,14 @@ export function drawHome(root, H) {
   const unsaved = h('button', { class: 'cbtn on', type: 'button', title: 'This conversation will not be saved. Click to save it as usual.', hidden: !draft.ephemeral, onclick: () => ((draft.ephemeral = false), (unsaved.hidden = true)) }, h('span', null, 'Not saved'), icon('x', 12));
 
   // Plan first: the session starts in plan mode (reads and proposes, changes nothing), then gets the task.
-  const planBtn = h('button', { class: 'cbtn' + (draft.plan ? ' on' : ''), type: 'button', 'aria-pressed': String(!!draft.plan), title: 'Start in plan mode: it reads and proposes a plan, and changes nothing until you turn plan mode off', onclick: () => ((draft.plan = !draft.plan), redraw()) }, icon('map', 14), 'Plan first');
+  box.modeRow ||= h('div',{class:'task-mode-row'});
+  if (!box.modeRow.isConnected) comp.el.insertBefore(box.modeRow,comp.ta);
+  box.modeRow.replaceChildren(h('div',{class:'task-modes',role:'group','aria-label':'Task mode'},
+    ...[[false,'bolt','Build'],[true,'map','Plan']].map(([plan,glyph,label])=>h('button',{class:'task-mode',type:'button','aria-pressed':String(!!draft.plan===plan),onclick:()=>{draft.plan=plan;redraw();}},icon(glyph,13),label))),
+    h('span',{class:'task-mode-hint'},draft.plan?'Read and propose a plan':'Implement changes'));
   const auto = S.engine?.approvals === 'auto';
   const apprBtn = h('button', { class: 'cbtn appr' + (auto ? ' risky' : ''), type: 'button', title: auto ? 'Approvals are off: it edits and runs commands without asking. Click to change.' : 'Edits and commands wait for your OK. Click to change.', onclick: () => H.settings('behavior') }, icon('shield', 14), auto ? 'Approvals off' : 'Asks first');
-  const go = h('button', { class: 'send start', type: 'button', title: 'Start (Enter)', 'aria-label': 'Start session', disabled: starting }, h('span', null, 'Start'));
+  const go = h('button', { class: 'send start', type: 'button', title: agentOk ? 'Start (Enter)' : 'Connect a model to run this task', 'aria-label': agentOk ? 'Start session' : 'Connect a model to start this task', disabled: starting }, h('span', null, agentOk ? 'Start task' : 'Connect model'), icon(agentOk ? 'send' : 'plug', 14));
   box.go = go;
   box.start = async () => {
     if (starting) return; // Enter twice, or Enter and a click: one session
@@ -183,9 +229,11 @@ export function drawHome(root, H) {
       const tab = await openTab({ workspace: draft.project, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: draft.ephemeral || undefined });
       draft.ephemeral = false;
       comp.reset(p?.raw);
+      persistDraft();
       if (draft.plan) await sendPrompt(tab, '/plan');
       if (p) await sendPrompt(tab, p.text || '(see the attached image)', { images: p.images });
     } catch (e) {
+      if (p && !comp.hasContent()) { comp.restore(p); persistDraft(); }
       toast(e.message, 'error', 8000);
     } finally {
       starting = false;
@@ -197,13 +245,16 @@ export function drawHome(root, H) {
   };
   go.addEventListener('click', () => box.start());
 
-  row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, planBtn, apprBtn, unsaved, h('span', { class: 'grow' }), go);
+  row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, apprBtn, unsaved, h('span', { class: 'grow' }), go);
   const rec = recipes(comp);
   if (rec.parentNode !== w.under) w.under.replaceChildren(rec);
 
   if (boardChanged(w, 'ready', projects)) {
+    const focused = w.boardSlot.querySelector('.session-library')?.contains(document.activeElement) ? document.activeElement : null;
+    const selection = focused?.matches('input') ? [focused.selectionStart,focused.selectionEnd] : null;
     const cl = checklist(H, projects);
-    w.boardSlot.replaceChildren(cl || '', (history && resumeCard(H)) || '', history || projects.length ? board(H, projects, true) : '', history ? heatmapCard(projects) : '');
+    w.boardSlot.replaceChildren(cl || '', history || projects.length ? board(H, projects, true) : '');
+    if(focused?.isConnected){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(...selection);}
   }
   const live = liveTabs();
   w.wrap.classList.toggle('is-busy', live.working.length > 0);
@@ -222,6 +273,7 @@ export function drawHome(root, H) {
 function boardChanged(w, mode, projects) {
   const sig = JSON.stringify([
     mode,
+    S.ui.pinned,
     draft.project,
     engineReady(),
     Math.floor(Date.now() / 60000), // relative times ("2m") stay current
@@ -234,25 +286,13 @@ function boardChanged(w, mode, projects) {
   return true;
 }
 
-const hello = () => {
-  const n = new Date().getHours();
-  return n < 5 ? 'Up late?' : n < 12 ? 'Good morning' : n < 17 ? 'Good afternoon' : 'Good evening';
-};
-
-/** The one question on the screen. It decodes into place when it changes, not on every redraw. */
-function drawHead(w, ready, hasProject) {
+/** The one question on the screen. */
+function drawHead(w, ready, projectName) {
   const live = liveTabs();
-  w.orbit.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
-  w.hi.hidden = !ready; // the first screen has one job, so it skips the greeting
-  w.hi.replaceChildren(hello(), h('span', { class: 'home-date' }, new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })));
-  const text = !ready ? 'Connect a model' : hasProject ? 'What should we work on?' : 'Pick a project to start';
-  if (w.titleText !== text) {
-    w.titleText = text;
-    w.title.textContent = text;
-    // After layout, so the letters can be measured.
-    requestAnimationFrame(() => w.titleText === text && decodeText(w.title, text));
-  }
-  w.sub.textContent = !ready ? 'Add an API key, sign in, or use a model that runs on this PC. You can change it at any time.' : hasProject ? '' : 'The agent only ever works inside a folder you choose.';
+  w.stage.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
+  const text = projectName || (!ready ? 'Connect a model' : 'Open a project');
+  if (w.title.textContent !== text) w.title.textContent = text;
+  w.sub.textContent = !ready ? 'Draft a task, then connect a model to run it.' : projectName ? 'Start a task or resume a conversation.' : 'Choose the folder you want to work in.';
   w.sub.hidden = !w.sub.textContent;
 }
 
@@ -273,7 +313,7 @@ function attention(H) {
 
 /** Recent conversations beside the projects and this week's activity. */
 function board(H, projects, canPick) {
-  return h('div', { class: 'home-board' }, h('div', { class: 'home-side' }, recentCard(H), S.sessions.length ? weekCard(projects) : null), projectsCard(H, projects, canPick));
+  return h('div', { class: 'home-board' }, sessionLibrary(H), h('div', {class:'home-side'},projectsCard(H, projects, canPick),S.sessions.length ? weekCard(projects) : null));
 }
 
 /** What is still needed before the first task. Optional extras live in Settings, not here. */
@@ -442,22 +482,6 @@ const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); retur
 function liveTabs() {
   const live = [...S.tabs.values()].filter((t) => !t.dead);
   return { live, working: live.filter((t) => t.streaming), waiting: live.filter((t) => t.dialogs.some(isApproval)) };
-}
-
-/** Recent conversations, one click from where they stopped. */
-function recentCard(H, n = 7) {
-  const rows = S.sessions.slice(0, n).map((s) => {
-    const open = tabForSession(s);
-    const waiting = open && open.dialogs.some(isApproval);
-    const state = waiting ? 'wait' : open?.streaming ? 'run' : open ? 'open' : '';
-    return h('button', { class: 'home-row', type: 'button', title: s.preview || s.title, onclick: () => H.openSession(s) },
-      h('span', { class: 'home-row-m' }, h('span', { class: 'home-row-t ell' }, s.title), h('span', { class: 'home-row-p ell' }, baseName(s.cwdDisplay || s.cwd))),
-      state ? h('span', { class: `home-tag ${state}` }, state === 'wait' ? 'Needs you' : state === 'run' ? 'Working' : 'Open') : h('span', { class: 'home-row-w num' }, timeAgo(s.mtime)),
-      icon('chevron-right', 14, 'home-row-go'));
-  });
-  return h('section', { class: 'home-card', 'aria-label': 'Recent conversations' },
-    h('div', { class: 'home-card-h' }, h('h2', null, 'Recent'), rows.length ? h('button', { class: 'link', type: 'button', onclick: H.manage }, 'Manage') : null),
-    rows.length ? h('div', { class: 'home-rows' }, ...rows) : h('p', { class: 'home-none' }, 'Conversations appear here. Each one is saved and can be resumed.'));
 }
 
 /** Projects by last activity. A click aims the next session there. */

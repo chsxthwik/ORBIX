@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-// ORBIX entry point.
-//   node src/main.mjs            start the desktop app (bin/ORBIX.exe), which runs this file with --serve
-//   node src/main.mjs --serve    run the local server for the desktop host (prints ORBIX-URL / ORBIX-DATA, exits when idle)
-//   node src/main.mjs --no-window   same, but never exits by itself (development / tests)
+// ORBIX entry point. Starts the local web app and opens it in the default browser.
+// --serve and --no-window run the server without opening a browser.
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -11,7 +9,7 @@ import { initLog, log, readJson, writeJson } from './util.mjs';
 import { Store, DATA_DIR } from './store.mjs';
 import { AppServer, VERSION } from './server.mjs';
 import { loadCatalog } from './engine/catalog.mjs';
-import { launchDesktop } from './launcher.mjs';
+import { openExternal } from './launcher.mjs';
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(n);
@@ -23,9 +21,9 @@ const opt = (n) => {
 if (flag('--help') || flag('-h')) {
   console.log(`ORBIX ${VERSION}
 Usage: node src/main.mjs [options]
-  (no options)       start the desktop app
-  --serve            server for the desktop host: prints ORBIX-URL / ORBIX-DATA, exits when idle
-  --no-window        server only, never exits by itself (development / tests)
+  (no options)       start ORBIX and open it in your browser
+  --serve            start the local web server without opening a browser
+  --no-window        server only; keep it running until stopped
   --port <n>         preferred port (default 47821; falls back to a random one)
   --version`);
   process.exit(0);
@@ -35,12 +33,7 @@ if (flag('--version')) {
   process.exit(0);
 }
 
-const serveMode = flag('--serve') || flag('--no-window');
-if (!serveMode) {
-  if (launchDesktop()) process.exit(0);
-  console.error('The desktop app is not built yet. Run:  npm run build\n(or start the server only with: node src/main.mjs --no-window)');
-  process.exit(1);
-}
+const headless = flag('--serve') || flag('--no-window');
 
 initLog(path.join(DATA_DIR, 'logs', 'server.log'));
 process.on('uncaughtException', (e) => log('uncaughtException', e));
@@ -69,17 +62,11 @@ function ping(port) {
   });
 }
 
-/** The desktop host reads exactly these two lines from stdout. */
-const handshake = (url) => {
-  console.log(`ORBIX-URL ${url}`);
-  console.log(`ORBIX-DATA ${DATA_DIR}`);
-};
-
 async function main() {
-  // Single instance: when a server is already running, hand its address to the new window and leave.
+  // Single instance: reuse the existing local server and browser session.
   const lock = readJson(LOCK, null);
   if (lock?.port && lock?.token && (await ping(lock.port))) {
-    handshake(`http://127.0.0.1:${lock.port}/?t=${lock.token}`);
+    if (!headless) openExternal(`http://127.0.0.1:${lock.port}/?t=${lock.token}`);
     return;
   }
 
@@ -97,7 +84,7 @@ async function main() {
   h.startEnv();
   const url = `http://127.0.0.1:${h.port}/?t=${token}`;
   writeJson(LOCK, { port: h.port, token, pid: process.pid, started: Date.now() });
-  handshake(url);
+  if (!headless) openExternal(url);
   setTimeout(() => loadCatalog(), 50);
   h.envReady.then(() => log(`backend: ${store.data.backend.kind}${store.data.backend.distro ? ' (' + store.data.backend.distro + ')' : ''}${h.envInfo.error ? ' | ' + h.envInfo.error : ''}`));
 
@@ -121,32 +108,13 @@ async function main() {
   process.on('SIGTERM', () => stop(0));
   process.on('SIGHUP', () => stop(0));
 
-  // The desktop host keeps our stdin open while it runs (--watch-stdin). When it closes, the host is gone for good
-  // (closed, crashed or killed), so nothing restarts this server's window: we exit as soon as no agent works.
-  let orphanedAt = 0;
-  if (flag('--watch-stdin')) {
-    const gone = () => {
-      if (orphanedAt) return;
-      orphanedAt = Date.now();
-      log('desktop host closed');
-    };
-    process.stdin.on('end', gone);
-    process.stdin.on('close', gone);
-    process.stdin.on('error', gone);
-    process.stdin.resume();
-  }
-  process.stdout.on('error', () => {}); // the host may be gone: never crash on a closed pipe
-
-  // Exit once the window is gone and no agent is working (running work is finished first). Work that waits for an
-  // answer nobody can give (the host is gone) is stopped after 10 minutes; anything else after 6 hours.
-  if (!flag('--no-window')) {
+  // Headless invocations are useful for scripts and local development. The normal browser app
+  // remains available even when its last tab is closed, until the user stops this process.
+  if (flag('--serve')) {
     setInterval(() => {
       if (h.clients.size) return;
       const idle = Date.now() - h.lastClientAt;
-      if (orphanedAt) {
-        const age = Date.now() - orphanedAt;
-        if ((!h.busy && idle > 3000) || (h.waitingForUser && age > 10 * 60000) || age > 6 * 3600000) stop(0);
-      } else if (!h.busy && idle > (h.hadClient ? 20000 : 90000)) stop(0);
+      if (!h.busy && idle > (h.hadClient ? 20000 : 90000)) stop(0);
     }, 5000);
   }
 }

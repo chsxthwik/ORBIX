@@ -153,6 +153,7 @@ export class EngineConfig {
     const s = this.data.search;
     return {
       approvals: this.data.approvals,
+      defaultModel: this.data.defaultModel,
       models: this.roles(),
       search: { provider: s?.provider || '', baseUrl: s?.baseUrl || '', hasKey: !!s?.key, configured: this.searchReady() },
       providers: PRESETS.map((p) => {
