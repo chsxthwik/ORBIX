@@ -48,10 +48,8 @@
       <h1>The coding agent that asks before it changes anything</h1>
       <p class="lead">ORBIX is an AI coding workspace that runs on your own machine, in your browser. The agent reads your project freely. Every file edit and every command waits for your OK, and every edit can be undone.</p>
       <div class="install" aria-label="Install">
-        <pre><code>git clone https://github.com/chsxthwik/ORBIX.git
-cd ORBIX
-npm start</code></pre>
-        <p>Needs <a href="https://nodejs.org/">Node.js 20</a> or newer. Runs on Windows, macOS and Linux. No account, and no npm dependencies to install.</p>
+        <pre><code>npx github:chsxthwik/ORBIX</code></pre>
+        <p>Needs <a href="https://nodejs.org/">Node.js 20</a> or newer on Windows 10 or 11. No account, and no npm dependencies to install.</p>
       </div>
       <p class="actions">
         <a class="btn" href="https://github.com/chsxthwik/ORBIX">Get ORBIX on GitHub</a>
@@ -132,7 +130,7 @@ npm start</code></pre>
         <details><summary>Where does my code go?</summary><p>To the model provider you choose. It receives your messages, the project rules and tool results, including the contents of files the agent reads. A local model (Ollama or LM Studio) keeps all of that on your PC.</p></details>
         <details><summary>Can I undo what the agent changed?</summary><p>Yes. Every file change has its own undo, and <code>/undo</code> reverts a whole reply. Commands cannot be undone.</p></details>
         <details><summary>Will it change files or run commands without asking?</summary><p>No. Reading and searching run without asking. Edits and commands ask first, unless you turn on &ldquo;Allow everything&rdquo; in Settings.</p></details>
-        <details><summary>Which systems does it run on?</summary><p>Windows, macOS and Linux, with Node.js 20 or newer. On Windows it can run commands in Windows or inside WSL.</p></details>
+        <details><summary>Which systems does it run on?</summary><p>Windows 10 and 11, with Node.js 20 or newer. It can run commands in Windows or inside WSL.</p></details>
         <details><summary>Is it free?</summary><p>ORBIX is free to use. The source is available under the Functional Source License and each release turns MIT after two years. Your model provider charges for its own usage.</p></details>
       </div>
     </section>
@@ -141,7 +139,7 @@ npm start</code></pre>
       <h2 id="start-t">Get started</h2>
       <ol class="steps">
         <li><strong>Install Node.js</strong> version 20 or newer.</li>
-        <li><strong>Clone the repository</strong> and run <code>npm start</code>. ORBIX opens in your default browser.</li>
+        <li><strong>Run <code>npx github:chsxthwik/ORBIX</code></strong>. ORBIX opens in your default browser.</li>
         <li><strong>Connect a model</strong> in Settings, under Providers.</li>
         <li><strong>Open a project folder</strong>, describe a task and press Enter.</li>
       </ol>
