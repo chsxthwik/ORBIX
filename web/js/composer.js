@@ -34,7 +34,10 @@ export function fuzzy(q, s) {
       j++;
     }
   }
-  return hits.length === lq.length ? { score: 3000 + gaps * 50 + s.length / 100, hits } : null;
+  // Letters scattered across a long text are not a match anyone meant ("auth" in "Explain how this is put together"):
+  // the letters of an abbreviation must sit close together, within four times its own length ("pkg" in package.json).
+  if (hits.length !== lq.length || hits[hits.length - 1] - hits[0] >= lq.length * 4) return null;
+  return { score: 3000 + gaps * 50 + s.length / 100, hits };
 }
 
 /** Text with the matched characters wrapped in <mark>. */

@@ -29,6 +29,9 @@ export function estimateTokens(messages) {
   return Math.ceil(chars / 3.6) + images * IMAGE_TOKENS;
 }
 
+/** True when a provider error says the request was larger than the model's context window. */
+export const isOverflow = (msg) => /context|too long|too many tokens|maximum.*tokens|token limit|prompt is too long|reduce the length/i.test(msg || '') && /exceed|maximum|limit|too long|too large|reduce/i.test(msg || '');
+
 export const lastMarker = (messages) => {
   for (let i = messages.length - 1; i >= 0; i--) if (messages[i].role === 'compactionSummary') return i;
   return -1;
@@ -42,7 +45,17 @@ const attachmentsText = (atts) => atts.map((a) => `<file path="${a.path}"${a.tru
 export function contextMessages(messages) {
   const start = lastMarker(messages);
   const out = [];
-  if (start >= 0) out.push({ role: 'user', content: [{ type: 'text', text: summaryText(messages[start].summary) }], timestamp: messages[start].timestamp });
+  if (start >= 0) {
+    // A compaction in the middle of a long run can summarize the user's request itself; the model then gets it back
+    // word for word after the summary, so an exact instruction ("do not touch file Y") is never only paraphrased.
+    let text = summaryText(messages[start].summary);
+    if (!messages.slice(start + 1).some((m) => m.role === 'user')) {
+      const ask = messages.slice(0, start).findLast((m) => m.role === 'user');
+      const said = (ask?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
+      if (said) text += `\n\n<latest-user-message>\n${said.length > 8000 ? `${said.slice(0, 8000)}\n[… cut at 8,000 characters]` : said}\n</latest-user-message>`;
+    }
+    out.push({ role: 'user', content: [{ type: 'text', text }], timestamp: messages[start].timestamp });
+  }
   // A reply that was stopped or failed mid-stream can hold tool calls that never ran; providers reject a tool call
   // without a result, so those calls are left out.
   const answered = new Set();

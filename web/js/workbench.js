@@ -134,12 +134,12 @@ export class SessionBar {
       if (el.getBoundingClientRect().top > top + 8) break;
       cur = el;
     }
-    const show = !!cur && cur.getBoundingClientRect().bottom < top;
+    const text = cur ? (cur.querySelector('.b-text')?.textContent || 'Attachment').trim().split('\n')[0] : '';
+    // A message the session's title was made from would only repeat the title beside it.
+    const name = this.title.textContent.replace(/…$/, '').trim();
+    const show = !!cur && cur.getBoundingClientRect().bottom < top && !(name && text.startsWith(name));
     this.ctxEl = show ? cur : null;
-    if (show) {
-      const text = (cur.querySelector('.b-text')?.textContent || 'Attachment').trim().split('\n')[0];
-      if (this.ctxText.textContent !== text) this.ctxText.textContent = text;
-    }
+    if (show && this.ctxText.textContent !== text) this.ctxText.textContent = text;
     if (this.ctx.hidden === show) {
       this.ctx.hidden = !show;
       this.meta.hidden = show;

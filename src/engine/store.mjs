@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { DATA_DIR } from '../store.mjs';
 import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, textOf } from '../util.mjs';
 import { protect, unprotect } from './secrets.mjs';
-import { PRESETS } from './providers.mjs';
+import { PRESETS, clientFor } from './providers.mjs';
 import { setProviderOrg } from './openai.mjs';
 import { refreshSignIn } from './oauth-pkce.mjs';
 import { VERIFY_MODES } from './verify.mjs';
@@ -135,6 +135,16 @@ export class EngineConfig {
     if (!this.data.providers[id]?.refresh) return null;
     await this._refresh(id);
     return this.getKey(id);
+  }
+  /** The provider's model list. A sign-in the provider rejects is renewed once and the list asked for again. */
+  async listModels(id) {
+    const ask = async () => clientFor(this.type(id)).listModels({ apiKey: await this.getKey(id), baseUrl: this.baseUrl(id), providerId: id });
+    try {
+      return await ask();
+    } catch (e) {
+      if (!(e?.status === 401 || e?.status === 403) || !this.isSignIn(id) || !(await this.renewSignIn(id).catch(() => null))) throw e;
+      return ask();
+    }
   }
   async setProvider(id, { key, baseUrl, models, via, refresh, expiresAt, orgId } = {}) {
     const p = this.provider(id);

@@ -20,14 +20,17 @@ export function sessionLibrary(H) {
     h('div',{class:'library-toolbar'},h('div',{class:'library-filters',role:'group','aria-label':'Filter saved conversations'},filters),sort),list,count);
   function draw(){
     clearSearch.hidden=!state.query;
+    // A short list needs no search box or filters; they appear once there is something to search.
+    el.classList.toggle('few',S.sessions.length<=6&&!state.query&&state.filter==='all');
     const pins=Array.isArray(S.ui.pinned)?S.ui.pinned:[],openPaths=S.sessions.filter(s=>!!tabForSession(s)).map(s=>s.path);
     const matches=selectSessions(S.sessions,{...state,pinned:pins,openPaths});
     count.textContent=matches.length===S.sessions.length?'':`${matches.length} of ${S.sessions.length}`;
     list.replaceChildren(...(matches.length?matches.slice(0,100).map(s=>{
       const tab=tabForSession(s),pin=pins.includes(s.path);
       return h('div',{class:'library-row'},h('button',{class:'library-open',type:'button',title:s.preview||s.title,onclick:()=>H.openSession(s)},
-        h('span',{class:'library-main'},h('strong',{class:'ell'},s.title||'Untitled session'),h('span',{class:'ell'},baseName(s.cwdDisplay||s.cwd||'Project'))),
-        tab?h('span',{class:'library-badge'+(tab.streaming?' working':'')},tab.streaming?'Working':'Open'):h('span',{class:'library-when num'},timeAgo(s.mtime))),
+        // The right column is always the time; whether the session is open or working sits beside its project.
+        h('span',{class:'library-main'},h('strong',{class:'ell'},s.title||'Untitled session'),h('span',{class:'ell'},baseName(s.cwdDisplay||s.cwd||'Project'),tab?h('span',{class:'library-badge'+(tab.streaming?' working':'')},tab.streaming?' · Working':' · Open'):null)),
+        h('span',{class:'library-when num'},timeAgo(s.mtime))),
         h('button',{class:'library-pin'+(pin?' on':''),type:'button','aria-label':`${pin?'Unpin':'Pin'} ${s.title||'session'}`,'aria-pressed':String(pin),onclick:()=>{
           const current=Array.isArray(S.ui.pinned)?S.ui.pinned:[];
           savePrefs({pinned:current.includes(s.path)?current.filter(p=>p!==s.path):[s.path,...current].slice(0,20)});draw();

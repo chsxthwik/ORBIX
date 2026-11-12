@@ -25,7 +25,7 @@ const CORE = `You are ORBIX, a coding agent working in the user's project on the
 
 # Context conventions
 - <file path="…"> blocks in a user message are files the user attached (@path or an upload).
-- <conversation-summary> replaces earlier conversation that was compacted to save context.
+- <conversation-summary> replaces earlier conversation that was compacted to save context. A <latest-user-message> inside it is the user's most recent request, word for word.
 - A tool call that was denied, stopped or failed comes back as an error result; do not retry a denied action.
 - Long tool output is cut in the middle at a "[… omitted …]" marker. To see the missing part, narrow the command or search, or read a line range; do not rerun it unchanged.`;
 

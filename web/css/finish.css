@@ -1,0 +1,98 @@
+/* Finish: light, depth and material on top of the flat system. Loaded last. Everything here is built from the
+   theme tokens, so the four themes and the accent colours follow without overrides. Nothing moves on its own:
+   the only motion is a response to the pointer or to focus (transform and opacity, under 200ms). */
+
+/* ---- light ----
+   The workspace sheet is lit from above by the accent, the way a desk lamp falls on paper: strongest on Home,
+   where there is nothing to read yet, and a trace of it behind a conversation. */
+.main { background-image: radial-gradient(70% 300px at 50% -60px, var(--glow), transparent 72%); background-repeat: no-repeat; }
+.main:has(#welcome:not([hidden])) {
+  background-image:
+    radial-gradient(46% 420px at 50% -40px, color-mix(in srgb, var(--accent-solid) 11%, transparent), transparent 70%),
+    radial-gradient(90% 620px at 50% -120px, color-mix(in srgb, var(--accent-solid) 5%, transparent), transparent 75%);
+}
+/* A hairline of light along the top edge of each sheet. */
+.main::before { content: ''; position: absolute; inset: 0 0 auto; z-index: 1; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-solid) 34%, transparent) 50%, transparent); opacity: .7; pointer-events: none; }
+
+/* ---- the question ---- */
+.home-title { font-size: clamp(28px, 1.9cqw + 16px, 48px); letter-spacing: -.035em; background: linear-gradient(180deg, var(--fg) 35%, color-mix(in srgb, var(--fg) 68%, var(--bg))); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.home-title-p { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, var(--fg)), var(--accent)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* ---- the task box: a raised slab with a lit top edge; focus pulls the accent into its border ---- */
+.home .home-composer {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bg-raise), var(--bg-raise)) padding-box,
+    linear-gradient(180deg, var(--line-3), var(--line) 60%) border-box;
+  box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2), 0 30px 70px -40px color-mix(in srgb, var(--accent-solid) 22%, transparent);
+}
+.home .home-composer:focus-within {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bg-raise), var(--bg-raise)) padding-box,
+    linear-gradient(180deg, var(--accent-line), var(--line-2) 75%) border-box;
+  box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2), 0 0 0 4px color-mix(in srgb, var(--accent-solid) 9%, transparent), 0 34px 80px -36px color-mix(in srgb, var(--accent-solid) 38%, transparent);
+}
+.composer:not(.home-composer) { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2); }
+.composer:not(.home-composer):focus-within { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2), 0 0 0 3px color-mix(in srgb, var(--accent-solid) 9%, transparent); }
+
+/* ---- the primary action: lit from above, with its own colour in the shadow ---- */
+.btn.primary, .send:not(.stop):not(:disabled) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-solid) 86%, #fff), var(--accent-solid) 70%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 1px 2px rgba(0,0,0,.35), 0 8px 20px -10px color-mix(in srgb, var(--accent-solid) 70%, transparent);
+  transition: transform var(--t1) var(--ease), box-shadow var(--t2) var(--ease), filter var(--t1) var(--ease);
+}
+.btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-solid) 78%, #fff), color-mix(in srgb, var(--accent-solid) 94%, #fff) 70%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.35), 0 12px 26px -10px color-mix(in srgb, var(--accent-solid) 85%, transparent);
+  transform: translateY(-1px);
+}
+.btn.primary:active:not(:disabled), .send:not(.stop):not(:disabled):active { transform: translateY(0) scale(.98); box-shadow: inset 0 1px 3px rgba(0,0,0,.3); }
+
+/* ---- suggestions, projects, sessions: surfaces that answer the pointer ---- */
+.home .ws-recipe { background: linear-gradient(180deg, var(--bg-raise), transparent); transition: border-color var(--t1) var(--ease), background-color var(--t1) var(--ease), color var(--t1) var(--ease), transform var(--t1) var(--ease), box-shadow var(--t2) var(--ease); }
+.home .ws-recipe:hover { border-color: var(--accent-line); transform: translateY(-1px); box-shadow: 0 8px 20px -14px color-mix(in srgb, var(--accent-solid) 60%, transparent); }
+.home .ws-recipe:hover svg { color: var(--accent); }
+.home .ws-recipe:active { transform: translateY(0) scale(.98); }
+
+.home-proj { background: linear-gradient(180deg, var(--bg-raise-2), var(--bg-raise)); box-shadow: inset 0 1px 0 var(--hi), var(--shadow-1); transition: border-color var(--t1) var(--ease), transform var(--t1) var(--ease), box-shadow var(--t2) var(--ease); }
+button.home-proj:hover { border-color: var(--accent-line); background: linear-gradient(180deg, var(--bg-raise-2), var(--bg-raise)); transform: translateY(-2px); box-shadow: inset 0 1px 0 var(--hi), 0 16px 32px -20px color-mix(in srgb, var(--accent-solid) 45%, transparent), var(--shadow-2); }
+button.home-proj:active { transform: translateY(0) scale(.985); }
+.home-proj-ic { transition: color var(--t1) var(--ease), border-color var(--t1) var(--ease), background-color var(--t1) var(--ease); }
+button.home-proj:hover .home-proj-ic { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
+
+/* A session row grows an accent bar at its left edge under the pointer or the keyboard. */
+.library-row::before { content: ''; position: absolute; left: 0; top: 50%; width: 3px; height: 22px; border-radius: 2px; background: var(--accent-solid); transform: translateY(-50%) scaleY(0); opacity: 0; transition: transform var(--t2) var(--ease), opacity var(--t1) var(--ease); }
+.library-row:hover::before, .library-row:focus-within::before { transform: translateY(-50%) scaleY(1); opacity: 1; }
+.library-row:hover .library-main strong, .library-row:focus-within .library-main strong { color: var(--fg); }
+
+/* ---- where you are: the current place in the sidebar and the tab strip ---- */
+.side-link.cur, .s-row.cur .s-btn { background: linear-gradient(90deg, color-mix(in srgb, var(--accent-solid) 9%, var(--bg-active)), var(--bg-active) 55%); box-shadow: inset 0 1px 0 var(--hi); }
+.tab.cur { background: linear-gradient(180deg, var(--bg-raise-2), var(--bg-active)); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 var(--hi); }
+.side-new { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-1); }
+
+/* ---- the conversation ---- */
+.bubble { background: linear-gradient(180deg, color-mix(in srgb, var(--bubble) 88%, var(--fg)), var(--bubble)); box-shadow: inset 0 1px 0 var(--hi), var(--shadow-1); }
+
+/* ---- dialogs float over a softened workspace ---- */
+.scrim { -webkit-backdrop-filter: blur(7px) saturate(115%); backdrop-filter: blur(7px) saturate(115%); }
+.modal { box-shadow: inset 0 1px 0 var(--hi), 0 0 0 1px color-mix(in srgb, var(--accent-solid) 6%, transparent), var(--shadow-pop); }
+.list-it.sel { background: linear-gradient(90deg, color-mix(in srgb, var(--accent-solid) 10%, var(--bg-active)), var(--bg-active) 60%); }
+.list-it.sel .pal-ico { border-color: var(--accent-line); color: var(--accent); }
+.menu, .popup { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-pop); }
+
+/* ---- status: a live dot carries a soft ring of its own colour ---- */
+.dot.ok { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 16%, transparent); }
+.dot.warn { box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 18%, transparent); }
+
+/* Light themes: the lamp is dimmer on paper, and coloured shadows turn to plain ones. */
+:root[data-theme=light] .main::before, :root[data-theme=frost] .main::before { opacity: .45; }
+
+@media (forced-colors: active) {
+  .home-title, .home-title-p { background: none; -webkit-text-fill-color: currentColor; }
+  .main, .main:has(#welcome:not([hidden])) { background-image: none; }
+  .main::before, .library-row::before { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover, .home .ws-recipe:hover, button.home-proj:hover { transform: none; }
+}

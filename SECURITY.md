@@ -6,7 +6,7 @@ ORBIX runs a local server that can start an AI agent (which can run commands and
 - Every API call needs a random per-launch token delivered as an HttpOnly, SameSite=Strict cookie.
 - `Host` and `Origin` are checked (DNS-rebinding and cross-site protection); state-changing calls also need a custom header.
 - A strict Content-Security-Policy is served with the UI (scripts and styles from the app only, no inline code, no frames or workers); all UI text is inserted as text nodes, never as HTML. Every answer also sends `nosniff`, `X-Frame-Options: DENY`, `no-referrer` and a same-origin resource policy.
-- The UI is served locally and opens in your default browser; ORBIX itself listens only on loopback.
+- The interface is served locally to the ORBIX window, which only shows ORBIX itself; links open in your default browser. ORBIX listens only on loopback, and each request needs the session token.
 - API keys are verified with the provider, then stored encrypted with Windows DPAPI (current user only). They are decrypted in memory once per run, never sent to the UI, never logged, and only sent to the provider you chose.
 - The ORBIX agent asks before every write, edit or command unless you switch it to automatic in Settings.
 - Deleting conversations only accepts files inside the app's own sessions folder and is logged to `data/logs/server.log`. The log is capped at 1 MB (one older copy is kept); API keys, agent shell commands and MCP server arguments are never written to it.

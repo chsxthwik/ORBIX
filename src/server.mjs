@@ -92,6 +92,8 @@ function shapeResponse(type, res) {
   return res;
 }
 
+const BOOT = Date.now().toString(36); // part of every static file's ETag
+
 export class AppServer {
   constructor({ store, token, webRoot = path.join(ROOT, 'web'), assetsRoot = path.join(ROOT, 'assets') }) {
     this.store = store;
@@ -104,8 +106,6 @@ export class AppServer {
     this.clients = new Set();
     this.envInfo = {};
     this.envReady = Promise.resolve();
-    this.hadClient = false;
-    this.lastClientAt = Date.now();
     this.pendingUpdates = new Map();
     this.onQuit = null;
     this.server = http.createServer((req, res) => this.handle(req, res).catch((e) => this.fail(res, e)));
@@ -184,7 +184,7 @@ export class AppServer {
     for (const c of this.clients) c.write(': ping\n\n');
   }
   procList() {
-    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin', waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null }));
+    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, title: p.title || '', streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin', waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null }));
   }
   broadcastProcs() {
     this.broadcast({ g: 'procs', procs: this.procList() });
@@ -375,7 +375,7 @@ export class AppServer {
     if (site && site !== 'same-origin' && site !== 'none') return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
     if (!this.authed(req)) {
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...SECURITY_HEADERS });
-      return res.end('ORBIX: open it with the link it printed when it started (token required).');
+      return res.end('ORBIX: this address only opens inside the ORBIX app.');
     }
     if (url.pathname.startsWith('/api/')) {
       // SameSite does not separate ports: a page on another local port would send our cookie. Browsers add Origin to
@@ -408,8 +408,10 @@ export class AppServer {
     if (!file.startsWith(base + path.sep) && file !== base) return this.json(res, 403, { ok: false, error: 'Forbidden' });
     fs.stat(file, (e1, st) => {
       if (e1 || !st.isFile()) return this.json(res, 404, { ok: false, error: 'Not found' });
-      // Revalidate with an ETag: instant 304s on every launch after the first, but edits show up immediately.
-      const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+      // Revalidate with an ETag: instant 304s while the app runs, and edits show up immediately. The tag also carries
+      // this start of the server, because files inside the installed app's archive do not have their own dates: an
+      // update with a same-sized file would otherwise keep the old copy.
+      const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}-${BOOT}"`;
       const headers = {
         'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
         'cache-control': 'no-cache',
@@ -573,7 +575,7 @@ export class AppServer {
         const lists = await Promise.all(
           ids.map(async (id) => {
             try {
-              const list = await clientFor(this.engineCfg.type(id)).listModels({ apiKey: await this.engineCfg.getKey(id), baseUrl: this.engineCfg.baseUrl(id), providerId: id });
+              const list = await this.engineCfg.listModels(id);
               return list.map((m) => ({ provider: id, providerName: this.engineCfg.provider(id).name, id: m.id, name: m.name || m.id }));
             } catch (e) {
               errors.push(`${this.engineCfg.provider(id).name}: ${e.message}`);
@@ -595,10 +597,10 @@ export class AppServer {
             const pid = i > 0 ? spec.slice(0, i) : '';
             const p = this.engineCfg.provider(pid);
             if (!p) throw bad(`Write the ${role} model as provider/model-id, for example anthropic/claude-haiku-4-5 (pick one from the list).`);
-            if (!this.engineCfg.configured(pid)) throw bad(`${p.name} is not set up. Add it in Settings → AI providers first.`);
+            if (!this.engineCfg.configured(pid)) throw bad(`${p.name} is not set up. Add it in Settings → Providers first.`);
             let list;
             try {
-              list = await clientFor(p.type).listModels({ apiKey: await this.engineCfg.getKey(pid), baseUrl: this.engineCfg.baseUrl(pid), providerId: pid });
+              list = await this.engineCfg.listModels(pid);
             } catch (e) {
               throw bad(`Could not load the models of ${p.name} to check "${spec}": ${e.message}`);
             }
@@ -755,11 +757,7 @@ export class AppServer {
         res.write(`retry: 1500\n\n`);
         res.write(`data: ${JSON.stringify({ g: 'hello', procs: this.procList(), t: Date.now() })}\n\n`);
         this.clients.add(res);
-        this.hadClient = true;
-        req.on('close', () => {
-          this.clients.delete(res);
-          this.lastClientAt = Date.now();
-        });
+        req.on('close', () => this.clients.delete(res));
         return undefined;
       },
 

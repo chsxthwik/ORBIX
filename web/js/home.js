@@ -75,13 +75,12 @@ function shell(root) {
   const deckSlot = h('div', { class: 'home-deck' });
   const under = h('div', { class: 'home-under' });
   const orbit = asciiOrbit({ cols: 64, rows: 15 });
-  const where = h('p', { class: 'home-where' });
-  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' }, h('div', { class: 'home-art', 'aria-hidden': 'true' }, orbit.el), h('header', { class: 'home-head' }, title, sub), alertSlot, deckSlot, where, under);
+  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' }, h('div', { class: 'home-art', 'aria-hidden': 'true' }, orbit.el), h('header', { class: 'home-head' }, title, sub), alertSlot, deckSlot, under);
   const boardSlot = h('div', { class: 'home-board-slot' });
   const firstSlot = h('div', { class: 'home-first-slot' });
   const keysSlot = h('div', { class: 'home-keys-slot' });
   const wrap = h('div', { class: 'home workspace-home' }, hero, boardSlot, firstSlot, keysSlot);
-  W = { wrap, orbit, where, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
+  W = { wrap, orbit, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -265,20 +264,18 @@ function boardChanged(w, mode, projects) {
   return true;
 }
 
-/** With a project: the planet, the task box and where it will run. Without one: what to do first. */
+/** The planet and one question: what to work on in this project. Without a project or a model: what to do first. */
 function drawHead(w, ready, project) {
   const live = liveTabs();
   w.orbit.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
   w.wrap.classList.toggle('has-project', !!project);
-  const text = project ? '' : ready ? 'Open a project folder' : 'Connect a model';
-  if (w.title.textContent !== text) w.title.textContent = text;
+  const text = project ? `What should we work on in ${project.name}?` : ready ? 'Open a project folder' : 'Connect a model';
+  // The project's name carries the accent: it is the one word in the question that changes.
+  if (w.title.textContent !== text) w.title.replaceChildren(...(project ? ['What should we work on in ', h('span', { class: 'home-title-p' }, project.name), '?'] : [text]));
+  w.title.title = project ? project.path : '';
   const sub = project ? '' : ready ? 'The agent works only inside a folder you choose.' : 'Add an API key, sign in, or use a model that runs on this PC. You can change it at any time.';
   if (w.sub.textContent !== sub) w.sub.textContent = sub;
-  w.title.parentNode.hidden = !!project;
-  const where = project ? project.path : '';
-  if (w.where.textContent !== where) w.where.textContent = where;
-  w.where.hidden = !project;
-  w.where.title = where;
+  w.sub.hidden = !sub;
 }
 
 /** Sessions working or waiting on you, above everything else: this is what you came back for. */
@@ -298,7 +295,7 @@ function attention(H) {
 
 /** Recent conversations beside the projects and this week's activity. */
 function board(H, projects, canPick) {
-  return h('div', { class: 'home-board' }, sessionLibrary(H), h('div', {class:'home-side'},projectsCard(H, projects, canPick)));
+  return h('div', { class: 'home-board' }, sessionLibrary(H), projectsCard(H, projects, canPick));
 }
 
 /** What is still needed before the first task. Optional extras live in Settings, not here. */
@@ -322,34 +319,38 @@ const footKeys = () => h('div', { class: 'home-keys' }, [['Ctrl+K', 'search'], [
 // ================= first run =================
 
 /** The providers on the first screen, one row each; a click opens Settings on that provider's form. */
-const PV_SUB = { anthropic: 'Claude models', chatgpt: 'Your Plus or Pro plan', openai: 'GPT and o-series', google: 'Gemini models', xai: 'Grok models', openrouter: 'Hundreds of models, one account', ollama: 'Models on this PC', lmstudio: 'Models on this PC' };
-const PV_HOW = { anthropic: 'API key', chatgpt: 'Sign in', openai: 'API key', google: 'API key', xai: 'Sign in', openrouter: 'Sign in', ollama: 'No key', lmstudio: 'No key' };
+// The first-run deck: one row per maker. OpenAI's row covers the ChatGPT plan and the API key, and opens on the plan sign-in.
+const PV_SUB = { anthropic: 'Claude models', chatgpt: 'Your ChatGPT plan or an API key', google: 'Gemini models', xai: 'Grok models', openrouter: 'Hundreds of models, one account', ollama: 'Free models on this PC', lmstudio: 'Models from the LM Studio app' };
+const PV_HOW = { anthropic: 'API key', chatgpt: 'Sign in', google: 'API key', xai: 'Sign in', openrouter: 'Sign in', ollama: 'No key', lmstudio: 'No key' };
+const PV_NAME = { chatgpt: 'OpenAI' };
 function focusProvider(H, id) {
   H.settings('engine');
   const t0 = Date.now();
+  const sel = `.pv-card[data-ids~="${CSS.escape(id)}"]`;
   const tick = () => {
-    const card = document.querySelector(`.pv-card[data-id="${CSS.escape(id)}"]`);
+    const card = document.querySelector(sel);
     if (card) {
       if (!card.classList.contains('open')) card.querySelector('.pv-head')?.click();
-      const open = document.querySelector(`.pv-card[data-id="${CSS.escape(id)}"]`);
+      const open = document.querySelector(sel);
       open.scrollIntoView({ block: 'center' });
       open.classList.add('flash');
-      open.querySelector('.pv-oauth .btn, .pv-key, .pv-url, .pv-form .btn')?.focus({ preventScroll: true });
+      (open.querySelector(`.pv-way[data-id="${CSS.escape(id)}"]`) || open).querySelector('.pv-oauth .btn, .pv-key, .pv-url, .pv-form .btn')?.focus({ preventScroll: true });
     } else if (Date.now() - t0 < 3000) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }
 function connectDeck(H) {
   const all = S.engine?.providers || [];
-  const rows = all.filter((p) => p.id in PV_SUB).map((p) => h('li', null, h('button', { class: 'cx-row' + (p.configured ? ' on' : ''), type: 'button', title: `Connect ${p.name}`, onclick: () => focusProvider(H, p.id) },
+  const on = (p) => p.configured || (p.id === 'chatgpt' && all.some((q) => q.id === 'openai' && q.configured));
+  const rows = all.filter((p) => p.id in PV_SUB).map((p) => h('li', null, h('button', { class: 'cx-row' + (on(p) ? ' on' : ''), type: 'button', title: `Connect ${PV_NAME[p.id] || p.name}`, onclick: () => focusProvider(H, p.id) },
     h('span', { class: 'cx-ic', 'aria-hidden': 'true' }, brandMark(p.id, 18)),
-    h('span', { class: 'cx-n' }, p.name),
+    h('span', { class: 'cx-n' }, PV_NAME[p.id] || p.name),
     h('span', { class: 'cx-s' }, PV_SUB[p.id]),
-    h('span', { class: 'cx-how' }, p.configured ? 'Connected' : PV_HOW[p.id]))));
+    h('span', { class: 'cx-how' }, on(p) ? 'Connected' : PV_HOW[p.id]))));
   return h('section', { class: 'home-connect', 'aria-label': 'Connect a model' },
     rows.length ? h('ul', { class: 'cx-list' }, ...rows) : h('p', { class: 'home-none' }, 'Choose a provider in Settings to connect your first model.'),
     h('div', { class: 'connect-foot' },
-      h('span', { class: 'connect-acts' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => H.settings('engine') }, all.length ? `All ${all.length} providers` : 'All providers'), h('button', { class: 'btn ghost sm', type: 'button', onclick: H.diagnostics }, 'Check my setup')),
+      h('span', { class: 'connect-acts' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => H.settings('engine') }, 'All providers'), h('button', { class: 'btn ghost sm', type: 'button', onclick: H.diagnostics }, 'Check my setup')),
       h('p', { class: 'setup-note' }, 'Keys are stored encrypted on this PC.')));
 }
 
@@ -370,16 +371,16 @@ function projectsCard(H, projects, canPick) {
     C?.comp.focus({ preventScroll: true });
   };
   return h('section', { class: 'home-card', 'aria-label': 'Projects' },
-    h('div', { class: 'home-card-h' }, h('h2', null, 'Projects'), h('button', { class: 'link', type: 'button', onclick: () => H.openFolder() }, icon('folder-plus', 13), 'Open folder')),
-    list.length ? h('div', { class: 'home-rows' }, ...list.map((g) => {
+    h('div', { class: 'home-card-h' }, h('h2', null, 'Projects'), h('button', { class: 'link', type: 'button', onclick: () => H.openFolder() }, icon('folder-plus', 14), 'Open folder')),
+    list.length ? h('div', { class: 'home-projs' }, ...list.map((g) => {
       const cur = canPick && g.path === draft.project;
       const n = g.sessions.length;
       const meta = `${n} conversation${n === 1 ? '' : 's'}${last(g) ? ` · ${timeAgo(last(g))}` : ''}`;
-      // Before a model is connected there is no task box to aim, so the row is a plain readout rather than a dead button.
+      // Before a model is connected there is no task box to aim, so the card is a plain readout rather than a dead button.
       const start = canPick ? { type: 'button', title: `Start the next session in ${g.path}`, 'aria-pressed': String(cur), onclick: () => pick(g) } : { title: g.path };
-      return h(canPick ? 'button' : 'div', { class: 'home-row proj' + (cur ? ' cur' : '') + (canPick ? '' : ' static'), ...start },
-        icon(cur ? 'folder-open' : 'folder', 15),
-        h('span', { class: 'home-row-m' }, h('span', { class: 'home-row-t ell' }, g.name), h('span', { class: 'home-row-p ell' }, meta)),
-        cur ? icon('check', 14, 'home-row-cur') : null);
+      return h(canPick ? 'button' : 'div', { class: 'home-proj' + (cur ? ' cur' : '') + (canPick ? '' : ' static'), ...start },
+        h('span', { class: 'home-proj-ic', 'aria-hidden': 'true' }, icon(cur ? 'folder-open' : 'folder', 16)),
+        h('span', { class: 'home-proj-m' }, h('span', { class: 'home-proj-t ell' }, g.name), h('span', { class: 'home-proj-p ell' }, meta)),
+        cur ? icon('check', 15, 'home-proj-cur') : null);
     })) : h('p', { class: 'home-none' }, 'The agent only works inside folders you open.'));
 }

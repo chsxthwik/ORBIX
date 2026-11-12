@@ -9,7 +9,7 @@ export function openHelp() {
     body: h('div', { class: 'help' },
       h('p', null, 'You describe a task. The agent reads your files, edits them and runs commands to do it, and shows every step.'),
       h('ol', { class: 'help-steps' },
-        step('Connect a model', 'Add an API key (Anthropic, OpenAI, OpenRouter and more) or a local model (Ollama) in Settings → AI providers.'),
+        step('Connect a model', 'Add an API key (Anthropic, OpenAI, OpenRouter and more) or a local model (Ollama) in Settings → Providers.'),
         step('Choose a project folder', 'The agent works only inside it. It can be on Windows (C:\\…) or in WSL (/home/…).'),
         step('Describe the task', 'For example: find why the login test fails and fix it.'),
         step('Approve changes', 'The agent asks before it edits a file or runs a command. Reading and searching don’t need your OK.'),

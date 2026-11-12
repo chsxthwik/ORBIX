@@ -11,12 +11,13 @@ import { renderModelRoles } from './models.js';
 import { renderMcpSettings } from './mcp.js';
 import { openHelp } from './help.js';
 import { openDiagnostics } from './diagnostics.js';
+import { asciiComx } from './ascii.js';
 
 /** key, label, icon, one line under the page title. */
 const TABS = [
   ['start', 'Overview', 'compass', 'How ORBIX is set up right now.'],
   { group: 'Agent' },
-  ['engine', 'Providers', 'key', 'Connect an API key or a local model. Keys are checked, stored encrypted for your Windows account, and sent only to that provider.'],
+  ['engine', 'Providers', 'key', 'Sign in, paste an API key or connect a local model. Keys are checked, stored encrypted for your Windows account and sent only to their provider.'],
   ['models', 'Models', 'cpu', 'Choose which model does which job.'],
   ['behavior', 'Permissions', 'shield', 'What the agent may do without asking, the commands you trust, and where it runs commands.'],
   ['checks', 'Checks', 'check', 'How the agent checks its own work before it replies.'],
@@ -24,8 +25,8 @@ const TABS = [
   ['tools', 'Tools & MCP', 'plug', 'What the agent can use, and the extra tools you add.'],
   { group: 'App' },
   ['look', 'Appearance', 'palette', 'Theme, text size and layout.'],
-  ['keys', 'Shortcuts', 'keyboard', 'Every keyboard shortcut. Type to filter.'],
-  ['about', 'About', 'info', 'Version and help.'],
+  ['keys', 'Shortcuts', 'keyboard', 'Every keyboard shortcut. Type to filter the list.'],
+  ['about', 'About', 'info', 'Version, developer and help.'],
 ];
 const PAGES = TABS.filter((t) => Array.isArray(t));
 
@@ -224,8 +225,16 @@ function tabLook(el) {
       h('p', { class: 'fs-sample' }, 'The quick brown fox: this is how replies will read.'),
       row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'Show the model’s reasoning in replies, collapsed.')),
     group('Layout', null,
+      window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales the whole window. Auto picks a size from your screen: larger on wide screens.') : null,
       row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on screen.'),
       row('Reading column', seg('Reading column', [['normal', 'Normal'], ['wide', 'Wide']], document.documentElement.classList.contains('wide') ? 'wide' : 'normal', (v) => (v === 'wide') !== document.documentElement.classList.contains('wide') && toggleWide()), 'Wide suits long diffs and tables. The session bar has the same switch.')));
+}
+
+/** Interface size in the Windows app: Auto, or a fixed scale. */
+function scaleSelect(u) {
+  const cur = typeof u.uiScale === 'number' ? String(u.uiScale) : 'auto';
+  const opts = [['auto', 'Auto'], ['0.9', '90%'], ['1', '100%'], ['1.1', '110%'], ['1.25', '125%'], ['1.5', '150%']];
+  return h('select', { class: 'scale-sel', 'aria-label': 'Interface size', onchange: (e) => savePrefs({ uiScale: e.target.value === 'auto' ? 'auto' : Number(e.target.value) }) }, ...opts.map(([v, l]) => h('option', { value: v, selected: v === cur }, l)));
 }
 
 /** A small drawing of the app in a theme: sidebar, a reply, your message and the message box. System shows dark and light side by side. */
@@ -463,11 +472,26 @@ function whereRow() {
 
 // ================= about =================
 
+const COMX_URL = 'https://comx-site.vercel.app';
+const ISSUES_URL = 'https://github.com/chsxthwik/ORBIX/issues';
+const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
+
 function tabAbout(el, show) {
   const b = S.env.backend;
   el.append(
-    h('div', { class: 'about-h' }, logo(38), h('div', null, h('strong', null, 'ORBIX'), h('p', null, `Version ${S.env.app.version}`))),
+    h('div', { class: 'about-h' }, logo(38), h('div', null,
+      h('div', { class: 'about-name' }, h('strong', null, 'ORBIX'), h('span', { class: 'tag on', title: 'Features and screens may still change between versions.' }, 'Beta')),
+      h('p', null, `Version ${S.env.app.version}`))),
+    h('p', { class: 'about-lead' }, 'A coding agent that works inside your projects, on your own computer. It reads freely, asks before it edits a file or runs a command, and lets you undo every edit.'),
+    h('section', { class: 'about-maker', 'aria-label': 'Made by COM-X Corporation' },
+      asciiComx().el,
+      h('div', { class: 'about-maker-t' },
+        h('span', { class: 'about-by' }, 'Developed by'),
+        h('strong', null, 'COM-X Corporation'),
+        h('p', null, 'Company X finds the problems that matter most and builds their solutions. ORBIX is its coding workspace.'),
+        h('button', { class: 'link', type: 'button', title: COMX_URL, onclick: () => openLink(COMX_URL) }, 'Visit COM-X', icon('external', 12)))),
     group(null, null,
+      row('Report a problem', btn('Open GitHub', () => openLink(ISSUES_URL), 'sm'), 'Report a bug or suggest a feature on GitHub.'),
       row('Commands run in', b.kind === 'wsl' ? `WSL (${b.distro})` : 'Windows'),
       row('How ORBIX works', btn('Open', () => openHelp(), 'sm')),
       row('Keyboard shortcuts', btn('Show', () => show('keys'), 'sm')),

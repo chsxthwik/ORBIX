@@ -6,6 +6,7 @@ import * as chatgpt from '../src/engine/chatgpt.mjs';
 import { clientFor } from '../src/engine/providers.mjs';
 import { TurnAssembler } from '../src/engine/assemble.mjs';
 import { AgentProc } from '../src/engine/proc.mjs';
+import { EngineConfig } from '../src/engine/store.mjs';
 
 const jwt = (claims) => ['e30', Buffer.from(JSON.stringify(claims)).toString('base64url'), 'sig'].join('.');
 const TOKEN = jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'acct-9', chatgpt_plan_type: 'pro' } });
@@ -136,6 +137,21 @@ describe('sign-in recovery', () => {
   test('a sign-in that cannot be renewed asks for a new sign-in', async () => {
     const config = { isSignIn: () => true, renewSignIn: async () => null, provider: () => ({ name: 'xAI' }) };
     await assert.rejects(() => run(config, rejecting([])), /xAI no longer accepts this sign-in\. Sign in with xAI again/);
+  });
+  test('the model list renews a rejected sign-in once and asks again', async () => {
+    const FRESH = jwt({ 'https://api.openai.com/auth': { chatgpt_account_id: 'acct-9' }, fresh: true });
+    let key = TOKEN;
+    const seen = [];
+    reply = ({ init }) => {
+      const auth = init.headers.authorization || init.headers.Authorization;
+      seen.push(auth === `Bearer ${FRESH}` ? 'fresh' : 'old');
+      return auth === `Bearer ${FRESH}` ? new Response(JSON.stringify({ models: [{ slug: 'gpt-6-sol', visibility: 'list' }] }), { status: 200 }) : new Response('{}', { status: 401 });
+    };
+    const config = { type: () => 'chatgpt', baseUrl: () => BASE, getKey: async () => key, isSignIn: () => true, renewSignIn: async () => (key = FRESH) };
+    assert.deepEqual(await EngineConfig.prototype.listModels.call(config, 'chatgpt'), [{ id: 'gpt-6-sol', name: 'gpt-6-sol' }]);
+    assert.deepEqual(seen, ['old', 'fresh']);
+    const stale = { ...config, getKey: async () => TOKEN, renewSignIn: async () => null };
+    await assert.rejects(() => EngineConfig.prototype.listModels.call(stale, 'chatgpt'), /sign-in has expired/);
   });
   test('a pasted API key that is rejected is not retried', async () => {
     const keys = [];

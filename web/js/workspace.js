@@ -1,23 +1,23 @@
 // Task suggestions: under the Home task box, and in an empty session for the open project.
 // A click puts the full text in the message box, ready to edit and send.
-import { h } from './dom.js';
+import { h, icon } from './dom.js';
 
 const T = {
-  explain: ['Explain this project', 'Explain how this project is put together: entry points, main modules, how data flows, and where to start reading.'],
-  bug: ['Find a bug', 'Investigate this issue: [describe the issue]. Trace its root cause, propose the smallest fix, and verify the affected behavior.'],
-  review: ['Review my changes', 'Review my uncommitted changes for bugs, edge cases and regressions. Give concrete findings with file references. Do not change files.'],
-  feature: ['Add a feature', 'Implement this feature: [describe the feature]. Follow the project conventions, consider edge cases, and verify the result.'],
-  tests: ['Run the tests', 'Run this project’s tests. If any fail, find out why, propose the smallest fix, and run them again.'],
-  readme: ['Write a README', 'Write a README for this project from its code: what it does, how to install and run it, and how the code is laid out.'],
-  start: ['Start a project', 'Set up a new project in this folder: [describe what you want to build]. Keep the structure simple, add a README, and explain how to run it.'],
-  plan: ['Plan the first steps', 'This folder is empty. Ask me what I want to build, then propose a short plan before writing any files.'],
+  explain: ['Explain this project', 'Explain how this project is put together: entry points, main modules, how data flows, and where to start reading.', 'compass'],
+  bug: ['Find a bug', 'Investigate this issue: [describe the issue]. Trace its root cause, propose the smallest fix, and verify the affected behavior.', 'search'],
+  review: ['Review my changes', 'Review my uncommitted changes for bugs, edge cases and regressions. Give concrete findings with file references. Do not change files.', 'eye'],
+  feature: ['Add a feature', 'Implement this feature: [describe the feature]. Follow the project conventions, consider edge cases, and verify the result.', 'plus'],
+  tests: ['Run the tests', 'Run this project’s tests. If any fail, find out why, propose the smallest fix, and run them again.', 'terminal'],
+  readme: ['Write a README', 'Write a README for this project from its code: what it does, how to install and run it, and how the code is laid out.', 'file'],
+  start: ['Start a project', 'Set up a new project in this folder: [describe what you want to build]. Keep the structure simple, add a README, and explain how to run it.', 'folder-plus'],
+  plan: ['Plan the first steps', 'This folder is empty. Ask me what I want to build, then propose a short plan before writing any files.', 'map'],
 };
 
 const RECIPES = [T.explain, T.bug, T.review, T.feature];
 
 /** Buttons that fill `comp` with a task. A task with a blank to fill in starts with that blank selected. */
 function taskButtons(comp, tasks, cls) {
-  return tasks.map(([label, text]) => h('button', { class: cls, type: 'button', title: text, onclick: () => {
+  return tasks.map(([label, text, mark]) => h('button', { class: cls, type: 'button', title: text, onclick: () => {
     comp.value = comp.value.trim() ? `${comp.value.trimEnd()}\n\n${text}` : text;
     comp.focus();
     const gap = /\[[^\]]+\]/.exec(text);
@@ -25,7 +25,7 @@ function taskButtons(comp, tasks, cls) {
       const start = comp.value.lastIndexOf(text) + gap.index;
       comp.ta.setSelectionRange(start, start + gap[0].length);
     }
-  } }, label));
+  } }, mark ? icon(mark, 14) : null, h('span', null, label)));
 }
 
 let recipesEl = null;

@@ -1,4 +1,4 @@
-// Small OS helper for opening the local web app in the user's default browser.
+// Small OS helper: open a link (a provider's sign-in page, a docs link) in the user's default browser.
 import { spawn } from 'node:child_process';
 import { log } from './util.mjs';
 

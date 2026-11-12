@@ -1,0 +1,36 @@
+/* The Windows app (html.desktop). The window has no title bar: the page's top row is the title bar. The sheets run
+   to the top and right edges, the window buttons sit over the top row on the right (Windows draws them in the
+   theme's colours), and the empty parts of the top row drag the window. A browser never gets this class. */
+
+.desktop {
+  /* The width the window buttons take on the right, from the window controls overlay. */
+  --wco: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+.desktop .app { padding-top: 0; padding-right: 0; }
+/* The sidebar starts at the window top, and its logo row lines up with the top bar beside it. */
+.desktop .app .sidebar { margin-top: 0; }
+.desktop .app:not(.rail) .side-top { padding-top: 0; height: var(--top-h); }
+.desktop .app.rail .side-top { padding-top: 8px; }
+
+/* The sheet at the right edge loses its rounded corner and the edges that touch the window. */
+.desktop .app.no-panel .main, .desktop .app.overlay-panel .main,
+.desktop .app:not(.no-panel):not(.overlay-panel) .panel { border-top-right-radius: 0; border-right: 0; }
+.desktop .main, .desktop .app:not(.no-panel):not(.overlay-panel) .panel { border-top: 0; border-top-left-radius: 0; }
+
+/* Room for the window buttons in whichever top row reaches the right edge. */
+.desktop .app.no-panel .topbar, .desktop .app.overlay-panel .topbar { padding-right: calc(var(--wco) + 6px); }
+.desktop .app:not(.no-panel):not(.overlay-panel) .ptabs { padding-right: calc(var(--wco) + 6px); }
+
+/* Drag the window by the empty parts of the top rows. */
+.desktop :is(.topbar, .side-top, .ptabs) { -webkit-app-region: drag; app-region: drag; }
+.desktop :is(.topbar, .side-top, .ptabs) :is(button, a, input, select, textarea, [role=tab], [tabindex], .tab, .tabs) { -webkit-app-region: no-drag; app-region: no-drag; }
+.desktop :is(.modal, .menu, .popup, .scrim) { -webkit-app-region: no-drag; app-region: no-drag; }
+
+/* Settings → Appearance → Interface size. */
+.desktop .scale-sel { width: auto; min-width: 130px; }
+
+/* With the side panel at the right edge, its tab row shares the top with the window buttons: below 760px the tabs
+   show only their icons, except the current one, so they fit without scrolling. */
+@container (max-width: 760px) {
+  .desktop .app:not(.no-panel):not(.overlay-panel) .ptab:not(.cur) .lbl { display: none; }
+}

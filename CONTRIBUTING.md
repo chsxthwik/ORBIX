@@ -1,14 +1,14 @@
 # Contributing
 
-Thanks for helping. The project is small on purpose: no npm dependencies, no bundler, no framework.
+Thanks for helping. The project is small on purpose: no runtime npm dependencies, no bundler, no framework. Electron and electron-builder are the only development dependencies; they make the Windows app.
 
 ## Layout
 
-- `src/main.mjs`: local web app startup and browser launch.
-- `src/*.mjs`: the local Node server: `main.mjs` (start, single instance), `server.mjs` (`AppServer`: HTTP API, static UI, SSE events), `backend.mjs` (WSL or Windows, path translation), `fsapi.mjs` / `gitapi.mjs` (file browser, Changes panel) and `diagnostics.mjs`.
+- `electron/`: the Windows app. `main.mjs` starts the server and opens the window; `preload.cjs` is the only bridge to the page (theme colours of the title bar).
+- `src/*.mjs`: the local Node server: `app.mjs` (start, single instance), `server.mjs` (`AppServer`: HTTP API, static UI, SSE events), `backend.mjs` (WSL or Windows, path translation), `fsapi.mjs` / `gitapi.mjs` (file browser, Changes panel) and `diagnostics.mjs`.
 - `src/engine/*.mjs`: the ORBIX agent. `proc.mjs` (`AgentProc`) is the agent loop; `slash.mjs` slash commands; `tools.mjs`, `webfetch.mjs`, `subagent.mjs`, `mcp.mjs` its tools; `providers.mjs`, `anthropic.mjs`, `openai.mjs`, `catalog.mjs` the model APIs; `store.mjs` saved chats and keys. The UI drives it through JSON requests and its event stream (engine id `builtin` on the wire).
 - `web/`: the UI (plain ES modules + CSS). `web/js/store.js` turns the event stream into state; `session.js` and `tools.js` render it.
-- `tools/`: environment diagnostics.
+- `tools/`: `shots.mjs`, which takes the README and website screenshots from a real ORBIX on sample data.
 
 ## Ground rules
 
@@ -20,7 +20,7 @@ Thanks for helping. The project is small on purpose: no npm dependencies, no bun
 
 ## Try your change
 
-`npm start` starts the local server and opens the browser. `npm run serve` runs headlessly and exits when idle. `node src/main.mjs --no-open` keeps the server running without opening a browser. `npm run doctor` prints the Diagnostics checks.
+`npm install` once, then `npm start` runs the app from source, with its data in `./data`. `npm run dist` builds the installer into `dist/`.
 
 ## Tests
 

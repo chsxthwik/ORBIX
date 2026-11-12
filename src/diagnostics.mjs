@@ -41,7 +41,7 @@ export async function collect(app) {
   }
 
   const ids = app.engineCfg?.configuredIds() || [];
-  add('engine', 'An AI provider is set up', ids.length > 0, ids.length ? ids.map((i) => app.engineCfg.provider(i).name).join(', ') : 'none yet', 'Open Settings → AI providers and add a key, sign in with OpenRouter, or connect a local Ollama / LM Studio.');
+  add('engine', 'An AI provider is set up', ids.length > 0, ids.length ? ids.map((i) => app.engineCfg.provider(i).name).join(', ') : 'none yet', 'Open Settings → Providers and add a key, sign in with OpenRouter, or connect a local Ollama / LM Studio.');
 
   return {
     ok: checks.every((c) => c.ok),

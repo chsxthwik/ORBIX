@@ -9,7 +9,7 @@ import * as providers from './providers.mjs';
 import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor, invalidArgsText } from './tools.mjs';
 import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession, isTrustedCommand, trustableCommand } from './store.mjs';
 import { loadInstructions, readMentions, promptAttachments, promptImages, loadUserInstructions } from './context.mjs';
-import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, lastMarker, rebuildSession, summarize, tokenScale } from './compact.mjs';
+import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, rebuildSession, summarize, tokenScale } from './compact.mjs';
 import { runTasks, SUBAGENT_TOOLS } from './subagent.mjs';
 import { TurnAssembler, collectTurn } from './assemble.mjs';
 import { HookRunner } from './hooks.mjs';
@@ -24,6 +24,8 @@ import { writeExport } from './export.mjs';
 import { detectCheck, sameCommand, outputTail, verifyFailedText, REVIEW_SYSTEM, reviewPrompt, parseReview, reviewIssuesText } from './verify.mjs';
 
 const MAX_TURNS = 100;
+// File tools whose path is checked against the project folder before they run.
+const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
 
 /** The request for one round of goal mode. */
 function goalPrompt(g) {
@@ -58,7 +60,6 @@ export function userMentionsHost(messages, host) {
   return messages.some((m) => m.role === 'user' && (m.attribution === 'user' || m.attribution === 'steer') && (m.content || []).some((c) => c.type === 'text' && re.test(c.text)));
 }
 
-const isOverflow = (msg) => /context|too long|too many tokens|maximum.*tokens|token limit|prompt is too long|reduce the length/i.test(msg || '') && /exceed|maximum|limit|too long|too large|reduce/i.test(msg || '');
 const hasAnswer = (m) => m.content.some((c) => (c.type === 'text' && c.text.trim()) || c.type === 'toolCall');
 const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 /** Wait `ms`, or less when `signal` aborts (at once when it already has). Never rejects. */
@@ -431,7 +432,7 @@ export class AgentProc extends EventEmitter {
 
   async _setModel(provider, modelId) {
     if (provider) {
-      if (!this.config.configured(provider)) throw new Error(`${this.config.provider(provider)?.name || provider} is not set up. Add it in Settings → AI providers.`);
+      if (!this.config.configured(provider)) throw new Error(`${this.config.provider(provider)?.name || provider} is not set up. Add it in Settings → Providers.`);
       this.provider = provider;
     }
     this.model = modelId;
@@ -443,11 +444,11 @@ export class AgentProc extends EventEmitter {
   async _models() {
     if (this.models) return this.models;
     const ids = this.config.configuredIds();
-    if (!ids.length) throw new Error('No AI provider is set up yet. Open Settings → AI providers and add an API key.');
+    if (!ids.length) throw new Error('No AI provider is set up yet. Open Settings → Providers and add an API key.');
     await catalogReady();
     const results = await Promise.allSettled(
       ids.map(async (id) => {
-        const list = await providers.clientFor(this.config.type(id)).listModels({ apiKey: await this.config.getKey(id), baseUrl: this.config.baseUrl(id) });
+        const list = this.config.listModels ? await this.config.listModels(id) : await providers.clientFor(this.config.type(id)).listModels({ apiKey: await this.config.getKey(id), baseUrl: this.config.baseUrl(id) });
         return list.map((m) => {
           const info = modelInfo(id, m.id);
           const levels = providers.thinkingLevels(id, m.id).filter((x) => x && x !== 'off');
@@ -484,13 +485,13 @@ export class AgentProc extends EventEmitter {
     const providerInfo = this.config.provider(this.provider);
     if (!providerInfo) throw new Error(`Unknown provider "${this.provider}". Pick a model again.`);
     const key = await this.config.getKey(this.provider);
-    if (!key && !providerInfo.keyOptional) throw new Error(`No API key is saved for ${providerInfo.name}. Open Settings → AI providers.`);
+    if (!key && !providerInfo.keyOptional) throw new Error(`No API key is saved for ${providerInfo.name}. Open Settings → Providers.`);
     const client = providers.clientFor(providerInfo.type);
     const base = { apiKey: key, baseUrl: this.config.baseUrl(this.provider), model: this.model, providerId: this.provider, maxTokens: this._maxTokens() };
     const thinking = this.thinkingLevel !== 'off' ? this.thinkingLevel : undefined;
     const args = (a) => ({ ...base, thinking, ...a });
     const main = { client, args, stream: this._signedIn(client, args, this.provider), provider: this.provider, model: this.model, info: this.meta?.info || null, contextWindow: this.meta?.contextWindow, thinking };
-    // Plan mode thinks with the "plan" model when one is chosen (Settings → AI providers → Models, or /model plan).
+    // Plan mode thinks with the "plan" model when one is chosen (Settings → Providers → Models, or /model plan).
     if (this.planMode) return (await this._roleConnSafe('plan')) || main;
     return main;
   }
@@ -512,7 +513,7 @@ export class AgentProc extends EventEmitter {
         if (started || !(e?.status === 401 || e?.status === 403) || !config.isSignIn?.(provider)) throw e;
         const fresh = await config.renewSignIn(provider).catch(() => null);
         const name = config.provider(provider)?.name || provider;
-        if (!fresh) throw Object.assign(new Error(`${name} no longer accepts this sign-in. Sign in with ${name} again in Settings → AI providers.`), { status: e.status });
+        if (!fresh) throw Object.assign(new Error(`${name} no longer accepts this sign-in. Sign in with ${name} again in Settings → Providers.`), { status: e.status });
         yield* client.stream(args({ ...a, apiKey: fresh }));
       }
     };
@@ -531,10 +532,10 @@ export class AgentProc extends EventEmitter {
     const s = this._parseSpec(spec);
     const provider = s.provider || this.provider;
     const info = this.config.provider(provider);
-    if (!info) throw new Error(`The ${label} model "${spec}" has no provider. Choose it again in Settings → AI providers → Models.`);
-    if (!this.config.configured(provider)) throw new Error(`The ${label} model "${spec}" needs ${info.name}, which is not set up. Add it in Settings → AI providers, or choose another ${label} model.`);
+    if (!info) throw new Error(`The ${label} model "${spec}" has no provider. Choose it again in Settings → Providers → Models.`);
+    if (!this.config.configured(provider)) throw new Error(`The ${label} model "${spec}" needs ${info.name}, which is not set up. Add it in Settings → Providers, or choose another ${label} model.`);
     const key = await this.config.getKey(provider);
-    if (!key && !info.keyOptional) throw new Error(`No API key is saved for ${info.name} (the ${label} model). Open Settings → AI providers.`);
+    if (!key && !info.keyOptional) throw new Error(`No API key is saved for ${info.name} (the ${label} model). Open Settings → Providers.`);
     await catalogReady();
     const mi = modelInfo(provider, s.model) || null;
     const levels = providers.thinkingLevels(provider, s.model).filter((x) => x && x !== 'off');
@@ -765,12 +766,14 @@ export class AgentProc extends EventEmitter {
   async _loop(conn) {
     const run = this.run;
     const system = await this._system();
-    const once = { compacted: false, overflow: false, empty: false, midStream: false, continued: false, stop: false };
+    const once = { compactions: 0, overflow: false, empty: false, midStream: false, continued: false, stop: false };
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       await this._drainSteer();
       if (this.abortCtl.signal.aborted) break;
-      if (this.autoCompact && !once.compacted && this._overThreshold(conn.contextWindow, conn.args?.({}).maxTokens ?? 8192)) {
-        once.compacted = true;
+      // A long run can pass the threshold again after a compaction; three per run is the limit, so a compaction that
+      // cannot bring the context down does not repeat every turn.
+      if (this.autoCompact && once.compactions < 3 && this._overThreshold(conn.contextWindow, conn.args?.({}).maxTokens ?? 8192)) {
+        once.compactions++;
         await this._compact({ conn, reason: 'threshold' });
         if (this.abortCtl.signal.aborted) break;
       }
@@ -840,7 +843,8 @@ export class AgentProc extends EventEmitter {
         }
         break;
       }
-      if (asst.stopReason === 'length') for (const c of calls) c.truncated = true;
+      // Only the last call can be cut off by the token limit; the complete calls before it run as usual.
+      if (asst.stopReason === 'length' && calls.at(-1).invalidArguments) calls.at(-1).truncated = true;
       run.toolCalls += calls.length;
       const results = await this._runTools(calls, conn);
       end(results);
@@ -1148,13 +1152,26 @@ export class AgentProc extends EventEmitter {
     if (this.streaming) throw new Error(`Wait for the agent to finish (or stop it), then ${what}.`);
   }
 
+  /**
+   * Hold the session busy while `fn` runs (a rewind that restores files): a message sent meanwhile is queued as it is
+   * during a run, instead of starting a second loop beside the one that follows.
+   */
+  async _held(fn) {
+    this.streaming = true;
+    try {
+      return await fn();
+    } finally {
+      this.streaming = false;
+    }
+  }
+
   /** Answer the last user message again: its reply (and tool calls) are dropped and the model runs anew. */
   async _regenerate({ undo = false } = {}) {
     this._idle('regenerate');
     let i = this.messages.length - 1;
     while (i >= 0 && this.messages[i].role !== 'user') i--;
     if (i < 0) throw new Error('There’s no reply to regenerate yet.');
-    const r = await this._rewind(i + 1, { undo });
+    const r = await this._held(() => this._rewind(i + 1, { undo }));
     this._exclusive(async () => {
       const conn = await this._connect();
       await this.mcp.ensureStarted().catch(() => {});
@@ -1180,7 +1197,7 @@ export class AgentProc extends EventEmitter {
     const { images, notes } = promptImages(cmd.images);
     const att = promptAttachments(cmd.attachments);
     if (!text.trim() && !images.length && !att.attachments.length && !att.images.length) throw new Error('Nothing to send');
-    const r = await this._rewind(i, { undo: !!cmd.undo });
+    const r = await this._held(() => this._rewind(i, { undo: !!cmd.undo }));
     for (const n of [...notes, ...att.notes]) this._emit({ type: 'notice', level: 'warn', message: n });
     this._run(text, [...images, ...att.images], 'user', att.attachments).catch((e) => this.emit('stderr', String(e?.stack || e)));
     return r;
@@ -1255,16 +1272,47 @@ export class AgentProc extends EventEmitter {
 
   /** Whether this call waits for the user, given the approval mode, what was allowed this session and trusted commands. */
   _mustAsk(call, args) {
-    if (!this._needsApproval(call.name)) return false;
     const mode = this.config.data.approvals;
+    // A file outside the project folder is asked about every time, read-only or not (except under Allow everything):
+    // text in the project could otherwise point the agent at ~/.ssh or a .env elsewhere and send it on with web_fetch.
+    if (mode !== 'auto' && this._outside(call, args)) return !this.allowAlways.has(`${call.name}:outside`);
+    if (!this._needsApproval(call.name)) return false;
     if (mode === 'auto' || this.allowAlways.has(call.name)) return false;
     if (mode === 'edits' && (call.name === 'edit' || call.name === 'write')) return false;
     if (call.name === 'bash' && args?.shell !== 'powershell' && isTrustedCommand(args?.command, this.config.data.trusted)) return false;
     return true;
   }
 
+  /**
+   * The one path every tool call takes: PreToolUse hooks, then `gate` (approval; a result from it means not run), a
+   * stop check before and after it, the call, then PostToolUse feedback for the model. Main agent and helpers alike.
+   */
+  async _hooked(name, input, signal, { gate, exec }) {
+    const stopped = { text: 'Not run: the agent was stopped before this step.', isError: true };
+    const pre = await this.hooks.run('PreToolUse', { tool: name, input }, signal);
+    if (pre.blocked) return { text: `Blocked by a hook: ${pre.reason}`, isError: true };
+    if (signal?.aborted) return stopped;
+    const refused = gate ? await gate() : undefined;
+    if (refused) return refused;
+    if (signal?.aborted) return stopped;
+    let r = await exec();
+    if (!signal?.aborted) {
+      // PostToolUse hooks can add feedback for the model (a failed check, a lint warning).
+      const post = await this.hooks.run('PostToolUse', { tool: name, input, extra: { result: { text: clip(String(r.text ?? ''), 8000), isError: !!r.isError } } }, signal);
+      if (post.blocked) r = { ...r, text: `${r.text}
+[Hook feedback] ${post.reason}` };
+    }
+    return r;
+  }
+
+  /** True when a file tool points outside the project folder. */
+  _outside(call, args) {
+    return PATH_TOOLS.has(call.name) && args?.path != null && String(args.path).trim() !== '' && !this.tools.inProject(args.path);
+  }
+
   _askTitle(call) {
     const a = call.arguments || {};
+    if (this._outside(call, a)) return `${{ read: 'Read a file outside the project?', grep: 'Search outside the project?', glob: 'List files outside the project?', write: 'Write a file outside the project?', edit: 'Edit a file outside the project?' }[call.name]}  ${clip(String(a.path), 200)}`;
     if (this.mcp.has(call.name)) return `Allow MCP tool ${this.mcp.describe(call.name)}?  ${clip(JSON.stringify(a), 200)}`;
     const detail = call.name === 'bash' ? `${a.shell === 'powershell' ? '[PowerShell] ' : ''}${a.command ?? ''}` : a.path;
     const verb = { bash: 'Run this command?', write: 'Write this file?', edit: 'Edit this file?' }[call.name] || `Allow ${call.name}?`;
@@ -1331,7 +1379,7 @@ export class AgentProc extends EventEmitter {
     const canTrust = call.name === 'bash' && args.shell !== 'powershell' && trustableCommand(args.command);
     const ans = await this._askUser(title, canTrust ? ['Allow once', 'Allow for this session', 'Always allow this command', 'Deny'] : ['Allow once', 'Allow for this session', 'Deny']);
     if (!ans || ans === 'Deny') return { text: 'The user denied this action. Do not retry it; ask what they want instead.', isError: true };
-    if (ans === 'Allow for this session') this.allowAlways.add(call.name);
+    if (ans === 'Allow for this session') this.allowAlways.add(this._outside(call, args) ? `${call.name}:outside` : call.name);
     else if (ans === 'Always allow this command' && canTrust) this.config.addTrusted(args.command);
     return undefined;
   }
@@ -1349,29 +1397,24 @@ export class AgentProc extends EventEmitter {
     } else if (this.planMode && !this._isReadOnly(call.name)) result = { text: 'Plan mode is on, so this tool is not available. Only read and plan; the user can turn plan mode off with /plan.', isError: true };
     else if ((!this.defs.some((d) => d.name === call.name) && !this.mcp.has(call.name)) || (call.name === 'web_search' && !this._searchOn())) result = { text: `Unknown tool "${call.name}". Available tools: ${this._toolDefs().map((d) => d.name).join(', ')}.`, isError: true };
     if (!result) {
-      // PreToolUse hooks can stop a call before you are even asked about it.
-      const hk = await this.hooks.run('PreToolUse', { tool: call.name, input: args }, this.abortCtl.signal);
-      if (hk.blocked) result = { text: `Blocked by a hook: ${hk.reason}`, isError: true };
-    }
-    // Stop pressed while a hook ran or an approval was open: nothing may run after that.
-    const stopped = () => this.abortCtl?.signal.aborted && { text: 'Not run: the agent was stopped before this step.', isError: true };
-    if (!result) result = stopped() || undefined;
-    if (!result && this._mustAsk(call, args)) {
-      result = await this._approve(call, args);
-      t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you
-    }
-    if (!result) result = stopped() || undefined;
-    if (!result) {
+      const signal = this.abortCtl.signal;
       const onUpdate = (text) => this._emit({ type: 'tool_execution_update', toolCallId: call.id, toolName: call.name, args, partialResult: { content: [{ type: 'text', text }], details: {} } });
-      if (call.name === 'task') result = await this._runTask(call, conn);
-      else if (this.mcp.has(call.name)) result = await this.mcp.call(call.name, args, this.abortCtl?.signal);
-      else result = await this.tools.run(call.name, args, { onUpdate, allowHost: (h) => this._allowHost(h), vision: this._vision(), search: () => this.config.searchConfig?.() });
-      if (result.images?.length && !this._vision()) result = { ...result, images: undefined };
-      // PostToolUse hooks can add feedback for the model (a failed check, a lint warning).
-      if (!this.abortCtl.signal.aborted) {
-        const hk = await this.hooks.run('PostToolUse', { tool: call.name, input: args, extra: { result: { text: clip(String(result.text ?? ''), 8000), isError: !!result.isError } } }, this.abortCtl.signal);
-        if (hk.blocked) result = { ...result, text: `${result.text}\n[Hook feedback] ${hk.reason}` };
-      }
+      result = await this._hooked(call.name, args, signal, {
+        // Asked after the PreToolUse hooks, so a hook can stop a call before you see it.
+        gate: async () => {
+          if (!this._mustAsk(call, args)) return undefined;
+          const denied = await this._approve(call, args);
+          t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you
+          return denied;
+        },
+        exec: async () => {
+          let r;
+          if (call.name === 'task') r = await this._runTask(call, conn);
+          else if (this.mcp.has(call.name)) r = await this.mcp.call(call.name, args, signal);
+          else r = await this.tools.run(call.name, args, { onUpdate, allowHost: (h) => this._allowHost(h), vision: this._vision(), search: () => this.config.searchConfig?.() });
+          return r.images?.length && !this._vision() ? { ...r, images: undefined } : r;
+        },
+      });
     }
     return this._record(call, result, true, t0);
   }
@@ -1468,17 +1511,11 @@ export class AgentProc extends EventEmitter {
       invalidArgs: invalidArgsText,
       // Helper agents go through the same PreToolUse / PostToolUse hooks as the main agent, so a hook that blocks
       // reading a file or fetching a host cannot be side-stepped with the task tool.
-      runTool: async (c, signal) => {
+      runTool: (c, signal) => {
         const input = c.arguments || {};
-        const pre = await this.hooks.run('PreToolUse', { tool: c.name, input }, signal);
-        if (pre.blocked) return { text: `Blocked by a hook: ${pre.reason}`, isError: true };
-        if (signal?.aborted) return { text: 'Stopped.', isError: true };
-        let r = await this.tools.run(c.name, input, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.() });
-        if (!signal?.aborted) {
-          const post = await this.hooks.run('PostToolUse', { tool: c.name, input, extra: { result: { text: clip(String(r.text ?? ''), 8000), isError: !!r.isError } } }, signal);
-          if (post.blocked) r = { ...r, text: `${r.text}\n[Hook feedback] ${post.reason}` };
-        }
-        return r;
+        // A helper agent cannot ask you, so it does not reach outside the project unless approvals are Allow everything.
+        if (this.config.data.approvals !== 'auto' && this._outside(c, input)) return { text: `Not run: ${input.path} is outside the project folder. Helper agents only read inside it; say in your answer that the main agent should read it.`, isError: true };
+        return this._hooked(c.name, input, signal, { exec: () => this.tools.run(c.name, input, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.() }) });
       },
       onUpdate: (view) => {
         const first = !this.subagents.has(view.id);
