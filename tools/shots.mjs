@@ -2,7 +2,6 @@
 // Screenshots for the README and the website, taken from a real ORBIX on sample data. No dependencies.
 //
 //   node tools/shots.mjs            regenerate docs/img/shots/*.png and site/assets/img/shots/*.webp
-//   node tools/shots.mjs --serve    set up the same sample data and keep ORBIX running (prints its address)
 //   node tools/shots.mjs --keep     keep the temporary folder afterwards (it holds the server log)
 //
 // It starts ORBIX with ORBIX_DATA in a temporary folder, a small sample project ("shop-api", a git repository) and a
@@ -15,12 +14,11 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
-const SERVE = args.includes('--serve');
-const KEEP = args.includes('--keep') || SERVE;
+const KEEP = args.includes('--keep');
 const PNG_DIR = path.join(ROOT, 'docs', 'img', 'shots');
 const WEBP_DIR = path.join(ROOT, 'site', 'assets', 'img', 'shots');
 const VIEW = { width: 1200, height: 759 }; // every shot is this window; the scale sets the pixel size
@@ -198,7 +196,9 @@ async function startOrbix(data, modelPort) {
     review: false,
   }, null, 2));
   const log = fs.openSync(path.join(data, 'orbix.out.log'), 'a');
-  const proc = spawn(process.execPath, [path.join(ROOT, 'src', 'main.mjs'), '--no-open', '--port', '47990'], { cwd: ROOT, env: { ...process.env, ORBIX_DATA: data }, stdio: ['ignore', log, log], windowsHide: true });
+  // ORBIX's own start-up (src/app.mjs) in a separate Node process, so the sample data folder is the only one it sees.
+  const start = `const { startOrbix } = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'app.mjs')).href)}); await startOrbix({ port: 47990 });`;
+  const proc = spawn(process.execPath, ['--input-type=module', '-e', start], { cwd: ROOT, env: { ...process.env, ORBIX_DATA: data }, stdio: ['ignore', log, log], windowsHide: true });
   const lock = path.join(data, 'instance.json');
   for (let i = 0; i < 150; i++) {
     await sleep(100);
@@ -468,15 +468,6 @@ async function main() {
     await sleep(800);
     if (!KEEP) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
-  if (SERVE) {
-    say(`Sample project: ${project}`);
-    say(`ORBIX: ${orbix.url}`);
-    say('Prompts the scripted model answers:');
-    for (const p of Object.values(PROMPTS)) say(`  ${p}`);
-    say('Press Ctrl+C to stop.');
-    process.on('SIGINT', () => stop().then(() => process.exit(0)));
-    return;
-  }
   try {
     browser = await startBrowser(path.join(tmp, 'browser'));
     const { cdp } = browser;

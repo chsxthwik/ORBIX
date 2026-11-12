@@ -1,6 +1,7 @@
 // Subagents: the `task` tool runs one or more nested agent loops with read-only tools, side by side, and returns
 // each one's final answer.
 import { collectTurn } from './assemble.mjs';
+import { isOverflow } from './compact.mjs';
 
 export { collectTurn };
 
@@ -89,12 +90,15 @@ async function runOne(a, ctx) {
   tick();
   const messages = [{ role: 'user', content: [{ type: 'text', text: a.assignment }], timestamp: Date.now() }];
   let answer = '';
+  let finishing = false; // out of context: old tool output cleared, the next turn is the answer
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      const last = turn === MAX_TURNS - 1;
-      if (last) messages.push({ role: 'user', content: [{ type: 'text', text: 'You have used all your steps. Do not call any more tools. Write your final answer now from what you found.' }], timestamp: Date.now() });
+      const last = finishing || turn === MAX_TURNS - 1;
+      if (last && !messages.at(-1)?.final) messages.push({ final: true, role: 'user', content: [{ type: 'text', text: finishing ? 'Your context is full, so older tool output was cleared. Do not call any more tools. Write your final answer now from what you found.' : 'You have used all your steps. Do not call any more tools. Write your final answer now from what you found.' }], timestamp: Date.now() });
       let lastText = 0;
-      const msg = await collectTurn(ctx.stream({ system: ctx.system, messages, tools: ctx.toolDefs, signal: ctl.signal, thinking: ctx.thinking }), {
+      let msg;
+      try {
+        msg = await collectTurn(ctx.stream({ system: ctx.system, messages: messages.map(({ final, ...m }) => m), tools: ctx.toolDefs, signal: ctl.signal, thinking: ctx.thinking }), {
         text: () => {
           if (Date.now() - lastText > 1000) {
             lastText = Date.now();
@@ -106,6 +110,17 @@ async function runOne(a, ctx) {
           tick();
         },
       });
+      } catch (e) {
+        // Out of context: what it found so far is worth more than the raw output, so clear all but the last two tool
+        // results and ask for the answer, instead of failing and losing the work.
+        if (finishing || ctl.signal.aborted || !isOverflow(e?.message)) throw e;
+        const outs = messages.filter((m) => m.role === 'toolResult');
+        for (const m of outs.slice(0, -2)) m.content = [{ type: 'text', text: '[Output cleared to save context.]' }];
+        finishing = true;
+        push('context full: writing the answer');
+        turn--;
+        continue;
+      }
       for (const k of ['input', 'output', 'cacheRead', 'cacheWrite']) a.usage[k] += msg.usage[k] || 0;
       a.tokens = a.usage.input + a.usage.output + a.usage.cacheRead + a.usage.cacheWrite;
       const c = ctx.costOf?.(msg.usage);

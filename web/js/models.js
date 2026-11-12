@@ -1,4 +1,4 @@
-// Settings → AI providers → "Models": the default fast model and plan model. Both are optional; empty means
+// Settings → Providers → "Models": the default fast model and plan model. Both are optional; empty means
 // "use the model of the session". Each choice is checked against the provider's own model list before it is saved.
 import { h, toast, replace } from './dom.js';
 import { api } from './api.js';

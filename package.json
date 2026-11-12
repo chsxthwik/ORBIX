@@ -1,8 +1,9 @@
 {
   "name": "orbix-agent",
   "version": "3.2.0",
-  "description": "ORBIX - a local-first AI coding workspace in your browser. Asks before it edits or runs anything; every change can be undone.",
+  "description": "ORBIX - a local-first AI coding workspace for Windows. Asks before it edits or runs anything; every change can be undone.",
   "type": "module",
+  "main": "electron/main.mjs",
   "license": "SEE LICENSE IN LICENSE",
   "engines": {
     "node": ">=22"
@@ -10,27 +11,10 @@
   "os": [
     "win32"
   ],
-  "bin": {
-    "orbix": "src/main.mjs",
-    "orbix-agent": "src/main.mjs"
-  },
-  "files": [
-    "src/",
-    "web/",
-    "assets/icon.png",
-    "assets/icon.ico",
-    "tools/doctor.mjs",
-    "LICENSE",
-    "NOTICE.md",
-    "README.md",
-    "CHANGELOG.md",
-    "SECURITY.md"
-  ],
   "scripts": {
-    "start": "node src/main.mjs",
+    "start": "electron .",
     "test": "node --test",
-    "serve": "node src/main.mjs --serve",
-    "doctor": "node tools/doctor.mjs",
+    "dist": "electron-builder --win nsis",
     "shots": "node tools/shots.mjs"
   },
   "keywords": [
@@ -38,13 +22,14 @@
     "ai",
     "llm",
     "agent",
-    "web-app",
     "local-first",
     "wsl",
     "claude",
     "chatgpt",
     "openrouter",
-    "ollama"
+    "ollama",
+    "windows",
+    "desktop-app"
   ],
   "author": "chsxthwik",
   "repository": {
@@ -54,5 +39,54 @@
   "bugs": {
     "url": "https://github.com/chsxthwik/ORBIX/issues"
   },
-  "homepage": "https://orbix-agent.vercel.app"
+  "homepage": "https://orbix-agent.vercel.app",
+  "productName": "ORBIX",
+  "build": {
+    "appId": "com.comx.orbix",
+    "productName": "ORBIX",
+    "copyright": "Copyright © 2026 COM-X Corporation",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**",
+      "src/**",
+      "web/**",
+      "assets/icon.png",
+      "assets/icon.ico",
+      "package.json",
+      "LICENSE",
+      "NOTICE.md"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "executableName": "ORBIX"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ORBIX",
+      "uninstallDisplayName": "ORBIX",
+      "artifactName": "ORBIX-Setup-${version}.${ext}",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false
+    }
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0"
+  }
 }

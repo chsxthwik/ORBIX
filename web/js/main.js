@@ -1,4 +1,5 @@
 // ORBIX front-end bootstrap: layout, sidebar, tabs, keyboard, and routing of events to views.
+import './desktop.js';
 import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, logo, lsGet, lsSet, kbd, copyText } from './dom.js';
 import { api, rpc, connectEvents } from './api.js';
 import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, engineReady, renameSession } from './store.js';
@@ -32,9 +33,15 @@ const overlay = { side: false, panel: false };
 
 // Every theme belongs to a mode (dark or light); the mode drives color-scheme and anything that only needs to know which.
 const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light' };
+/** The Windows app's interface size: a chosen factor, or on Auto one that fits the screen (larger on wide screens). */
+export function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth || 0) {
+  if (typeof v === 'number' && v >= 0.5 && v <= 2) return v;
+  return screenWidth >= 3000 ? 1.25 : screenWidth >= 2300 ? 1.15 : 1;
+}
 function applyPrefs() {
   const u = S.ui;
   const root = document.documentElement;
+  window.orbixDesktop?.setZoom(interfaceScale(u.uiScale));
   const name = THEMES[u.theme] ? u.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; // 'system' or unknown
   root.dataset.theme = name;
   root.dataset.mode = THEMES[name];
@@ -328,8 +335,13 @@ function syncTitle() {
 
 /** Sidebar footer: whether the agent can work, and with which provider. */
 function footStatus() {
+  const on = (S.engine?.providers || []).filter((p) => p.configured);
+  const names = on.map((p) => p.name.replace(/ \(.*\)$/, ''));
+  // Every connected provider is a sign-in its provider ended: say so, and open Providers to sign in again.
+  if (on.length && on.every((p) => p.signInError)) {
+    return h('button', { class: 'foot-status', type: 'button', title: `${names.join(', ')}: the sign-in has ended. Sign in again in Settings → Providers.`, onclick: () => settingsDialog('engine') }, h('span', { class: 'dot warn' }), h('span', { class: 'ell' }, names.join(', ')), h('span', { class: 'fs-k' }, 'Sign in'));
+  }
   const ready = engineReady();
-  const names = (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name.replace(/ \(.*\)$/, ''));
   const text = ready ? names.join(', ') : 'No model connected';
   return h('button', { class: 'foot-status', type: 'button', title: ready ? `Connected: ${names.join(', ')}` : 'Add an API key or a local model', onclick: () => settingsDialog(ready ? 'start' : 'engine') }, h('span', { class: 'dot' + (ready ? ' ok' : ' warn') }), h('span', { class: 'ell' }, text), ready ? null : h('span', { class: 'fs-k' }, 'Connect'));
 }
@@ -582,7 +594,7 @@ function paletteItems() {
     { group: 'General', icon: 'plus', label: 'New session without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
     { group: 'General', icon: 'cog', label: 'Settings', key: 'Ctrl+,', run: () => settingsDialog() },
-    { group: 'General', icon: 'key', label: 'AI providers', run: () => settingsDialog('engine') },
+    { group: 'General', icon: 'key', label: 'Providers', run: () => settingsDialog('engine') },
     { group: 'General', icon: 'trash', label: 'Manage conversations…', run: openCleanup },
     { group: 'General', icon: 'activity', label: 'Diagnostics', run: openDiagnostics },
     { group: 'General', icon: 'compass', label: 'How ORBIX works', run: openHelp },
@@ -691,7 +703,7 @@ async function adoptRunning(procs) {
   for (const p of procs) {
     if (S.tabs.has(p.id)) continue;
     fresh.add(p.id);
-    const tab = new Tab(p.id, p.workspace, { resume: p.resume });
+    const tab = new Tab(p.id, p.workspace, { resume: p.resume, title: p.title }); // the title you gave it, not its first message
     S.tabs.set(p.id, tab);
     try {
       const c = await rpc(p.id, { type: 'get_available_commands' });

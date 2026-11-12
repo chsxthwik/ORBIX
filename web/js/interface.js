@@ -15,11 +15,15 @@ export function initInterface() {
     if(target===el)return;hide();target=el;previous=el.getAttribute('aria-describedby')||'';
     timer=setTimeout(()=>{
       if(!el.isConnected||el.disabled)return hide();
-      tip.textContent=el.getAttribute('title')||el.dataset.tooltip;tip.hidden=false;
+      // "Settings (Ctrl+,)" shows the label and the shortcut as keys.
+      const text=el.getAttribute('title')||el.dataset.tooltip,keys=/^(.+?)\s*\(((?:Ctrl|Shift|Alt|Esc|Enter|Tab)\b[^)]*)\)$/.exec(text);
+      tip.replaceChildren(keys?keys[1]:text,...(keys?[h('span',{class:'tip-keys'},...keys[2].split(/\+(?=.)/).map(k=>h('kbd',null,k)))]:[]));
+      tip.hidden=false;
       el.setAttribute('aria-describedby',[previous,tip.id].filter(Boolean).join(' '));
       const r=el.getBoundingClientRect(),box=tip.getBoundingClientRect();
       tip.style.left=`${Math.max(8,Math.min(innerWidth-box.width-8,r.left+r.width/2-box.width/2))}px`;
-      tip.style.top=`${r.bottom+box.height+12<innerHeight?r.bottom+7:Math.max(8,r.top-box.height-7)}px`;
+      const below=r.bottom+box.height+12<innerHeight;tip.dataset.side=below?'bottom':'top';
+      tip.style.top=`${below?r.bottom+7:Math.max(8,r.top-box.height-7)}px`;
     },delay);
   }
   document.addEventListener('pointerover',e=>{if(e.pointerType==='touch')return;const el=e.target.closest?.('[data-tooltip]');if(el)show(el,350);});

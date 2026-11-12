@@ -1694,11 +1694,16 @@ describe('compact: estimates, cut points, context', () => {
       assert.deepEqual(contextMessages(m), m);
     });
     test('the summary replaces everything before the marker and is a user message', () => {
-      const out = contextMessages([u('old'), a('old'), marker('S'), a('after')]);
+      const out = contextMessages([u('first'), a('old'), u('old'), a('old'), marker('S'), u('new'), a('after')]);
       assert.equal(out.length, 2);
       assert.equal(out[0].role, 'user');
       assert.equal(out[0].content[0].text, summaryText('S'));
       assert.equal(out[1].content[0].text, 'after');
+    });
+    test('when the latest user message was compacted, it follows the summary word for word', () => {
+      const out = contextMessages([u('fix the bug, do not touch b.js'), a('step'), marker('S'), a('after')]);
+      assert.equal(out.length, 2);
+      assert.equal(out[0].content[0].text, `${summaryText('S')}\n\n<latest-user-message>\nfix the bug, do not touch b.js\n</latest-user-message>`);
     });
     test('a user message right after the marker is merged into the summary turn (no two user turns in a row)', () => {
       const out = contextMessages([marker('S'), u('question'), a('ans')]);

@@ -6,14 +6,13 @@
   <img alt="ORBIX" src="docs/img/logo-light.svg" width="207" height="72">
 </picture>
 
-**A local-first coding workspace that runs in your browser.**<br>
+**A local-first coding workspace for Windows.**<br>
 It asks before it edits a file or runs a command, and every file change can be undone.<br>
 Bring your own API key or run a local model.
 
 [![Latest release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=4D6B00&labelColor=151514)](https://github.com/chsxthwik/ORBIX/releases/latest)
 [![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=151514)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-4D6B00?style=flat-square&labelColor=151514)](#install)
-[![No npm dependencies](https://img.shields.io/badge/npm%20dependencies-0-4D6B00?style=flat-square&labelColor=151514)](package.json)
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-4D6B00?style=flat-square&labelColor=151514)](LICENSE)
 
 [Install](#install) · [Website](https://orbix-agent.vercel.app) · [Architecture](docs/ARCHITECTURE.md) · [Changelog](CHANGELOG.md) · [Security](SECURITY.md)
@@ -28,20 +27,14 @@ Bring your own API key or run a local model.
 
 ## Install
 
-With [Node.js 22 or newer](https://nodejs.org/) on Windows 10 or 11, run:
-
-```powershell
-npx github:chsxthwik/ORBIX
-```
-
-ORBIX starts and opens in your default browser. Run the same command to start it again.
+Download `ORBIX-Setup-3.2.0.exe` from the [latest release](https://github.com/chsxthwik/ORBIX/releases/latest) and run it. It installs ORBIX for your Windows account, with a Start menu and desktop shortcut, and needs no administrator rights and no Node.js. The installer is not code-signed yet, so Windows SmartScreen asks for confirmation the first time (More info, then Run anyway).
 
 1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in with ChatGPT, xAI or OpenRouter, paste an API key and press **Check & save**, or connect a local model.
 2. Open a project folder, describe a task and press <kbd>Enter</kbd>.
 
-Settings and conversations are kept in `%LOCALAPPDATA%\ORBIX`, so they stay when ORBIX updates. To work on ORBIX itself, clone the repository and run `npm start`; a clone keeps its data in its own `data` folder.
+Settings and conversations are kept in `%LOCALAPPDATA%\ORBIX`, so they stay when ORBIX updates or is reinstalled.
 
-ORBIX runs on Windows 10 and 11 with Node.js 22 or newer, using WSL or native Windows to run commands. The UI and agent server stay on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
+ORBIX runs on Windows 10 and 11, using WSL or native Windows to run commands. The app and its agent run on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
 
 ## How a task runs
 
@@ -83,7 +76,7 @@ When the reply ends, a summary lists every changed file with line counts. Each e
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/providers-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/img/providers-light.png">
-  <img src="docs/img/providers-light.png" alt="Anthropic, OpenAI, Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenRouter, Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, Ollama, LM Studio, and a custom server for any OpenAI-compatible endpoint" width="100%">
+  <img src="docs/img/providers-light.png" alt="Anthropic, OpenAI (ChatGPT plan or API key), Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenCode (Zen or Go plan), OpenRouter, Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, Ollama, LM Studio, and a custom server for any OpenAI-compatible endpoint" width="100%">
 </picture>
 
 **ChatGPT** uses the models on your ChatGPT Plus or Pro plan: sign in, no API key. It goes through the same sign-in and endpoint as the OpenAI Codex CLI, which is unofficial and can change. **xAI** and **OpenRouter** also offer a sign-in; sign-ins renew themselves.
@@ -201,13 +194,14 @@ System, Dark, Light, Midnight and Frost, under Settings, Appearance.
 Node.js 22 or newer.
 
 ```bash
-npm start          # run from source
-npm run serve      # the server only, in any browser
+npm install        # Electron and the installer builder
+npm start          # run the app from source (its data stays in ./data)
 npm test           # 700+ tests, with no network and no API keys
-npm run doctor     # the Diagnostics checks, in the console
+npm run dist       # build the installer into dist/
 ```
 
 ```text
+electron/  the Windows app: window, title bar, links, installer entry
 src/       the local server: HTTP API, event stream, WSL and Windows backend
 src/engine the agent: loop, model clients, tools, MCP, hooks, sessions
 web/       the interface: plain ES modules and one stylesheet

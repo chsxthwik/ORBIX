@@ -114,7 +114,7 @@ class LiveMarkdown {
 /** What to tell the user about a failed request, and the one action that most likely fixes it. */
 function errorHelp(msg) {
   const m = String(msg || '');
-  if (/\b(401|403)\b|unauthori[sz]ed|invalid.{0,20}(api.?)?key|incorrect api key|authentication|no api key/i.test(m)) return { hint: 'Check the API key for this provider.', act: 'Open AI providers', run: () => emit('settings', 'engine') };
+  if (/\b(401|403)\b|unauthori[sz]ed|invalid.{0,20}(api.?)?key|incorrect api key|authentication|no api key/i.test(m)) return { hint: 'Check the API key for this provider.', act: 'Open Providers', run: () => emit('settings', 'engine') };
   if (/\b429\b|rate.?limit|quota|overloaded|capacity|too many requests/i.test(m)) return { hint: 'The provider is busy, or your quota is used up. Wait a moment and try again.' };
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|fetch failed|network|socket hang up|timed? ?out/i.test(m)) return { hint: 'ORBIX couldn’t reach the provider. Check your internet connection, or make sure your local model server is running.' };
   if (/context|too long|maximum.{0,20}tokens|token limit/i.test(m) && /exceed|maximum|limit|too long|reduce/i.test(m)) return { hint: 'The conversation is too long for this model. Compact it with /compact, or start a new session.' };

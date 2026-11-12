@@ -1,6 +1,6 @@
 # How ORBIX is built
 
-ORBIX is a local Node.js server and a browser interface. The server runs one agent loop per open conversation and listens only on `127.0.0.1`.
+ORBIX is a Windows app: a local Node.js server and its interface, shown in an Electron window. The server runs one agent loop per open conversation and listens only on `127.0.0.1`.
 
 ```
 Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ──────▶  AgentProc per session (src/engine/proc.mjs)
@@ -11,11 +11,11 @@ Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ───�
 
 ## Start-up and shutdown
 
-1. `npm start` runs `src/main.mjs` and opens ORBIX in the default browser.
-2. The server checks `data/instance.json` and reuses a healthy existing server when possible.
-3. A new server creates a random token, binds to port 47821 (or another available local port), and passes the token to the browser in a one-time URL. The server exchanges it for an `HttpOnly`, `SameSite=Strict` cookie, then redirects to `/`.
+1. The app (`electron/main.mjs`) sets the data folder (`%LOCALAPPDATA%\ORBIX` when installed) and starts the server in its own process through `src/app.mjs`.
+2. The server checks `instance.json` in the data folder and reuses a healthy existing server when possible.
+3. A new server creates a random token and binds to port 47821 (or another available local port). The window opens a one-time URL with the token; the server exchanges it for an `HttpOnly`, `SameSite=Strict` cookie, then redirects to `/`.
 4. On first run the server detects where commands run: the first WSL distribution that starts, otherwise Windows.
-5. The browser app keeps the server available when a tab closes. Stop the terminal process to shut it down. `npm run serve` runs headlessly and exits after the server has been idle; `node src/main.mjs --no-open` keeps the server running without opening a browser.
+5. Closing the window, or Quit ORBIX in Settings, saves, stops every session and the server, and removes the lock file.
 
 ## The server (`src/server.mjs`)
 

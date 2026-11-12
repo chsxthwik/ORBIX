@@ -9,6 +9,7 @@ import { webSearch, WEB_SEARCH_DEF } from './websearch.mjs';
 import { TASK_DEF } from './subagent.mjs';
 import { decodeText, encodeText, ENCODING_NAMES, lineEnding, prepareImage, sniffImage, cleanTerminal, looksBinaryText, formatBytes } from './files.mjs';
 import { globFiles, grepFiles, MAX_GREP_BYTES, MAX_WALK_FILES } from './search.mjs';
+import { syntaxNote } from './syntax.mjs';
 
 const MAX_READ_BYTES = 5 * 1024 * 1024;
 const MAX_READ_CHARS = 200000;
@@ -122,12 +123,53 @@ function makeDiff(oldText, newText) {
     ea--;
     eb--;
   }
-  const out = [];
   const strip = (l) => l.replace(/\r$/, '');
-  for (let i = Math.max(0, s - 2); i < s; i++) out.push(` ${i + 1}|${strip(a[i])}`);
-  for (let i = s; i <= ea; i++) out.push(`-${i + 1}|${strip(a[i])}`);
-  for (let i = s; i <= eb; i++) out.push(`+${i + 1}|${strip(b[i])}`);
-  for (let i = ea + 1; i < Math.min(a.length, ea + 3); i++) out.push(` ${i + 1}|${strip(a[i])}`);
+  // The changed middle, line by line: a longest-common-subsequence walk, so two edits far apart are two hunks and
+  // the unchanged lines between them are not shown as removed and added. Very large middles fall back to one block.
+  const n = ea - s + 1;
+  const m = eb - s + 1;
+  const ops = []; // ['=', i, j] | ['-', i] | ['+', j], indexes into a and b
+  if (n > 0 && m > 0 && n * m <= 4_000_000) {
+    const L = new Uint32Array((n + 1) * (m + 1));
+    const at = (i, j) => i * (m + 1) + j;
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[at(i, j)] = a[s + i] === b[s + j] ? L[at(i + 1, j + 1)] + 1 : Math.max(L[at(i + 1, j)], L[at(i, j + 1)]);
+    let i = 0;
+    let j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && a[s + i] === b[s + j]) ops.push(['=', s + i++, s + j++]);
+      else if (j >= m || (i < n && L[at(i + 1, j)] >= L[at(i, j + 1)])) ops.push(['-', s + i++]);
+      else ops.push(['+', s + j++]);
+    }
+  } else {
+    for (let i = s; i <= ea; i++) ops.push(['-', i]);
+    for (let j = s; j <= eb; j++) ops.push(['+', j]);
+  }
+  // Removed lines before added ones within each run of changes, as diffs are read.
+  for (let k = 0; k < ops.length; ) {
+    if (ops[k][0] === '=') { k++; continue; }
+    let e = k;
+    while (e < ops.length && ops[e][0] !== '=') e++;
+    const run = ops.slice(k, e);
+    ops.splice(k, e - k, ...run.filter((o) => o[0] === '-'), ...run.filter((o) => o[0] === '+'));
+    k = e;
+  }
+  // Two lines of context around each change; a gap between hunks is marked with "…".
+  const all = [];
+  for (let i = 0; i < s; i++) all.push(['=', i, i]);
+  all.push(...ops);
+  for (let i = ea + 1, j = eb + 1; i < a.length; i++, j++) all.push(['=', i, j]);
+  const near = new Uint8Array(all.length);
+  all.forEach((o, k) => {
+    if (o[0] !== '=') for (let d = Math.max(0, k - 2); d <= Math.min(all.length - 1, k + 2); d++) near[d] = 1;
+  });
+  const out = [];
+  let last = -1;
+  all.forEach((o, k) => {
+    if (!near[k]) return;
+    if (last >= 0 && k > last + 1) out.push('…');
+    last = k;
+    out.push(o[0] === '=' ? ` ${o[1] + 1}|${strip(a[o[1]])}` : o[0] === '-' ? `-${o[1] + 1}|${strip(a[o[1]])}` : `+${o[1] + 1}|${strip(b[o[1]])}`);
+  });
   return { diff: out.join('\n'), firstChangedLine: s + 1, lastChangedLine: Math.max(s + 1, eb + 1) };
 }
 
@@ -436,7 +478,8 @@ export function createTools({ backend, cwd, getSignal }) {
       const undo = st && !old ? { skipped: true } : makeUndo(shown, old ? old.text : null, enc.buf, old?.encoding);
       const details = { path: shown, ...(old ? makeDiff(old.text, text) : {}), undo };
       const lineCount = text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0;
-      return { text: `${st ? 'Overwrote' : 'Created'} ${shown} (${enc.buf.length} bytes, ${lineCount} line${lineCount === 1 ? '' : 's'})${notes.length ? `; ${notes.join('; ')}` : ''}`, details };
+      const syntax = await syntaxNote(shown, text);
+      return { text: `${st ? 'Overwrote' : 'Created'} ${shown} (${enc.buf.length} bytes, ${lineCount} line${lineCount === 1 ? '' : 's'})${notes.length ? `; ${notes.join('; ')}` : ''}${syntax}`, details: { ...details, ...(syntax ? { syntaxError: true } : {}) } };
     },
 
     async edit({ path: p, old_string: oldS, new_string: newS, replace_all: all }) {
@@ -447,7 +490,8 @@ export function createTools({ backend, cwd, getSignal }) {
       const dec = await readText(file);
       if (!dec) return { text: `${shown} is not a text file, so it cannot be edited.`, isError: true };
       const text = dec.text;
-      const crlf = text.includes('\r\n');
+      // The file's own line ending, by majority: one stray CRLF line must not turn new lines in an LF file into CRLF.
+      const crlf = (text.match(/\r\n/g) || []).length * 2 > (text.match(/\n/g) || []).length;
       const toFile = (s) => (crlf && !s.includes('\r') ? s.replace(/\n/g, '\r\n') : s);
       let from = oldS;
       let to = newS;
@@ -466,9 +510,10 @@ export function createTools({ backend, cwd, getSignal }) {
         const bare = stripLineNumbers(oldS);
         if (bare && bare !== oldS) {
           const f2 = toFile(bare);
-          const at2 = occurrences(text, f2).length ? occurrences(text, f2) : occurrences(text, bare);
+          const inFileEnds = occurrences(text, f2);
+          const at2 = inFileEnds.length ? inFileEnds : occurrences(text, bare);
           if (at2.length) {
-            from = occurrences(text, f2).length ? f2 : bare;
+            from = inFileEnds.length ? f2 : bare;
             to = toFile(stripLineNumbers(newS) ?? newS);
             at = at2;
             notes.push('line-number prefixes removed from old_string');
@@ -510,7 +555,8 @@ export function createTools({ backend, cwd, getSignal }) {
       if (enc.encoding !== dec.encoding) notes.push(`saved as UTF-8: the text has characters that ${ENCODING_NAMES[dec.encoding]} cannot store`);
       // A whitespace-tolerant match changed text the model did not quote exactly: show it so it can be checked.
       const shownDiff = at.length ? '' : `\n${clipLines(d.diff, 40)}`;
-      return { text: `Edited ${shown}${count}: ${where}${notes.length ? `; ${notes.join('; ')}` : ''}${shownDiff}`, details: { path: shown, op: 'update', ...d, undo: makeUndo(shown, text, enc.buf, dec.encoding) } };
+      const syntax = await syntaxNote(shown, next);
+      return { text: `Edited ${shown}${count}: ${where}${notes.length ? `; ${notes.join('; ')}` : ''}${shownDiff}${syntax}`, details: { path: shown, op: 'update', ...d, undo: makeUndo(shown, text, enc.buf, dec.encoding), ...(syntax ? { syntaxError: true } : {}) } };
     },
 
     async bash({ command, timeout = 120, shell }, { onUpdate } = {}) {
@@ -704,6 +750,18 @@ export function createTools({ backend, cwd, getSignal }) {
       await fs.promises.writeFile(file, encodeText(u.before, u.encoding || 'utf-8').buf);
       await remember(file);
       return { ok: true, text: `Restored ${u.path}` };
+    },
+
+    /** Whether a path the model gave is inside the project folder (compared as Windows paths, ignoring case). */
+    inProject(p) {
+      let file;
+      try {
+        file = path.win32.resolve(host(p)).toLowerCase();
+      } catch {
+        return true; // no usable path: the tool itself reports the error
+      }
+      const root = path.win32.resolve(backend.hostPath(cwd)).toLowerCase();
+      return file === root || file.startsWith(root.endsWith('\\') ? root : `${root}\\`);
     },
 
     /**

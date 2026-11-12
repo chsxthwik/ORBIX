@@ -168,7 +168,7 @@ export function asciiOrbit({ cols = 64, rows = 15, font = 10, lineH = 12 } = {})
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    ctx.font = `${font}px "JetBrains Mono Variable", Consolas, monospace`;
+    ctx.font = `${font}px "Geist Mono Variable", Consolas, monospace`;
     ctx.textBaseline = 'middle';
     const signal = mode === 'wait' ? colors.warn : colors.live;
     // The first 0.9 s: each cell shows noise until its turn, so the picture resolves instead of popping in.
@@ -238,6 +238,183 @@ export function asciiOrbit({ cols = 64, rows = 15, font = 10, lineH = 12 } = {})
 }
 
 const NOISE = '/\\|-+*=<>#%';
+
+/**
+ * The COM-X mark in characters: a faint ring, a solid X, and the signal arc travelling round the ring with a fading tail.
+ * A light sweeps across the X now and then. It resolves out of noise like the orbit, sleeps off screen, and under
+ * prefers-reduced-motion holds the arc where the logo has it (top right).
+ */
+export function asciiComx({ cols = 30, rows = 14, font = 10, lineH = 12 } = {}) {
+  const cw = font * 0.6;
+  const W = cols * cw;
+  const H = rows * lineH;
+  const canvas = h('canvas', { class: 'ascii-comx', width: Math.round(W), height: Math.round(H), 'aria-hidden': 'true' });
+  canvas.style.width = `${W}px`;
+  canvas.style.height = 'auto';
+  canvas.style.aspectRatio = `${W} / ${H}`;
+  const ctx = canvas.getContext('2d', { alpha: true });
+  const N = cols * rows;
+  const cell = new Uint8Array(N);
+  const alpha = new Float32Array(N);
+  const sig = new Uint8Array(N);
+  const R = Math.min(W, H) * 0.43; // the ring, in pixels, so it stays round on 6 x 12 cells
+  const S = R * 0.42; // half the X's diagonal, as in the logo (28 of a 68 ring)
+  const T = R * 0.13; // half the X's stroke
+  const ARC = 1.1; // the logo's arc spans about 63 degrees
+  const HOME = (-73 * Math.PI) / 180; // where the logo's arc starts
+  const born = performance.now();
+  let head = HOME + ARC;
+  let shownAt = 0;
+  let last = 0;
+  let drawnAt = 0;
+  let seen = false;
+  let colors = null;
+  let colorsAt = -1e9;
+  let dpr = 0;
+  const stop = new AbortController();
+
+  const put = (c, r, ch, al, signal = 0) => {
+    if (c < 0 || r < 0 || c >= cols || r >= rows) return;
+    const i = r * cols + c;
+    if (cell[i] && alpha[i] > al && !signal) return; // a stronger mark already holds this cell
+    cell[i] = ch;
+    alpha[i] = al;
+    sig[i] = signal;
+  };
+  /** The character that follows the ring's tangent where it crosses a cell. */
+  const ringChar = (t, y) => {
+    const dx = (-Math.sin(t) * R) / cw;
+    const dy = (Math.cos(t) * R) / lineH;
+    const slope = Math.abs(dx) < 1e-6 ? 99 : dy / dx;
+    if (Math.abs(slope) > 2.2) return 124; // |
+    if (slope > 0.45) return 92; // \
+    if (slope < -0.45) return 47; // /
+    const fy = (y + H / 2) / lineH;
+    return fy - Math.floor(fy) > 0.62 ? 95 : 45; // _ or -
+  };
+  const toCell = (x, y) => [Math.floor((x + W / 2) / cw), Math.floor((y + H / 2) / lineH)];
+  // Distance from a point to the X's two strokes.
+  const segDist = (px, py, ax, ay, bx, by) => {
+    const vx = bx - ax;
+    const vy = by - ay;
+    const k = Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy)));
+    return Math.hypot(px - ax - vx * k, py - ay - vy * k);
+  };
+  const xDist = (x, y) => Math.min(segDist(x, y, -S, -S, S, S), segDist(x, y, S, -S, -S, S));
+  const DENSE = ' .:+*#%@';
+  // The ring as a one-character line: where it is steep (in cell units) it is placed row by row, where it is flat
+  // column by column, so no row gets a doubled slash and the top and bottom have no stray dashes.
+  const RING = [];
+  {
+    const seen = new Set();
+    const add = (x, y) => {
+      const t = Math.atan2(y, x);
+      const [c, r] = toCell(x, y);
+      if (c < 0 || r < 0 || c >= cols || r >= rows || seen.has(r * cols + c)) return;
+      seen.add(r * cols + c);
+      RING.push({ c, r, t: (t + Math.PI * 2) % (Math.PI * 2), ch: ringChar(t, y) });
+    };
+    const steep = (x, y) => Math.abs((x / lineH) / ((y || 1e-6) / cw)) >= 1; // |dy/dx| in cells, from the tangent
+    for (let r = 0; r < rows; r++) {
+      const y = (r + 0.5) * lineH - H / 2;
+      if (Math.abs(y) > R) continue;
+      const x = Math.sqrt(R * R - y * y);
+      for (const sx of [x, -x]) if (steep(sx, y)) add(sx, y);
+    }
+    for (let c = 0; c < cols; c++) {
+      const x = (c + 0.5) * cw - W / 2;
+      if (Math.abs(x) > R) continue;
+      const y = Math.sqrt(R * R - x * x);
+      for (const sy of [y, -y]) if (!steep(x, sy)) add(x, sy);
+    }
+  }
+
+  function compose(time) {
+    cell.fill(0);
+    for (const p of RING) put(p.c, p.r, p.ch, 0.34);
+    // The X: four samples per cell give a soft edge; a light sweeps along the diagonal every few seconds.
+    const sweep = ((time / 1000) % 4.2) / 4.2; // 0..1 across, then a pause while it is off the mark
+    for (let r = 0; r < rows; r++) {
+      const cy = (r + 0.5) * lineH - H / 2;
+      for (let c = 0; c < cols; c++) {
+        const cx = (c + 0.5) * cw - W / 2;
+        if (Math.abs(cx) > S + T + cw || Math.abs(cy) > S + T + lineH) continue;
+        let cov = 0;
+        for (let s = 0; s < 4; s++) if (xDist(cx + (s & 1 ? 0.25 : -0.25) * cw, cy + (s & 2 ? 0.25 : -0.25) * lineH) < T) cov++;
+        if (!cov) continue;
+        const along = (cx + cy) / (4 * S) + 0.5; // 0 at top left, 1 at bottom right
+        const glint = time ? Math.max(0, 1 - Math.abs(along - (sweep * 1.8 - 0.4)) * 5) : 0;
+        const v = Math.min(1, (0.45 + 0.13 * cov) + glint * 0.35);
+        const idx = Math.round(v * (DENSE.length - 1) + BAYER[(c & 3) + (r & 3) * 4] * 0.6);
+        put(c, r, DENSE.charCodeAt(Math.min(DENSE.length - 1, Math.max(2, idx))), 0.35 + 0.6 * v);
+      }
+    }
+    // The arc: the signal, travelling clockwise, brightest at its head.
+    // The ring's own cells behind the head light up, fading along the arc; the cell at the head is @.
+    let lead = null;
+    for (const p of RING) {
+      const behind = (((head - p.t) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      if (behind > ARC) continue;
+      put(p.c, p.r, p.ch, 0.35 + 0.65 * (1 - behind / ARC), 1);
+      if (!lead || behind < lead.behind) lead = { p, behind };
+    }
+    if (lead) put(lead.p.c, lead.p.r, 64, 1, 1);
+  }
+
+  function paint(time) {
+    const ratio = Math.min(2, devicePixelRatio || 1);
+    if (ratio !== dpr) {
+      dpr = ratio;
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    const now = performance.now();
+    if (!colors || now - colorsAt > 500) {
+      colorsAt = now;
+      const css = getComputedStyle(document.documentElement);
+      const get = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+      colors = { fg: get('--fg', '#888'), live: get('--live', '#4c4') };
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = `${font}px "Geist Mono Variable", Consolas, monospace`;
+    ctx.textBaseline = 'middle';
+    const intro = reduced.matches ? 1 : Math.min(1, (time - shownAt) / 900);
+    const flick = Math.floor(time / 60);
+    let fill = '';
+    for (let i = 0; i < N; i++) {
+      if (!cell[i]) continue;
+      const nf = sig[i] ? colors.live : colors.fg;
+      if (nf !== fill) ctx.fillStyle = fill = nf;
+      const settled = intro >= 1 || hash(i) < intro;
+      ctx.globalAlpha = settled ? alpha[i] : alpha[i] * 0.45;
+      ctx.fillText(settled ? String.fromCharCode(cell[i]) : NOISE[(i * 7 + flick) % NOISE.length], (i % cols) * cw, (Math.floor(i / cols) + 0.5) * lineH);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function tick(time) {
+    if (stop.signal.aborted) return;
+    if (canvas.isConnected) seen = true;
+    else if (seen || time - born > 10000) return stop.abort();
+    requestAnimationFrame(tick);
+    const still = reduced.matches;
+    if (!canvas.isConnected || document.hidden || !canvas.checkVisibility()) {
+      last = time;
+      return;
+    }
+    if (time - drawnAt < (still ? 1000 : 40)) return;
+    drawnAt = time;
+    if (!shownAt) shownAt = time;
+    const dt = Math.min(0.1, (time - last) / 1000 || 0);
+    last = time;
+    head = still ? HOME + ARC : (head + dt * 0.9) % (Math.PI * 2);
+    compose(still ? 0 : time);
+    paint(time);
+  }
+  requestAnimationFrame(tick);
+  return { el: canvas };
+}
 
 const ART = {
   check: ' /\\_/\\\n( ^.^ )\n > ~ < ',
