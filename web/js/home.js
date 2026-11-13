@@ -35,6 +35,9 @@ let starting = false;
 on('engine', () => (models = null));
 
 /** Choose the project the next session starts in (used by "New session in this project"). */
+/** The project chosen on Home, for pages that need one while no session is open. */
+export const homeProject = () => draft.project || '';
+
 export function setHomeProject(path, { ephemeral } = {}) {
   if (path) draft.project = path;
   if (ephemeral != null) draft.ephemeral = ephemeral;

@@ -1189,10 +1189,10 @@ describe('anthropic: pure helpers', () => {
     const err = (status, body, headers) => httpError(new Response(body, { status, headers }));
     test('401/403: key rejected, not retryable', async () => {
       const e = await err(401, JSON.stringify({ error: { message: 'invalid x-api-key' } }));
-      assert.equal(e.message, 'The API key was rejected (401): invalid x-api-key');
+      assert.equal(e.message, 'The provider refused the API key or sign-in (401): invalid x-api-key');
       assert.equal(e.retryable, false);
       assert.equal(e.status, 401);
-      assert.equal((await err(403, '')).message, 'The API key was rejected (403)');
+      assert.equal((await err(403, '')).message, 'The provider refused the API key or sign-in (403)');
     });
     test('429 is retryable and carries retry-after', async () => {
       const e = await err(429, '{}', { 'retry-after': '2' });

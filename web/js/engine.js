@@ -10,10 +10,10 @@ const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(
 let signIn = null; // {state, url, timer, provider} while a sign-in is waiting for the browser
 // How each sign-in is offered, and what the user should know before choosing it.
 const SIGN_IN = {
-  openrouter: { name: 'OpenRouter', label: 'Sign in with OpenRouter', note: 'or paste a key below' },
-  chatgpt: { name: 'ChatGPT', label: 'Sign in with ChatGPT', note: 'Works through the Codex CLI sign-in, which OpenAI can change at any time. The sign-in renews itself.' },
-  opencode: { name: 'OpenCode', site: 'opencode.ai', label: 'Sign in with OpenCode', note: 'You confirm a short code on opencode.ai; paid models are billed to your OpenCode account. Uses the opencode CLI sign-in, which OpenCode can change at any time; an oc_sk_ key below always works. Free models are only available inside OpenCode itself.' },
-  xai: { name: 'xAI', site: 'x.ai', label: 'Sign in with xAI', note: 'You confirm a short code on x.ai; nothing else to install. Uses the Grok CLI sign-in, which xAI can change at any time. The sign-in renews itself.' },
+  openrouter: { name: 'OpenRouter', label: 'Sign in with OpenRouter', note: 'Or paste an API key below.' },
+  chatgpt: { name: 'ChatGPT', label: 'Sign in with ChatGPT', note: 'It uses the Codex CLI sign-in, which OpenAI can change at any time. The sign-in renews itself.' },
+  opencode: { name: 'OpenCode', site: 'opencode.ai', label: 'Sign in with OpenCode', note: 'You confirm a short code on opencode.ai, and paid models are billed to your OpenCode account. It uses the opencode CLI sign-in, which OpenCode can change at any time; an oc_sk_ key below always works. Free models work only inside OpenCode itself.' },
+  xai: { name: 'xAI', site: 'x.ai', label: 'Sign in with xAI', note: 'You confirm a short code on x.ai, and nothing else needs to be installed. It uses the Grok CLI sign-in, which xAI can change at any time. The sign-in renews itself.' },
 };
 // One card per maker. Where a maker offers two ways in, both sit inside its card, each with its own sign-in or key.
 const FAMILY = {
@@ -21,10 +21,10 @@ const FAMILY = {
   opencode: { name: 'OpenCode', note: 'Pay as you go with Zen, or your OpenCode Go plan.', members: ['opencode', 'opencode-go'] },
 };
 const WAY = {
-  chatgpt: ['ChatGPT plan', 'Your Plus or Pro plan and its usage limits. No API key or credits.'],
-  openai: ['API key', 'Pay per token on the OpenAI Platform.'],
-  opencode: ['Zen', 'Claude, GPT, Gemini and open models, pay as you go.'],
-  'opencode-go': ['Go plan', 'Open models on your OpenCode Go subscription. Paste your Go API key.'],
+  chatgpt: ['ChatGPT plan', 'Uses your paid ChatGPT plan and its usage limits. No API key or credits are needed.'],
+  openai: ['API key', 'Pay per token through the OpenAI Platform.'],
+  opencode: ['Zen', 'Claude, GPT, Gemini and open models, paid as you go.'],
+  'opencode-go': ['Go plan', 'Open models on your OpenCode Go subscription. Paste your Go API key to connect.'],
 };
 const familyOf = (id) => Object.keys(FAMILY).find((f) => FAMILY[f].members.includes(id)) || id;
 // Connected, with the model count of the ways that work; a sign-in the provider ended asks for a new one instead.

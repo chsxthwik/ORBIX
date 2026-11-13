@@ -23,7 +23,7 @@ export const HELP = [
   '• `@path` in a message attaches that file (an image is sent as an image; a folder as a listing). `/plan` switches to read-only planning and back.',
   '• `/retry` answers your last message again (the old reply is replaced).',
   '• `/init` writes an AGENTS.md for the project, `/review` reviews your uncommitted changes, `/commit` writes a message for the staged changes and commits (it asks first).',
-  '• `/model fast|plan <provider/model>` sets the fast model (titles, summaries, helper agents) or the plan model for this session; defaults are in Settings → Providers → Models.',
+  '• `/model fast|plan <provider/model>` sets the fast model (titles, summaries, helper agents) or the plan model for this session; defaults are in Settings → Models.',
   '• `/branch` continues the conversation in a new tab (files stay as they are); every message of yours also has a Branch button.',
   '• `/goal <text>` keeps the agent working on its own (up to 6 rounds) until it ends with GOAL_DONE or asks you something. Esc stops it.',
   '• `/memory` shows the project memory file (AGENTS.md); `/hooks` lists the commands that run before and after tool calls (Settings → Tools & MCP).',

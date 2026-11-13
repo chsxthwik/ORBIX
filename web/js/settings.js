@@ -12,6 +12,7 @@ import { renderMcpSettings } from './mcp.js';
 import { openHelp } from './help.js';
 import { openDiagnostics } from './diagnostics.js';
 import { asciiComx } from './ascii.js';
+import { homeProject } from './home.js';
 import { updatesSupported, checkForUpdates, setAutoUpdates, restartToUpdate, updateLine } from './updates.js';
 
 /** key, label, icon, one line under the page title. */
@@ -161,7 +162,7 @@ function tabStart(el, show, m) {
   }).catch(() => (mcp.querySelector('.ov-val').textContent = 'Not available'));
 
   el.append(
-    ready ? '' : h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'Connect a model to start'), h('p', null, 'An API key, a sign-in, or a model on this PC. Nothing else to install.')), btn('Connect a model', () => show('engine'), 'primary')),
+    ready ? '' : h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'Connect a model to start'), h('p', null, 'Use an API key, a sign-in or a model on this PC. Nothing else needs to be installed.')), btn('Connect a model', () => show('engine'), 'primary')),
     card('Agent',
       line(connected[0] ? brandMark(connected[0].id, 16) : 'key', 'Providers', ready ? connected.map((p) => (p.models != null ? `${p.name} · ${p.models} model${p.models === 1 ? '' : 's'}` : p.name)).join(', ') : 'None connected', 'engine', ready ? '' : 'warn'),
       line('message', 'Default model for new sessions', hm?.id ? hm.name || hm.id : 'Chosen on Home, under the task box', null),
@@ -178,7 +179,7 @@ function tabStart(el, show, m) {
     card('Your work',
       line('message', 'Conversations', String(S.sessions.length), null),
       line('folder', 'Projects', String(projects), null),
-      line('check', 'Pinned in the sidebar', pins ? String(pins) : 'None. Right-click a conversation to pin it.', null)),
+      line('check', 'Pinned in the sidebar', pins ? String(pins) : 'None yet. Select a conversation and press P, or right-click it.', null)),
     h('div', { class: 'set-actions' },
       btn('New session', () => {
         m.close();
@@ -199,7 +200,7 @@ async function tabModels(el, show) {
     return replace(el, errorState(e.message, { title: 'Couldn’t load your models.', retry: () => tabModels(el, show) }));
   }
   if (!engine.providers.some((p) => p.configured)) {
-    return replace(el, h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'No model connected yet'), h('p', null, 'Connect a provider first, then choose models here.')), btn('Open providers', () => show('engine'), 'primary')));
+    return replace(el, h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'No model is connected yet'), h('p', null, 'Connect a provider first, then choose your models here.')), btn('Open Providers', () => show('engine'), 'primary')));
   }
   const roles = h('div', { class: 'roles' });
   replace(el, roles);
@@ -225,10 +226,10 @@ function tabLook(el) {
     group('Reading', null,
       row('Message text size', h('div', { class: 'row' }, size, val)),
       h('p', { class: 'fs-sample' }, 'The quick brown fox: this is how replies will read.'),
-      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'Show the model’s reasoning in replies, collapsed.')),
+      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'Shows the model’s reasoning above its reply, folded until you open it.')),
     group('Layout', null,
-      window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales the whole window. Auto picks a size from your screen: larger on wide screens.') : null,
-      row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on screen.'),
+      window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales everything in the window. Auto picks a size for your screen and goes larger on wide, high-resolution screens.') : null,
+      row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on the screen.'),
       row('Reading column', seg('Reading column', [['normal', 'Normal'], ['wide', 'Wide']], document.documentElement.classList.contains('wide') ? 'wide' : 'normal', (v) => (v === 'wide') !== document.documentElement.classList.contains('wide') && toggleWide()), 'Wide suits long diffs and tables. The session bar has the same switch.')));
 }
 
@@ -303,11 +304,11 @@ function tabBehavior(el) {
   el.append(
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'File edits and commands'), h('p', { class: 'set-note' }, 'Reading and searching never ask.'),
       h('div', { class: 'perms', role: 'radiogroup', 'aria-label': 'File edits and commands' },
-        choice('ask', 'shield', 'Ask me first', 'Each edit and command waits for your OK.', 'Recommended'),
-        choice('edits', 'pencil', 'Allow edits, ask before commands', 'File edits run without asking and each can be undone. Commands still wait for you.'),
-        choice('auto', 'bolt', 'Allow everything', 'Edits and commands run without asking.'))),
+        choice('ask', 'shield', 'Ask me first', 'Each file edit and command waits for your OK.', 'Recommended'),
+        choice('edits', 'pencil', 'Allow edits, ask before commands', 'File edits run without asking, and each one can be undone. Commands still wait for your OK.'),
+        choice('auto', 'bolt', 'Allow everything', 'File edits and commands run without asking. Edits can be undone; commands cannot.'))),
     trustedGroup(),
-    group('Running', null, whereRow(), row('Follow new output', toggle(S.ui.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Scroll to the newest text while it streams, unless you scrolled up.')));
+    group('Running', null, whereRow(), row('Follow new output', toggle(S.ui.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Scrolls to the newest text while a reply streams in, unless you have scrolled up.')));
 }
 
 /**
@@ -342,7 +343,7 @@ function trustedGroup() {
   }
   draw();
   return h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Trusted commands'),
-    h('p', { class: 'set-note' }, 'These run without asking, in any mode. End with * to allow any arguments. A command that chains, pipes or redirects always asks.'),
+    h('p', { class: 'set-note' }, 'These commands run without asking, in every mode. End one with * to allow any arguments. A command that chains, pipes or redirects always asks.'),
     h('div', { class: 'set-card trust-card' }, list, h('div', { class: 'trust-add' }, input, btn('Trust', add, 'sm'))));
 }
 
@@ -360,10 +361,10 @@ function tabChecks(el) {
     }
   };
   el.append(
-    group('After the agent changes files', 'The check runs when the agent says it is done. If it fails, the agent gets the output and fixes the cause before it replies.',
-      row('Run the project’s check', seg('Run the project’s check', [['off', 'Off'], ['ask', 'Ask'], ['always', 'Always']], eng.verify || 'ask', (v) => save({ verify: v })), 'Ask: you choose each time. Always: it runs like any other command, so it still waits for approval unless you trust the command.'),
-      row('Review the changes', toggle(eng.review !== false, (v) => save({ review: v }), 'Review the changes'), 'Before the reply, the fast model (or the session’s model) reads the diff once and reports real defects for the agent to fix. Skipped when fewer than 5 lines changed.')),
-    checkCommandGroup(activeTab()?.workspace || ''));
+    group('After the agent changes files', 'The check runs when the agent says it is done. If the check fails, the agent gets its output and fixes the cause before it replies.',
+      row('Run the project’s check', seg('Run the project’s check', [['off', 'Off'], ['ask', 'Ask'], ['always', 'Always']], eng.verify || 'ask', (v) => save({ verify: v })), 'Off never runs it. Ask lets you choose each time. Always runs it like any other command, so it still waits for your OK unless the command is trusted.'),
+      row('Review the changes', toggle(eng.review !== false, (v) => save({ review: v }), 'Review the changes'), 'Before the reply, the fast model (or the session’s model) reads the changes once and reports real defects for the agent to fix. It is skipped when fewer than 5 lines changed.')),
+    checkCommandGroup(activeTab()?.workspace || homeProject()));
 }
 
 /** The check command of the open project: the one found in its files, or one you set (or none). */
@@ -376,7 +377,7 @@ function checkCommandGroup(ws) {
     input.value = j.command && j.command !== 'off' ? j.command : '';
     input.placeholder = j.detected?.command || 'npm test';
     const d = j.detected ? `${j.detected.command}, from ${j.detected.source}` : '';
-    found.textContent = j.command === 'off' ? 'No check runs in this project.' : j.command ? `Your command runs${d ? ` instead of ${d}` : ''}.` : d ? `Found ${d}.` : 'Nothing found: no test, typecheck, lint or build script, Cargo.toml, go.mod, pytest setup or Makefile target. Type a command to use one.';
+    found.textContent = j.command === 'off' ? 'No check runs in this project.' : j.command ? `Your command runs${d ? ` instead of ${d}` : ''}.` : d ? `Found ${d}.` : 'Nothing was found: there is no test, typecheck, lint or build script, Cargo.toml, go.mod, pytest setup or Makefile target. Type a command to use one.';
   };
   const save = async (command) => {
     try {
@@ -389,8 +390,8 @@ function checkCommandGroup(ws) {
   api.get(`/api/engine/check?ws=${encodeURIComponent(ws)}`).then(show).catch((e) => (found.textContent = e.message));
   input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), save(input.value)));
   return h('section', { class: 'set-group' }, head,
-    h('p', { class: 'set-note' }, 'For ', h('bdi', null, ws), '. Leave it empty to use the command found in the project.'),
-    h('div', { class: 'set-card trust-card' }, found, h('div', { class: 'trust-add' }, input, btn('Save', () => save(input.value), 'sm'), btn('No check here', () => save('off'), 'sm ghost'))));
+    h('p', { class: 'set-note' }, 'For ', h('bdi', null, ws), '. Leave the box empty to use the command found in the project.'),
+    h('div', { class: 'set-card trust-card' }, found, h('div', { class: 'trust-add' }, input, btn('Save', () => save(input.value), 'sm'), btn('No check in this project', () => save('off'), 'sm ghost'))));
 }
 
 // ================= instructions =================
@@ -410,7 +411,7 @@ function tabRules(el) {
     try {
       const r = await api.post('/api/instructions', { text: ta.value });
       saved = ta.value = r.text;
-      status.textContent = r.text ? 'Saved. New messages in every session follow it.' : 'Cleared.';
+      status.textContent = r.text ? 'Saved. New messages in every session follow these instructions.' : 'Cleared.';
       sync();
     } catch (e) {
       toast(e.message, 'error');
@@ -421,7 +422,7 @@ function tabRules(el) {
   const failed = h('div', { class: 'rules-err' });
   el.append(
     h('section', { class: 'set-group' },
-      h('p', { class: 'set-note' }, 'Plain text or Markdown. A project\'s own AGENTS.md or CLAUDE.md comes after this and wins when the two disagree.'),
+      h('p', { class: 'set-note' }, 'Write plain text or Markdown. A project’s own AGENTS.md or CLAUDE.md comes after this and wins when the two disagree.'),
       failed,
       ta,
       h('div', { class: 'rules-foot' }, count, h('span', { class: 'grow' }), status, saveBtn)));
@@ -469,7 +470,7 @@ function whereRow() {
       sel.value = cur;
     }
   });
-  return row('Run commands in', sel, 'From WSL, Windows drives appear as /mnt/c, /mnt/d and so on.');
+  return row('Run commands in', sel, 'In WSL, Windows drives appear as /mnt/c, /mnt/d and so on.');
 }
 
 // ================= about =================
@@ -482,7 +483,7 @@ const RELEASES_URL = 'https://github.com/chsxthwik/ORBIX/releases';
 
 /** Settings → About → Updates, in the Windows app. It redraws itself as the status changes. */
 function updatesGroup() {
-  if (!updatesSupported()) return null;
+  if (!updatesSupported()) return ''; // el.append() would print null
   const box = h('div');
   let drawn = false;
   const draw = () => {
@@ -521,8 +522,8 @@ function tabAbout(el, show) {
     group(null, null,
       row('Report a problem', btn('Open GitHub', () => openLink(ISSUES_URL), 'sm'), 'Report a bug or suggest a feature on GitHub.'),
       row('Commands run in', b.kind === 'wsl' ? `WSL (${b.distro})` : 'Windows'),
-      row('How ORBIX works', btn('Open', () => openHelp(), 'sm')),
-      row('Keyboard shortcuts', btn('Show', () => show('keys'), 'sm')),
+      row('How ORBIX works', btn('Open', () => openHelp(), 'sm'), 'A short guide to connecting a model, approvals, undo and project rules.'),
+      row('Keyboard shortcuts', btn('Show', () => show('keys'), 'sm'), 'Every shortcut, with a filter.'),
       row('Quit ORBIX', btn('Quit', async () => {
         if (await confirmDialog('Quit ORBIX', 'Stop all sessions and close ORBIX?', { ok: 'Quit', danger: true })) {
           await api.post('/api/quit').catch(() => {});
