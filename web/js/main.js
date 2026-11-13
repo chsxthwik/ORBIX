@@ -2,7 +2,7 @@
 import './desktop.js';
 import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, logo, lsGet, lsSet, kbd, copyText } from './dom.js';
 import { api, rpc, connectEvents } from './api.js';
-import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, engineReady, renameSession } from './store.js';
+import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, engineReady, renameSession, keyPath } from './store.js';
 import { TabView, sessionMenu, copyConversation } from './session.js';
 import { drawHome, setHomeProject } from './home.js';
 import { openCleanup, confirmDeleteConversation } from './cleanup.js';
@@ -16,6 +16,7 @@ import { onBoard, boardState } from './review.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { barHandlers, toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
+import { sideUpdate } from './updates.js';
 
 const views = new Map();
 const sideEl = $('#sidebar');
@@ -25,6 +26,9 @@ const homeEl = $('#welcome');
 const appEl = $('#app');
 let searchTerm = '';
 const collapsed = new Set(lsGet('collapsed', []));
+// Projects whose whole list is shown (by default a project shows its newest conversations only).
+const expanded = new Set(lsGet('expanded', []));
+const SHOWN = 8;
 
 // In narrow windows the sidebar and side panel float over the content; there they open on demand and are not saved.
 const narrowSide = matchMedia('(max-width: 760px)');
@@ -38,6 +42,9 @@ export function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth
   if (typeof v === 'number' && v >= 0.5 && v <= 2) return v;
   return screenWidth >= 3000 ? 1.25 : screenWidth >= 2300 ? 1.15 : 1;
 }
+// The sidebar can be dragged between these widths (double-click the edge to reset).
+const SIDE_MIN = 220, SIDE_MAX = 440, SIDE_W = 264;
+
 function applyPrefs() {
   const u = S.ui;
   const root = document.documentElement;
@@ -49,7 +56,7 @@ function applyPrefs() {
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
   root.classList.toggle('compact', u.density === 'compact');
   root.dataset.density = u.density === 'compact' ? 'compact' : 'comfortable';
-  root.style.setProperty('--side-w', Math.min(320, Math.max(220, u.sidebarW || 264)) + 'px');
+  root.style.setProperty('--side-w', Math.min(SIDE_MAX, Math.max(SIDE_MIN, u.sidebarW || 264)) + 'px');
   root.style.setProperty('--panel-w', (u.panelW || 380) + 'px');
   const side = narrowSide.matches ? overlay.side : u.sidebar !== false;
   const panel = !!activeTab() && (narrowPanel.matches ? overlay.panel : u.rightPanel !== false);
@@ -83,8 +90,12 @@ appEl.addEventListener('mousedown', (e) => {
   if (overlay.panel && narrowPanel.matches && !$('#panel').contains(e.target) && !e.target.closest('.tb-panel')) (overlay.panel = false), applyPrefs(), drawTop();
 });
 
-function resizer(id, varName, key, min, max, fromRight) {
+function resizer(id, varName, key, min, max, fromRight, reset) {
   const el = $(id);
+  if (reset) el.addEventListener('dblclick', () => {
+    document.documentElement.style.setProperty(varName, reset + 'px');
+    savePrefs({ [key]: reset });
+  });
   el.addEventListener('mousedown', (e) => {
     e.preventDefault();
     el.classList.add('drag');
@@ -106,8 +117,8 @@ function resizer(id, varName, key, min, max, fromRight) {
     addEventListener('mouseup', up);
   });
 }
-resizer('#rs-side', '--side-w', 'sidebarW', 220, 320, false);
-resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true);
+resizer('#rs-side', '--side-w', 'sidebarW', SIDE_MIN, SIDE_MAX, false, SIDE_W);
+resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true, 380);
 
 const dotCls = (t) => 'dot' + (t.dead ? ' dead' : t.streaming ? ' run' : t.unread ? ' unread' : ' open');
 const fmtSecs = (sec) => (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`);
@@ -119,32 +130,90 @@ function togglePin(s) {
   savePrefs({ pinned: list.includes(s.path) ? list.filter((p) => p !== s.path) : [s.path, ...list].slice(0, 20) });
 }
 
+/** Rename a conversation, open or not: an open one through its session, a saved one in its file. */
+async function renameConversation(s) {
+  const tab = tabForSession(s);
+  if (tab) return renameTab(tab);
+  const n = (await promptDialog('Rename conversation', 'Name', s.title))?.trim();
+  if (!n || n === s.title) return;
+  try {
+    await api.post('/api/sessions/rename', { path: s.path, title: n });
+    await loadSessions();
+    drawSidebar();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 function rowMenu(s, anchor) {
   const tab = tabForSession(s);
   const isPinned = pinned().includes(s.path);
   popMenu(anchor, [
     { header: s.title },
     { label: tab ? 'Show' : 'Open', run: () => openSession(s) },
-    { label: isPinned ? 'Unpin' : 'Pin to the top', run: () => togglePin(s) },
-    tab ? { label: 'Rename…', run: () => renameTab(tab) } : null,
+    { label: isPinned ? 'Unpin' : 'Pin to the top', hint: 'P', run: () => togglePin(s) },
+    { label: 'Rename…', hint: 'F2', run: () => renameConversation(s) },
     { label: 'New session in this project', run: () => newSession(s.cwdDisplay || s.cwd) },
     { label: 'Show folder in Explorer', run: () => api.post('/api/fs/reveal', { path: s.cwdDisplay || s.cwd }).catch((e) => toast(e.message, 'error')) },
     '-',
-    { label: 'Delete conversation…', danger: true, run: () => confirmDeleteConversation(s) },
-  ].filter(Boolean), { minWidth: 230 });
+    { label: 'Delete conversation…', danger: true, hint: 'Del', run: () => confirmDeleteConversation(s) },
+  ].filter(Boolean), { minWidth: 240 });
 }
 
 /** One saved conversation in the sidebar. `where` shows its project (in Pinned, where rows from many projects mix). */
+/** Keys on a focused conversation row: F2 renames, P pins or unpins, Delete asks to delete, Shift+F10 opens its menu. */
+function rowKeys(s, e) {
+  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.key === 'F2') return e.preventDefault(), renameConversation(s);
+  if (e.key === 'Delete') return e.preventDefault(), confirmDeleteConversation(s);
+  if (e.key.toLowerCase() === 'p' && !e.shiftKey) return e.preventDefault(), togglePin(s);
+  if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') return e.preventDefault(), rowMenu(s, e.currentTarget);
+}
+
 function sessionRow(s, where) {
   const tab = tabForSession(s);
   const cur = !!tab && tab.id === S.active;
   const more = iconBtn('more', 'More', (e) => rowMenu(s, e.currentTarget), 'sm');
-  return h('div', { class: 's-row' + (cur ? ' cur' : '') },
-    h('button', { class: 's-btn', type: 'button', title: (where ? `${s.title}\n${where}` : s.preview || s.title), 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
+  const tip = [s.title, where, s.branch ? `Branch ${s.branch}` : '', !where && s.preview && s.preview !== s.title ? s.preview : ''].filter(Boolean).join('\n');
+  return h('div', { class: 's-row' + (cur ? ' cur' : '') + (tab?.streaming ? ' live' : '') },
+    h('button', { class: 's-btn', type: 'button', title: tip, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), ondblclick: (e) => (e.preventDefault(), renameConversation(s)), onkeydown: (e) => rowKeys(s, e), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
       tab ? h('span', { class: dotCls(tab) }) : null,
+      s.branch ? icon('branch', 12, 's-br') : null,
       h('span', { class: 'ell grow' }, s.title),
       where ? h('span', { class: 's-where ell' }, where) : h('span', { class: 's-when' }, timeAgo(s.mtime))),
     h('span', { class: 'row-acts' }, more));
+}
+
+/** A project's menu (its ⋯ button or a right-click on its name). */
+function projectMenu(g, anchor) {
+  const all = groupSessions();
+  popMenu(anchor, [
+    { header: g.name },
+    { label: 'New session here', run: () => newSession(g.path) },
+    { label: 'Show folder in Explorer', run: () => api.post('/api/fs/reveal', { path: g.path }).catch((e) => toast(e.message, 'error')) },
+    { label: 'Copy folder path', run: () => copyText(g.path) },
+    '-',
+    { label: 'Fold the other projects', run: () => {
+      for (const x of all) if (x.key !== g.key) collapsed.add(x.key);
+      collapsed.delete(g.key);
+      lsSet('collapsed', [...collapsed]);
+      drawSidebar();
+    } },
+    { label: 'Unfold all projects', run: () => {
+      collapsed.clear();
+      lsSet('collapsed', []);
+      drawSidebar();
+    } },
+    g.saved ? '-' : null,
+    g.saved ? { label: 'Remove from the list', hint: 'files kept', run: async () => {
+      try {
+        S.workspaces = (await api.post('/api/workspaces/remove', { id: g.id })).workspaces;
+        drawSidebar();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    } } : null,
+  ].filter(Boolean), { minWidth: 240 });
 }
 
 /** Pinned conversations, above the projects. */
@@ -173,11 +242,12 @@ function listKeys(e) {
 let sideSig = '';
 function sidebarSig() {
   return JSON.stringify([
-    searchTerm, [...collapsed], pinned(), S.active, S.ui.rail === true, Math.floor(Date.now() / 60000),
+    searchTerm, [...collapsed], [...expanded], pinned(), S.active, S.ui.rail === true, Math.floor(Date.now() / 60000),
     S.sessions.map((s) => [s.path, s.mtime, s.title]),
     [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '', t.worktree?.branch || '', t.worktree?.state || '']),
     S.workspaces.map((w) => [w.id, w.path, w.name]),
     (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name),
+    S.update ? [S.update.state, S.update.version, S.update.percent] : null,
   ]);
 }
 
@@ -201,7 +271,9 @@ function drawSidebar() {
     const fresh = unlistedTabs(g).filter((t) => !term || `${t.name} ${g.name}`.toLowerCase().includes(term));
     if (term && !sess.length && !fresh.length && !g.name.toLowerCase().includes(term)) return null;
     const open = !!term || !collapsed.has(g.key);
-    const shown = open ? sess.slice(0, term ? 50 : 8) : [];
+    const all = !!term || expanded.has(g.key);
+    const shown = open ? sess.slice(0, term ? 50 : all ? 300 : SHOWN) : [];
+    const live = [...S.tabs.values()].filter((t) => !t.dead && t.streaming && keyPath(t.worktree?.source || t.workspace || '') === g.key).length;
     const toggle = () => {
       // In the rail a project is one icon: a click starts a session there instead of folding a hidden list.
       if (appEl.classList.contains('rail')) return newSession(g.path);
@@ -211,22 +283,23 @@ function drawSidebar() {
     };
     return h('div', { class: 'proj' },
       h('div', { class: 'proj-head' },
-        h('button', { class: 'proj-btn', type: 'button', title: g.path, 'aria-expanded': String(open), onclick: toggle }, icon(open ? 'chevron-down' : 'chevron-right', 12, 'chev'), icon(open ? 'folder-open' : 'folder', 14, 'proj-ic'), h('span', { class: 'ell' }, g.name), g.sessions.length ? h('span', { class: 'proj-n num' }, g.sessions.length) : null),
+        h('button', { class: 'proj-btn', type: 'button', title: live ? `${g.path}\n${live} working` : g.path, 'aria-expanded': String(open), onclick: toggle, oncontextmenu: (e) => (e.preventDefault(), projectMenu(g, e.currentTarget)), onkeydown: (e) => ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') && (e.preventDefault(), projectMenu(g, e.currentTarget)) },
+          icon(open ? 'chevron-down' : 'chevron-right', 12, 'chev'), icon(open ? 'folder-open' : 'folder', 14, 'proj-ic'), h('span', { class: 'ell' }, g.name),
+          live ? h('span', { class: 'proj-live', title: `${live} working`, 'aria-label': `${live} working` }, h('span', { class: 'dot run' })) : null,
+          g.sessions.length ? h('span', { class: 'proj-n num' }, g.sessions.length) : null),
         h('span', { class: 'row-acts' },
           iconBtn('plus', `New session in ${g.name}`, () => newSession(g.path), 'sm'),
-          g.saved ? iconBtn('x', 'Remove from the list (your files are kept)', async () => {
-            try {
-              S.workspaces = (await api.post('/api/workspaces/remove', { id: g.id })).workspaces;
-              drawSidebar();
-            } catch (e) {
-              toast(e.message, 'error');
-            }
-          }, 'sm') : null)),
+          iconBtn('more', `${g.name}: more`, (e) => projectMenu(g, e.currentTarget), 'sm'))),
       open ? fresh.map((t) => h('div', { class: 's-row' + (t.id === S.active ? ' cur' : '') },
         h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, h('span', { class: dotCls(t) }), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
       shown.map((s) => sessionRow(s)),
       open && !term && !sess.length && !fresh.length ? h('div', { class: 's-none' }, g.sessions.length ? 'All pinned' : 'No conversations yet') : null,
-      open && !term && sess.length > shown.length ? h('button', { class: 's-more', type: 'button', onclick: () => ((searchTerm = g.name), drawSidebar(), sideEl.querySelector('.side-search input')?.focus()) }, `${sess.length - shown.length} more`) : null);
+      // The rest of a long project opens in place; it stays open until you fold it again.
+      open && !term && sess.length > SHOWN ? h('button', { class: 's-more', type: 'button', 'aria-expanded': String(all), onclick: () => {
+        all ? expanded.delete(g.key) : expanded.add(g.key);
+        lsSet('expanded', [...expanded]);
+        drawSidebar();
+      } }, icon(all ? 'chevron-up' : 'chevron-down', 12), all ? 'Show fewer' : `Show ${sess.length - SHOWN} more`) : null);
   }).filter(Boolean);
   // The brand row stays in the document across redraws (re-inserting it would restart the logo's orbit); only the
   // rows after it are rebuilt.
@@ -244,6 +317,7 @@ function drawSidebar() {
       pinnedList(term),
       h('div', { class: 'side-h' }, h('span', null, 'Projects'), iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm')),
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No matching conversations.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
+    sideUpdate(icon('download', 15)),
     h('div', { class: 'side-foot' }, footStatus(), iconBtn('cog', 'Settings (Ctrl+,)', () => settingsDialog())),
   );
   sideEl.querySelector('.side-scroll').scrollTop = scroll;
@@ -512,6 +586,7 @@ on('tabs', () => {
   drawSidebar();
 });
 on('active', showActive);
+on('update', () => drawSidebar());
 on('engine', () => {
   drawSidebar();
   if (!activeTab()) drawWelcome();

@@ -15,6 +15,7 @@ ORBIX runs a local server that can start an AI agent (which can run commands and
 - MCP servers listed in a project's `.mcp.json` only start after you allow them; the question shows the whole command and its environment (secret-looking values masked). A changed config asks again.
 - The agent's file tools do not open network shares (`\\host\share`) outside the project's own share, so a path planted in a web page or file cannot make Windows send your credentials to another host.
 - The Changes panel runs git with repository programs off (`core.fsmonitor`, external diff, textconv), and file diffs stay inside the project folder.
+- Updates come only from this repository's GitHub releases over HTTPS. A downloaded installer runs only if its SHA-512 matches the release's `latest.yml`, and it is never downgraded or taken from a pre-release. A copy run from source never updates itself.
 - Release zips are checked at build time: no user data, tests, logs or caches.
 
 ## Reporting a vulnerability

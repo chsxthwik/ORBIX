@@ -29,6 +29,7 @@ export const emit = (ev, ...a) => {
 
 export const S = {
   env: null,
+  update: null, // the Windows app's update status (web/js/updates.js); null in a browser
   ui: {},
   workspaces: [],
   sessions: [],
@@ -39,7 +40,7 @@ export const S = {
 
 export const activeTab = () => S.tabs.get(S.active) || null;
 
-function keyPath(p) {
+export function keyPath(p) {
   if (!p) return '';
   if (S.env?.backend.kind === 'native') return p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
   let x = p;

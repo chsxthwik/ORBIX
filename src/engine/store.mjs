@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DATA_DIR } from '../store.mjs';
-import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, textOf } from '../util.mjs';
+import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, readTail, textOf } from '../util.mjs';
 import { protect, unprotect } from './secrets.mjs';
 import { PRESETS, clientFor } from './providers.mjs';
 import { setProviderOrg } from './openai.mjs';
@@ -378,6 +378,19 @@ export function loadSession(file) {
   return { header, messages, title, undone, checkpoints, worktreeState };
 }
 
+/** The last title entry in a stretch of session lines, or ''. */
+export function lastTitle(text) {
+  let title = '';
+  for (const line of text.split('\n')) {
+    if (!line.includes('"title"')) continue;
+    try {
+      const o = JSON.parse(line);
+      if (o.type === 'title' && typeof o.title === 'string') title = o.title;
+    } catch {}
+  }
+  return title;
+}
+
 /** Header facts of a saved conversation from its first bytes: { header, title, first } (first user text). */
 export function parseAgentHead(text) {
   let header = null;
@@ -398,6 +411,7 @@ export function parseAgentHead(text) {
 }
 
 const listCache = new Map(); // file -> { mtime, size, head }
+const HEAD_BYTES = 65536;
 
 /** Session-list entries (id, path, cwd, title, mtime, size, chain, engine: 'builtin'). Unchanged files are not re-read. */
 export async function listAgentSessions(backend) {
@@ -415,7 +429,11 @@ export async function listAgentSessions(backend) {
     const st = await fs.promises.stat(file);
     let hit = listCache.get(file);
     if (!hit || hit.mtime !== st.mtimeMs || hit.size !== st.size) {
-      hit = { mtime: st.mtimeMs, size: st.size, head: parseAgentHead(await readHead(file, 65536)) };
+      const head = parseAgentHead(await readHead(file, HEAD_BYTES));
+      // A rename (or the automatic title) is appended to the end of the file; in a long conversation that is past
+      // the first bytes, so the newest title comes from the end.
+      if (st.size > HEAD_BYTES) head.title = lastTitle(await readTail(file, HEAD_BYTES, st.size)) || head.title;
+      hit = { mtime: st.mtimeMs, size: st.size, head };
       listCache.set(file, hit);
     }
     const { header, title, first } = hit.head;
@@ -444,6 +462,23 @@ export async function deleteAgentSessions(paths) {
     await fs.promises.rm(file, { force: true });
   }
   return files.length;
+}
+
+/** Give a saved conversation a new name (an entry appended to its file, as a rename in an open session writes). */
+export function renameAgentSession(file, title) {
+  const t = String(title ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!t) throw Object.assign(new Error('A name is required'), { status: 400 });
+  // Same rule as delete: only a file directly inside data/sessions/<project>/.
+  const f = typeof file === 'string' && file.endsWith('.jsonl') ? path.resolve(file) : '';
+  if (!f || path.dirname(path.dirname(f)) !== path.resolve(sessionsDir()) || !fs.existsSync(f)) throw Object.assign(new Error('That conversation was not found'), { status: 404 });
+  // A new name is not new work: the conversation keeps its place in the list (sorted by last change).
+  const { atime, mtime } = fs.statSync(f);
+  appendEntry(f, { type: 'title', title: t });
+  closeSession(f); // Windows may stamp the time again when a written handle closes; close it first
+  try {
+    fs.utimesSync(f, atime, mtime);
+  } catch {}
+  return t;
 }
 
 export const isAgentSessionPath = (p) => typeof p === 'string' && path.resolve(p).startsWith(path.resolve(sessionsDir()) + path.sep);

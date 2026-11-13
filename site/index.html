@@ -51,7 +51,7 @@
         <a class="btn" href="https://github.com/chsxthwik/ORBIX/releases/latest">Download for Windows</a>
         <a class="btn ghost" href="#start">How to start</a>
       </p>
-      <p class="install-note">Windows 10 or 11. Installs for your account, with no administrator rights, no Node.js and no account.</p>
+      <p class="install-note">Windows 10 or 11. Installs for your account, with no administrator rights, no Node.js and no account, then keeps itself up to date.</p>
     </section>
 
     <figure class="shot wide">
@@ -75,6 +75,9 @@
         <div><dt>Checks its own work</dt><dd>After it changes files, ORBIX can run your project&rsquo;s own tests or build before the agent reports back.</dd></div>
         <div><dt>Catches broken syntax at once</dt><dd>Each JavaScript or JSON file the agent writes is parsed straight away, and it is told the line to fix.</dd></div>
         <div><dt>Search everything</dt><dd>Ctrl+K finds conversations, files, projects and commands from one box.</dd></div>
+        <div><dt>A sidebar that keeps up</dt><dd>Rename, pin and delete conversations from the keyboard. Busy projects show a live dot, and branch sessions are marked.</dd></div>
+        <div><dt>Fits your screen</dt><dd>The interface scales itself on wide and high-resolution screens, and the window reopens where you left it.</dd></div>
+        <div><dt>Updates itself</dt><dd>New versions download in the background and install when you close ORBIX. Your settings and chats stay.</dd></div>
       </dl>
     </section>
 
@@ -130,6 +133,7 @@
         <details><summary>Where does my code go?</summary><p>To the model provider you choose. It receives your messages, the project rules and tool results, including the contents of files the agent reads. A local model (Ollama or LM Studio) keeps all of that on your PC.</p></details>
         <details><summary>Can I undo what the agent changed?</summary><p>Yes. Every file change has its own undo, and <code>/undo</code> reverts a whole reply. Commands cannot be undone.</p></details>
         <details><summary>Will it change files or run commands without asking?</summary><p>No. Reading and searching run without asking. Edits and commands ask first, unless you turn on &ldquo;Allow everything&rdquo; in Settings.</p></details>
+        <details><summary>How does ORBIX update?</summary><p>By itself. The app checks GitHub for a new version when it opens and every few hours, downloads it in the background and installs it when you close ORBIX. Restart at the bottom of the sidebar installs it at once. Each download is checked before it runs, and you can turn automatic updates off in Settings, under About.</p></details>
         <details><summary>Which systems does it run on?</summary><p>Windows 10 and 11. It can run commands in Windows or inside WSL.</p></details>
         <details><summary>Is it free?</summary><p>ORBIX is free to use. The source is available under the Functional Source License and each release turns MIT after two years. Your model provider charges for its own usage.</p></details>
       </div>
@@ -141,7 +145,7 @@
         <li><strong>Download the installer</strong> from the latest release and run it.</li>
         <li><strong>Open ORBIX</strong> from the Start menu or the desktop shortcut.</li>
         <li><strong>Connect a model</strong> in Settings, under Providers.</li>
-        <li><strong>Open a project folder</strong>, describe a task and press Enter.</li>
+        <li><strong>Open a project folder</strong>, describe a task and press Enter. From then on, ORBIX updates itself.</li>
       </ol>
       <p class="actions"><a class="btn" href="https://github.com/chsxthwik/ORBIX/releases/latest">Download for Windows</a></p>
     </section>
