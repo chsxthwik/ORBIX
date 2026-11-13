@@ -8,7 +8,7 @@ import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
 import { Backend } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
-import { EngineConfig, listAgentSessions, deleteAgentSessions, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
+import { EngineConfig, listAgentSessions, deleteAgentSessions, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
 import { clientFor } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import * as pkce from './engine/oauth-pkce.mjs';
@@ -665,6 +665,13 @@ export class AppServer {
         return { path: target };
       },
       'GET /api/diagnostics': async () => ({ report: await collectDiagnostics(this) }),
+      'POST /api/sessions/rename': async ({ body }) => {
+        const file = typeof body.path === 'string' ? body.path : '';
+        // An open session keeps its title in memory and writes it itself; renaming it here would be overwritten.
+        const open = [...this.procs.values()].some((p) => p.opts.resume === file || p.session?.file === file);
+        if (open) throw Object.assign(new Error('That conversation is open. Rename it from its tab.'), { status: 409 });
+        return { title: renameAgentSession(file, body.title) };
+      },
       'POST /api/sessions/delete': async ({ body }) => {
         const paths = Array.isArray(body.paths) ? body.paths : [];
         if (!paths.length || paths.length > 500) throw Object.assign(new Error('Nothing to delete'), { status: 400 });

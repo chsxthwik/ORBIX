@@ -4,6 +4,7 @@ import { app, BrowserWindow, Menu, nativeTheme, shell, ipcMain, screen } from 'e
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { startUpdates, installOnQuit } from './updater.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -120,6 +121,7 @@ async function quit() {
   try {
     await orbix?.stop();
   } finally {
+    installOnQuit(); // a downloaded update installs now, after the server has stopped
     app.exit(0);
   }
 }
@@ -138,6 +140,7 @@ app.on('before-quit', (e) => {
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  startUpdates({ restart: () => quit() }); // registers its IPC handlers at once; the updater itself loads after
   // Imported only now, so ORBIX_DATA above is set before the data folder is chosen.
   const { startOrbix } = await import('../src/app.mjs');
   orbix = await startOrbix({ onQuit: () => quit() });

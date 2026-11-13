@@ -14,7 +14,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "dist": "electron-builder --win nsis",
+    "dist": "electron-builder --win nsis --publish never",
+    "release": "electron-builder --win nsis --publish always",
     "shots": "node tools/shots.mjs"
   },
   "keywords": [
@@ -59,6 +60,14 @@
       "NOTICE.md"
     ],
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "chsxthwik",
+        "repo": "ORBIX",
+        "releaseType": "release"
+      }
+    ],
     "win": {
       "target": [
         {
@@ -88,5 +97,8 @@
   "devDependencies": {
     "electron": "45.1.0",
     "electron-builder": "26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
   }
 }

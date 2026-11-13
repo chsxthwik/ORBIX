@@ -16,6 +16,7 @@ Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ───�
 3. A new server creates a random token and binds to port 47821 (or another available local port). The window opens a one-time URL with the token; the server exchanges it for an `HttpOnly`, `SameSite=Strict` cookie, then redirects to `/`.
 4. On first run the server detects where commands run: the first WSL distribution that starts, otherwise Windows.
 5. Closing the window, or Quit ORBIX in Settings, saves, stops every session and the server, and removes the lock file.
+6. Updates (`electron/updater.mjs`, installed app only): electron-updater reads the newest GitHub release's `latest.yml` 15 seconds after start and every 4 hours, downloads the installer into `%LOCALAPPDATA%\orbix-agent-updater` and checks its SHA-512. The page sees the status through the preload bridge (`orbixDesktop.updates`). The installer runs silently (`--updated /S`) as the last step of quitting, after the server has stopped, and with `--force-run` when the update was started from Restart.
 
 ## The server (`src/server.mjs`)
 

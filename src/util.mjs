@@ -132,6 +132,21 @@ export function safeLink(raw) {
 }
 
 /** First `bytes` bytes of a file as UTF-8 (the tail may cut a multi-byte character; fine for sniffing headers). */
+/** The last `bytes` of a file as text, starting at the first complete line (a cut first line is dropped). */
+export async function readTail(file, bytes, size) {
+  const fh = await fs.promises.open(file, 'r');
+  try {
+    const total = size ?? (await fh.stat()).size;
+    const from = Math.max(0, total - bytes);
+    const buf = Buffer.alloc(Math.min(bytes, total));
+    const { bytesRead } = await fh.read(buf, 0, buf.length, from);
+    const text = buf.subarray(0, bytesRead).toString('utf8');
+    return from ? text.slice(text.indexOf('\n') + 1) : text;
+  } finally {
+    await fh.close();
+  }
+}
+
 export async function readHead(file, bytes) {
   const fh = await fs.promises.open(file, 'r');
   try {

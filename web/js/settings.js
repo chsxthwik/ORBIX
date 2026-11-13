@@ -2,7 +2,7 @@
 // A search box finds any setting by name and jumps to it.
 import { h, icon, toast, replace, clear, logo, errorState, loadingState } from './dom.js';
 import { api } from './api.js';
-import { S, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
+import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { toggleWide } from './workbench.js';
 import { modal, btn, confirmDialog, row, toggle, SHORTCUTS, keyCaps } from './dialogs.js';
 import { renderEngineSettings } from './engine.js';
@@ -12,6 +12,7 @@ import { renderMcpSettings } from './mcp.js';
 import { openHelp } from './help.js';
 import { openDiagnostics } from './diagnostics.js';
 import { asciiComx } from './ascii.js';
+import { updatesSupported, checkForUpdates, setAutoUpdates, restartToUpdate, updateLine } from './updates.js';
 
 /** key, label, icon, one line under the page title. */
 const TABS = [
@@ -26,7 +27,7 @@ const TABS = [
   { group: 'App' },
   ['look', 'Appearance', 'palette', 'Theme, text size and layout.'],
   ['keys', 'Shortcuts', 'keyboard', 'Every keyboard shortcut. Type to filter the list.'],
-  ['about', 'About', 'info', 'Version, developer and help.'],
+  ['about', 'About', 'info', 'Version, updates, developer and help.'],
 ];
 const PAGES = TABS.filter((t) => Array.isArray(t));
 
@@ -54,6 +55,7 @@ const FIND = [
   ['Show model thinking', 'look', 'reasoning'],
   ['Keyboard shortcuts', 'keys', 'keys hotkeys'],
   ['Default model for new sessions', 'start', 'model home'],
+  ['Updates', 'about', 'update upgrade new version check download install release'],
 ];
 
 /** Rows that belong together, in one framed list. */
@@ -476,6 +478,31 @@ const COMX_URL = 'https://comx-site.vercel.app';
 const ISSUES_URL = 'https://github.com/chsxthwik/ORBIX/issues';
 const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
 
+const RELEASES_URL = 'https://github.com/chsxthwik/ORBIX/releases';
+
+/** Settings → About → Updates, in the Windows app. It redraws itself as the status changes. */
+function updatesGroup() {
+  if (!updatesSupported()) return null;
+  const box = h('div');
+  let drawn = false;
+  const draw = () => {
+    if (drawn && !box.isConnected) return off(); // the settings sheet was closed
+    drawn = true;
+    const st = S.update;
+    const busy = st.state === 'checking' || st.state === 'downloading';
+    const action = st.state === 'ready'
+      ? btn('Restart to update', () => restartToUpdate(), 'sm primary')
+      : h('button', { class: 'btn sm', type: 'button', disabled: busy ? true : null, onclick: () => checkForUpdates() }, st.state === 'checking' ? 'Checking…' : st.state === 'downloading' ? `${st.percent || 0}%` : 'Check now');
+    replace(box, group('Updates', null,
+      row(st.state === 'ready' ? `ORBIX ${st.version} is ready` : `ORBIX ${st.current}`, action, h('span', { class: 'upd-line' + (st.state === 'error' ? ' err' : '') }, updateLine(st))),
+      row('Update automatically', toggle(st.auto, (v) => setAutoUpdates(v), 'Update automatically'), 'Downloads new versions in the background from GitHub. Each download is checked before it installs, and your settings and conversations are kept.'),
+      row('What’s new', btn('Release notes', () => openLink(RELEASES_URL), 'sm'), 'Every version and what changed in it.')));
+  };
+  const off = on('update', draw);
+  draw();
+  return box;
+}
+
 function tabAbout(el, show) {
   const b = S.env.backend;
   el.append(
@@ -490,6 +517,7 @@ function tabAbout(el, show) {
         h('strong', null, 'COM-X Corporation'),
         h('p', null, 'Company X finds the problems that matter most and builds their solutions. ORBIX is its coding workspace.'),
         h('button', { class: 'link', type: 'button', title: COMX_URL, onclick: () => openLink(COMX_URL) }, 'Visit COM-X', icon('external', 12)))),
+    updatesGroup(),
     group(null, null,
       row('Report a problem', btn('Open GitHub', () => openLink(ISSUES_URL), 'sm'), 'Report a bug or suggest a feature on GitHub.'),
       row('Commands run in', b.kind === 'wsl' ? `WSL (${b.distro})` : 'Windows'),

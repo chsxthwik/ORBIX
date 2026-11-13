@@ -691,6 +691,53 @@ describe('GET /api/fs/list', () => {
   });
 });
 
+describe('POST /api/sessions/rename', () => {
+  const sessions = path.join(DATA, 'sessions');
+  const rename = (p, title) => api('POST', '/api/sessions/rename', { body: { path: p, title } });
+  const mk = (name, extra = '') => {
+    const f = path.join(sessions, 'ren', name);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify({ type: 'session', id: name, cwd: TMP }) + '\n' + extra);
+    return f;
+  };
+  const listed = async (f) => (await api('GET', '/api/sessions')).json.sessions.find((s) => s.path === f);
+
+  test('renames a saved conversation, and the list shows the new name', async () => {
+    const f = mk('r1.jsonl', JSON.stringify({ type: 'title', title: 'Old name' }) + '\n');
+    const old = new Date('2026-01-02T03:04:05Z');
+    fs.utimesSync(f, old, old);
+    const r = await rename(f, '  New   name ');
+    assert.equal(r.status, 200);
+    assert.equal(r.json.title, 'New name');
+    assert.equal((await listed(f))?.title, 'New name');
+    assert.equal(Math.round((await listed(f)).mtime / 1000), Math.round(old.getTime() / 1000), 'a rename keeps its place in the list');
+  });
+
+  test('a long conversation shows the title written at its end, past the first 64 KB', async () => {
+    const pad = Array.from({ length: 200 }, (_, i) => JSON.stringify({ type: 'message', message: { role: 'assistant', content: 'x'.repeat(500) + i } })).join('\n') + '\n';
+    const f = mk('r2.jsonl', JSON.stringify({ type: 'title', title: 'First title' }) + '\n' + pad);
+    assert.ok(fs.statSync(f).size > 65536);
+    assert.equal((await listed(f))?.title, 'First title');
+    assert.equal((await rename(f, 'Renamed late')).status, 200);
+    assert.equal((await listed(f))?.title, 'Renamed late');
+  });
+
+  test('refuses an empty name, and files outside the sessions folders (writing nothing)', async () => {
+    const f = mk('r3.jsonl');
+    const before = fs.readFileSync(f, 'utf8');
+    assert.equal((await rename(f, '   ')).status, 400);
+    assert.equal(fs.readFileSync(f, 'utf8'), before);
+    const outside = path.join(TMP, 'outside-ren', 'p', 'x.jsonl');
+    fs.mkdirSync(path.dirname(outside), { recursive: true });
+    fs.writeFileSync(outside, '{"type":"session"}\n');
+    for (const p of [outside, path.join(sessions, 'ren', 'missing.jsonl'), path.join(sessions, 'ren', 'x.txt'), 42, null]) {
+      const r = await rename(p, 'Nope');
+      assert.equal(r.status, 404, String(p));
+    }
+    assert.equal(fs.readFileSync(outside, 'utf8'), '{"type":"session"}\n');
+  });
+});
+
 describe('POST /api/sessions/delete', () => {
   const sessions = path.join(DATA, 'sessions');
   const del = (paths) => api('POST', '/api/sessions/delete', { body: { paths } });

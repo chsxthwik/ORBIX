@@ -32,7 +32,7 @@ Download `ORBIX-Setup-3.2.0.exe` from the [latest release](https://github.com/ch
 1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in with ChatGPT, xAI or OpenRouter, paste an API key and press **Check & save**, or connect a local model.
 2. Open a project folder, describe a task and press <kbd>Enter</kbd>.
 
-Settings and conversations are kept in `%LOCALAPPDATA%\ORBIX`, so they stay when ORBIX updates or is reinstalled.
+ORBIX keeps itself up to date. It checks GitHub for a new version when it opens and every few hours, downloads it in the background and installs it when you close ORBIX; **Restart** at the bottom of the sidebar installs it at once. Settings → About → Updates has Check now and a switch to turn this off. Settings and conversations are kept in `%LOCALAPPDATA%\ORBIX`, so they stay through every update.
 
 ORBIX runs on Windows 10 and 11, using WSL or native Windows to run commands. The app and its agent run on your machine; there is no account or subscription. You pay your provider directly, or nothing with a local model.
 

@@ -332,11 +332,35 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px va
 .s-more { display: block; height: 26px; padding: 0 8px; color: var(--fg-3); font-size: 12px; border-radius: 0 var(--r-sm) var(--r-sm) 0; text-align: left; }
 .s-more:hover { color: var(--fg); background: var(--bg-hover); }
 .s-none { padding: 6px 8px; color: var(--fg-3); font-size: 12px; }
+.s-more { display: flex; align-items: center; gap: 6px; width: 100%; }
+.s-more svg { flex: none; }
+/* A conversation on its own git branch. */
+.s-br { flex: none; color: var(--fg-3); }
+.s-row.cur .s-br { color: var(--accent); }
+/* A project with an agent at work in it: a live dot before the count. */
+.proj-live { display: inline-flex; flex: none; align-items: center; margin-left: auto; padding: 0 2px; }
+.proj-live + .proj-n { margin-left: 6px; }
+.proj-head:hover .proj-live { visibility: hidden; }
+.app.rail .proj-live { display: none; }
 .side-foot { display: flex; align-items: center; gap: 2px; flex: none; }
 .foot-status { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r); color: var(--fg-2); transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
 .foot-status:hover { background: var(--bg-hover); color: var(--fg); }
 .foot-status .ell { flex: 1; }
 .foot-status .fs-k { flex: none; color: var(--fg-3); font-size: 12px; }
+/* An app update downloading (a thin progress fill) or ready (accent; click restarts into it). */
+.side-update { position: relative; display: flex; align-items: center; gap: 9px; flex: none; height: 34px; margin: 4px 10px 6px; padding: 0 10px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r); color: var(--fg-2); font-size: 13px; text-align: left; transition: background-color var(--t1) var(--ease), border-color var(--t1) var(--ease), color var(--t1) var(--ease); }
+.side-update::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--p, 0%); background: var(--accent-soft); transition: width var(--t2) var(--ease); pointer-events: none; }
+.side-update > * { position: relative; }
+.side-update .ell { flex: 1; min-width: 0; }
+.side-update .su-k { flex: none; color: var(--fg-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.side-update:disabled { cursor: default; opacity: 1; }
+.side-update.ready { border-color: var(--accent-line); background: var(--accent-soft); color: var(--fg); }
+.side-update.ready svg, .side-update.ready .su-k { color: var(--accent); }
+.side-update.ready .su-k { font-weight: 600; }
+.side-update.ready:hover { border-color: var(--accent); }
+.side-update.ready::before { display: none; }
+.upd-line { font-variant-numeric: tabular-nums; }
+.upd-line.err { color: var(--err); }
 /* ================= topbar / tabs ================= */
 .topbar { position: relative; display: flex; align-items: stretch; gap: 0; flex: none; height: var(--top-h); padding: 0 6px; border-bottom: 1px solid var(--line); background: transparent; }
 .topbar > .ibtn { align-self: center; }
@@ -1157,6 +1181,8 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 .app.rail .proj-btn, .app.rail .sidebar .run-row { justify-content: center; width: 40px; margin: 0 auto; padding: 0; }
 .app.rail .side-foot { flex-direction: column; gap: 4px; padding: 10px 0 12px; }
 .app.rail .foot-status { flex: none; justify-content: center; width: 40px; padding: 0; }
+.app.rail .side-update { justify-content: center; width: 40px; margin: 0 auto 6px; padding: 0; }
+.app.rail .side-update .ell, .app.rail .side-update .su-k { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar { transition: none; }
