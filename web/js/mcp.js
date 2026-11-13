@@ -9,9 +9,9 @@ import { renderSearchSettings, renderHooksSettings } from './toolset.js';
 const BUILTIN = [
   ['read, glob, grep', 'Read files and search the project.', false],
   ['web_fetch', 'Read a public web page as text. Local network addresses need your OK.', false],
-  ['web_search', 'Search the web. Only available after you set up a search service (below).', false],
+  ['web_search', 'Search the web. It is available once you set up a search service below.', false],
   ['task', 'Run read-only helper agents in parallel for research.', false],
-  ['todo', 'Keep a task list (shown in the Plan panel).', false],
+  ['todo', 'Keep a task list, shown in the Plan panel.', false],
   ['write, edit', 'Change files. Each change can be undone.', true],
   ['bash', 'Run shell commands in the project.', true],
 ];
@@ -27,7 +27,7 @@ function statusChip(s) {
 }
 
 function toolList(tools) {
-  if (!tools?.length) return h('p', { class: 'muted small' }, 'The server offers no tools.');
+  if (!tools?.length) return h('p', { class: 'muted small' }, 'This server offers no tools.');
   return h('div', { class: 'mcp-tools' }, tools.map((t) => h('div', { class: 'mcp-tool' }, h('code', null, t.name), t.readOnly ? h('span', { class: 'tag' }, 'Read-only') : h('span', { class: 'tag warn', title: 'Asks before running (unless approvals are off)' }, 'Asks first'), t.description ? h('span', { class: 'muted small' }, t.description) : null)));
 }
 

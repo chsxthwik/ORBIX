@@ -91,7 +91,7 @@ export async function httpError(r, { quotaWords = /insufficient_quota|exceeded y
   } catch {}
   const s = r.status;
   let msg;
-  if (s === 401 || s === 403) msg = `The API key was rejected (${s})`;
+  if (s === 401 || s === 403) msg = `The provider refused the API key or sign-in (${s})`;
   else if (s === 429) msg = 'Rate limited (429)';
   else if (s === 529) msg = 'The provider is overloaded (529)';
   else msg = `Provider error ${s}`;

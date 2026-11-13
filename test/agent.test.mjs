@@ -777,7 +777,7 @@ describe('agent loop end to end (mock provider)', () => {
     script = [() => new Response(JSON.stringify({ error: { message: 'invalid x-api-key' } }), { status: 401 })];
     const end = await send(p, 'hi');
     assert.equal(end.status, 'error');
-    assert.match(end.errorMessage, /The API key was rejected \(401\): invalid x-api-key/);
+    assert.match(end.errorMessage, /The provider refused the API key or sign-in \(401\): invalid x-api-key/);
   });
 
   test('regenerate replaces the last reply; the session file rebuilds the same and keeps the spent tokens', async () => {

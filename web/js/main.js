@@ -317,7 +317,7 @@ function drawSidebar() {
       pinnedList(term),
       h('div', { class: 'side-h' }, h('span', null, 'Projects'), iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm')),
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No matching conversations.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
-    sideUpdate(icon('download', 15)),
+    sideUpdate(icon('download', 15)) || '', // native append() would print null as text
     h('div', { class: 'side-foot' }, footStatus(), iconBtn('cog', 'Settings (Ctrl+,)', () => settingsDialog())),
   );
   sideEl.querySelector('.side-scroll').scrollTop = scroll;

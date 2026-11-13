@@ -491,7 +491,7 @@ export class AgentProc extends EventEmitter {
     const thinking = this.thinkingLevel !== 'off' ? this.thinkingLevel : undefined;
     const args = (a) => ({ ...base, thinking, ...a });
     const main = { client, args, stream: this._signedIn(client, args, this.provider), provider: this.provider, model: this.model, info: this.meta?.info || null, contextWindow: this.meta?.contextWindow, thinking };
-    // Plan mode thinks with the "plan" model when one is chosen (Settings → Providers → Models, or /model plan).
+    // Plan mode thinks with the "plan" model when one is chosen (Settings → Models, or /model plan).
     if (this.planMode) return (await this._roleConnSafe('plan')) || main;
     return main;
   }
@@ -532,7 +532,7 @@ export class AgentProc extends EventEmitter {
     const s = this._parseSpec(spec);
     const provider = s.provider || this.provider;
     const info = this.config.provider(provider);
-    if (!info) throw new Error(`The ${label} model "${spec}" has no provider. Choose it again in Settings → Providers → Models.`);
+    if (!info) throw new Error(`The ${label} model "${spec}" has no provider. Choose it again in Settings → Models.`);
     if (!this.config.configured(provider)) throw new Error(`The ${label} model "${spec}" needs ${info.name}, which is not set up. Add it in Settings → Providers, or choose another ${label} model.`);
     const key = await this.config.getKey(provider);
     if (!key && !info.keyOptional) throw new Error(`No API key is saved for ${info.name} (the ${label} model). Open Settings → Providers.`);

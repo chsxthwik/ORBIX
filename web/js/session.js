@@ -114,7 +114,7 @@ class LiveMarkdown {
 /** What to tell the user about a failed request, and the one action that most likely fixes it. */
 function errorHelp(msg) {
   const m = String(msg || '');
-  if (/\b(401|403)\b|unauthori[sz]ed|invalid.{0,20}(api.?)?key|incorrect api key|authentication|no api key/i.test(m)) return { hint: 'Check the API key for this provider.', act: 'Open Providers', run: () => emit('settings', 'engine') };
+  if (/\b(401|403)\b|unauthori[sz]ed|invalid.{0,20}(api.?)?key|incorrect api key|authentication|no api key/i.test(m)) return { hint: 'Check the key in Providers, or sign in again if you connected with a sign-in.', act: 'Open Providers', run: () => emit('settings', 'engine') };
   if (/\b429\b|rate.?limit|quota|overloaded|capacity|too many requests/i.test(m)) return { hint: 'The provider is busy, or your quota is used up. Wait a moment and try again.' };
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|fetch failed|network|socket hang up|timed? ?out/i.test(m)) return { hint: 'ORBIX couldn’t reach the provider. Check your internet connection, or make sure your local model server is running.' };
   if (/context|too long|maximum.{0,20}tokens|token limit/i.test(m) && /exceed|maximum|limit|too long|reduce/i.test(m)) return { hint: 'The conversation is too long for this model. Compact it with /compact, or start a new session.' };
@@ -221,7 +221,17 @@ function checkCard(m) {
   return card;
 }
 
-const clock = (ts) => (ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+/** A message's time: just the time today, "Yesterday" and the time, or the date and the time for older messages. */
+const clock = (ts) => {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const ago = Math.round((day(new Date()) - day(d)) / 86400000);
+  if (ago === 0) return time;
+  if (ago === 1) return `Yesterday ${time}`;
+  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })}, ${time}`;
+};
 
 export class TabView {
   constructor(tab) {

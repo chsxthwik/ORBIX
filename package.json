@@ -1,6 +1,6 @@
 {
   "name": "orbix-agent",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "ORBIX - a local-first AI coding workspace for Windows. Asks before it edits or runs anything; every change can be undone.",
   "type": "module",
   "main": "electron/main.mjs",

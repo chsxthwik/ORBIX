@@ -8,8 +8,8 @@ import { row, btn } from './dialogs.js';
 const SAVED = 'pv-save-hidden';
 
 const ROLES = [
-  ['fast', 'Fast model', 'Used for chat titles, summaries of long chats (/compact and automatic) and helper agents. A small, cheap model is a good choice.'],
-  ['plan', 'Plan model', 'Used while plan mode is on (/plan). A stronger model is a good choice.'],
+  ['fast', 'Fast model', 'Writes conversation titles, summarizes long conversations (with /compact or when the context fills up), reviews the changes and runs helper agents. A small, low-cost model is a good choice.'],
+  ['plan', 'Plan model', 'Thinks while plan mode is on (/plan). A stronger model is a good choice.'],
 ];
 
 export function renderModelRoles(root, engine) {
@@ -37,7 +37,7 @@ export function renderModelRoles(root, engine) {
     save.classList.add(SAVED);
     return row(label, h('div', { class: 'role-ctl' }, input, save), hint);
   });
-  replace(root, h('p', { class: 'set-note' }, 'Leave a box empty to use the session’s model. In a session, /model fast and /model plan change them for that session only.'), h('div', { class: 'set-card' }, rows), dl);
+  replace(root, h('p', { class: 'set-note' }, 'Leave a box empty to use the session’s own model. In a session, /model fast and /model plan change these for that session only.'), h('div', { class: 'set-card' }, rows), dl);
   api.get('/api/engine/models').then((r) => {
     replace(dl, r.models.map((m) => h('option', { value: `${m.provider}/${m.id}` }, `${m.providerName}: ${m.name}`)));
     if (r.errors?.length) toast(r.errors[0], 'info', 5000);

@@ -829,7 +829,7 @@ button.sb-item:hover { background: var(--bg-hover); color: var(--fg-2); }
 .set-tab.cur { background: var(--bg-active); color: var(--fg); font-weight: 500; }
 .set-tab.cur svg { color: var(--fg); }
 .set-tab:focus-visible { outline-offset: -2px; }
-.set-content { overflow-y: auto; }
+.set-content { overflow-y: auto; scrollbar-gutter: stable; } /* same width whether a page scrolls or not */
 .set-content > * { animation: fade-in var(--t2) var(--ease); }
 .set-body { display: flex; flex-direction: column; min-width: 0; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--line); }
@@ -1264,7 +1264,7 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 
 /* ---- settings ---- */
 .modal.settings { width: min(1040px, calc(100vw - 48px)); max-width: none; }
-.set-wrap { grid-template-columns: 224px minmax(0, 1fr); height: min(700px, calc(100vh - 128px)); }
+.set-wrap { grid-template-columns: 224px minmax(0, 1fr); height: min(820px, calc(100vh - 128px)); }
 .set-nav { gap: 8px; padding: 12px 10px; }
 .set-find { position: relative; flex: none; }
 .set-find svg { position: absolute; left: 10px; top: 50%; color: var(--fg-3); transform: translateY(-50%); pointer-events: none; }
@@ -1521,6 +1521,7 @@ html.zen .main { border: 0; border-radius: 0; }
 .ov-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 14px; color: var(--fg); text-align: left; transition: background-color var(--t1) var(--ease); }
 .ov-row + .ov-row { border-top: 1px solid var(--line); }
 button.ov-row:hover { background: var(--bg-hover); }
+.ov-row.static .ov-val { margin-right: 26px; } /* lines up with the values of the rows that have a chevron */
 button.ov-row:focus-visible { outline-offset: -2px; }
 .ov-row .ov-ic { width: 28px; height: 28px; border-radius: 7px; }
 .ov-l { flex: none; font-size: 13px; font-weight: 500; }

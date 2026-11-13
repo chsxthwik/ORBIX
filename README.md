@@ -27,7 +27,7 @@ Bring your own API key or run a local model.
 
 ## Install
 
-Download `ORBIX-Setup-3.2.0.exe` from the [latest release](https://github.com/chsxthwik/ORBIX/releases/latest) and run it. It installs ORBIX for your Windows account, with a Start menu and desktop shortcut, and needs no administrator rights and no Node.js. The installer is not code-signed yet, so Windows SmartScreen asks for confirmation the first time (More info, then Run anyway).
+Download the `ORBIX-Setup` installer from the [latest release](https://github.com/chsxthwik/ORBIX/releases/latest) and run it. It installs ORBIX for your Windows account, with a Start menu and desktop shortcut, and needs no administrator rights and no Node.js. The installer is not code-signed yet, so Windows SmartScreen asks for confirmation the first time (More info, then Run anyway).
 
 1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in with ChatGPT, xAI or OpenRouter, paste an API key and press **Check & save**, or connect a local model.
 2. Open a project folder, describe a task and press <kbd>Enter</kbd>.
