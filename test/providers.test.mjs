@@ -51,7 +51,10 @@ describe('model lists', () => {
   });
   test('a provider that does not answer in time is reported, not waited on forever', async (t) => {
     t.mock.method(globalThis, 'fetch', (url, init) => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(init.signal.reason))));
-    const signal = AbortSignal.timeout(30);
+    // A ref'd timer: Node 22 does not keep the process alive for AbortSignal.timeout() while fetch hangs.
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(new DOMException('The operation timed out.', 'TimeoutError')), 30);
+    const signal = ctl.signal;
     await assert.rejects(() => clientFor('openai').listModels({ apiKey: 'k', baseUrl: 'https://api.groq.com/openai/v1', providerId: 'groq', signal }), /Groq did not answer within 20 seconds/);
   });
 });
