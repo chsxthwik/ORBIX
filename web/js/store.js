@@ -198,6 +198,11 @@ const refreshStats = perTab(async (tab) => {
   } catch {}
 }, 600);
 
+// A provider was added, removed or changed: every session asks for its model list again.
+on('engine', () => {
+  for (const t of S.tabs.values()) t.models = null;
+});
+
 export async function loadModels(tab) {
   if (tab.models) return tab.models;
   const r = await rpc(tab.id, { type: 'get_available_models' });

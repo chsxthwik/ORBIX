@@ -4,6 +4,7 @@
 // Emits the same normalised events as anthropic.mjs and openai.mjs.
 import crypto from 'node:crypto';
 import { parseSSE, httpError, post, streamError, imageBlock } from './anthropic.mjs';
+import { setLiveInfo, learnEfforts, effortsKnown } from './catalog.mjs';
 
 const join = (base, p) => base.replace(/\/+$/, '') + p;
 
@@ -45,14 +46,75 @@ function headers(accessToken, accept = 'text/event-stream') {
 export const PLAN_MODELS = ['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'];
 
 /** The models this ChatGPT plan offers (GET /models, as Codex reads it). Also proves the sign-in works. */
-export async function listModels({ apiKey, baseUrl, signal }) {
+export async function listModels({ apiKey, baseUrl, signal, probe = false }) {
   const r = await post(join(baseUrl, `/models?client_version=${CLIENT_VERSION}`), { headers: headers(apiKey, 'application/json'), signal }, baseUrl);
   if (r.status === 404) return PLAN_MODELS.map((id) => ({ id, name: id }));
   if (!r.ok) throw await planError(r);
   const j = await r.json().catch(() => ({}));
   const rows = (Array.isArray(j.models) ? j.models : []).filter((m) => m?.slug && (m.visibility || 'list') === 'list');
   if (!rows.length) return PLAN_MODELS.map((id) => ({ id, name: id }));
+  // In the plan's own order, with the facts it reports about each model.
+  rows.sort((a, b) => (Number(a.priority) || 0) - (Number(b.priority) || 0));
+  for (const m of rows) setLiveInfo('chatgpt', m.slug, planFacts(m));
+  // The advertised levels are not always what the API takes: ask it, once a week per model (it costs nothing).
+  if (probe) await Promise.all(rows.filter((m) => !effortsKnown('chatgpt', m.slug)).map((m) => probeEfforts({ apiKey, baseUrl, model: m.slug, signal }).catch(() => null)));
   return rows.map((m) => ({ id: m.slug, name: m.display_name || m.slug }));
+}
+
+/**
+ * The effort levels the API accepts, from an error that lists them: "Unsupported value: 'none' is not supported with
+ * the 'gpt-x' model. Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'." Null for any other error,
+ * and for the generic list an unknown value gets (it names every level of the API, not this model's).
+ */
+export function supportedEfforts(message, tried) {
+  const m = /Unsupported value: '([^']+)' is not supported with the '[^']+' model\. Supported values are: ([^.]+)\./.exec(String(message || ''));
+  if (!m || (tried && m[1] !== tried)) return null;
+  const list = [...m[2].matchAll(/'([a-z]+)'/g)].map((x) => x[1]);
+  return list.length ? list : null;
+}
+
+/**
+ * Learn which effort levels a model takes by asking for one that no current model takes ('minimal'): the API refuses
+ * it before any work is done and lists the accepted levels. If a model does take it, the request is cancelled at
+ * once and nothing is learned (the advertised levels stay in use).
+ */
+export async function probeEfforts({ apiKey, baseUrl, model, signal }) {
+  const ctl = new AbortController();
+  const stop = () => ctl.abort();
+  signal?.addEventListener?.('abort', stop, { once: true });
+  const timer = setTimeout(stop, 10000);
+  try {
+    const body = buildBody({ model, system: '', messages: [{ role: 'user', content: [{ type: 'text', text: '.' }] }], tools: [], thinking: 'low', effort: 'minimal' });
+    const r = await fetch(join(baseUrl, '/responses'), { method: 'POST', headers: headers(apiKey), body: JSON.stringify(body), signal: ctl.signal });
+    if (r.ok) return ctl.abort(), null;
+    const text = await r.text().catch(() => '');
+    let msg = text;
+    try {
+      msg = JSON.parse(text)?.error?.message || text;
+    } catch {}
+    const list = supportedEfforts(msg, 'minimal');
+    if (list) learnEfforts('chatgpt', model, list);
+    return list;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener?.('abort', stop);
+  }
+}
+
+/**
+ * What the plan says about a model: its working context window (not the larger maximum), the effort levels it accepts
+ * (these models always reason, so there is no "off"), the level it uses by default, and whether it reads images.
+ * Plan usage is not billed per token, so no price is shown.
+ */
+export function planFacts(m) {
+  const efforts = (Array.isArray(m.supported_reasoning_levels) ? m.supported_reasoning_levels : []).map((x) => (typeof x === 'string' ? x : x?.effort)).filter((x) => typeof x === 'string' && x);
+  return {
+    contextWindow: Number(m.context_window) > 0 ? Number(m.context_window) : undefined,
+    efforts: efforts.length ? efforts : undefined,
+    defaultEffort: typeof m.default_reasoning_level === 'string' ? m.default_reasoning_level : undefined,
+    vision: Array.isArray(m.input_modalities) ? m.input_modalities.includes('image') : undefined,
+    cost: { input: null, output: null, cacheRead: null, cacheWrite: null },
+  };
 }
 
 /** A clear error for the plan's own limits (usage limit with its reset time, no plan), else the usual HTTP error. */
@@ -120,8 +182,8 @@ export function toResponsesInput(messages) {
   return out;
 }
 
-/** Request body for one turn. */
-export function buildBody({ model, system, messages, tools, thinking = 'off', effort }) {
+/** Request body for one turn. Thinking off is sent as the effort 'none' to a model that takes it (else it would reason at its default). */
+export function buildBody({ model, system, messages, tools, thinking = 'off', effort, style }) {
   const body = {
     model,
     // Like current Codex: the instructions travel as the first input item, a developer message.
@@ -135,6 +197,7 @@ export function buildBody({ model, system, messages, tools, thinking = 'off', ef
     prompt_cache_key: SESSION,
   };
   if (thinking !== 'off' && effort) body.reasoning = { effort, summary: 'auto' };
+  else if (thinking === 'off' && style?.efforts?.includes('none')) body.reasoning = { effort: 'none' };
   return body;
 }
 

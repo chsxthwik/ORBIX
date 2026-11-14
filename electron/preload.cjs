@@ -10,6 +10,8 @@ const screenWidth = arg ? Number(arg.slice('--orbix-screen='.length)) || 0 : 0;
 
 contextBridge.exposeInMainWorld('orbixDesktop', {
   platform: process.platform,
+  // For Settings → About and bug reports.
+  versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
   screenWidth,
   setTitleBar: (bg, fg) => ipcRenderer.send('orbix:titlebar', { bg: String(bg), fg: String(fg) }),
   setZoom: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, Number(factor) || 1))),

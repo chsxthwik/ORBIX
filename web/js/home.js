@@ -172,7 +172,7 @@ export function drawHome(root, H) {
       // Without an open session the list comes from a short-lived agent, which takes a moment to start.
       loading: models || [...S.tabs.values()].some((t) => !t.dead && t.ready) ? 'Loading models…' : 'Asking your providers for their models…',
       current: homeModel(),
-      extra: 'Default model',
+      extra: 'Default: your saved default model, or the first one listed',
       onPick: (x) => {
         savePrefs({ homeModel: x ? { provider: x.provider, id: x.id, name: x.name || x.id } : null });
         redraw();

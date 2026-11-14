@@ -66,7 +66,7 @@ When the reply ends, a summary lists every changed file with line counts. Each e
 | Area | Details |
 | --- | --- |
 | **Agent** | Tools for `read`, `write`, `edit`, `glob`, `grep`, `bash`, `todo`, `web_fetch` and `web_search`, plus `task`, which runs read-only helper agents side by side. Plan mode only reads. `/goal` keeps working for up to 6 rounds. Older messages are summarized when the context fills up. |
-| **Models** | 18 providers, including your ChatGPT plan without an API key, live model lists, thinking levels, and separate fast and plan models. Tokens and context show in the interface, and cost when the model's pricing is known. |
+| **Models** | 17 providers and any OpenAI-compatible server, including your ChatGPT plan without an API key. Live model lists, the thinking levels each model really accepts, and separate fast and plan models. Tokens and context show in the interface, and cost when the model's pricing is known. |
 | **Workspace** | Session tabs, and a side panel with Files, Changes (stage, unstage, discard, commit), Plan, Agents and Console. Branch from any of your messages, attach images and files, mention files with `@`, export a conversation to HTML. |
 | **Windows or WSL** | Commands, tools, MCP servers, git and hooks all run in one place: a WSL distribution, or Windows with `cmd.exe` or PowerShell. Paths are translated between the two. |
 | **Project context** | Follows `AGENTS.md` or `CLAUDE.md`, and supports MCP, skills, custom slash commands and hooks. |
@@ -81,7 +81,7 @@ When the reply ends, a summary lists every changed file with line counts. Each e
 
 **ChatGPT** uses the models on your ChatGPT Plus or Pro plan: sign in, no API key. It goes through the same sign-in and endpoint as the OpenAI Codex CLI, which is unofficial and can change. **xAI** and **OpenRouter** also offer a sign-in; sign-ins renew themselves.
 
-Model lists come live from each provider. Prices, context sizes and thinking support come from the [models.dev](https://models.dev) catalog, refreshed at most once a day. The custom server slot works with vLLM, llama.cpp, a company gateway or anything else that speaks the OpenAI chat API.
+Model lists come live from each provider and offer chat models only. Prices, context sizes and thinking support come from the [models.dev](https://models.dev) catalog, refreshed at most once a day, except where a provider reports them itself: the ChatGPT plan gives each model's context window and default thinking level, and ORBIX asks its API which levels a model accepts (a refused request, which costs nothing) and keeps the answer for a week. Thinking can be turned off only on models that allow it. The custom server slot works with vLLM, llama.cpp, a company gateway or anything else that speaks the OpenAI chat API.
 
 ## Security and privacy
 
@@ -168,7 +168,7 @@ ORBIX is a local Node.js server and a browser interface written in plain ES modu
 
 ## Themes
 
-System, Dark, Light, Midnight and Frost, under Settings, Appearance.
+Under Settings, Appearance: System, Dark, Light, Midnight and Frost, and five scene themes with a moving picture behind the conversation (ORBIX, Synthwave, Koi pond, Aurora and Halftone dusk). A scene moves faster while the agent works and sends up fireworks when a task finishes; Animate scenes keeps it still, and so does the Windows reduce-motion setting.
 
 <table>
 <tr>
@@ -180,12 +180,12 @@ System, Dark, Light, Midnight and Frost, under Settings, Appearance.
 <td><b>Light</b></td>
 </tr>
 <tr>
-<td><img src="docs/img/shots/theme-midnight.png" alt="Midnight theme"></td>
-<td><img src="docs/img/shots/theme-frost.png" alt="Frost theme"></td>
+<td><img src="docs/img/shots/theme-orbix.png" alt="The ORBIX scene theme: a planet with a lime ring behind the conversation"></td>
+<td><img src="docs/img/shots/theme-sunset.png" alt="The Synthwave scene theme: a neon grid running to a striped sun"></td>
 </tr>
 <tr>
-<td><b>Midnight</b></td>
-<td><b>Frost</b></td>
+<td><b>ORBIX</b> (scene)</td>
+<td><b>Synthwave</b> (scene)</td>
 </tr>
 </table>
 
@@ -196,7 +196,7 @@ Node.js 22 or newer.
 ```bash
 npm install        # Electron and the installer builder
 npm start          # run the app from source (its data stays in ./data)
-npm test           # 700+ tests, with no network and no API keys
+npm test           # about 800 tests, with no network and no API keys
 npm run dist       # build the installer into dist/
 ```
 
@@ -204,9 +204,9 @@ npm run dist       # build the installer into dist/
 electron/  the Windows app: window, title bar, links, installer entry
 src/       the local server: HTTP API, event stream, WSL and Windows backend
 src/engine the agent: loop, model clients, tools, MCP, hooks, sessions
-web/       the interface: plain ES modules and one stylesheet
+web/       the interface: plain ES modules and CSS, no build step
 test/      regression tests on Node's built-in runner
-tools/     environment diagnostics
+tools/     shots.mjs: the README and website screenshots, taken from a real ORBIX
 ```
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.

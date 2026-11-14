@@ -1,98 +1,149 @@
-/* Finish: light, depth and material on top of the flat system. Loaded last. Everything here is built from the
-   theme tokens, so the four themes and the accent colours follow without overrides. Nothing moves on its own:
-   the only motion is a response to the pointer or to focus (transform and opacity, under 200ms). */
+/* Calm: the finish layer, loaded last. Flat near-black surfaces, no glow, no gradients, one hairline where a line is
+   needed. The conversation is the interface: chrome recedes until the pointer reaches it. Built from theme tokens,
+   so every theme follows; Dark gets a neutral, deeper palette of its own below. */
 
-/* ---- light ----
-   The workspace sheet is lit from above by the accent, the way a desk lamp falls on paper: strongest on Home,
-   where there is nothing to read yet, and a trace of it behind a conversation. */
-.main { background-image: radial-gradient(70% 300px at 50% -60px, var(--glow), transparent 72%); background-repeat: no-repeat; }
-.main:has(#welcome:not([hidden])) {
-  background-image:
-    radial-gradient(46% 420px at 50% -40px, color-mix(in srgb, var(--accent-solid) 11%, transparent), transparent 70%),
-    radial-gradient(90% 620px at 50% -120px, color-mix(in srgb, var(--accent-solid) 5%, transparent), transparent 75%);
+/* ---- Dark: neutral graphite, the workspace sheet darker than the frame around it ---- */
+:root:not([data-mode=light]):not([data-theme=midnight]):not([data-scene]) {
+  --chrome: #111114; --bg-side: #111114; --bg: #08080A; --bg-raise: #141418; --bg-raise-2: #1B1B20; --bg-modal: #131316; --bg-inset: #0B0B0D; --bg-field: #0E0E11;
+  --bg-hover: rgba(255,255,255,.045); --bg-active: rgba(255,255,255,.08); --bubble: #1A1A1E; --bubble-line: rgba(255,255,255,.06);
+  --line: rgba(255,255,255,.07); --line-2: rgba(255,255,255,.11); --line-3: rgba(255,255,255,.2); --hi: transparent;
+  --fg: #ECECEA; --fg-2: #A6A6A2; --fg-3: #7C7C78;
+  --glow: transparent;
+  --shadow-1: none;
+  --shadow-2: 0 12px 32px -16px rgba(0,0,0,.8);
+  --shadow-sheet: none;
 }
-/* A hairline of light along the top edge of each sheet. */
-.main::before { content: ''; position: absolute; inset: 0 0 auto; z-index: 1; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-solid) 34%, transparent) 50%, transparent); opacity: .7; pointer-events: none; }
 
-/* ---- the question ---- */
-.home-title { font-size: clamp(28px, 1.9cqw + 16px, 48px); letter-spacing: -.035em; background: linear-gradient(180deg, var(--fg) 35%, color-mix(in srgb, var(--fg) 68%, var(--bg))); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-.home-title-p { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, var(--fg)), var(--accent)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+/* ---- frame and sheet ---- */
+.app, .app:not(.overlay-side) .sidebar { background: var(--chrome); }
+.main { border-radius: 10px 10px 0 0; box-shadow: none; background: var(--bg); }
+.statusbar, .sb { color: var(--fg-3); }
 
-/* ---- the task box: a raised slab with a lit top edge; focus pulls the accent into its border ---- */
-.home .home-composer {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--bg-raise), var(--bg-raise)) padding-box,
-    linear-gradient(180deg, var(--line-3), var(--line) 60%) border-box;
-  box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2), 0 30px 70px -40px color-mix(in srgb, var(--accent-solid) 22%, transparent);
-}
-.home .home-composer:focus-within {
-  border-color: transparent;
-  background:
-    linear-gradient(var(--bg-raise), var(--bg-raise)) padding-box,
-    linear-gradient(180deg, var(--accent-line), var(--line-2) 75%) border-box;
-  box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2), 0 0 0 4px color-mix(in srgb, var(--accent-solid) 9%, transparent), 0 34px 80px -36px color-mix(in srgb, var(--accent-solid) 38%, transparent);
-}
-.composer:not(.home-composer) { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2); }
-.composer:not(.home-composer):focus-within { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2), 0 0 0 3px color-mix(in srgb, var(--accent-solid) 9%, transparent); }
+/* ---- top bar: tabs read as plain titles; the current one is simply brighter ---- */
+.topbar { border-bottom-color: transparent; }
+.tab { height: 30px; border-radius: 8px; background: transparent; color: var(--fg-3); }
+.tab:hover { background: var(--bg-hover); color: var(--fg-2); }
+.tab.cur { background: var(--bg-active); color: var(--fg); box-shadow: none; }
+.tab.cur::after { display: none; }
+.tab .dot.open { display: none; }
+.workspace-command { border-color: transparent; background: transparent; }
+.workspace-command:hover { background: var(--bg-hover); }
 
-/* ---- the primary action: lit from above, with its own colour in the shadow ---- */
-.btn.primary, .send:not(.stop):not(:disabled) {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-solid) 86%, #fff), var(--accent-solid) 70%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.42), 0 1px 2px rgba(0,0,0,.35), 0 8px 20px -10px color-mix(in srgb, var(--accent-solid) 70%, transparent);
-  transition: transform var(--t1) var(--ease), box-shadow var(--t2) var(--ease), filter var(--t1) var(--ease);
-}
-.btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent-solid) 78%, #fff), color-mix(in srgb, var(--accent-solid) 94%, #fff) 70%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 1px 2px rgba(0,0,0,.35), 0 12px 26px -10px color-mix(in srgb, var(--accent-solid) 85%, transparent);
-  transform: translateY(-1px);
-}
-.btn.primary:active:not(:disabled), .send:not(.stop):not(:disabled):active { transform: translateY(0) scale(.98); box-shadow: inset 0 1px 3px rgba(0,0,0,.3); }
-
-/* ---- suggestions, projects, sessions: surfaces that answer the pointer ---- */
-.home .ws-recipe { background: linear-gradient(180deg, var(--bg-raise), transparent); transition: border-color var(--t1) var(--ease), background-color var(--t1) var(--ease), color var(--t1) var(--ease), transform var(--t1) var(--ease), box-shadow var(--t2) var(--ease); }
-.home .ws-recipe:hover { border-color: var(--accent-line); transform: translateY(-1px); box-shadow: 0 8px 20px -14px color-mix(in srgb, var(--accent-solid) 60%, transparent); }
-.home .ws-recipe:hover svg { color: var(--accent); }
-.home .ws-recipe:active { transform: translateY(0) scale(.98); }
-
-.home-proj { background: linear-gradient(180deg, var(--bg-raise-2), var(--bg-raise)); box-shadow: inset 0 1px 0 var(--hi), var(--shadow-1); transition: border-color var(--t1) var(--ease), transform var(--t1) var(--ease), box-shadow var(--t2) var(--ease); }
-button.home-proj:hover { border-color: var(--accent-line); background: linear-gradient(180deg, var(--bg-raise-2), var(--bg-raise)); transform: translateY(-2px); box-shadow: inset 0 1px 0 var(--hi), 0 16px 32px -20px color-mix(in srgb, var(--accent-solid) 45%, transparent), var(--shadow-2); }
-button.home-proj:active { transform: translateY(0) scale(.985); }
-.home-proj-ic { transition: color var(--t1) var(--ease), border-color var(--t1) var(--ease), background-color var(--t1) var(--ease); }
-button.home-proj:hover .home-proj-ic { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
-
-/* A session row grows an accent bar at its left edge under the pointer or the keyboard. */
-.library-row::before { content: ''; position: absolute; left: 0; top: 50%; width: 3px; height: 22px; border-radius: 2px; background: var(--accent-solid); transform: translateY(-50%) scaleY(0); opacity: 0; transition: transform var(--t2) var(--ease), opacity var(--t1) var(--ease); }
-.library-row:hover::before, .library-row:focus-within::before { transform: translateY(-50%) scaleY(1); opacity: 1; }
-.library-row:hover .library-main strong, .library-row:focus-within .library-main strong { color: var(--fg); }
-
-/* ---- where you are: the current place in the sidebar and the tab strip ---- */
-.side-link.cur, .s-row.cur .s-btn { background: linear-gradient(90deg, color-mix(in srgb, var(--accent-solid) 9%, var(--bg-active)), var(--bg-active) 55%); box-shadow: inset 0 1px 0 var(--hi); }
-.tab.cur { background: linear-gradient(180deg, var(--bg-raise-2), var(--bg-active)); box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 var(--hi); }
-.side-new { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-1); }
+/* ---- session bar: a quiet header; labels give way to icons, status shows only when it says something ---- */
+.sbar { border-bottom-color: transparent; background: transparent; }
+.sbar-state.ok { padding: 0; border: 0; background: none; }
+.sbar-state.ok .num { display: none; }
+.sbar-meta { opacity: 0; transition: opacity var(--t2) var(--ease); }
+.sbar:hover .sbar-meta { opacity: 1; }
+.sbar-title { font-weight: 500; color: var(--fg-2); }
+.sbar-title:hover { color: var(--fg); }
+.sbar .ibtn, .sbar-zen, .sbar-inspect { color: var(--fg-3); }
 
 /* ---- the conversation ---- */
-.bubble { background: linear-gradient(180deg, color-mix(in srgb, var(--bubble) 88%, var(--fg)), var(--bubble)); box-shadow: inset 0 1px 0 var(--hi), var(--shadow-1); }
+/* Replies carry no name plate; the model shows in the reply's actions. Your own messages need no label either. */
+.msg-by.asst-by { display: none; }
+.msg.user > .msg-by { display: none; }
+.bubble { border-color: transparent; background: var(--bubble); box-shadow: none; border-radius: 18px; }
+.msg-acts { margin-top: -2px; }
+.msg-act { height: 24px; padding: 0 6px; font-size: 12px; }
+.msg-model { padding: 0 6px; color: var(--fg-3); font-size: 12px; }
 
-/* ---- dialogs float over a softened workspace ---- */
-.scrim { -webkit-backdrop-filter: blur(7px) saturate(115%); backdrop-filter: blur(7px) saturate(115%); }
-.modal { box-shadow: inset 0 1px 0 var(--hi), 0 0 0 1px color-mix(in srgb, var(--accent-solid) 6%, transparent), var(--shadow-pop); }
-.list-it.sel { background: linear-gradient(90deg, color-mix(in srgb, var(--accent-solid) 10%, var(--bg-active)), var(--bg-active) 60%); }
-.list-it.sel .pal-ico { border-color: var(--accent-line); color: var(--accent); }
-.menu, .popup { box-shadow: inset 0 1px 0 var(--hi), var(--shadow-pop); }
+/* Tool steps: one quiet line each, like a log. The icon tile and the rail go; status keeps its colour only when it
+   needs you (waiting, failed). Durations and the success tick appear under the pointer. */
+.tool::before { display: none; }
+.tool + .tool { margin-top: -10px; }
+.tool-head { height: 30px; gap: 8px; padding: 0 6px; }
+.tool-ico { width: 16px; height: 16px; background: none; outline: 0; color: var(--fg-3); }
+.tool-name { color: var(--fg-2); font-weight: 500; }
+.tool-sum { color: var(--fg-3); font-size: 12.5px; }
+.tool-head:hover .tool-name { color: var(--fg); }
+.tool-head:hover .tool-sum { color: var(--fg-2); }
+.tool.done .tool-dur, .tool.done .st.ok { opacity: 0; transition: opacity var(--t2) var(--ease); }
+.tool.done .tool-head:hover .tool-dur, .tool.done .tool-head:hover .st.ok, .tool.done.open .tool-dur, .tool.done.open .st.ok { opacity: 1; }
+.tool.open { border-color: var(--line); background: var(--bg-raise); box-shadow: none; }
+.tool.running .tool-name { color: var(--fg); }
+.tool.running .tool-sum { color: var(--fg-2); }
+.tool.error:not(.open) .tool-name { color: var(--err); }
+.tool-exit { background: transparent; padding: 0; }
+details.think > summary, .think-sum { color: var(--fg-3); }
 
-/* ---- status: a live dot carries a soft ring of its own colour ---- */
-.dot.ok { box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 16%, transparent); }
-.dot.warn { box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 18%, transparent); }
+/* Errors read as a line of red text with a thin rule, not a red box. */
+.msg .errbox { border: 0; border-left: 2px solid var(--err-line); border-radius: 0; background: transparent; box-shadow: none; padding: 2px 0 2px 14px; }
 
-/* Light themes: the lamp is dimmer on paper, and coloured shadows turn to plain ones. */
-:root[data-theme=light] .main::before, :root[data-theme=frost] .main::before { opacity: .45; }
+/* ---- the message box: a dark slab with one hairline; the send button is a plain disc ---- */
+.composer { border-color: var(--line-2); background: var(--bg-raise); box-shadow: none; border-radius: 16px; }
+.composer:focus-within { border-color: var(--line-3); box-shadow: none; }
+.composer.busy { border-color: var(--line-2); }
+.send { border-radius: 50%; box-shadow: none; }
+.send:hover:not(:disabled) { box-shadow: none; }
+.send:disabled { background: var(--bg-active); }
+.c-row .cbtn { border-color: transparent; background: transparent; color: var(--fg-3); }
+.c-row .cbtn:hover:not(:disabled) { border-color: transparent; background: var(--bg-hover); color: var(--fg); }
+.c-row .cbtn.on { border-color: transparent; background: var(--bg-active); color: var(--fg); }
+.c-status { color: var(--fg-3); }
+
+/* ---- timeline: grey marks; colour comes back under the pointer ---- */
+.tl { opacity: .55; transition: opacity var(--t2) var(--ease); }
+.tl:hover { opacity: 1; }
+.tl:not(:hover) .tl-mark { filter: grayscale(1); }
+
+/* ---- primary actions: flat, no lamp ---- */
+.btn.primary, .send:not(.stop):not(:disabled) { background: var(--fg); border-color: var(--fg); color: var(--bg); box-shadow: none; }
+.btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 86%, var(--bg)); box-shadow: none; transform: none; }
+.btn.primary:active:not(:disabled), .send:not(.stop):not(:disabled):active { transform: scale(.98); box-shadow: none; }
+.send.stop { background: transparent; color: var(--err); box-shadow: inset 0 0 0 1px var(--err-line); }
+
+/* ---- sidebar ---- */
+.side-new { border-color: transparent; background: var(--bg-active); box-shadow: none; }
+.side-new:hover { background: color-mix(in srgb, var(--fg) 11%, transparent); }
+.side-new svg { color: var(--fg-2); }
+.side-new kbd { opacity: 0; transition: opacity var(--t2) var(--ease); }
+.side-new:hover kbd { opacity: .8; }
+.side-link.cur, .s-row.cur .s-btn { background: var(--bg-active); box-shadow: none; }
+.side-search input { background: transparent; }
+.side-h { color: var(--fg-3); }
+.side-foot { border-top-color: transparent; }
+.foot-status { color: var(--fg-3); }
+
+/* ---- Home: the question in plain ink; the project name keeps the accent ---- */
+.home-title { background: none; -webkit-text-fill-color: currentColor; color: var(--fg); letter-spacing: -.03em; }
+.home-title-p { background: none; -webkit-text-fill-color: currentColor; color: var(--accent); }
+.home .home-composer, .home .home-composer:focus-within { border: 1px solid var(--line-2); background: var(--bg-raise); box-shadow: none; }
+.home .home-composer:focus-within { border-color: var(--line-3); }
+.home .ws-recipe { border-color: var(--line); background: transparent; box-shadow: none; transform: none; }
+.home .ws-recipe:hover { border-color: var(--line-2); background: var(--bg-hover); color: var(--fg); transform: none; box-shadow: none; }
+.home-proj, button.home-proj:hover { background: var(--bg-raise); box-shadow: none; transform: none; }
+button.home-proj:hover { border-color: var(--line-2); }
+button.home-proj:hover .home-proj-ic { border-color: var(--line-2); background: transparent; color: var(--fg); }
+.library-row:hover .library-main strong { color: var(--fg); }
+
+/* ---- panels, menus and dialogs: flat surfaces over a dim, unblurred workspace ---- */
+.scrim { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.modal { box-shadow: 0 0 0 1px var(--line-2), var(--shadow-pop); }
+.menu, .popup { box-shadow: 0 0 0 1px var(--line), var(--shadow-pop); }
+.list-it.sel { background: var(--bg-active); }
+.list-it.sel .pal-ico { color: var(--fg); }
+.dot.ok, .dot.warn { box-shadow: none; }
 
 @media (forced-colors: active) {
-  .home-title, .home-title-p { background: none; -webkit-text-fill-color: currentColor; }
-  .main, .main:has(#welcome:not([hidden])) { background-image: none; }
-  .main::before, .library-row::before { display: none; }
+  .tool.done .tool-dur, .tool.done .st.ok, .sbar-meta, .side-new kbd { opacity: 1; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover, .home .ws-recipe:hover, button.home-proj:hover { transform: none; }
-}
+
+/* Session message box: the same flat slab when focused; the hairline brightens, nothing glows around it. */
+.session .composer, .session .composer:focus-within { box-shadow: none; }
+.session .composer:focus-within { border-color: var(--line-3); }
+/* "Show earlier messages" is a quiet link, not a button. */
+.earlier { border-color: transparent; background: transparent; color: var(--fg-3); font-weight: 500; }
+.earlier:hover { background: var(--bg-hover); color: var(--fg); }
+/* The guide line beside the current conversation stays neutral; the row's own fill marks it. */
+.proj > .s-row.cur { border-left-color: var(--line-3); }
+
+/* ---- window frame: the workspace fills the window above the status bar, with no rounding overflow at any zoom ---- */
+body { display: flex; flex-direction: column; height: 100vh; }
+.app { flex: 1 1 auto; height: auto; min-height: 0; }
+#statusbar { flex: none; }
+
+/* ---- sidebar: one inset for every row, so the button, links, filter, projects and footer share both edges ---- */
+.app:not(.rail) .sidebar .side-new { margin-inline: 10px; }
+.app:not(.rail) .sidebar .side-nav { padding-inline: 10px; }
+.app:not(.rail) .sidebar .side-search { margin-inline: 10px; }

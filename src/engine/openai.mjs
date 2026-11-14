@@ -25,7 +25,8 @@ const headers = (apiKey, providerId, { orgId = ORGS.get(providerId), session } =
 const isFreeOpencode = (m) => m && typeof m === 'object' && (/(^|-)free$/.test(String(m.id)) || (m.cost?.text?.input?.price === 0 && m.cost?.text?.output?.price === 0));
 
 // Not chat models: hidden from the model picker when the provider lists everything together.
-const NOT_CHAT = /(^|[-_/])(embed|embedding|whisper|tts|dall-e|moderation|rerank|transcribe|audio|realtime|speech|sora|veo|imagen|image-gen|guard)([-_./:]|$)|text-embedding|gpt-image|-image(-|$)/i;
+// Also hidden: Gemini's music (Lyria), live audio, Deep Research and computer-use models, which the chat API cannot run.
+const NOT_CHAT = /(^|[-_/])(embed|embedding|whisper|tts|dall-e|moderation|rerank|transcribe|audio|realtime|speech|sora|veo|imagen|image-gen|guard|lyria|live|aqa)([-_./:]|$)|text-embedding|gpt-image|-image(-|$)|deep-research|computer-use/i;
 
 /** Rows from any of the /models shapes: {data:[...]}, {models:[...]}, or a bare array (Together). */
 export function modelRows(j) {

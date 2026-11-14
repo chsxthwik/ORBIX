@@ -1,13 +1,16 @@
 // The ORBIX agent: one conversation's agent loop (model streaming, tools, approvals, compaction, subagents, undo).
 // The server and UI drive it through request()/send() and its event stream (JSON frames: get_state, prompt,
 // agent_start/end, message_update, tool_execution_*, extension_ui_request). Its engine id on the wire is 'builtin'.
+// This file holds the lifecycle, the commands and the turn loop. The rest of the agent lives beside it, mixed into
+// this class (mixin.mjs): proc-models.mjs (model, thinking, connections), proc-tools.mjs (tool calls, approvals),
+// proc-checks.mjs (the check and review after a run) and proc-usage.mjs (tokens, cost, context fill).
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { clip, makeTitle, uid, textOf } from '../util.mjs';
 import { isWinPath } from '../backend.mjs';
 import * as providers from './providers.mjs';
 import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor, invalidArgsText } from './tools.mjs';
-import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession, isTrustedCommand, trustableCommand } from './store.mjs';
+import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession } from './store.mjs';
 import { loadInstructions, readMentions, promptAttachments, promptImages, loadUserInstructions } from './context.mjs';
 import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, rebuildSession, summarize, tokenScale } from './compact.mjs';
 import { runTasks, SUBAGENT_TOOLS } from './subagent.mjs';
@@ -19,13 +22,14 @@ import { McpManager } from './mcp.mjs';
 import { discoverSkills, skillsPrompt } from './skills.mjs';
 import { BUILTIN_COMMANDS, discoverCommands } from './commands.mjs';
 import { runSlash } from './slash.mjs';
-import { loadCatalog, modelInfo, costOf } from './catalog.mjs';
+import { UsageAccounting, zeroUsage } from './proc-usage.mjs';
+import { ModelChoice } from './proc-models.mjs';
+import { RunChecks } from './proc-checks.mjs';
+import { ToolRuns, userMentionsHost } from './proc-tools.mjs';
+import { mixin } from './mixin.mjs';
 import { writeExport } from './export.mjs';
-import { detectCheck, sameCommand, outputTail, verifyFailedText, REVIEW_SYSTEM, reviewPrompt, parseReview, reviewIssuesText } from './verify.mjs';
 
 const MAX_TURNS = 100;
-// File tools whose path is checked against the project folder before they run.
-const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
 
 /** The request for one round of goal mode. */
 function goalPrompt(g) {
@@ -39,29 +43,11 @@ const CONTINUE_TEXT = 'Your previous reply was cut off by the output token limit
 /** Optional protocol features this engine supports (the UI shows the matching actions). */
 const FEATURES = ['regenerate', 'edit_message', 'attachments', 'prompt_status', 'branch'];
 const GOAL_ROUNDS = 6;
-// Run-end checks stay bounded: the check runs at most VERIFY_MAX times per run, the review once, and not at all for
-// a diff under REVIEW_MIN_LINES changed lines.
-const VERIFY_MAX = 3;
-const VERIFY_TIMEOUT_S = 300;
-const REVIEW_MIN_LINES = 5;
-const REVIEW_MAX_CHARS = 40000;
-const REVIEW_TIMEOUT_MS = 120000;
 const TITLE_SYSTEM = 'You name chat sessions. Reply with only a title of at most 6 words for the conversation that starts with the message below: no quotes, no trailing punctuation, same language as the message.';
 
-/** Model facts (context window, prices) from the catalog; waits at most 3 s for a first download, then goes on without. */
-async function catalogReady() {
-  await Promise.race([loadCatalog(), new Promise((r) => setTimeout(r, 3000).unref?.())]).catch(() => {});
-}
 
-/** True when a message the user typed names `host` as a whole word ("10.0.0.1" does not match "10.0.0.15"). */
-export function userMentionsHost(messages, host) {
-  const esc = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`(^|[^\\w.-])${esc}(?![\\w-]|\\.\\w)`, 'i');
-  return messages.some((m) => m.role === 'user' && (m.attribution === 'user' || m.attribution === 'steer') && (m.content || []).some((c) => c.type === 'text' && re.test(c.text)));
-}
 
 const hasAnswer = (m) => m.content.some((c) => (c.type === 'text' && c.text.trim()) || c.type === 'toolCall');
-const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 /** Wait `ms`, or less when `signal` aborts (at once when it already has). Never rejects. */
 const sleep = (ms, signal) =>
   new Promise((resolve) => {
@@ -107,6 +93,7 @@ export class AgentProc extends EventEmitter {
     this.models = null;
     this.meta = null;
     this.thinkingLevel = 'off';
+    this.thinkingChosen = false; // until you choose a level, the session follows each model's own default
     this.planMode = false;
     this.autoCompact = true;
     this.allowAlways = new Set();
@@ -170,7 +157,7 @@ export class AgentProc extends EventEmitter {
       }
       if (!this.provider && s.header.provider) this.provider = s.header.provider;
       if (!this.model && s.header.model) this.model = s.header.model;
-      if (ex.thinkingLevel) this.thinkingLevel = ex.thinkingLevel;
+      if (ex.thinkingLevel) (this.thinkingLevel = ex.thinkingLevel), (this.thinkingChosen = true);
       if (ex.roles) this.roles = { fast: ex.roles.fast || '', plan: ex.roles.plan || '' };
       this.planMode = ex.planMode;
       this.dropped = { ...zeroUsage(), cost: 0, ...ex.droppedUsage };
@@ -299,7 +286,7 @@ export class AgentProc extends EventEmitter {
           contextWindow: meta.contextWindow,
           maxTokens: meta.info?.maxOutput,
           cost: meta.info?.cost,
-          thinking: meta.levels?.length ? { efforts: meta.levels, mode: 'effort' } : undefined,
+          thinking: meta.levels?.length ? { efforts: meta.levels, mode: 'effort', canOff: meta.canOff !== false } : undefined,
         }
       : null;
     return {
@@ -321,269 +308,6 @@ export class AgentProc extends EventEmitter {
       worktree: this.worktreeView(),
       features: FEATURES,
     };
-  }
-
-  _contextUsage() {
-    const cw = this.meta?.contextWindow;
-    if (!cw) return undefined;
-    const tokens = contextTokens(this.messages);
-    return { tokens, contextWindow: cw, percent: Math.min(100, (tokens / cw) * 100), estimated: !this.meta?.contextWindowKnown };
-  }
-
-  _stats() {
-    const count = (role) => this.messages.filter((m) => m.role === role).length;
-    const toolCalls = this.messages.reduce((n, m) => n + (m.role === 'assistant' ? (m.content || []).filter((c) => c.type === 'toolCall').length : 0), 0);
-    const u = this.usage;
-    return {
-      sessionFile: this.session?.file,
-      sessionId: this.sessionId,
-      userMessages: count('user'),
-      assistantMessages: count('assistant'),
-      toolCalls,
-      toolResults: count('toolResult'),
-      totalMessages: this.messages.length,
-      tokens: { ...u, total: u.input + u.output + u.cacheRead + u.cacheWrite },
-      cost: this.costKnown ? this.cost : undefined,
-      contextUsage: this._contextUsage(),
-    };
-  }
-
-  _addUsage(usage, cost) {
-    for (const k of ['input', 'output', 'cacheRead', 'cacheWrite']) this.usage[k] += usage?.[k] || 0;
-    if (Number.isFinite(cost)) {
-      this.cost += cost;
-      this.costKnown = true;
-    }
-  }
-
-  /** Usage and cost of a list of messages: { input, output, cacheRead, cacheWrite, cost, costKnown }. */
-  _usageOf(messages) {
-    const sum = { ...zeroUsage(), cost: 0, costKnown: false };
-    const add = (u, c) => {
-      for (const k of ['input', 'output', 'cacheRead', 'cacheWrite']) sum[k] += u?.[k] || 0;
-      if (Number.isFinite(c)) {
-        sum.cost += c;
-        sum.costKnown = true;
-      }
-    };
-    for (const m of messages) {
-      if (m.role === 'assistant' && m.usage) add(m.usage, m.usage.cost?.total);
-      else if (m.role === 'toolResult' && m.toolName === 'task' && m.details?.usage) add(m.details.usage, m.details.usage.cost);
-      else if ((m.role === 'compactionSummary' || m.role === 'custom') && m.usage) add(m.usage, m.cost);
-    }
-    return sum;
-  }
-
-  _recomputeUsage() {
-    const s = this._usageOf(this.messages);
-    const d = this.dropped;
-    this.usage = { input: s.input + d.input, output: s.output + d.output, cacheRead: s.cacheRead + d.cacheRead, cacheWrite: s.cacheWrite + d.cacheWrite };
-    this.cost = s.cost + d.cost;
-    this.costKnown = s.costKnown || d.cost > 0;
-  }
-
-  /** USD for one usage record: the provider's own figure when it sends one (OpenRouter), else catalog prices. */
-  _costOf(usage, info = this.meta?.info) {
-    if (Number.isFinite(usage?.costUsd)) return usage.costUsd;
-    if (!info) return undefined;
-    const c = costOf(info, usage);
-    return Number.isFinite(c) ? c : undefined;
-  }
-
-  _modelName(id) {
-    return this.models?.find((x) => x.id === id && (!this.provider || x.provider === this.provider))?.name || id;
-  }
-
-  /** Context window, thinking levels and prices of the current model (from the catalog when it exists). */
-  async _refreshMeta(emit = true) {
-    await catalogReady();
-    const info = (this.provider && this.model && modelInfo(this.provider, this.model)) || null;
-    const all = this.provider && this.model ? providers.thinkingLevels(this.provider, this.model) : [];
-    const levels = [...new Set(all.map(String).filter((x) => x && x !== 'off'))];
-    const type = this.config.type(this.provider);
-    this.meta = { info, levels, contextWindow: info?.contextWindow || (type === 'anthropic' ? 200000 : 128000), contextWindowKnown: !!info?.contextWindow };
-    if (this.thinkingLevel !== 'off' && !levels.includes(this.thinkingLevel) && this.provider) {
-      const prev = this.thinkingLevel;
-      this.thinkingLevel = levels.includes('medium') ? 'medium' : levels[levels.length - 1] || 'off';
-      if (emit && prev !== this.thinkingLevel) this._emit({ type: 'thinking_level_changed', level: this.thinkingLevel });
-    }
-    return this.meta;
-  }
-
-  _maxTokens() {
-    const mo = this.meta?.info?.maxOutput;
-    return mo ? Math.min(mo, 32000) : undefined;
-  }
-
-  /** false only when the catalog says the model cannot take images (unknown models are assumed to). */
-  _vision() {
-    return this.meta?.info?.vision !== false;
-  }
-
-  async _setThinking(level) {
-    await this._refreshMeta(false);
-    const levels = this.meta?.levels || [];
-    if (level !== 'off' && !levels.includes(level)) throw new Error(levels.length ? `Thinking level must be one of: off, ${levels.join(', ')}` : 'This model has no thinking levels');
-    this.thinkingLevel = level;
-    if (this.session) this._persistRaw({ type: 'thinking', level });
-    this._emit({ type: 'thinking_level_changed', level });
-    return level;
-  }
-
-  async _setModel(provider, modelId) {
-    if (provider) {
-      if (!this.config.configured(provider)) throw new Error(`${this.config.provider(provider)?.name || provider} is not set up. Add it in Settings → Providers.`);
-      this.provider = provider;
-    }
-    this.model = modelId;
-    await this._refreshMeta(true);
-    if (this.session) this._persistRaw({ type: 'model', provider: this.provider, model: this.model });
-    this._emit({ type: 'model_changed', model: { id: this.model, provider: this.provider } });
-  }
-
-  async _models() {
-    if (this.models) return this.models;
-    const ids = this.config.configuredIds();
-    if (!ids.length) throw new Error('No AI provider is set up yet. Open Settings → Providers and add an API key.');
-    await catalogReady();
-    const results = await Promise.allSettled(
-      ids.map(async (id) => {
-        const list = this.config.listModels ? await this.config.listModels(id) : await providers.clientFor(this.config.type(id)).listModels({ apiKey: await this.config.getKey(id), baseUrl: this.config.baseUrl(id) });
-        return list.map((m) => {
-          const info = modelInfo(id, m.id);
-          const levels = providers.thinkingLevels(id, m.id).filter((x) => x && x !== 'off');
-          return { id: m.id, provider: id, name: m.name, reasoning: levels.length > 0, input: info?.vision === false ? ['text'] : ['text', 'image'], contextWindow: info?.contextWindow, maxTokens: info?.maxOutput, cost: info?.cost, thinking: levels.length ? { efforts: levels, mode: 'effort' } : undefined };
-        });
-      }),
-    );
-    const good = results.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value);
-    if (!good.length) throw results.find((r) => r.status === 'rejected').reason;
-    // A provider that failed to answer is reported, never silently dropped.
-    results.forEach((r, i) => r.status === 'rejected' && this._emit({ type: 'notice', level: 'warn', message: `${this.config.provider(ids[i]).name}: could not load models (${r.reason?.message || r.reason})` }));
-    this.models = good;
-    return good;
-  }
-
-  async _resolveModel() {
-    // A known provider + model needs no model list: listing every provider first would delay the first token.
-    if (this.model && this.provider && this.config.configured(this.provider)) return this._refreshMeta(true);
-    const models = await this._models();
-    if (this.model) {
-      const hit = models.find((m) => m.id === this.model && (!this.provider || m.provider === this.provider)) || models.find((m) => m.id === this.model);
-      this.provider = hit?.provider || this.provider || this.config.configuredIds()[0];
-    } else {
-      const first = (this.provider && models.find((m) => m.provider === this.provider)) || models[0];
-      this.provider = first.provider;
-      this.model = first.id;
-    }
-    await this._refreshMeta(true);
-  }
-
-  /** Everything needed to call the current model. `stream(args)` fills in key, URL, model and thinking. */
-  async _connect() {
-    await this._resolveModel();
-    const providerInfo = this.config.provider(this.provider);
-    if (!providerInfo) throw new Error(`Unknown provider "${this.provider}". Pick a model again.`);
-    const key = await this.config.getKey(this.provider);
-    if (!key && !providerInfo.keyOptional) throw new Error(`No API key is saved for ${providerInfo.name}. Open Settings → Providers.`);
-    const client = providers.clientFor(providerInfo.type);
-    const base = { apiKey: key, baseUrl: this.config.baseUrl(this.provider), model: this.model, providerId: this.provider, maxTokens: this._maxTokens() };
-    const thinking = this.thinkingLevel !== 'off' ? this.thinkingLevel : undefined;
-    const args = (a) => ({ ...base, thinking, ...a });
-    const main = { client, args, stream: this._signedIn(client, args, this.provider), provider: this.provider, model: this.model, info: this.meta?.info || null, contextWindow: this.meta?.contextWindow, thinking };
-    // Plan mode thinks with the "plan" model when one is chosen (Settings → Models, or /model plan).
-    if (this.planMode) return (await this._roleConnSafe('plan')) || main;
-    return main;
-  }
-
-  /**
-   * client.stream for a provider, with sign-in recovery: when a signed-in provider rejects its token before anything
-   * streamed, the sign-in is renewed once and the request repeated. A sign-in that cannot be renewed asks for a new one.
-   */
-  _signedIn(client, args, provider) {
-    const config = this.config;
-    return async function* (a) {
-      let started = false;
-      try {
-        for await (const ev of client.stream(args(a))) {
-          if (ev.type !== 'start' && ev.type !== 'retry') started = true;
-          yield ev;
-        }
-      } catch (e) {
-        if (started || !(e?.status === 401 || e?.status === 403) || !config.isSignIn?.(provider)) throw e;
-        const fresh = await config.renewSignIn(provider).catch(() => null);
-        const name = config.provider(provider)?.name || provider;
-        if (!fresh) throw Object.assign(new Error(`${name} no longer accepts this sign-in. Sign in with ${name} again in Settings → Providers.`), { status: e.status });
-        yield* client.stream(args({ ...a, apiKey: fresh }));
-      }
-    };
-  }
-
-  /** "provider/model" chosen for a role: this session's override, else the saved default, else '' (current model). */
-  _roleSpec(role) {
-    return this.roles[role] || this.config.roles?.()?.[role] || '';
-  }
-
-  /** A connection for a role's model, or null when no model is chosen for it. Throws a plain error when it cannot be used. */
-  async _roleConn(role) {
-    const spec = this._roleSpec(role);
-    if (!spec) return null;
-    const label = role === 'fast' ? 'fast' : 'plan';
-    const s = this._parseSpec(spec);
-    const provider = s.provider || this.provider;
-    const info = this.config.provider(provider);
-    if (!info) throw new Error(`The ${label} model "${spec}" has no provider. Choose it again in Settings → Models.`);
-    if (!this.config.configured(provider)) throw new Error(`The ${label} model "${spec}" needs ${info.name}, which is not set up. Add it in Settings → Providers, or choose another ${label} model.`);
-    const key = await this.config.getKey(provider);
-    if (!key && !info.keyOptional) throw new Error(`No API key is saved for ${info.name} (the ${label} model). Open Settings → Providers.`);
-    await catalogReady();
-    const mi = modelInfo(provider, s.model) || null;
-    const levels = providers.thinkingLevels(provider, s.model).filter((x) => x && x !== 'off');
-    const thinking = this.thinkingLevel !== 'off' && levels.includes(this.thinkingLevel) ? this.thinkingLevel : undefined;
-    const client = providers.clientFor(info.type);
-    const base = { apiKey: key, baseUrl: this.config.baseUrl(provider), model: s.model, providerId: provider, maxTokens: mi?.maxOutput ? Math.min(mi.maxOutput, 32000) : undefined };
-    const args = (a) => ({ ...base, thinking, ...a });
-    return { client, args, stream: this._signedIn(client, args, provider), provider, model: s.model, info: mi, contextWindow: mi?.contextWindow || (info.type === 'anthropic' ? 200000 : 128000), thinking, role };
-  }
-
-  /** Like _roleConn, but a role that cannot be used is reported once as a note and the caller falls back to the current model. */
-  async _roleConnSafe(role) {
-    try {
-      return await this._roleConn(role);
-    } catch (e) {
-      const key = `${role}:${e.message}`;
-      if (this._roleWarned !== key) {
-        this._roleWarned = key;
-        this._emit({ type: 'notice', level: 'warn', message: `${e.message} Using the current model instead.` });
-      }
-      return null;
-    }
-  }
-
-  /** Set (or clear, with '' / 'default') this session's fast or plan model. Returns the text to show. */
-  async _setRole(role, arg) {
-    const name = role === 'fast' ? 'Fast' : 'Plan';
-    const text = String(arg || '').trim();
-    const where = () => {
-      const own = this.roles[role];
-      const saved = this.config.roles?.()?.[role] || '';
-      return own ? `**${own}** (this session)` : saved ? `**${saved}** (default from Settings)` : `not set: the current model is used`;
-    };
-    if (!text) return `${name} model: ${where()}. Change it with \`/model ${role} provider/model-id\`, or \`/model ${role} default\` to go back to the Settings default.`;
-    if (/^(default|reset|clear|none|off)$/i.test(text)) {
-      this.roles[role] = '';
-    } else {
-      const spec = this._parseSpec(text);
-      const models = await this._models().catch((e) => {
-        throw new Error(`Could not check the model list: ${e.message}`);
-      });
-      const hit = models.find((x) => x.id === spec.model && (!spec.provider || x.provider === spec.provider)) || (!spec.provider ? models.find((x) => x.id === text) : null);
-      if (!hit) throw new Error(`No model "${text}". Use provider/model-id (for example anthropic/claude-haiku-4-5) from the model picker.`);
-      this.roles[role] = `${hit.provider}/${hit.id}`;
-    }
-    this._persistRaw({ type: 'roles', fast: this.roles.fast, plan: this.roles.plan });
-    this._roleWarned = null;
-    return `${name} model is now ${where()}.`;
   }
 
   _isReadOnly(name) {
@@ -857,176 +581,6 @@ export class AgentProc extends EventEmitter {
   }
 
   /** Edits of the current run that are still in place, oldest first. */
-  _runEdits() {
-    return (this.run?.edits || []).filter((id) => this.checkpoints.has(id) && !this.undone.has(id));
-  }
-
-  /**
-   * At the end of a run that changed files: run the project's check (again after each round of fixes, at most
-   * VERIFY_MAX times) and review the diff once. Returns true when the model gets another round to fix what was found.
-   */
-  async _finishChecks(conn) {
-    const c = this.run.checks;
-    const edits = this._runEdits();
-    if (!edits.length || this.planMode || this.abortCtl.signal.aborted) return false;
-    if (c.review?.status === 'issues') c.review.fixed = edits.length > c.reviewAt;
-    if (edits.length > (c.checkedAt || 0) && !c.verifyOff && (c.verify?.runs || 0) < VERIFY_MAX) {
-      c.checkedAt = edits.length;
-      const v = await this._verify();
-      if (this.abortCtl.signal.aborted) return false;
-      if (v === 'failed') return true;
-    }
-    // A failing check already sent the model back once; a review on top of it would cost more and find the same thing.
-    if (!c.reviewed && this.config.data.review !== false && c.verify?.status !== 'failed') {
-      c.reviewed = true;
-      return this._review(conn, edits);
-    }
-    return false;
-  }
-
-  /** The project's check command: the one chosen for this project in Settings, else found from its files, or null. */
-  _checkCommand() {
-    const own = this.config.checkCommand?.(this.backend.keyPath(this.workspace)) || '';
-    if (own === 'off') return null;
-    if (own) return { command: own, source: 'project setting' };
-    return detectCheck(this.backend.hostPath(this.workspace), { wsl: !!this.backend.isWsl });
-  }
-
-  /** The result of `command` when the agent itself ran it after its last edit in this run (bash details), else null. */
-  _ranAfterEdits(command) {
-    const msgs = this.messages.slice(this.run.from);
-    const edits = new Set(this.run.edits);
-    const args = new Map();
-    for (const m of msgs) if (m.role === 'assistant') for (const b of m.content || []) if (b.type === 'toolCall') args.set(b.id, b.arguments || {});
-    let found = null;
-    for (const m of msgs) {
-      if (m.role !== 'toolResult') continue;
-      if (edits.has(m.toolCallId)) found = null;
-      else if (m.toolName === 'bash' && sameCommand(args.get(m.toolCallId)?.command, command) && !m.details?.aborted) found = m.details || {};
-    }
-    return found;
-  }
-
-  _status(key, text) {
-    this._emit({ type: 'extension_ui_request', id: `status-${key}-${Date.now()}`, method: 'setStatus', statusKey: key, statusText: text });
-  }
-
-  /** Run the project's check after edits. Returns 'passed', 'failed', or null when it did not run. */
-  async _verify() {
-    const c = this.run.checks;
-    const mode = this.config.data.verify || 'ask';
-    const found = mode === 'off' ? null : this._checkCommand();
-    if (!found) {
-      c.verifyOff = true;
-      return null;
-    }
-    const { command } = found;
-    const runs = c.verify?.runs || 0;
-    const note = (status, text, details, forModel = false) => {
-      c.verify = { status, command, runs: runs + 1, ...(details.exitCode != null ? { exitCode: details.exitCode } : {}), ...(details.by ? { by: details.by } : {}) };
-      this._add({ role: 'custom', customType: 'verify', forModel, display: true, content: [{ type: 'text', text }], details: { status, command, ...details }, timestamp: Date.now() });
-      return status;
-    };
-    // The agent already ran this exact check after its last edit: running it again would only repeat that result.
-    const own = this._ranAfterEdits(command);
-    if (own) {
-      c.verifyOff = true; // it saw the output itself, so a failure is not sent back to it again
-      return own.exitCode === 0 ? note('passed', `Checks passed: ${command}`, { exitCode: 0, by: 'agent' }) : (note('failed', `Checks failed: ${command} (exit code ${own.exitCode})`, { exitCode: own.exitCode, by: 'agent' }), null);
-    }
-    if (mode === 'ask' && !c.verifyApproved) {
-      const ans = await this._askUser(`Check the changes with ${command}?`, ['Run the check', 'Skip']);
-      if (ans !== 'Run the check') {
-        c.verifyOff = true;
-        c.verify = { status: 'skipped', command, runs };
-        return null;
-      }
-      c.verifyApproved = true; // one answer covers the re-checks after fixes in this run
-    }
-    const args = { command, timeout: VERIFY_TIMEOUT_S };
-    const call = { id: uid('check'), name: 'bash', arguments: args };
-    const signal = this.abortCtl.signal;
-    // The same path as a bash call from the model: hooks, approval (unless you just said yes above), shell backend.
-    const pre = await this.hooks.run('PreToolUse', { tool: 'bash', input: args }, signal);
-    let denied = pre.blocked ? `A hook blocked the check: ${pre.reason}` : '';
-    if (!denied && !c.verifyApproved && this._mustAsk(call, args) && (await this._approve(call, args, `Run the project's check?  ${command}`))) denied = 'You denied the check command.';
-    if (denied || signal.aborted) {
-      c.verifyOff = true;
-      c.verify = { status: 'skipped', command, runs };
-      if (denied) this._emit({ type: 'notice', level: 'info', message: denied });
-      return null;
-    }
-    this._status('verify', `Checking the changes: ${command}`);
-    let r;
-    try {
-      r = await this.tools.run('bash', args, {});
-    } finally {
-      this._status('verify', '');
-    }
-    if (signal.aborted || r.details?.aborted) return null;
-    const post = await this.hooks.run('PostToolUse', { tool: 'bash', input: args, extra: { result: { text: clip(String(r.text ?? ''), 8000), isError: !!r.isError } } }, signal);
-    const output = stripSgr(String(r.text ?? '')) + (post.blocked ? `\n[Hook feedback] ${post.reason}` : '');
-    const d = r.details || {};
-    const details = { exitCode: d.exitCode ?? (r.isError ? 1 : 0), durationMs: d.durationMs, ...(d.timedOut ? { timedOut: true } : {}), output: outputTail(output, 4000) };
-    if (!r.isError && details.exitCode === 0) return note('passed', `Checks passed: ${command}`, details);
-    return note('failed', verifyFailedText({ command, exitCode: details.exitCode, timedOut: !!d.timedOut, output }), details, true);
-  }
-
-  /**
-   * One review of the run's diff by the fast model (or the session's model when none is chosen), skipped for tiny
-   * edits. Returns true when it found issues: they go to the model as a note and it gets one more round.
-   */
-  async _review(conn, edits) {
-    const c = this.run.checks;
-    // One diff per file: from its state before the first edit in this run to now.
-    const first = new Map();
-    for (const id of edits) {
-      const u = this.checkpoints.get(id);
-      if (u && !first.has(u.path)) first.set(u.path, u);
-    }
-    const diffs = (await Promise.all([...first.values()].map((u) => this.tools.diffSince(u).catch(() => null)))).filter(Boolean);
-    const lines = diffs.reduce((n, d) => n + d.added + d.removed, 0);
-    if (lines < REVIEW_MIN_LINES || this.abortCtl.signal.aborted) return false;
-    let room = REVIEW_MAX_CHARS;
-    const parts = [];
-    for (const d of diffs) {
-      if (room <= 0) break;
-      const diff = d.diff.length > room ? `${d.diff.slice(0, room)}\n[… rest of this diff omitted …]` : d.diff;
-      parts.push({ path: d.path, diff });
-      room -= diff.length;
-    }
-    // What the user asked: their messages in this run (a regenerated run has none, so the last one before it).
-    const own = this.messages.slice(this.run.from).filter((m) => m.role === 'user');
-    const asked = own.length ? own : [...this.messages.slice(0, this.run.from)].reverse().filter((m) => m.role === 'user').slice(0, 1);
-    const request = clip(asked.map((m) => textOf(m.content)).join('\n\n'), 4000) || '(not available)';
-    const rconn = (await this._roleConnSafe('fast')) || conn;
-    this._status('review', 'Reviewing the changes');
-    let msg;
-    try {
-      msg = await collectTurn(rconn.stream({ system: REVIEW_SYSTEM, messages: [{ role: 'user', content: [{ type: 'text', text: reviewPrompt(request, parts) }], timestamp: Date.now() }], tools: [], signal: AbortSignal.any([this.abortCtl.signal, AbortSignal.timeout(REVIEW_TIMEOUT_MS)]), maxTokens: 1500, thinking: undefined }));
-    } catch (e) {
-      if (!this.abortCtl.signal.aborted) this._emit({ type: 'notice', level: 'warn', message: `The review of the changes did not run: ${e?.message || e}` });
-      return false;
-    } finally {
-      this._status('review', '');
-    }
-    if (this.abortCtl.signal.aborted) return false;
-    const usage = { ...zeroUsage(), ...msg.usage };
-    const cost = this._costOf(usage, rconn.info);
-    this._addUsage(usage, cost);
-    const issues = parseReview(textOf(msg.content));
-    const model = `${rconn.provider}/${rconn.model}`;
-    const base = { role: 'custom', customType: 'review', display: true, usage, ...(cost !== undefined ? { cost } : {}), timestamp: Date.now() };
-    if (!issues.length) {
-      c.review = { status: 'clean' };
-      this._add({ ...base, forModel: false, content: [{ type: 'text', text: 'Review found no issues.' }], details: { status: 'clean', files: diffs.length, lines, model } });
-      return false;
-    }
-    c.review = { status: 'issues', count: issues.length, fixed: false };
-    c.reviewAt = edits.length;
-    this._add({ ...base, forModel: true, content: [{ type: 'text', text: reviewIssuesText(issues) }], details: { status: 'issues', issues, files: diffs.length, lines, model } });
-    return true;
-  }
-
   _overThreshold(cw = this.meta?.contextWindow, reserve = this._maxTokens() ?? 8192) {
     return !!cw && contextTokens(this.messages) > compactLimit(cw, reserve);
   }
@@ -1254,171 +808,6 @@ export class AgentProc extends EventEmitter {
   }
 
   /** Answer every open question with "cancelled" and close its dialog in the UI. */
-  _cancelAsks() {
-    for (const [id, resolve] of this.pendingAsk) {
-      resolve({ cancelled: true });
-      this._emit({ type: 'extension_ui_request', id: `cancel-${id}`, method: 'cancel', targetId: id });
-    }
-    this.pendingAsk.clear();
-  }
-
-  _askUser(title, options) {
-    const id = `ask-${Date.now().toString(36)}-${++this.askSeq}`;
-    return new Promise((resolve) => {
-      this.pendingAsk.set(id, (ans) => resolve(ans?.cancelled ? null : ans?.value ?? null));
-      this._emit({ type: 'extension_ui_request', id, method: 'select', title, options });
-    });
-  }
-
-  /** Whether this call waits for the user, given the approval mode, what was allowed this session and trusted commands. */
-  _mustAsk(call, args) {
-    const mode = this.config.data.approvals;
-    // A file outside the project folder is asked about every time, read-only or not (except under Allow everything):
-    // text in the project could otherwise point the agent at ~/.ssh or a .env elsewhere and send it on with web_fetch.
-    if (mode !== 'auto' && this._outside(call, args)) return !this.allowAlways.has(`${call.name}:outside`);
-    if (!this._needsApproval(call.name)) return false;
-    if (mode === 'auto' || this.allowAlways.has(call.name)) return false;
-    if (mode === 'edits' && (call.name === 'edit' || call.name === 'write')) return false;
-    if (call.name === 'bash' && args?.shell !== 'powershell' && isTrustedCommand(args?.command, this.config.data.trusted)) return false;
-    return true;
-  }
-
-  /**
-   * The one path every tool call takes: PreToolUse hooks, then `gate` (approval; a result from it means not run), a
-   * stop check before and after it, the call, then PostToolUse feedback for the model. Main agent and helpers alike.
-   */
-  async _hooked(name, input, signal, { gate, exec }) {
-    const stopped = { text: 'Not run: the agent was stopped before this step.', isError: true };
-    const pre = await this.hooks.run('PreToolUse', { tool: name, input }, signal);
-    if (pre.blocked) return { text: `Blocked by a hook: ${pre.reason}`, isError: true };
-    if (signal?.aborted) return stopped;
-    const refused = gate ? await gate() : undefined;
-    if (refused) return refused;
-    if (signal?.aborted) return stopped;
-    let r = await exec();
-    if (!signal?.aborted) {
-      // PostToolUse hooks can add feedback for the model (a failed check, a lint warning).
-      const post = await this.hooks.run('PostToolUse', { tool: name, input, extra: { result: { text: clip(String(r.text ?? ''), 8000), isError: !!r.isError } } }, signal);
-      if (post.blocked) r = { ...r, text: `${r.text}
-[Hook feedback] ${post.reason}` };
-    }
-    return r;
-  }
-
-  /** True when a file tool points outside the project folder. */
-  _outside(call, args) {
-    return PATH_TOOLS.has(call.name) && args?.path != null && String(args.path).trim() !== '' && !this.tools.inProject(args.path);
-  }
-
-  _askTitle(call) {
-    const a = call.arguments || {};
-    if (this._outside(call, a)) return `${{ read: 'Read a file outside the project?', grep: 'Search outside the project?', glob: 'List files outside the project?', write: 'Write a file outside the project?', edit: 'Edit a file outside the project?' }[call.name]}  ${clip(String(a.path), 200)}`;
-    if (this.mcp.has(call.name)) return `Allow MCP tool ${this.mcp.describe(call.name)}?  ${clip(JSON.stringify(a), 200)}`;
-    const detail = call.name === 'bash' ? `${a.shell === 'powershell' ? '[PowerShell] ' : ''}${a.command ?? ''}` : a.path;
-    const verb = { bash: 'Run this command?', write: 'Write this file?', edit: 'Edit this file?' }[call.name] || `Allow ${call.name}?`;
-    return `${verb}  ${clip(String(detail ?? ''), 200)}`;
-  }
-
-  /**
-   * web_fetch on a private/local host: allowed when the user typed that host themselves (as a whole word, in a message
-   * they wrote, not in an attached file or a command file), otherwise ask.
-   */
-  async _allowHost(host) {
-    const h = host.toLowerCase();
-    if (this.allowedHosts.has(h)) return true;
-    if (userMentionsHost(this.messages, h)) return true;
-    const ans = await this._askUser(`Fetch from ${host}? It is a local or private network address.`, ['Allow for this session', 'Deny']);
-    if (ans === 'Allow for this session') {
-      this.allowedHosts.add(h);
-      return true;
-    }
-    return false;
-  }
-
-  /** Run tool calls: consecutive read-only calls run side by side, everything else one at a time, in order. */
-  async _runTools(calls, conn) {
-    const results = new Array(calls.length);
-    let i = 0;
-    while (i < calls.length && !this.abortCtl.signal.aborted) {
-      if (this._isReadOnly(calls[i].name)) {
-        let j = i;
-        while (j < calls.length && this._isReadOnly(calls[j].name)) j++;
-        const done = await Promise.all(calls.slice(i, j).map((c) => this._runTool(c, conn)));
-        done.forEach((r, k) => (results[i + k] = r));
-        i = j;
-      } else {
-        results[i] = await this._runTool(calls[i], conn);
-        i++;
-      }
-    }
-    // Every tool call must have a result, even when the run was stopped, or the next request would be invalid.
-    for (let k = 0; k < calls.length; k++) if (!results[k]) results[k] = this._record(calls[k], { text: 'Not run: the agent was stopped before this step.', isError: true }, false);
-    return results;
-  }
-
-  _record(call, result, announce = true, startedAt) {
-    const content = [{ type: 'text', text: result.text }, ...(result.images || [])];
-    const details = { ...(result.details || {}) };
-    const undo = details.undo;
-    delete details.undo;
-    if (undo && !undo.skipped) {
-      this.checkpoints.set(call.id, undo);
-      this._persistRaw({ type: 'checkpoint', toolCallId: call.id, undo });
-      details.undoable = true;
-      this.run?.edits.push(call.id); // what the run-end check and review look at
-    }
-    if (startedAt && details.wallTimeMs == null) details.wallTimeMs = Date.now() - startedAt;
-    if (call.name === 'todo' && details.phases) this.todoPhases = details.phases;
-    if (announce) this._emit({ type: 'tool_execution_end', toolCallId: call.id, toolName: call.name, result: { content, details }, isError: !!result.isError });
-    const tr = { role: 'toolResult', toolCallId: call.id, toolName: call.name, content, details, isError: !!result.isError, timestamp: Date.now() };
-    return this._add(tr);
-  }
-
-  /** Ask the user about a call that needs approval. Returns the denial result, or undefined when it may run. */
-  async _approve(call, args, title = this._askTitle(call)) {
-    const canTrust = call.name === 'bash' && args.shell !== 'powershell' && trustableCommand(args.command);
-    const ans = await this._askUser(title, canTrust ? ['Allow once', 'Allow for this session', 'Always allow this command', 'Deny'] : ['Allow once', 'Allow for this session', 'Deny']);
-    if (!ans || ans === 'Deny') return { text: 'The user denied this action. Do not retry it; ask what they want instead.', isError: true };
-    if (ans === 'Allow for this session') this.allowAlways.add(this._outside(call, args) ? `${call.name}:outside` : call.name);
-    else if (ans === 'Always allow this command' && canTrust) this.config.addTrusted(args.command);
-    return undefined;
-  }
-
-  async _runTool(call, conn) {
-    const args = call.arguments || {};
-    let t0 = Date.now();
-    const intent = call.name === 'bash' ? clip(String(args.command ?? ''), 80) : call.name === 'web_fetch' ? clip(String(args.url ?? ''), 80) : this.mcp.has(call.name) ? this.mcp.describe(call.name) : undefined;
-    this._emit({ type: 'tool_execution_start', toolCallId: call.id, toolName: call.name, args, intent });
-    let result;
-    if (call.truncated || call.invalidArguments) {
-      result = call.truncated
-        ? { text: 'Not run: this tool call was cut off because the reply reached the output token limit. Make smaller calls: for a large file, write the first part, then add the rest with edit.', isError: true }
-        : { text: invalidArgsText(this._toolDefs().find((d) => d.name === call.name)), isError: true };
-    } else if (this.planMode && !this._isReadOnly(call.name)) result = { text: 'Plan mode is on, so this tool is not available. Only read and plan; the user can turn plan mode off with /plan.', isError: true };
-    else if ((!this.defs.some((d) => d.name === call.name) && !this.mcp.has(call.name)) || (call.name === 'web_search' && !this._searchOn())) result = { text: `Unknown tool "${call.name}". Available tools: ${this._toolDefs().map((d) => d.name).join(', ')}.`, isError: true };
-    if (!result) {
-      const signal = this.abortCtl.signal;
-      const onUpdate = (text) => this._emit({ type: 'tool_execution_update', toolCallId: call.id, toolName: call.name, args, partialResult: { content: [{ type: 'text', text }], details: {} } });
-      result = await this._hooked(call.name, args, signal, {
-        // Asked after the PreToolUse hooks, so a hook can stop a call before you see it.
-        gate: async () => {
-          if (!this._mustAsk(call, args)) return undefined;
-          const denied = await this._approve(call, args);
-          t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you
-          return denied;
-        },
-        exec: async () => {
-          let r;
-          if (call.name === 'task') r = await this._runTask(call, conn);
-          else if (this.mcp.has(call.name)) r = await this.mcp.call(call.name, args, signal);
-          else r = await this.tools.run(call.name, args, { onUpdate, allowHost: (h) => this._allowHost(h), vision: this._vision(), search: () => this.config.searchConfig?.() });
-          return r.images?.length && !this._vision() ? { ...r, images: undefined } : r;
-        },
-      });
-    }
-    return this._record(call, result, true, t0);
-  }
-
   _goalStatus() {
     const g = this.goal;
     this._emit({ type: 'extension_ui_request', id: `status-goal-${Date.now()}`, method: 'setStatus', statusKey: 'goal', statusText: g ? `Goal ${g.round}/${g.max}: working (Esc to stop)` : '' });
@@ -1605,3 +994,9 @@ export class AgentProc extends EventEmitter {
     this.emit('exit', 0);
   }
 }
+
+// The parts of an agent that live in their own files: token usage and cost; the model, thinking and connections; the
+// checks at the end of a run; and running tool calls with their approvals.
+mixin(AgentProc, UsageAccounting, ModelChoice, RunChecks, ToolRuns);
+
+export { userMentionsHost }; // used by the tests and kept here for callers of proc.mjs

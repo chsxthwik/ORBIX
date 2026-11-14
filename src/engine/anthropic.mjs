@@ -83,13 +83,19 @@ export async function httpError(r, { quotaWords = /insufficient_quota|exceeded y
   try {
     const text = await r.text();
     try {
-      const j = JSON.parse(text);
-      detail = j.error?.message || (typeof j.error === 'string' ? j.error : '') || j.message || JSON.stringify(j).slice(0, 300);
+      const parsed = JSON.parse(text);
+      const j = Array.isArray(parsed) ? parsed[0] || {} : parsed || {}; // Gemini wraps its error in an array
+      const d = j.detail;
+      detail =
+        j.error?.message || (typeof j.error === 'string' ? j.error : '') || j.message ||
+        (typeof d === 'string' ? d : d?.message || (Array.isArray(d) ? d.map((x) => x?.msg || x?.message).filter(Boolean).join('; ') : '')) || // FastAPI-style servers (Mistral, Cerebras, vLLM)
+        JSON.stringify(parsed).slice(0, 300);
     } catch {
       detail = text.slice(0, 300);
     }
   } catch {}
-  const s = r.status;
+  // Gemini and xAI answer a wrong key with 400, not 401: treat it as the refused key it is.
+  const s = r.status === 400 && /api[ _-]?key|unauthenticated|not authenticated|authentication (failed|fails|required)|invalid (credential|token)/i.test(detail) ? 401 : r.status;
   let msg;
   if (s === 401 || s === 403) msg = `The provider refused the API key or sign-in (${s})`;
   else if (s === 429) msg = 'Rate limited (429)';

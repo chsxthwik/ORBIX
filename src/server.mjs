@@ -4,12 +4,14 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
-import { Backend } from './backend.mjs';
+import { Backend, runProc } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
+import { DATA_DIR } from './store.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
-import { clientFor } from './engine/providers.mjs';
+import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import * as pkce from './engine/oauth-pkce.mjs';
 import { webSearch } from './engine/websearch.mjs';
@@ -70,7 +72,7 @@ const SECURITY_HEADERS = {
 };
 
 /** Strip bulky, UI-irrelevant fields from a model descriptor. */
-function slimModel(m) {
+export function slimModel(m) {
   if (!m) return m;
   return {
     id: m.id,
@@ -81,7 +83,8 @@ function slimModel(m) {
     contextWindow: m.contextWindow,
     maxTokens: m.maxTokens,
     cost: m.cost,
-    thinking: m.thinking ? { efforts: m.thinking.efforts, mode: m.thinking.mode } : undefined,
+    // canOff: false for a model that always thinks (no Off in the menu); default: the level it starts at.
+    thinking: m.thinking ? { efforts: m.thinking.efforts, mode: m.thinking.mode, canOff: m.thinking.canOff !== false, default: m.thinking.default } : undefined,
   };
 }
 
@@ -93,6 +96,21 @@ function shapeResponse(type, res) {
 }
 
 const BOOT = Date.now().toString(36); // part of every static file's ETag
+
+/**
+ * "Windows 11 Pro (build 26100)" for Settings → About; empty when the system will not say. Windows 11 still calls
+ * itself Windows 10 in the registry name os.version() reads, so the build number decides (22000 and up is 11).
+ */
+export function osName(version = os.version(), release = os.release()) {
+  try {
+    const [major, , build] = String(release).split('.').map(Number);
+    let name = String(version || '').trim();
+    if (major === 10 && build) name = name.replace(/^Windows 1[01]\b/, build >= 22000 ? 'Windows 11' : 'Windows 10');
+    return build ? `${name} (build ${build})`.trim() : name;
+  } catch {
+    return '';
+  }
+}
 
 export class AppServer {
   constructor({ store, token, webRoot = path.join(ROOT, 'web'), assetsRoot = path.join(ROOT, 'assets') }) {
@@ -434,7 +452,7 @@ export class AppServer {
   stateSnapshot() {
     const d = this.store.data;
     return {
-      app: { version: VERSION, pid: process.pid },
+      app: { version: VERSION, pid: process.pid, data: DATA_DIR, os: osName() },
       backend: { kind: d.backend.kind, distro: d.backend.distro, error: this.envInfo.error || null },
       workspaces: d.workspaces,
       ui: d.ui,
@@ -499,7 +517,7 @@ export class AppServer {
         if (!baseUrl) throw Object.assign(new Error('Enter the server address first'), { status: 400 });
         if (!key && !p.keyOptional) throw Object.assign(new Error('Paste an API key first'), { status: 400 });
         // Check with the provider BEFORE saving, so a typo or a wrong address is never stored.
-        const models = await clientFor(p.type).listModels({ apiKey: key, baseUrl, providerId: id });
+        const models = await clientFor(p.type).listModels({ apiKey: key, baseUrl, providerId: id, signal: AbortSignal.timeout(LIST_TIMEOUT) });
         await this.engineCfg.setProvider(id, { key: typedKey || undefined, baseUrl, models: models.length });
         return { models: models.length, engine: this.engineCfg.publicView() };
       },
@@ -789,6 +807,12 @@ export class AppServer {
         } catch (e) {
           throw Object.assign(e, { status: 400 });
         }
+        return {};
+      },
+
+      // Settings → About: the data folder in Explorer. Takes no path, so it can open nothing else.
+      'POST /api/reveal-data': async () => {
+        await runProc('explorer.exe', [DATA_DIR], { timeout: 5000 }).catch(() => {}); // explorer.exe exits 1 even when it opened the folder
         return {};
       },
 

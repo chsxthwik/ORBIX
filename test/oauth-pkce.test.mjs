@@ -40,6 +40,7 @@ after(() => {
   pkce.closeAll();
   globalThis.fetch = realFetch;
 });
+process.on('exit', () => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 3 }));
 
 // A JWT the way OpenAI shapes it; only the claims matter here (nothing verifies the signature).
 const jwt = (claims) => ['e30', Buffer.from(JSON.stringify(claims)).toString('base64url'), 'sig'].join('.');
