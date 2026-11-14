@@ -37,7 +37,17 @@ Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ───�
 
 ## An agent session (`src/engine/proc.mjs`)
 
-Each open conversation is one `AgentProc`. The interface talks to it in two ways:
+Each open conversation is one `AgentProc`. Its code is split by job and joined into one class by `mixin.mjs` (a method defined twice is an error):
+
+| File | Job |
+|---|---|
+| `proc.mjs` | lifecycle, requests and the turn loop: streaming, retries, compaction, undo, branching, goals, subagents |
+| `proc-models.mjs` | the model and its facts (context window, thinking levels, prices), the thinking level, fast and plan models, connections and sign-in renewal |
+| `proc-tools.mjs` | running tool calls: approvals, trusted commands, hooks, paths outside the project, local network addresses |
+| `proc-checks.mjs` | after a run that changed files: the project's check command and a review of the diff |
+| `proc-usage.mjs` | tokens, cost and how full the context is |
+
+The interface talks to an `AgentProc` in two ways:
 
 - **Requests** (`POST /api/rpc` → `proc.request(cmd)`): prompt, abort, state and message retrieval, model selection, compaction, undo, regeneration, branching, shell commands, exports and session settings.
 - **Events** (on the SSE stream): agent and turn lifecycle, message updates, tool execution, approvals and questions, compaction, retries, subagents and session information.
@@ -49,6 +59,10 @@ One turn combines the user's message, project rules (`context.mjs`: `AGENTS.md` 
 - **Compaction** (`compact.mjs`): older messages are summarised when context fills. The full history stays on disk and on screen.
 - **Subagents** (`subagent.mjs`): the `task` tool runs read-only helper agents side by side and returns their answers.
 - **Slash commands** (`slash.mjs`, `commands.mjs`): built-in commands such as `/plan`, `/undo` and `/compact`, plus Markdown prompt files from the project.
+
+### Models and thinking levels (`providers.mjs`, `catalog.mjs`)
+
+A model's facts come from three sources, each overriding the one before: the models.dev catalog; what the provider's model list reports (the ChatGPT plan gives each model's context window, levels and default level); and the levels the provider's API actually accepted, learned from its answers and kept for a week in `cache/effort-levels.json`. The ChatGPT client asks for an unsupported level once per model when it lists models: the API refuses it before doing any work and names the accepted ones. If a turn's level is still refused, the turn runs again at the nearest accepted level. A session starts at the model's own default level; Off is offered only when the model can stop thinking. Model lists are cached for a minute and dropped when a provider changes, and each request has a 20-second limit.
 
 ### Tools
 
@@ -74,7 +88,7 @@ Hooks run at `PreToolUse`, `PostToolUse`, `UserPromptSubmit` and `Stop`. Files: 
 | `engine.json` | AI providers, approvals, model roles, web search. API keys are encrypted with Windows DPAPI (`secrets.mjs`) |
 | `sessions/<project>/*.jsonl` | saved conversations, append-only |
 | `mcp.json`, `hooks.json` | your MCP servers and hooks |
-| `cache/` | the model catalog from models.dev, refreshed at most once a day |
+| `cache/` | the model catalog from models.dev (refreshed at most once a day), and the thinking levels learned from providers |
 | `logs/server.log` | capped server log; keys, commands and MCP arguments are never written to it |
 | `instance.json` | the running server's local port and token |
 
@@ -85,6 +99,8 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | Module | Role |
 |---|---|
 | `main.js` | start-up, layout, sidebar, tabs, keyboard shortcuts, routing events to views |
+| `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
+| `updates.js` | update status in the sidebar and Settings → About |
 | `store.js` | client state and the reducer that turns session events into UI state |
 | `api.js` | HTTP calls and the SSE connection |
 | `home.js` | Home: task box, next actions, recent conversations and projects |

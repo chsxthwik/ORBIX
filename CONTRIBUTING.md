@@ -4,9 +4,9 @@ Thanks for helping. The project is small on purpose: no runtime npm dependencies
 
 ## Layout
 
-- `electron/`: the Windows app. `main.mjs` starts the server and opens the window; `preload.cjs` is the only bridge to the page (theme colours of the title bar).
+- `electron/`: the Windows app. `main.mjs` starts the server and opens the window; `updater.mjs` installs updates; `preload.cjs` is the only bridge to the page (title bar colours, zoom, updates, app versions).
 - `src/*.mjs`: the local Node server: `app.mjs` (start, single instance), `server.mjs` (`AppServer`: HTTP API, static UI, SSE events), `backend.mjs` (WSL or Windows, path translation), `fsapi.mjs` / `gitapi.mjs` (file browser, Changes panel) and `diagnostics.mjs`.
-- `src/engine/*.mjs`: the ORBIX agent. `proc.mjs` (`AgentProc`) is the agent loop; `slash.mjs` slash commands; `tools.mjs`, `webfetch.mjs`, `subagent.mjs`, `mcp.mjs` its tools; `providers.mjs`, `anthropic.mjs`, `openai.mjs`, `catalog.mjs` the model APIs; `store.mjs` saved chats and keys. The UI drives it through JSON requests and its event stream (engine id `builtin` on the wire).
+- `src/engine/*.mjs`: the ORBIX agent. `proc.mjs` (`AgentProc`) is the agent loop, with its other parts beside it in `proc-models.mjs` (model, thinking levels, connections), `proc-tools.mjs` (tool calls and approvals), `proc-checks.mjs` (the check and review after a run) and `proc-usage.mjs` (tokens and cost), joined by `mixin.mjs`; `slash.mjs` slash commands; `tools.mjs`, `webfetch.mjs`, `subagent.mjs`, `mcp.mjs` its tools; `providers.mjs`, `anthropic.mjs`, `openai.mjs`, `chatgpt.mjs`, `catalog.mjs` the model APIs; `store.mjs` saved chats and keys. The UI drives it through JSON requests and its event stream (engine id `builtin` on the wire).
 - `web/`: the UI (plain ES modules + CSS). `web/js/store.js` turns the event stream into state; `session.js` and `tools.js` render it.
 - `tools/`: `shots.mjs`, which takes the README and website screenshots from a real ORBIX on sample data.
 
@@ -28,7 +28,7 @@ Thanks for helping. The project is small on purpose: no runtime npm dependencies
 
 ## Review
 
-There is no CI. Run `npm test` yourself before you open a pull request. `.github/CODEOWNERS` asks the maintainer to review every change.
+GitHub Actions runs `npm test` on Windows with Node 22 and 24 for every push to `main` and every pull request (`.github/workflows/test.yml`). Run it yourself first. `.github/CODEOWNERS` asks the maintainer to review every change.
 
 ## License of contributions
 
@@ -36,7 +36,8 @@ ORBIX is licensed under FSL-1.1-MIT (see `LICENSE`). By sending a pull request y
 
 ## Releasing (maintainer)
 
-1. Bump the version in `package.json`, add a section to `CHANGELOG.md`, run `npm test`.
-2. Publish the source release and update the public site as needed.
-3. Create a GitHub release `v<version>` and attach the zip.
-4. Deploy the site: from the `site` folder run `vercel deploy --prod`.
+1. Bump the version in `package.json`, give the `CHANGELOG.md` section its version and date, and run `npm test`.
+2. If the interface changed, run `npm run shots` to retake the README and website screenshots.
+3. Commit, tag `v<version>` and push.
+4. `npm run release` builds the installer and publishes it with `latest.yml` and the blockmap to a GitHub release `v<version>` (it needs a `GH_TOKEN`). Installed copies update themselves from that release.
+5. Deploy the site: from the `site` folder run `vercel deploy --prod`.

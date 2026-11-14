@@ -150,7 +150,7 @@ describe('sign-in recovery', () => {
     const config = { type: () => 'chatgpt', baseUrl: () => BASE, getKey: async () => key, isSignIn: () => true, renewSignIn: async () => (key = FRESH) };
     assert.deepEqual(await EngineConfig.prototype.listModels.call(config, 'chatgpt'), [{ id: 'gpt-6-sol', name: 'gpt-6-sol' }]);
     assert.deepEqual(seen, ['old', 'fresh']);
-    const stale = { ...config, getKey: async () => TOKEN, renewSignIn: async () => null };
+    const stale = { ...config, lists: undefined, getKey: async () => TOKEN, renewSignIn: async () => null }; // its own (empty) list cache
     await assert.rejects(() => EngineConfig.prototype.listModels.call(stale, 'chatgpt'), /sign-in has expired/);
   });
   test('a pasted API key that is rejected is not retried', async () => {

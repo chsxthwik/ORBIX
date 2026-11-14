@@ -1,6 +1,6 @@
 // Settings: a full-size sheet. Overview, then the agent (providers, models, permissions, tools), then the app.
 // A search box finds any setting by name and jumps to it.
-import { h, icon, toast, replace, clear, logo, errorState, loadingState } from './dom.js';
+import { h, icon, toast, replace, clear, logo, errorState, loadingState, copyText } from './dom.js';
 import { api } from './api.js';
 import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { toggleWide } from './workbench.js';
@@ -13,6 +13,7 @@ import { openHelp } from './help.js';
 import { openDiagnostics } from './diagnostics.js';
 import { asciiComx } from './ascii.js';
 import { homeProject } from './home.js';
+import { previewCelebration } from './backdrop.js';
 import { updatesSupported, checkForUpdates, setAutoUpdates, restartToUpdate, updateLine } from './updates.js';
 
 /** key, label, icon, one line under the page title. */
@@ -49,7 +50,7 @@ const FIND = [
   ['Web search', 'tools', 'brave tavily searxng'],
   ['MCP servers', 'tools', 'server tools mcp'],
   ['Hooks', 'tools', 'before after tool'],
-  ['Theme', 'look', 'dark light system midnight frost color'],
+  ['Theme', 'look', 'dark light system midnight frost orbix scene synthwave koi aurora dusk animated backdrop fireworks color'],
   ['Message text size', 'look', 'font zoom bigger smaller'],
   ['Density', 'look', 'compact comfortable spacing rows'],
   ['Reading column', 'look', 'wide width'],
@@ -212,17 +213,25 @@ async function tabModels(el, show) {
 function tabLook(el) {
   const u = S.ui;
   const theme = u.theme || 'system';
-  const themes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Theme' }, [['system', 'System'], ['dark', 'Dark'], ['light', 'Light'], ['midnight', 'Midnight'], ['frost', 'Frost']].map(([v, l]) => h('button', { class: 'theme-c', type: 'button', role: 'radio', 'aria-checked': String(theme === v), onclick: (e) => {
+  const card = ([v, l]) => h('button', { class: 'theme-c', type: 'button', role: 'radio', 'aria-checked': String(theme === v), onclick: (e) => {
     const apply = () => savePrefs({ theme: v });
     // A soft crossfade between themes.
     if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(apply);
     else apply();
-    for (const b of e.currentTarget.parentElement.children) b.setAttribute('aria-checked', String(b === e.currentTarget));
-  } }, themePreview(v), h('span', { class: 'theme-n' }, h('span', null, l), icon('check', 13, 'theme-ok')))));
+    for (const b of e.currentTarget.closest('.set-wrap, .modal, body').querySelectorAll('.theme-c')) b.setAttribute('aria-checked', String(b === e.currentTarget));
+  } }, themePreview(v), h('span', { class: 'theme-n' }, h('span', null, l), icon('check', 13, 'theme-ok')));
+  const themes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Theme' }, [['system', 'System'], ['dark', 'Dark'], ['light', 'Light'], ['midnight', 'Midnight'], ['frost', 'Frost']].map(card));
+  const scenes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Scene theme' }, [['orbix', 'ORBIX'], ['sunset', 'Synthwave'], ['koi', 'Koi pond'], ['aurora', 'Aurora'], ['dusk', 'Halftone dusk']].map(card));
   const val = h('span', { class: 'num range-v' }, `${u.fontSize || 14}px`);
   const size = h('input', { type: 'range', min: 12, max: 18, step: 1, value: u.fontSize || 14, 'aria-label': 'Message text size', oninput: () => ((val.textContent = size.value + 'px'), savePrefs({ fontSize: +size.value })) });
   el.append(
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Theme'), themes),
+    h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Scenes'),
+      h('p', { class: 'set-note' }, 'Themes with a moving picture behind the conversation. Text stays on a calm column in the middle, the scene speeds up while the agent works, and fireworks go up when a task finishes.'),
+      scenes,
+      h('div', { class: 'set-card scene-opts' },
+      row('Animate scenes', toggle(u.sceneMotion !== false, (v) => savePrefs({ sceneMotion: v }), 'Animate scenes'), 'Turn this off to keep the picture still. Scenes also stay still when Windows is set to reduce motion.'),
+      row('Preview the finish', btn('Fireworks', () => previewCelebration()), 'Shows what happens in a scene theme when the agent finishes a task.'))),
     group('Reading', null,
       row('Message text size', h('div', { class: 'row' }, size, val)),
       h('p', { class: 'fs-sample' }, 'The quick brown fox: this is how replies will read.'),
@@ -504,13 +513,75 @@ function updatesGroup() {
   return box;
 }
 
+const SITE_URL = 'https://orbix-agent.vercel.app';
+const REPO_URL = 'https://github.com/chsxthwik/ORBIX';
+const LICENSE_URL = 'https://github.com/chsxthwik/ORBIX/blob/main/LICENSE';
+
+/** The facts a bug report needs, one per line. */
+function versionInfo() {
+  const v = window.orbixDesktop?.versions;
+  const b = S.env.backend;
+  return [
+    `ORBIX ${S.env.app.version}${window.orbixDesktop ? '' : ' (run in a browser)'}`,
+    v ? `Electron ${v.electron} · Chromium ${v.chrome} · Node.js ${v.node}` : '',
+    S.env.app.os || '',
+    `Commands run in ${b.kind === 'wsl' ? `WSL${b.distro ? ` (${b.distro})` : ''}` : 'Windows'}`,
+  ].filter(Boolean).join('\n');
+}
+
+/** A small pill next to the version: where the update stands. Nothing outside the Windows app. */
+function updatePill() {
+  if (!updatesSupported()) return '';
+  const pill = h('button', { class: 'about-pill', type: 'button' });
+  let drawn = false;
+  const draw = () => {
+    if (drawn && !pill.isConnected) return off();
+    drawn = true;
+    const st = S.update;
+    const [text, tone] = { ready: [`${st.version} is ready`, 'on'], downloading: [`Downloading ${st.percent || 0}%`, ''], checking: ['Checking…', ''], latest: ['Up to date', 'ok'], error: ['Update failed', 'warn'] }[st.state] || [st.auto ? 'Updates on' : 'Updates off', ''];
+    pill.className = `about-pill ${tone}`.trim();
+    pill.title = updateLine(st);
+    pill.onclick = st.state === 'ready' ? () => restartToUpdate() : () => pill.closest('.set-content')?.querySelector('.about-upd')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    replace(pill, h('span', { class: 'dot' + (tone === 'ok' ? ' ok' : tone === 'warn' ? ' warn' : tone === 'on' ? ' live' : '') }), text);
+  };
+  const off = on('update', draw);
+  draw();
+  return pill;
+}
+
+const extLink = (label, url) => h('button', { class: 'about-link', type: 'button', title: url, onclick: () => openLink(url) }, label, icon('external', 12));
+
 function tabAbout(el, show) {
   const b = S.env.backend;
+  const v = window.orbixDesktop?.versions;
+  const data = S.env.app.data || '';
   el.append(
-    h('div', { class: 'about-h' }, logo(38), h('div', null,
-      h('div', { class: 'about-name' }, h('strong', null, 'ORBIX'), h('span', { class: 'tag on', title: 'Features and screens may still change between versions.' }, 'Beta')),
-      h('p', null, `Version ${S.env.app.version}`))),
+    h('header', { class: 'about-h' }, logo(44),
+      h('div', { class: 'about-id' },
+        h('div', { class: 'about-name' }, h('strong', null, 'ORBIX'), h('span', { class: 'tag on', title: 'Features and screens may still change between versions.' }, 'Beta')),
+        h('div', { class: 'about-ver' }, h('span', { class: 'num' }, `Version ${S.env.app.version}`), updatePill())),
+      btn('Copy version info', async (e) => {
+        const b2 = e.currentTarget;
+        if (!(await copyText(versionInfo(), { quiet: true }))) return toast('Copy failed. Click into ORBIX and try again.', 'error');
+        b2.textContent = 'Copied';
+        setTimeout(() => (b2.textContent = 'Copy version info'), 1600);
+      }, 'sm about-copy')),
     h('p', { class: 'about-lead' }, 'A coding agent that works inside your projects, on your own computer. It reads freely, asks before it edits a file or runs a command, and lets you undo every edit.'),
+    h('ul', { class: 'about-facts' },
+      h('li', null, icon('shield', 15), h('div', null, h('strong', null, 'Asks first'), h('span', null, 'Edits and commands wait for your OK.'))),
+      h('li', null, icon('undo', 15), h('div', null, h('strong', null, 'Undo any edit'), h('span', null, 'Every file change can be reverted.'))),
+      h('li', null, icon('key', 15), h('div', null, h('strong', null, 'Your keys stay here'), h('span', null, 'Encrypted for your Windows account.')))),
+    h('div', { class: 'about-upd' }, updatesGroup()),
+    group('This copy', null,
+      v ? row('Runtime', h('span', { class: 'about-v num' }, `Electron ${v.electron}`), `With Chromium ${v.chrome} and Node.js ${v.node}.`) : null,
+      S.env.app.os ? row('System', h('span', { class: 'about-v' }, S.env.app.os)) : null,
+      row('Commands run in', h('span', { class: 'about-v' }, b.kind === 'wsl' ? `WSL${b.distro ? ` · ${b.distro}` : ''}` : 'Windows'), h('span', null, 'Change it in ', h('button', { class: 'link', type: 'button', onclick: () => show('behavior') }, 'Permissions'), '.')),
+      data ? row('Data folder', btn('Open', () => api.post('/api/reveal-data').catch((e) => toast(e.message, 'error')), 'sm'), h('span', null, h('code', { class: 'about-path', title: data }, data), h('br'), 'Settings, conversations and logs live here and stay through every update.')) : null),
+    group('Help', null,
+      row('How ORBIX works', btn('Open', () => openHelp(), 'sm'), 'A short guide to connecting a model, approvals, undo and project rules.'),
+      row('Keyboard shortcuts', btn('Show', () => show('keys'), 'sm'), 'Every shortcut, with a filter.'),
+      row('Check my setup', btn('Run', () => openDiagnostics(), 'sm'), 'Checks the data folder, WSL and your providers, and says what to fix.'),
+      row('Report a problem', btn('Open GitHub', () => openLink(ISSUES_URL), 'sm'), 'Report a bug or suggest a feature. Copy version info above and paste it into the report.')),
     h('section', { class: 'about-maker', 'aria-label': 'Made by COM-X Corporation' },
       asciiComx().el,
       h('div', { class: 'about-maker-t' },
@@ -518,15 +589,12 @@ function tabAbout(el, show) {
         h('strong', null, 'COM-X Corporation'),
         h('p', null, 'Company X finds the problems that matter most and builds their solutions. ORBIX is its coding workspace.'),
         h('button', { class: 'link', type: 'button', title: COMX_URL, onclick: () => openLink(COMX_URL) }, 'Visit COM-X', icon('external', 12)))),
-    updatesGroup(),
+    h('nav', { class: 'about-links', 'aria-label': 'ORBIX links' }, extLink('Website', SITE_URL), extLink('GitHub', REPO_URL), extLink('Release notes', RELEASES_URL), extLink('License', LICENSE_URL)),
     group(null, null,
-      row('Report a problem', btn('Open GitHub', () => openLink(ISSUES_URL), 'sm'), 'Report a bug or suggest a feature on GitHub.'),
-      row('Commands run in', b.kind === 'wsl' ? `WSL (${b.distro})` : 'Windows'),
-      row('How ORBIX works', btn('Open', () => openHelp(), 'sm'), 'A short guide to connecting a model, approvals, undo and project rules.'),
-      row('Keyboard shortcuts', btn('Show', () => show('keys'), 'sm'), 'Every shortcut, with a filter.'),
       row('Quit ORBIX', btn('Quit', async () => {
         if (await confirmDialog('Quit ORBIX', 'Stop all sessions and close ORBIX?', { ok: 'Quit', danger: true })) {
           await api.post('/api/quit').catch(() => {});
         }
-      }, 'sm danger'), 'Stops every running session.')));
+      }, 'sm danger'), 'Stops every running session and closes the window. A downloaded update installs now.')),
+    h('p', { class: 'about-legal' }, '© 2026 chsxthwik. Licensed under FSL-1.1-MIT: free to use, and each release becomes MIT two years after it ships. Geist and Geist Mono are used under the SIL Open Font License.'));
 }

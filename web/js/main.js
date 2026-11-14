@@ -17,6 +17,7 @@ import { openSettings as settingsDialog } from './settings.js';
 import { barHandlers, toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
 import { sideUpdate } from './updates.js';
+import { initBackdrop, SCENES } from './backdrop.js';
 
 const views = new Map();
 const sideEl = $('#sidebar');
@@ -25,6 +26,8 @@ const sessEl = $('#session');
 const homeEl = $('#welcome');
 const appEl = $('#app');
 let searchTerm = '';
+// The conversation filter opens from the funnel button beside Projects and stays open while it has text.
+let filterOpen = false;
 const collapsed = new Set(lsGet('collapsed', []));
 // Projects whose whole list is shown (by default a project shows its newest conversations only).
 const expanded = new Set(lsGet('expanded', []));
@@ -36,7 +39,7 @@ const narrowPanel = matchMedia('(max-width: 1100px)');
 const overlay = { side: false, panel: false };
 
 // Every theme belongs to a mode (dark or light); the mode drives color-scheme and anything that only needs to know which.
-const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light' };
+const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light', orbix: 'dark', sunset: 'dark', koi: 'light', aurora: 'dark', dusk: 'dark' };
 /** The Windows app's interface size: a chosen factor, or on Auto one that fits the screen (larger on wide screens). */
 export function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth || 0) {
   if (typeof v === 'number' && v >= 0.5 && v <= 2) return v;
@@ -52,6 +55,8 @@ function applyPrefs() {
   const name = THEMES[u.theme] ? u.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; // 'system' or unknown
   root.dataset.theme = name;
   root.dataset.mode = THEMES[name];
+  if (SCENES.includes(name)) root.dataset.scene = name;
+  else delete root.dataset.scene;
   lsSet('look', { theme: name });
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
   root.classList.toggle('compact', u.density === 'compact');
@@ -120,7 +125,8 @@ function resizer(id, varName, key, min, max, fromRight, reset) {
 resizer('#rs-side', '--side-w', 'sidebarW', SIDE_MIN, SIDE_MAX, false, SIDE_W);
 resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true, 380);
 
-const dotCls = (t) => 'dot' + (t.dead ? ' dead' : t.streaming ? ' run' : t.unread ? ' unread' : ' open');
+// A session's status in the sidebar: ended, waiting for your OK, working, finished while you were away, or just open.
+const dotCls = (t) => 'dot' + (t.dead ? ' dead' : t.dialogs?.some(isApproval) ? ' warn' : t.streaming ? ' run' : t.unread ? ' unread' : ' open');
 const fmtSecs = (sec) => (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`);
 
 // Pinned conversations, by session file, saved with the other UI preferences.
@@ -175,7 +181,7 @@ function sessionRow(s, where) {
   const cur = !!tab && tab.id === S.active;
   const more = iconBtn('more', 'More', (e) => rowMenu(s, e.currentTarget), 'sm');
   const tip = [s.title, where, s.branch ? `Branch ${s.branch}` : '', !where && s.preview && s.preview !== s.title ? s.preview : ''].filter(Boolean).join('\n');
-  return h('div', { class: 's-row' + (cur ? ' cur' : '') + (tab?.streaming ? ' live' : '') },
+  return h('div', { class: 's-row' + (cur ? ' cur' : '') + (tab?.streaming ? ' live' : '') + (tab?.unread && !cur ? ' unread' : '') },
     h('button', { class: 's-btn', type: 'button', title: tip, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), ondblclick: (e) => (e.preventDefault(), renameConversation(s)), onkeydown: (e) => rowKeys(s, e), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
       tab ? h('span', { class: dotCls(tab) }) : null,
       s.branch ? icon('branch', 12, 's-br') : null,
@@ -242,7 +248,7 @@ function listKeys(e) {
 let sideSig = '';
 function sidebarSig() {
   return JSON.stringify([
-    searchTerm, [...collapsed], [...expanded], pinned(), S.active, S.ui.rail === true, Math.floor(Date.now() / 60000),
+    searchTerm, filterOpen, [...collapsed], [...expanded], pinned(), S.active, S.ui.rail === true, Math.floor(Date.now() / 60000),
     S.sessions.map((s) => [s.path, s.mtime, s.title]),
     [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '', t.worktree?.branch || '', t.worktree?.state || '']),
     S.workspaces.map((w) => [w.id, w.path, w.name]),
@@ -261,7 +267,7 @@ function drawSidebar() {
   const typing = document.activeElement?.matches?.('.side-search input') ? document.activeElement.selectionStart : -1;
   const scroll = sideEl.querySelector('.side-scroll')?.scrollTop || 0;
   const search = h('input', { type: 'search', placeholder: 'Filter conversations', value: searchTerm, 'aria-label': 'Filter conversations', spellcheck: 'false', oninput: (e) => ((searchTerm = e.target.value), drawSidebar()), onkeydown: (e) => {
-    if (e.key === 'Escape' && searchTerm) return e.stopPropagation(), (searchTerm = ''), drawSidebar();
+    if (e.key === 'Escape') return e.stopPropagation(), (searchTerm = ''), (filterOpen = false), drawSidebar(), sideEl.querySelector('.side-filter-btn')?.focus();
     if (e.key === 'Enter') return e.preventDefault(), sideEl.querySelector('.side-scroll .s-btn')?.click();
     if (e.key === 'ArrowDown') return e.preventDefault(), sideEl.querySelector('.side-scroll .s-btn, .side-scroll .proj-btn')?.focus();
   } });
@@ -306,19 +312,31 @@ function drawSidebar() {
   const top = brandTop();
   if (sideEl.firstElementChild !== top) replace(sideEl, top);
   while (top.nextSibling) top.nextSibling.remove();
+  const showFilter = filterOpen || !!searchTerm;
+  const toggleFilter = () => {
+    filterOpen = !showFilter;
+    if (!filterOpen) searchTerm = '';
+    drawSidebar();
+    if (filterOpen) sideEl.querySelector('.side-search input')?.focus();
+  };
   sideEl.append(
-    h('button', { class: 'side-new', type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), 'New session', kbd('Ctrl+N')),
+    h('button', { class: 'side-new', type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), h('span', null, 'New session'), kbd('Ctrl+N')),
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
       h('button', { class: 'side-link' + (S.active ? '' : ' cur'), type: 'button', title: 'Home', 'aria-current': S.active ? null : 'page', onclick: () => newSession() }, icon('layers', 15), h('span', null, 'Home')),
       h('button', { class: 'side-link', type: 'button', title: 'Search everything (Ctrl+K)', onclick: () => openSearch() }, icon('search', 15), h('span', null, 'Search'), kbd('Ctrl+K'))),
-    h('div', { class: 'side-search' }, icon('list', 14), search),
     h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
       pinnedList(term),
-      h('div', { class: 'side-h' }, h('span', null, 'Projects'), iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm')),
-      projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No matching conversations.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
+      h('div', { class: 'side-h' }, h('span', null, 'Projects'),
+        h('span', { class: 'side-h-acts' },
+          iconBtn('filter', showFilter ? 'Close the filter' : 'Filter conversations', toggleFilter, 'sm side-filter-btn' + (showFilter ? ' on' : '')),
+          iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm'))),
+      showFilter ? h('div', { class: 'side-search' }, icon('search', 14), search) : null,
+      projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
     sideUpdate(icon('download', 15)) || '', // native append() would print null as text
-    h('div', { class: 'side-foot' }, footStatus(), iconBtn('cog', 'Settings (Ctrl+,)', () => settingsDialog())),
+    h('div', { class: 'side-foot' },
+      h('button', { class: 'side-link foot-set', type: 'button', title: 'Settings (Ctrl+,)', onclick: () => settingsDialog() }, icon('cog', 15), h('span', null, 'Settings')),
+      footStatus()),
   );
   sideEl.querySelector('.side-scroll').scrollTop = scroll;
   if (typing >= 0) {
@@ -336,7 +354,7 @@ function brandTop() {
   // Built once: a new logo would restart its orbit. The button itself is Home.
   BRAND_TOP ||= h('div', { class: 'side-top' },
     h('button', { class: 'brand', type: 'button', onclick: () => newSession() },
-      h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, logo(28, { alive: true })),
+      h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, logo(24, { alive: true })),
       h('span', { class: 'wordmark' }, 'ORBIX')),
     iconBtn('chevron-left', 'Collapse to icons', () => savePrefs({ rail: S.ui.rail !== true }), 'sm rail-btn'));
   const b = BRAND_TOP.firstChild;
@@ -807,6 +825,7 @@ async function boot() {
   drawWelcome();
   mountPanel($('#panel'));
   initNotify();
+  initBackdrop();
   initStatusBar();
   loadSessions();
   connectEvents({

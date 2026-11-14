@@ -141,8 +141,65 @@ function maybeRefresh() {
   if (!loading && (!cat || Date.now() - (cat.fetchedAt || 0) > DAY) && Date.now() - lastTry > 10 * 60 * 1000) loadCatalog();
 }
 
+// What a provider says about its own models, from its model list (the ChatGPT plan reports each model's context
+// window, effort levels and default effort). It is more accurate than the catalog, so it wins field by field.
+const live = new Map(); // provider + '\n' + model id -> { contextWindow, efforts, defaultEffort, vision, cost }
+const BLANK = { contextWindow: null, maxOutput: null, cost: { input: null, output: null, cacheRead: null, cacheWrite: null }, reasoning: false, vision: true, tools: true, efforts: null, budget: false, toggle: false, interleaved: null, canonical: null };
+
+/** Record facts a provider reported about one of its models (fields left undefined keep the catalog's value). */
+export function setLiveInfo(providerId, modelId, facts) {
+  if (!providerId || !modelId || !facts) return;
+  const clean = Object.fromEntries(Object.entries(facts).filter(([, v]) => v !== undefined));
+  if (clean.efforts) clean.reasoning = clean.efforts.length > 0;
+  live.set(`${providerId}\n${modelId}`, clean);
+}
+
+// The effort levels a provider's API actually accepted for a model, learned from its own answers (a request with a
+// level the model does not take is refused, free of charge, with the list of levels it does take). This is the
+// final word: model lists can advertise a level the API refuses, or leave out one it takes. Kept on disk for a week.
+const LEARN_TTL = 7 * DAY;
+const learnFile = () => path.join(DATA_DIR, 'cache', 'effort-levels.json');
+let learned = null; // key -> { efforts, at }
+function learnedMap() {
+  if (learned) return learned;
+  learned = new Map();
+  try {
+    for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(learnFile(), 'utf8')) || {})) if (Array.isArray(v?.efforts) && Number.isFinite(v.at)) learned.set(k, v);
+  } catch {}
+  return learned;
+}
+
+/** Remember the effort levels a provider's API accepts for a model ('none' among them means thinking can be off). */
+export function learnEfforts(providerId, modelId, efforts) {
+  if (!providerId || !modelId || !Array.isArray(efforts) || !efforts.length) return;
+  learnedMap().set(`${providerId}\n${modelId}`, { efforts: [...new Set(efforts.map(String))], at: Date.now() });
+  try {
+    fs.mkdirSync(path.dirname(learnFile()), { recursive: true });
+    const tmp = learnFile() + '.' + process.pid + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(learned)));
+    fs.renameSync(tmp, learnFile());
+  } catch {}
+}
+
+/** True when the accepted levels of a model were learned within the last week. */
+export function effortsKnown(providerId, modelId) {
+  const v = learnedMap().get(`${providerId}\n${modelId}`);
+  return !!v && Date.now() - v.at < LEARN_TTL;
+}
+
 /** Raw slim record (with efforts/budget/toggle/interleaved/canonical) or null. */
 export function modelRecord(providerId, modelId) {
+  const key = `${providerId}\n${String(modelId)}`;
+  const own = modelId ? live.get(key) : null;
+  const taught = modelId ? learnedMap().get(key) : null;
+  const base = catalogRecord(providerId, modelId);
+  if (!own && !taught) return base;
+  const r = { ...(base || BLANK), ...(own || {}), cost: own?.cost ? { ...BLANK.cost, ...own.cost } : (base || BLANK).cost };
+  if (taught && Date.now() - taught.at < LEARN_TTL) Object.assign(r, { efforts: taught.efforts, reasoning: true });
+  return r;
+}
+
+function catalogRecord(providerId, modelId) {
   try {
     maybeRefresh();
     if (!cat || !modelId) return null;
@@ -168,7 +225,7 @@ export function modelRecord(providerId, modelId) {
 export function modelInfo(providerId, modelId) {
   const r = modelRecord(providerId, modelId);
   if (!r) return null;
-  return { contextWindow: r.contextWindow, maxOutput: r.maxOutput, cost: { ...r.cost }, reasoning: r.reasoning, vision: r.vision, tools: r.tools, efforts: r.efforts, interleaved: r.interleaved };
+  return { contextWindow: r.contextWindow, maxOutput: r.maxOutput, cost: { ...r.cost }, reasoning: r.reasoning, vision: r.vision, tools: r.tools, efforts: r.efforts, defaultEffort: r.defaultEffort || null, interleaved: r.interleaved };
 }
 
 /** Models the catalog lists for one provider (used when a provider has no /models endpoint). */

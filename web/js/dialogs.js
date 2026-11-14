@@ -168,6 +168,13 @@ export function folderPicker(start = '') {
  * Searchable model list. `load()` returns the models; `onPick(model)` applies one (throw to keep the list open).
  * `loading` is the line shown while `load()` runs.
  */
+/** A model's details for its tooltip in the picker: id, context window and thinking levels. */
+function modelTip(x) {
+  const th = x.thinking;
+  const levels = th?.efforts?.length ? `Thinking: ${[...(th.canOff === false ? [] : ['off']), ...th.efforts].join(', ')}${th.canOff === false ? ' (always thinks)' : ''}` : 'No thinking levels';
+  return [x.id, x.contextWindow ? `Context: ${fmtTokens(x.contextWindow)} tokens` : '', levels].filter(Boolean).join('\n');
+}
+
 export function modelPicker({ load, current, onPick, extra, loading = 'Loading models…' }) {
   const list = h('div', { class: 'list mp-list', role: 'listbox', 'aria-label': 'Models' });
   const q = h('input', { type: 'search', placeholder: 'Search models', 'aria-label': 'Search models', spellcheck: 'false' });
@@ -193,12 +200,14 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
       kids.push(h('button', { class: 'list-it' + (!current ? ' cur' : ''), type: 'button', role: 'option', onclick: () => choose(null) }, h('span', { class: 'grow' }, extra)));
       shown.push(null);
     }
+    // "thinking" only tells models apart where a provider has some that think and some that do not.
+    const mixed = new Set([...byProv].filter(([, arr]) => arr.some((x) => x.reasoning) && arr.some((x) => !x.reasoning)).map(([p]) => p));
     for (const [p, arr] of byProv) {
       kids.push(h('div', { class: 'list-h with-mark' }, brandMark(p, 14), S.engine?.providers?.find((q) => q.id === p)?.name || p));
       for (const x of arr) {
         const isCur = current && current.id === x.id && current.provider === x.provider;
         shown.push(x);
-        kids.push(h('button', { class: 'list-it' + (isCur ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(!!isCur), onclick: () => choose(x) }, h('span', { class: 'grow ell' }, x.name || x.id), x.reasoning ? h('span', { class: 'tag' }, 'thinking') : null, x.contextWindow ? h('span', { class: 'muted small num' }, fmtTokens(x.contextWindow)) : null, isCur ? icon('check', 14) : null));
+        kids.push(h('button', { class: 'list-it' + (isCur ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(!!isCur), title: modelTip(x), onclick: () => choose(x) }, h('span', { class: 'grow ell' }, x.name || x.id), x.reasoning && mixed.has(p) ? h('span', { class: 'tag' }, 'thinking') : null, x.contextWindow ? h('span', { class: 'muted small num' }, fmtTokens(x.contextWindow)) : null, isCur ? icon('check', 14) : null));
       }
     }
     if (!byProv.size && !(extra && !f)) kids.push(h('div', { class: 'empty' }, 'No matching models'));

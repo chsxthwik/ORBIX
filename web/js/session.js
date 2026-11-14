@@ -13,6 +13,10 @@ import { viewFile, reviewChanges } from './panels.js';
 import { conversationToMarkdown } from './exporter.js';
 import { Composer } from './composer.js';
 import { Timeline } from './timeline.js';
+
+// How each thinking level reads in the interface.
+const THINKING = { off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
+const thinkingLabel = (l) => THINKING[l] || String(l).charAt(0).toUpperCase() + String(l).slice(1);
 import { projectTasks, sessionTasks } from './workspace.js';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -384,7 +388,8 @@ export class TabView {
     const efforts = m?.thinking?.efforts || [];
     const lvl = st?.thinkingLevel || 'off';
     this.thinkBtn.hidden = dead || !(m?.reasoning || efforts.length);
-    this.thinkBtn.replaceChildren(icon('brain', 14), h('span', null, lvl === 'off' ? 'Thinking off' : `Thinking ${lvl}`), icon('chevron-down', 12, 'cbtn-chev'));
+    this.thinkBtn.replaceChildren(icon('brain', 14), h('span', null, lvl === 'off' ? 'Thinking off' : `Thinking: ${thinkingLabel(lvl).toLowerCase()}`), icon('chevron-down', 12, 'cbtn-chev'));
+    this.thinkBtn.title = m?.thinking?.canOff === false ? 'How hard the model thinks. This model always thinks, so there is no Off.' : 'How hard the model thinks before it answers';
     this.thinkBtn.classList.toggle('on', lvl !== 'off');
     const hasPlan = !!st && 'planMode' in st;
     this.planBtn.hidden = dead || !hasPlan;
@@ -496,7 +501,9 @@ export class TabView {
   pickThinking(anchor) {
     const t = this.tab;
     const lvl = t.state?.thinkingLevel || 'off';
-    popMenu(anchor, ['off', ...(t.model?.thinking?.efforts || [])].map((l) => ({ label: l === 'off' ? 'Off' : l[0].toUpperCase() + l.slice(1), on: l === lvl, run: () => setThinking(t, l).catch((er) => toast(er.message, 'error')) })), { minWidth: 160 });
+    const th = t.model?.thinking;
+    const levels = [...(th?.canOff === false ? [] : ['off']), ...(th?.efforts || [])];
+    popMenu(anchor, [{ header: th?.canOff === false ? 'Thinking · this model always thinks' : 'Thinking' }, ...levels.map((l) => ({ label: thinkingLabel(l), on: l === lvl, run: () => setThinking(t, l).catch((er) => toast(er.message, 'error')) }))], { minWidth: 200 });
   }
 
   async togglePlan() {
@@ -791,6 +798,9 @@ export class TabView {
     const ended = m.stopReason === 'error' || m.stopReason === 'aborted';
     if (!text && !ended) return wrap;
     if (m.timestamp) acts.prepend(h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)));
+    // Which model wrote it, at the end of the row (the reply itself carries no name plate).
+    const model = typeof m.model === 'string' ? m.model : '';
+    if (model) acts.append(h('span', { class: 'msg-model', title: m.provider ? `${m.provider}/${model}` : model }, model));
     wrap.append(acts);
     return wrap;
   }

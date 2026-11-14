@@ -7,10 +7,13 @@ import crypto from 'node:crypto';
 import { DATA_DIR } from '../store.mjs';
 import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, readTail, textOf } from '../util.mjs';
 import { protect, unprotect } from './secrets.mjs';
-import { PRESETS, clientFor } from './providers.mjs';
+import { PRESETS, clientFor, LIST_TIMEOUT } from './providers.mjs';
 import { setProviderOrg } from './openai.mjs';
 import { refreshSignIn } from './oauth-pkce.mjs';
 import { VERIFY_MODES } from './verify.mjs';
+
+/** How long a provider's model list is reused before it is asked for again. */
+const LIST_TTL = 60 * 1000;
 
 const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
 /** ask: edits and commands ask. edits: edits run, commands ask. auto: nothing asks. */
@@ -65,9 +68,11 @@ export class EngineConfig {
     // Decrypted keys by their stored (encrypted) form: each DPAPI call starts PowerShell (~250 ms), so a key is
     // decrypted once per run instead of on every prompt. Plain keys stay in this process only.
     this.plain = new Map();
+    this.rev = 0; // goes up on every saved change, so model lists cached under an older one are asked for again
     for (const [id, p] of Object.entries(this.data.providers)) if (p?.orgId) setProviderOrg(id, p.orgId);
   }
   save() {
+    this.rev = (this.rev || 0) + 1; // a provider, key or address changed: cached model lists are stale
     writeJson(this.file, this.data);
   }
   provider(id) {
@@ -136,15 +141,26 @@ export class EngineConfig {
     await this._refresh(id);
     return this.getKey(id);
   }
-  /** The provider's model list. A sign-in the provider rejects is renewed once and the list asked for again. */
-  async listModels(id) {
-    const ask = async () => clientFor(this.type(id)).listModels({ apiKey: await this.getKey(id), baseUrl: this.baseUrl(id), providerId: id });
+  /**
+   * The provider's model list. A sign-in the provider rejects is renewed once and the list asked for again.
+   * Each request has a time limit, so a provider that hangs is reported instead of freezing the model picker, and a
+   * list is reused for a minute (every model picker, Home and each session ask for it), until the provider changes.
+   */
+  async listModels(id, { fresh = false } = {}) {
+    this.lists ||= new Map();
+    const hit = this.lists.get(id);
+    if (!fresh && hit && hit.rev === this.rev && Date.now() - hit.at < LIST_TTL) return hit.list;
+    // A provider that reports its models' facts also has the accepted effort levels checked (see chatgpt.probeEfforts).
+    const ask = async () => clientFor(this.type(id)).listModels({ apiKey: await this.getKey(id), baseUrl: this.baseUrl(id), providerId: id, signal: AbortSignal.timeout(LIST_TIMEOUT), probe: !!this.provider?.(id)?.listsFacts });
+    let list;
     try {
-      return await ask();
+      list = await ask();
     } catch (e) {
       if (!(e?.status === 401 || e?.status === 403) || !this.isSignIn(id) || !(await this.renewSignIn(id).catch(() => null))) throw e;
-      return ask();
+      list = await ask();
     }
+    this.lists.set(id, { rev: this.rev, at: Date.now(), list });
+    return list;
   }
   async setProvider(id, { key, baseUrl, models, via, refresh, expiresAt, orgId } = {}) {
     const p = this.provider(id);

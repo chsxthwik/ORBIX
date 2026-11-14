@@ -908,3 +908,13 @@ describe('security headers', () => {
     }
   });
 });
+
+describe('osName (Settings → About)', () => {
+  test('Windows 11 is named by its build, since its registry name still says Windows 10', async () => {
+    const { osName } = await import('../src/server.mjs');
+    assert.equal(osName('Windows 10 Pro', '10.0.26100'), 'Windows 11 Pro (build 26100)');
+    assert.equal(osName('Windows 10 Home', '10.0.19045'), 'Windows 10 Home (build 19045)');
+    assert.equal(osName('Windows 11 Home Single Language', '10.0.22631'), 'Windows 11 Home Single Language (build 22631)');
+    assert.equal(osName('', ''), '');
+  });
+});

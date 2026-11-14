@@ -702,7 +702,9 @@ describe('providers: thinking levels and effort mapping', () => {
   test('mapEffort with a list only returns what the model accepts', () => {
     assert.equal(mapEffort('low', ['low', 'high']), 'low');
     assert.equal(mapEffort('medium', ['low', 'high']), null);
-    assert.equal(mapEffort('xhigh', ['low', 'high', 'max']), 'max');
+    assert.equal(mapEffort('xhigh', ['low', 'high', 'max']), null); // max is offered as its own level
+    assert.equal(mapEffort('max', ['low', 'high', 'max']), 'max');
+    assert.equal(mapEffort('ultra', ['low', 'max', 'ultra']), 'ultra');
     assert.equal(mapEffort('xhigh', ['low', 'high']), null);
     assert.equal(mapEffort('xhigh', ['low', 'xhigh', 'max']), 'xhigh');
     assert.equal(mapEffort('minimal', ['low', 'high']), null);
@@ -711,7 +713,8 @@ describe('providers: thinking levels and effort mapping', () => {
     assert.equal(nearestEffort('xhigh', ['low', 'medium', 'high']), 'high');
     assert.equal(nearestEffort('minimal', ['low', 'high']), 'low');
     assert.equal(nearestEffort('low', ['none', 'minimal']), 'minimal');
-    assert.equal(nearestEffort('xhigh', ['low', 'medium', 'high', 'max']), 'max');
+    assert.equal(nearestEffort('xhigh', ['low', 'medium', 'high', 'max']), 'max'); // no xhigh: max is the next step up
+    assert.equal(nearestEffort('ultra', ['low', 'medium', 'high', 'xhigh', 'max']), 'max');
     assert.equal(nearestEffort('high', undefined), 'high');
     assert.equal(nearestEffort('off', undefined), 'medium');
     assert.equal(nearestEffort('medium', ['none', 'low', 'high', 'weird']), 'low'); // unknown names are ignored, "none" never chosen
@@ -742,16 +745,17 @@ describe('providers: thinking levels and effort mapping', () => {
     assert.equal(thinkingStyle('nobody', null).kind, 'none');
   });
 
-  test('thinkingLevels always starts with off and respects what the model offers', () => {
+  test('thinkingLevels offers off only when the model can stop thinking, then what the model offers', () => {
     assert.deepEqual(thinkingLevels('openai', 'gpt-4o'), ['off']);
     assert.deepEqual(thinkingLevels('anthropic', 'claude-3-5-haiku-latest'), ['off']);
-    assert.deepEqual(thinkingLevels('anthropic', 'claude-sonnet-4-5'), LEVELS);
-    assert.deepEqual(thinkingLevels('anthropic', 'claude-opus-4-7'), ['off', 'low', 'medium', 'high', 'xhigh']);
-    assert.deepEqual(thinkingLevels('openai', 'o3'), ['off', 'low', 'medium', 'high']);
-    assert.deepEqual(thinkingLevels('openai', 'gpt-5'), ['off', 'minimal', 'low', 'medium', 'high']);
+    assert.deepEqual(thinkingLevels('anthropic', 'claude-sonnet-4-5'), ['off', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+    assert.deepEqual(thinkingLevels('anthropic', 'claude-opus-4-7'), ['off', 'low', 'medium', 'high', 'xhigh', 'max']);
+    // o3 and GPT-5 always reason (no 'none' effort): asking for off would silently use their default, so there is no off
+    assert.deepEqual(thinkingLevels('openai', 'o3'), ['low', 'medium', 'high']);
+    assert.deepEqual(thinkingLevels('openai', 'gpt-5'), ['minimal', 'low', 'medium', 'high']);
     assert.deepEqual(thinkingLevels('openai', 'gpt-5.1'), ['off', 'low', 'medium', 'high']);
     assert.deepEqual(thinkingLevels('deepseek', 'deepseek-reasoner'), ['off', 'high']);
-    assert.deepEqual(thinkingLevels('openrouter', 'any/model'), LEVELS);
+    assert.deepEqual(thinkingLevels('openrouter', 'any/model'), ['off', 'minimal', 'low', 'medium', 'high', 'xhigh']);
     assert.deepEqual(thinkingLevels('ollama', 'llama3'), ['off']);
   });
   test('thinkingLevels never throws on garbage', () => {
@@ -2259,7 +2263,7 @@ describe('catalog', () => {
     try {
       const fresh = await import('../src/engine/catalog.mjs?fresh=' + Date.now());
       assert.equal(await fresh.loadCatalog(), true);
-      assert.deepEqual(fresh.modelInfo('anthropic', 'claude-x-1'), { contextWindow: 1000000, maxOutput: 64000, cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 }, reasoning: true, vision: true, tools: true, efforts: ['low', 'high'], interleaved: null });
+      assert.deepEqual(fresh.modelInfo('anthropic', 'claude-x-1'), { contextWindow: 1000000, maxOutput: 64000, cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 }, reasoning: true, vision: true, tools: true, efforts: ['low', 'high'], defaultEffort: null, interleaved: null });
       assert.equal(fresh.modelRecord('anthropic', 'claude-x-1').toggle, true);
       assert.equal(fresh.modelRecord('anthropic', 'claude-x-1').canonical, 'claude-x');
       const plain = fresh.modelInfo('textonly', 'plain-1');

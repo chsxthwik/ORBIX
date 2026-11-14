@@ -9,7 +9,10 @@ import path from 'node:path';
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-app-'));
 process.env.ORBIX_DATA = TMP;
 const { startOrbix, ping } = await import('../src/app.mjs');
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+// Removed again on exit: a background catalog refresh can write into the folder after the tests end.
+const clean = () => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 3 });
+after(clean);
+process.on('exit', clean);
 
 test('starts a server, reuses it for a second start, and stops cleanly', async () => {
   const first = await startOrbix({ port: 0 });
