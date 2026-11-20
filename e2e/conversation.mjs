@@ -7,7 +7,7 @@
 // --desktop uses the unpacked Windows executable from npm run dist instead of a standalone browser.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, startModel, makeRepo, writeConfig, startOrbix, startBrowser, startDesktop, tmpRoot } from './lib.mjs';
+import { ROOT, sleep, startModel, makeRepo, writeConfig, startOrbix, startBrowser, startDesktop, tmpRoot } from './lib.mjs';
 
 const args = process.argv.slice(2);
 const SHOTS = args.includes('--shots');
@@ -91,6 +91,30 @@ try {
   await page.eval(`document.querySelector('#topbar .tb-nav').click()`);
   await page.until(`!document.querySelector('#session').hidden && /explain sign-in/i.test(document.querySelector('#topbar .crumb.cur')?.textContent || '')`, 'Back returns to the conversation');
   say('conversation e2e: menu row, toolbar, Overview and back');
+  // Sidebar: archive a conversation (A on its row), then bring it back from the filter menu.
+  await page.eval(`(await import('/js/store.js')).loadSessions()`);
+  await page.until(`document.querySelector('#sidebar .s-btn[data-path]')`, 'the conversation in the sidebar');
+  await page.eval(`const b = document.querySelector('#sidebar .s-btn[data-path]'); b.focus(); b.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));`);
+  await page.until(`!document.querySelector('#sidebar .s-btn[data-path]')`, 'the archived conversation left the sidebar');
+  await page.eval(`(await import('/js/store.js')).savePrefs({ showArchived: true })`);
+  await page.until(`document.querySelector('#sidebar .s-row.archived')`, 'archived conversations shown on request');
+  await page.eval(`(await import('/js/store.js')).savePrefs({ showArchived: false, archived: [] })`);
+  await page.until(`document.querySelector('#sidebar .s-btn[data-path]') && !document.querySelector('#sidebar .s-row.archived')`, 'unarchived');
+  // Settings is a page: Preferences → send with Ctrl+Enter makes Enter a new line; Back returns to the app.
+  await page.key(',', { ctrl: true, keyCode: 188, code: 'Comma' });
+  await page.until(`document.querySelector('.modal.settings-page .set-back')`, 'Settings as a page');
+  await page.eval(`document.querySelector('#set-prefs').click()`);
+  await page.click('Ctrl+Enter', '.modal.settings-page');
+  await page.click('Back to app', '.modal.settings-page');
+  await page.until(`!document.querySelector('.modal.settings-page')`, 'back to the app');
+  const sent = model.seen.length;
+  await page.fill('#session textarea', 'one line');
+  await page.eval(`document.querySelector('#session textarea').focus()`);
+  await page.key('Enter', { keyCode: 13, code: 'Enter' });
+  await sleep(400);
+  assert(model.seen.length === sent && (await page.eval(`return document.querySelector('#session textarea').value`)).includes('one line'), 'with Ctrl+Enter to send, Enter does not send');
+  await page.eval(`(await import('/js/store.js')).savePrefs({ sendKey: 'enter' }); document.querySelector('#session textarea').value = ''; document.querySelector('#session textarea').dispatchEvent(new Event('input', { bubbles: true }));`);
+  say('conversation e2e: archive, Settings page and send key');
   const bad = page.errors.filter((e) => e && !/favicon|Failed to load resource/i.test(e));
   assert(!bad.length, `no page errors: ${bad.join(' | ')}`);
   ok = true;

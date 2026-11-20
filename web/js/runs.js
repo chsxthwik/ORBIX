@@ -61,6 +61,8 @@ function reviewItems() {
 }
 export const reviewCount = () => reviewItems().length;
 export const workingCount = () => [...runs.values()].filter((r) => WORKING.has(r.status)).length;
+/** Every run ORBIX knows, newest first (Settings → Worktrees lists the ones that still have a worktree). */
+export const allRuns = () => [...runs.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 /** Runs working now, newest first (the side panel lists them). */
 export const workingRuns = () => [...runs.values()].filter((r) => WORKING.has(r.status)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 

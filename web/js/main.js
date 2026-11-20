@@ -133,10 +133,21 @@ resizer('#rs-side', '--side-w', 'sidebarW', SIDE_MIN, SIDE_MAX, false, SIDE_W);
 resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true, 380);
 
 // A session's status in the sidebar: ended, waiting for your OK, working, finished while you were away, or just open.
-const dotCls = (t) => 'dot' + (t.dead ? ' dead' : t.dialogs?.some(isApproval) ? ' warn' : t.streaming ? ' run' : t.unread ? ' unread' : ' open');
+const dotState = (t) => (t.dead ? 'dead' : t.dialogs?.some(isApproval) ? 'warn' : t.streaming ? 'run' : t.unread ? 'unread' : '');
+const dotCls = (t) => 'dot' + (dotState(t) ? ` ${dotState(t)}` : '');
+/** A conversation's state in the sidebar, only when it has one: working, needs you, unread or ended (an open, idle one shows nothing). */
+const stateDot = (t) => (t && dotState(t) ? h('span', { class: dotCls(t), title: { dead: 'Ended', warn: 'Needs your OK', run: 'Working', unread: 'Finished while you were away' }[dotState(t)] }) : null);
 
 // Pinned conversations, by session file, saved with the other UI preferences.
 const pinned = () => (Array.isArray(S.ui.pinned) ? S.ui.pinned : []);
+/** Archived conversations: kept on disk, left out of the sidebar until you show them (the filter menu). */
+const archived = () => (Array.isArray(S.ui.archived) ? S.ui.archived : []);
+function toggleArchive(s) {
+  const list = archived();
+  const on = list.includes(s.path);
+  savePrefs({ archived: on ? list.filter((p) => p !== s.path) : [s.path, ...list].slice(0, 500), ...(on ? {} : { pinned: pinned().filter((p) => p !== s.path) }) });
+  if (!on) toast('Archived. Show it again from the filter menu beside Projects.', 'info', 2600);
+}
 function togglePin(s) {
   const list = pinned();
   savePrefs({ pinned: list.includes(s.path) ? list.filter((p) => p !== s.path) : [s.path, ...list].slice(0, 20) });
@@ -160,11 +171,13 @@ async function renameConversation(s) {
 function rowMenu(s, anchor) {
   const tab = tabForSession(s);
   const isPinned = pinned().includes(s.path);
+  const isArchived = archived().includes(s.path);
   popMenu(anchor, [
     { header: s.title },
     { label: tab ? 'Show' : 'Open', run: () => openSession(s) },
     tab ? { label: 'Close', run: () => closeWithCheck(tab) } : null,
-    { label: isPinned ? 'Unpin' : 'Pin to the top', hint: 'P', run: () => togglePin(s) },
+    { icon: 'bookmark', label: isPinned ? 'Unpin' : 'Pin to the top', hint: 'P', run: () => togglePin(s) },
+    { icon: 'archive', label: isArchived ? 'Unarchive' : 'Archive', hint: 'A', run: () => toggleArchive(s) },
     { label: 'Rename…', hint: 'F2', run: () => renameConversation(s) },
     { label: 'New conversation in this project', run: () => newSession(s.cwdDisplay || s.cwd) },
     { label: 'Show folder in Explorer', run: () => api.post('/api/fs/reveal', { path: s.cwdDisplay || s.cwd }).catch((e) => toast(e.message, 'error')) },
@@ -180,6 +193,7 @@ function rowKeys(s, e) {
   if (e.key === 'F2') return e.preventDefault(), renameConversation(s);
   if (e.key === 'Delete') return e.preventDefault(), confirmDeleteConversation(s);
   if (e.key.toLowerCase() === 'p' && !e.shiftKey) return e.preventDefault(), togglePin(s);
+  if (e.key.toLowerCase() === 'a' && !e.shiftKey) return e.preventDefault(), toggleArchive(s);
   if ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') return e.preventDefault(), rowMenu(s, e.currentTarget);
 }
 
@@ -187,15 +201,17 @@ function sessionRow(s, where) {
   const tab = tabForSession(s);
   const cur = !!tab && tab.id === S.active;
   const isPinned = pinned().includes(s.path);
+  const isArchived = archived().includes(s.path);
   const pin = iconBtn('bookmark', isPinned ? 'Unpin' : 'Pin to the top', () => togglePin(s), 'sm' + (isPinned ? ' on' : ''));
+  const arch = iconBtn('archive', isArchived ? 'Unarchive' : 'Archive', () => toggleArchive(s), 'sm' + (isArchived ? ' on' : ''));
   const more = iconBtn('more', 'More', (e) => rowMenu(s, e.currentTarget), 'sm');
-  return h('div', { class: 's-row' + (cur ? ' cur' : '') + (tab?.streaming ? ' live' : '') + (tab?.unread && !cur ? ' unread' : '') },
+  return h('div', { class: 's-row' + (cur ? ' cur' : '') + (tab?.streaming ? ' live' : '') + (tab?.unread && !cur ? ' unread' : '') + (isArchived ? ' archived' : '') },
     h('button', { class: 's-btn', type: 'button', dataset: { path: s.path }, 'aria-label': s.title, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), ondblclick: (e) => (e.preventDefault(), renameConversation(s)), onkeydown: (e) => rowKeys(s, e), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
-      tab ? h('span', { class: dotCls(tab) }) : null,
+      stateDot(tab),
       s.branch ? icon('branch', 12, 's-br') : null,
       h('span', { class: 'ell grow' }, s.title),
       where ? h('span', { class: 's-where ell' }, where) : h('span', { class: 's-when' }, timeAgo(s.mtime))),
-    h('span', { class: 'row-acts' }, pin, more));
+    h('span', { class: 'row-acts' }, pin, arch, more));
 }
 
 /** A project's menu (its ⋯ button or a right-click on its name). */
@@ -256,7 +272,7 @@ function listKeys(e) {
 let sideSig = '';
 function sidebarSig() {
   return JSON.stringify([
-    searchTerm, filterOpen, [...collapsed], [...expanded], pinned(), S.active, Math.floor(Date.now() / 60000),
+    searchTerm, filterOpen, [...collapsed], [...expanded], pinned(), archived(), S.ui.sortProjects || '', S.ui.showArchived === true, S.active, Math.floor(Date.now() / 60000),
     hubView()?.view || '', reviewCount(), workingCount(),
     S.sessions.map((s) => [s.path, s.mtime, s.title]),
     [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '', t.worktree?.branch || '', t.worktree?.state || '']),
@@ -270,7 +286,11 @@ function drawSidebar() {
   const sig = sidebarSig();
   if (sig === sideSig && sideEl.querySelector('.side-scroll')) return;
   sideSig = sig;
-  const groups = groupSessions();
+  const sortByName = S.ui.sortProjects === 'name';
+  const showArchived = S.ui.showArchived === true;
+  const hidden = new Set(showArchived ? [] : archived());
+  const groups = groupSessions().map((g) => (hidden.size ? { ...g, sessions: g.sessions.filter((x) => !hidden.has(x.path)) } : g));
+  if (sortByName) groups.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   const term = searchTerm.toLowerCase().trim();
   // The sidebar is rebuilt on every change; keep the search box focused (with its caret) and the list scroll.
   const typing = document.activeElement?.matches?.('.side-search input') ? document.activeElement.selectionStart : -1;
@@ -304,7 +324,7 @@ function drawSidebar() {
           iconBtn('plus', `New conversation in ${g.name}`, () => newSession(g.path), 'sm'),
           iconBtn('more', `${g.name}: more`, (e) => projectMenu(g, e.currentTarget), 'sm'))),
       open ? fresh.map((t) => h('div', { class: 's-row' + (t.id === S.active ? ' cur' : '') },
-        h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, h('span', { class: dotCls(t) }), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
+        h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, stateDot(t), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
       shown.map((s) => sessionRow(s)),
       open && !term && !sess.length && !fresh.length ? h('div', { class: 's-none' }, g.sessions.length ? 'All pinned' : 'No conversations yet') : null,
       // The rest of a long project opens in place; it stays open until you fold it again.
@@ -333,7 +353,15 @@ function drawSidebar() {
       pinnedList(term),
       h('div', { class: 'side-h' }, h('span', null, 'Projects'),
         h('span', { class: 'side-h-acts' },
-          iconBtn('filter', showFilter ? 'Close the filter' : 'Filter conversations', toggleFilter, 'sm side-filter-btn' + (showFilter ? ' on' : '')),
+          iconBtn('filter', 'Filter and sort', (e) => popMenu(e.currentTarget, [
+            { icon: 'search', label: showFilter ? 'Close the filter' : 'Filter conversations…', run: toggleFilter },
+            '-',
+            { header: 'Sort projects' },
+            { label: 'By recent activity', on: !sortByName, run: () => savePrefs({ sortProjects: 'recent' }) },
+            { label: 'By name', on: sortByName, run: () => savePrefs({ sortProjects: 'name' }) },
+            '-',
+            { label: `Show archived (${archived().filter((p) => S.sessions.some((x) => x.path === p)).length})`, on: showArchived, run: () => savePrefs({ showArchived: !showArchived }) },
+          ], { minWidth: 220 }), 'sm side-filter-btn' + (showFilter || sortByName || showArchived ? ' on' : '')),
           iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm'))),
       showFilter ? h('div', { class: 'side-search' }, icon('search', 14), search) : null,
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
@@ -415,8 +443,9 @@ function footStatus() {
     return h('button', { class: 'foot-status', type: 'button', title: `${names.join(', ')}: the sign-in has ended. Sign in again in Settings → Providers.`, onclick: () => settingsDialog('engine') }, h('span', { class: 'dot warn' }), h('span', { class: 'ell' }, names.join(', ')), h('span', { class: 'fs-k' }, 'Sign in'));
   }
   const ready = engineReady();
-  const text = ready ? names.join(', ') : 'No model connected';
-  return h('button', { class: 'foot-status', type: 'button', title: ready ? `Connected: ${names.join(', ')}` : 'Add an API key or a local model', onclick: () => settingsDialog(ready ? 'start' : 'engine') }, h('span', { class: 'dot' + (ready ? ' ok' : ' warn') }), h('span', { class: 'ell' }, text), ready ? null : h('span', { class: 'fs-k' }, 'Connect'));
+  // Connected: one quiet dot (the providers are in its hint). Not connected: say so, with the way to fix it.
+  if (ready) return h('button', { class: 'foot-status ok', type: 'button', title: `Connected: ${names.join(', ')}`, 'aria-label': `Connected: ${names.join(', ')}`, onclick: () => settingsDialog('engine') }, h('span', { class: 'dot ok' }));
+  return h('button', { class: 'foot-status', type: 'button', title: 'Add an API key or a local model', onclick: () => settingsDialog('engine') }, h('span', { class: 'dot warn' }), h('span', { class: 'ell' }, 'No model connected'), h('span', { class: 'fs-k' }, 'Connect'));
 }
 
 function toggleTheme() {
@@ -543,6 +572,7 @@ on('chrome', () => {
 on('git', () => drawTop());
 on('search', (scope) => openSearch(scope));
 on('open-run', (id) => goHub(id ? 'run' : 'runs', id || undefined));
+on('open-tab', (id) => S.tabs.has(id) && setActive(id));
 on('panel:badges', () => syncOverview(mainEl));
 
 const homeHandlers = {

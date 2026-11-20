@@ -1,10 +1,12 @@
 // Settings: a full-size sheet. Overview, then the agent (providers, models, permissions, tools), then the app.
 // A search box finds any setting by name and jumps to it.
-import { h, icon, toast, replace, clear, logo, errorState, loadingState, copyText } from './dom.js';
+import { h, icon, toast, replace, clear, logo, errorState, loadingState, copyText, timeAgo, baseName } from './dom.js';
 import { api } from './api.js';
 import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { toggleWide } from './workbench.js';
-import { modal, btn, confirmDialog, row, toggle, SHORTCUTS, keyCaps } from './dialogs.js';
+import { modal, btn, confirmDialog, row, toggle, SHORTCUTS, keyCaps, folderPicker } from './dialogs.js';
+import { notifyPrefs, attention, notifyPermission, askNotifyPermission } from './notify.js';
+import { allRuns } from './runs.js';
 import { renderEngineSettings, openLink } from './engine.js';
 import { brandMark } from './brands.js';
 import { renderModelRoles } from './models.js';
@@ -19,6 +21,11 @@ import { updatesSupported, checkForUpdates, setAutoUpdates, restartToUpdate, upd
 /** key, label, icon, one line under the page title. */
 const TABS = [
   ['start', 'Overview', 'compass', 'How ORBIX is set up right now.'],
+  { group: 'App' },
+  ['prefs', 'Preferences', 'sliders', 'How ORBIX behaves while you work: sending, following output, the sidebar and the Overview card.'],
+  ['look', 'Appearance', 'palette', 'Theme, text size and layout.'],
+  ['notify', 'Notifications', 'bell', 'When ORBIX gets your attention, and how.'],
+  ['keys', 'Shortcuts', 'keyboard', 'Every keyboard shortcut. Type to filter the list.'],
   { group: 'Agent' },
   ['engine', 'Providers', 'key', 'Sign in, paste an API key or connect a local model. Keys are checked, stored encrypted for your Windows account and sent only to their provider.'],
   ['models', 'Models', 'cpu', 'Choose which model does which job.'],
@@ -26,9 +33,10 @@ const TABS = [
   ['checks', 'Checks', 'check', 'How the agent checks its own work before it replies.'],
   ['rules', 'Instructions', 'file', 'What the agent should always know about you and how you work. It follows these in every project.'],
   ['tools', 'Tools & MCP', 'plug', 'What the agent can use, and the extra tools you add.'],
-  { group: 'App' },
-  ['look', 'Appearance', 'palette', 'Theme, text size and layout.'],
-  ['keys', 'Shortcuts', 'keyboard', 'Every keyboard shortcut. Type to filter the list.'],
+  { group: 'Workspace' },
+  ['projects', 'Projects', 'folder', 'The folders ORBIX knows, with their conversations.'],
+  ['worktrees', 'Worktrees', 'git-fork', 'Runs and conversations that work on their own branch, in their own folder, apart from your checkout.'],
+  { group: '' },
   ['about', 'About', 'info', 'Version, updates, developer and help.'],
 ];
 const PAGES = TABS.filter((t) => Array.isArray(t));
@@ -46,7 +54,17 @@ const FIND = [
   ['Check command', 'checks', 'npm test pytest cargo go make verify project'],
   ['Instructions for every project', 'rules', 'agents.md rules memory preferences custom prompt'],
   ['Run commands in', 'behavior', 'shell wsl windows powershell kali'],
-  ['Follow new output', 'behavior', 'scroll auto'],
+  ['Follow new output', 'prefs', 'scroll auto'],
+  ['Send messages with', 'prefs', 'enter ctrl newline send key keyboard'],
+  ['Overview card', 'prefs', 'card overview panel'],
+  ['Sort projects', 'prefs', 'sidebar order name recent'],
+  ['Archived conversations', 'prefs', 'archive hide sidebar unarchive'],
+  ['When the agent finishes', 'notify', 'notification done finished alert'],
+  ['When the agent needs you', 'notify', 'notification approval question input'],
+  ['Sound', 'notify', 'chime audio beep'],
+  ['Flash the taskbar', 'notify', 'taskbar flash attention'],
+  ['Projects', 'projects', 'folders workspace remove explorer'],
+  ['Worktrees', 'worktrees', 'branch worktree runs git'],
   ['Web search', 'tools', 'brave tavily searxng'],
   ['MCP servers', 'tools', 'server tools mcp'],
   ['Hooks', 'tools', 'before after tool'],
@@ -69,17 +87,19 @@ export function openSettings(initial = 'start') {
   const results = h('div', { class: 'set-results', hidden: true, role: 'listbox', 'aria-label': 'Matching settings' });
   const list = h('div', { class: 'set-pages', role: 'tablist', 'aria-orientation': 'vertical', 'aria-label': 'Settings pages' });
   const search = h('input', { type: 'search', class: 'set-search', placeholder: 'Find a setting', 'aria-label': 'Find a setting', spellcheck: 'false', autocomplete: 'off' });
-  const nav = h('nav', { class: 'set-nav' }, h('div', { class: 'set-find' }, icon('search', 14), search), results, list);
+  const back = h('button', { class: 'set-back', type: 'button', title: 'Back to app (Esc)', onclick: () => m.close() }, icon('arrow-left', 15), 'Back to app');
+  const nav = h('nav', { class: 'set-nav' }, back, h('div', { class: 'set-find' }, icon('search', 14), search), results, list);
   const content = h('div', { class: 'set-content', role: 'tabpanel', tabindex: '-1' });
-  const m = modal({ title: 'Settings', size: 'xl', cls: 'settings', body: h('div', { class: 'set-wrap' }, nav, content) });
+  // A page of its own: it covers the workspace below the menu row; Esc or Back returns.
+  const m = modal({ title: 'Settings', size: 'xl', cls: 'settings settings-page', body: h('div', { class: 'set-wrap' }, nav, content) });
 
   const badge = (k) => {
     if (k !== 'engine') return null;
     const n = (S.engine?.providers || []).filter((p) => p.configured).length;
     return n ? h('span', { class: 'set-n num' }, String(n)) : h('span', { class: 'dot warn', title: 'No model connected' });
   };
-  const drawNav = () => replace(list, TABS.map((t) => t.group
-    ? h('div', { class: 'set-nav-h' }, t.group)
+  const drawNav = () => replace(list, TABS.map((t) => !Array.isArray(t)
+    ? (t.group ? h('div', { class: 'set-nav-h' }, t.group) : h('div', { class: 'set-nav-gap', 'aria-hidden': 'true' }))
     : h('button', { type: 'button', role: 'tab', id: `set-${t[0]}`, 'aria-selected': String(t[0] === cur), tabindex: t[0] === cur ? '0' : '-1', class: 'set-tab' + (t[0] === cur ? ' cur' : ''), onclick: () => show(t[0]) }, icon(t[2], 15), h('span', { class: 'ell grow' }, t[1]), badge(t[0]))));
 
   const show = (name, focusNav) => {
@@ -92,7 +112,7 @@ export function openSettings(initial = 'start') {
     const page = PAGES.find(([k]) => k === name);
     const body = h('div', { class: 'set-body' });
     content.append(h('header', { class: 'set-head' }, h('h3', { class: 'set-title' }, page[1]), h('p', { class: 'set-lead' }, page[3])), body);
-    ({ start: tabStart, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, checks: tabChecks, tools: renderMcpSettings, rules: tabRules, keys: tabKeys, about: tabAbout })[name](body, show, m);
+    ({ start: tabStart, prefs: tabPrefs, notify: tabNotify, projects: tabProjects, worktrees: tabWorktrees, engine: renderEngineSettings, models: tabModels, look: tabLook, behavior: tabBehavior, checks: tabChecks, tools: renderMcpSettings, rules: tabRules, keys: tabKeys, about: tabAbout })[name](body, show, m);
     if (focusNav) list.querySelector('.cur')?.focus();
   };
 
@@ -188,6 +208,113 @@ function tabStart(el, show, m) {
       }, ready ? 'primary' : ''),
       btn('Check my setup', () => openDiagnostics()),
       btn('How ORBIX works', () => openHelp())));
+}
+
+/** "just now", "5m ago", "on Nov 3". */
+const ago = (ts) => {
+  const t = timeAgo(ts);
+  return t === 'now' ? 'just now' : /^\d+[mhd]$/.test(t) ? `${t} ago` : `on ${t}`;
+};
+
+// ================= preferences =================
+
+function tabPrefs(el) {
+  const u = S.ui;
+  const archivedPaths = () => (Array.isArray(S.ui.archived) ? S.ui.archived : []).filter((p) => S.sessions.some((x) => x.path === p));
+  const unarchive = btn('Unarchive all', () => {
+    savePrefs({ archived: [] });
+    toast('Every archived conversation is back in the sidebar', 'ok', 1800);
+    unarchive.disabled = true;
+  }, 'sm');
+  unarchive.disabled = !archivedPaths().length;
+  el.append(
+    group('Messages', null,
+      row('Send messages with', seg('Send messages with', [['enter', 'Enter'], ['ctrl', 'Ctrl+Enter']], u.sendKey === 'ctrl' ? 'ctrl' : 'enter', (v) => savePrefs({ sendKey: v })), 'With Enter, Shift+Enter starts a new line. With Ctrl+Enter, Enter starts a new line. Alt+Enter always queues a message while the agent works.'),
+      row('Follow new output', toggle(u.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Scrolls to the newest text while a reply streams in, unless you have scrolled up.')),
+    group('Workspace', null,
+      row('Overview card', toggle(u.overview !== false, (v) => savePrefs({ overview: v }), 'Overview card'), 'The card beside the conversation with Changes, Files, Terminal and Plan. Ctrl+Alt+O switches it too.')),
+    group('Sidebar', null,
+      row('Sort projects', seg('Sort projects', [['recent', 'Recent activity'], ['name', 'Name']], u.sortProjects === 'name' ? 'name' : 'recent', (v) => savePrefs({ sortProjects: v }))),
+      row('Show archived conversations', toggle(u.showArchived === true, (v) => savePrefs({ showArchived: v }), 'Show archived conversations'), 'Archive a conversation from its row in the sidebar (or press A on it): it leaves the list but stays on disk.'),
+      row('Archived', unarchive, `${archivedPaths().length || 'No'} archived conversation${archivedPaths().length === 1 ? '' : 's'}.`)));
+}
+
+// ================= notifications =================
+
+function tabNotify(el) {
+  const p = notifyPrefs();
+  const set = (k) => (v) => savePrefs({ notify: { ...notifyPrefs(), [k]: v } });
+  const perm = notifyPermission();
+  const permText = { granted: 'Allowed', denied: 'Blocked in Windows', default: 'Not asked yet', unsupported: 'Not available here' }[perm] || perm;
+  const allow = perm === 'default' ? btn('Allow', async () => {
+    await askNotifyPermission();
+    replace(el);
+    tabNotify(el);
+  }, 'sm primary') : h('span', { class: `about-v ${perm === 'granted' ? 'ok-text' : perm === 'denied' ? 'warn-text' : ''}` }, permText);
+  el.append(
+    group('Tell me', null,
+      row('When the agent finishes', toggle(p.done, set('done'), 'When the agent finishes'), 'A reply or a task has ended.'),
+      row('When the agent needs you', toggle(p.input, set('input'), 'When the agent needs you'), 'An approval or a question is waiting for you.'),
+      row('Only while ORBIX is in the background', toggle(p.onlyAway, set('onlyAway'), 'Only while ORBIX is in the background'), 'Turn this off to be told even while you are looking at ORBIX.')),
+    group('How', null,
+      row('Windows notifications', allow, perm === 'denied' ? 'Allow them in Windows Settings → System → Notifications.' : 'The message in the corner of the screen.'),
+      row('Sound', toggle(p.sound, set('sound'), 'Sound'), 'A short, soft chime.'),
+      window.orbixDesktop ? row('Flash the taskbar', toggle(p.flash, set('flash'), 'Flash the taskbar'), 'The ORBIX button on the taskbar flashes until you open the window.') : null,
+      row('Try it', btn('Send a test', () => attention('ORBIX', 'This is how ORBIX gets your attention.', { force: true }), 'sm'), 'Uses the choices above, even while ORBIX is in front.')));
+}
+
+// ================= projects =================
+
+function tabProjects(el, show, m) {
+  const draw = () => {
+    clear(el);
+    const groups = groupSessions().filter((g) => g.path);
+    const add = btn('Open a folder…', async () => {
+      const p = await folderPicker('');
+      if (!p) return;
+      try {
+        S.workspaces = (await api.post('/api/workspaces', { path: p })).workspaces;
+        emit('sessions');
+        draw();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }, 'sm');
+    el.append(h('div', { class: 'set-actions set-actions-top' }, add));
+    if (!groups.length) return el.append(h('p', { class: 'set-note' }, 'No projects yet. Open a folder to start.'));
+    el.append(h('div', { class: 'set-card' }, groups.map((g) => {
+      const n = g.sessions.length;
+      const acts = h('div', { class: 'row' },
+        btn('New conversation', () => (m.close(), emit('home', g.path)), 'sm'),
+        btn('Show', () => api.post('/api/fs/reveal', { path: g.path }).catch((e) => toast(e.message, 'error')), 'sm'),
+        g.saved ? btn('Remove', async () => {
+          if (!(await confirmDialog('Remove from the list', `Remove ${g.name} from ORBIX? The folder and its conversations stay on disk; it comes back when you open it again.`, { ok: 'Remove' }))) return;
+          try {
+            S.workspaces = (await api.post('/api/workspaces/remove', { id: g.id })).workspaces;
+            emit('sessions');
+            draw();
+          } catch (e) {
+            toast(e.message, 'error');
+          }
+        }, 'sm') : null);
+      return row(h('span', { class: 'proj-l' }, icon('folder', 14), g.name), acts, h('span', null, h('code', { class: 'about-path', title: g.path }, g.path), h('br'), `${n} conversation${n === 1 ? '' : 's'}${g.latest ? ` · last active ${ago(g.latest)}` : ''}`));
+    })));
+  };
+  draw();
+}
+
+// ================= worktrees =================
+
+function tabWorktrees(el, show, m) {
+  const RUN_STATE = { planning: 'Planning', awaiting_plan: 'Plan to review', question: 'Asked you a question', executing: 'Working', review: 'Changes to review', stopped: 'Stopped', failed: 'Failed', interrupted: 'Interrupted', kept: 'Branch kept' };
+  const runs = allRuns().filter((r) => r.worktree && RUN_STATE[r.status]);
+  const convs = [...S.tabs.values()].filter((t) => t.worktree && !t.dead);
+  const reveal = (p) => api.post('/api/fs/reveal', { path: p }).catch((e) => toast(e.message, 'error'));
+  if (!runs.length && !convs.length) {
+    return el.append(h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'No worktrees right now'), h('p', null, 'A run works in its own worktree and branch, and so does a conversation started with "Separate branch" on Home. They show here until you apply, merge or discard them.')), btn('Open Runs', () => (m.close(), emit('open-run', null)), 'primary')));
+  }
+  if (runs.length) el.append(group('Runs', 'Each run has its own folder and branch. Open it to apply or discard its changes.', ...runs.map((r) => row(h('span', { class: 'ell' }, r.title), h('div', { class: 'row' }, btn('Open', () => (m.close(), emit('open-run', r.id)), 'sm'), r.workspace ? btn('Show', () => reveal(r.workspace), 'sm') : null), h('span', null, h('code', null, r.worktree.branch || ''), ` · ${RUN_STATE[r.status]} · ${baseName(r.project)} · ${ago(r.updatedAt)}`)))));
+  if (convs.length) el.append(group('Conversations', 'Open conversations on their own branch. Review merges or discards them.', ...convs.map((t) => row(h('span', { class: 'ell' }, t.name), h('div', { class: 'row' }, btn('Open', () => (m.close(), emit('open-tab', t.id)), 'sm'), t.workspace ? btn('Show', () => reveal(t.workspace), 'sm') : null), h('span', null, h('code', null, t.worktree.branch || ''), t.worktree.baseBranch ? ` · from ${t.worktree.baseBranch}` : '')))));
 }
 
 // ================= models =================
@@ -317,7 +444,7 @@ function tabBehavior(el) {
         choice('edits', 'pencil', 'Auto edits', 'File edits run without asking, and each one can be undone. Commands still wait for your OK.'),
         choice('auto', 'bolt', 'Turbo', 'File edits and commands run without asking. Edits can be undone; commands cannot. Destructive commands still ask.'))),
     trustedGroup(),
-    group('Running', null, whereRow(), row('Follow new output', toggle(S.ui.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Scrolls to the newest text while a reply streams in, unless you have scrolled up.')));
+    group('Running', null, whereRow()));
 }
 
 /**

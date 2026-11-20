@@ -1,5 +1,5 @@
 // The only bridge between the page and the Windows app: tell the page it is in the app, let it set the colour of
-// the title bar to match its theme, let it scale the interface (Settings → Appearance → Interface size), and let
+// the title bar to match its theme, flash the taskbar button, let it scale the interface (Settings → Appearance → Interface size), and let
 // it show and drive app updates (Settings → About → Updates).
 // Nothing else from Electron or Node reaches the page.
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
   versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
   screenWidth,
   setTitleBar: (bg, fg) => ipcRenderer.send('orbix:titlebar', { bg: String(bg), fg: String(fg) }),
+  // Flash the taskbar button until the window is focused (Settings → Notifications).
+  flash: () => ipcRenderer.send('orbix:flash'),
   setZoom: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, Number(factor) || 1))),
   updates: {
     get: () => ipcRenderer.invoke('orbix:update:get'),
