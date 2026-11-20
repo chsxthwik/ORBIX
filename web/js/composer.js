@@ -325,7 +325,7 @@ export class Composer {
       if (e.key === 'Escape') return e.preventDefault(), e.stopPropagation(), this.closePopup();
     }
     if (e.key === 'Enter' && !e.shiftKey) {
-      // Settings → Preferences → Send messages with Ctrl+Enter: a plain Enter is a new line (Alt+Enter still queues).
+      // Settings → General → Send messages with Ctrl+Enter: a plain Enter is a new line (Alt+Enter still queues).
       if (S.ui?.sendKey === 'ctrl' && !e.ctrlKey && !e.metaKey && !e.altKey) return;
       e.preventDefault();
       this.o.onSubmit(e.altKey);

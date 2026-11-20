@@ -291,12 +291,13 @@ export class TabView {
       workspace: () => t.workspace,
       commands: () => t.commands,
       model: () => t.model,
-      onSubmit: (alt) => this.onSend(alt),
+      // Settings → General → While the agent works: Enter steers or queues, Alt+Enter does the other.
+      onSubmit: (alt) => this.onSend(alt !== (S.ui.whileBusy === 'queue')),
       onEscape: () => this.onEscape(),
       onChange: () => this.updateSend(),
     });
     this.ta = this.composer.ta;
-    this.sendBtn = h('button', { class: 'send', type: 'button', onclick: () => this.onSend(false, true) });
+    this.sendBtn = h('button', { class: 'send', type: 'button', onclick: () => this.onSend(S.ui.whileBusy === 'queue', true) });
     this.modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model', onclick: () => this.pickModel() });
     this.thinkBtn = h('button', { class: 'cbtn c-effort', type: 'button', title: 'Thinking level', 'aria-haspopup': 'menu', onclick: (e) => this.pickThinking(e.currentTarget) });
     this.permBtn = permissionChip();
@@ -473,7 +474,7 @@ export class TabView {
     if (now) {
       const secs = Math.floor((Date.now() - now[2]) / 1000);
       bits.unshift(h('span', { class: 'c-now', title: now[1] ? `${now[0]} ${now[1]}` : now[0] }, spinner(11), h('b', null, now[0]), now[1] ? h('span', { class: 'c-now-a ell' }, now[1]) : null, secs >= 3 ? h('span', { class: 'c-now-t num' }, secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`) : null));
-      if (bits.length === 1) bits.push(h('span', { class: 'c-keys' }, kbd('Enter'), ' steer  ', kbd('Alt+Enter'), ' queue  ', kbd('Esc'), ' stop'));
+      if (bits.length === 1) bits.push(h('span', { class: 'c-keys' }, kbd('Enter'), S.ui.whileBusy === 'queue' ? ' queue  ' : ' steer  ', kbd('Alt+Enter'), S.ui.whileBusy === 'queue' ? ' steer  ' : ' queue  ', kbd('Esc'), ' stop'));
     }
     replace(this.statusLine, bits);
     // While the agent works the line ticks once a second, so the step and its time stay current.

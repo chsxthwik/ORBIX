@@ -42,7 +42,7 @@ export async function restartToUpdate() {
   bridge.restart().catch((e) => toast(e.message, 'error'));
 }
 
-/** One line for Settings → About: where the update stands. */
+/** One line for Settings → Application: where the update stands. */
 export function updateLine(st = S.update) {
   if (!st) return '';
   const when = st.checkedAt ? ` Checked ${new Date(st.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : '';

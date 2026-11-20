@@ -96,6 +96,24 @@ export async function loadRules(backend, workspace) {
   return { always, listed };
 }
 
+/**
+ * What a project gives the agent, for Settings → its project page: instruction files (AGENTS.md, CLAUDE.md… from the
+ * folder up to the repository root) and every rule file in .agents/rules with its trigger, manual ones included.
+ */
+export async function projectRules(backend, workspace) {
+  const instructions = (await loadInstructions(backend, workspace)).map((f) => ({ path: f.path, chars: f.text.length, truncated: f.truncated }));
+  const dir = path.join(path.resolve(backend.hostPath(workspace)), '.agents', 'rules');
+  const names = (await fs.promises.readdir(dir).catch(() => [])).filter((n) => n.toLowerCase().endsWith('.md')).sort().slice(0, 40);
+  const rules = [];
+  for (const name of names) {
+    const text = ((await cachedText(path.join(dir, name), CAP * 4).catch(() => null)) || '').trim();
+    if (!text) continue;
+    const { data, body } = frontMatter(text);
+    rules.push({ name, path: path.join(workspace, '.agents', 'rules', name), trigger: RULE_TRIGGERS.has(data.trigger) ? data.trigger : 'always_on', description: data.description || '', globs: data.globs || '', chars: body.trim().length });
+  }
+  return { instructions, rules };
+}
+
 /** One-level listing of a folder for an @mention: folders first (with /), then files with sizes. */
 async function folderListing(host) {
   const ents = (await fs.promises.readdir(host, { withFileTypes: true })).filter((e) => !(e.isDirectory() && SKIP_DIRS.has(e.name)));

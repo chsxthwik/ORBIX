@@ -893,6 +893,14 @@ describe('security headers', () => {
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/);
     for (const d of ["default-src 'self'", "script-src 'self'", "style-src 'self'", "frame-src http://localhost:* http://127.0.0.1:*", "worker-src 'none'", "object-src 'none'", "frame-ancestors 'none'"]) assert.ok(csp.includes(d), d);
   });
+  test('the Windows app may frame any web page (its <webview>), and only the webview style is allowed inline', async () => {
+    const r = await raw(port, 'GET', '/index.html', { headers: { cookie: COOKIE, 'user-agent': 'Mozilla/5.0 ORBIX/3.7.0 Chrome/140 Electron/45.1.0' } });
+    const csp = r.headers['content-security-policy'];
+    assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/);
+    assert.ok(csp.includes('frame-src http: https:'));
+    assert.ok(csp.includes("style-src 'self' 'sha256-XNfYdUW7S7AWSxlvq47SGsGIxvvzKwvUGdsFQQ/zXf4='"));
+    assert.ok(csp.includes("script-src 'self'") && csp.includes("frame-ancestors 'none'"));
+  });
   test('static files, API answers, the token redirect and 401s all carry the same protective headers', async () => {
     const answers = [
       await raw(port, 'GET', '/css/app.css', { headers: { cookie: COOKIE } }),

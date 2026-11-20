@@ -29,6 +29,7 @@ import { ToolRuns, userMentionsHost } from './proc-tools.mjs';
 import { mixin } from './mixin.mjs';
 import { writeExport } from './export.mjs';
 import { ARTIFACT_DEF, runPrompt } from './artifact.mjs';
+import { siteVerdict } from './policy.mjs';
 
 const MAX_TURNS = 100;
 
@@ -929,7 +930,10 @@ export class AgentProc extends EventEmitter {
         const input = c.arguments || {};
         // A helper agent cannot ask you, so it does not reach outside the project unless approvals are Turbo.
         if (this.config.data.approvals !== 'auto' && this._outside(c, input)) return { text: `Not run: ${input.path} is outside the project folder. Helper agents only read inside it; say in your answer that the main agent should read it.`, isError: true };
-        return this._hooked(c.name, input, signal, { exec: () => this.tools.run(c.name, input, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.() }) });
+        // Network rules: a denied site is never read; with an allowed list in use, a helper reads only listed sites.
+        const site = c.name === 'web_fetch' ? siteVerdict(input.url, this.config.data.network) : 'any';
+        if (site === 'deny' || (site === 'ask' && !this.allowAlways.has('web_fetch:site'))) return { text: site === 'deny' ? 'Blocked by the user\'s network rules. Do not retry this site.' : 'Not run: this site is not on the user\'s allowed list, and a helper agent cannot ask. Say in your answer that the main agent should read it.', isError: true };
+        return this._hooked(c.name, input, signal, { exec: () => this.tools.run(c.name, input, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.(), denied: (u) => siteVerdict(u, this.config.data.network) === 'deny' }) });
       },
       onUpdate: (view) => {
         const first = !this.subagents.has(view.id);

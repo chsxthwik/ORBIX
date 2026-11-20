@@ -10,9 +10,12 @@ import { openCleanup, confirmDeleteConversation } from './cleanup.js';
 import { openDiagnostics } from './diagnostics.js';
 import { initNotify } from './notify.js';
 import { openHelp } from './help.js';
-import { mountPanel, showTab, viewFile } from './panels.js';
+import { mountPanel, showTab, viewFile, stepPanelTab } from './panels.js';
+import { actionFor, comboOf, firstKey } from './keys.mjs';
+import { browserPrefs, desktopBrowser, canShowInside } from './browser.js';
+import { settingsSearchItems } from './settings.js';
 import { H as shell, drawMenubar, drawToolbar, tickToolbar, syncOverview, navRecord, navGo, bindHoverCards, updatedLabel } from './shell.js';
-import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
+import { folderPicker, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { onBoard, boardState } from './review.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { toggleZen, toggleWide, zenOn } from './workbench.js';
@@ -563,7 +566,7 @@ function goTo(loc) {
 }
 
 Object.assign(shell, {
-  newSession, openFolder, goHub, goTo, settings: (tab) => settingsDialog(tab), help: openHelp, shortcuts: shortcutsDialog, diagnostics: openDiagnostics,
+  newSession, openFolder, goHub, goTo, settings: (tab) => settingsDialog(tab), help: openHelp, shortcuts: () => settingsDialog('keys'), diagnostics: openDiagnostics,
   manage: openCleanup, search: () => openSearch(), toggleSidebar, togglePanel, sideShown, panelShown, toggleTheme, textSize, cycle,
   zen: () => toggleZen(), wide: toggleWide, hubView, workingCount, open: (id) => setActive(id), close: (t) => closeWithCheck(t), rename: (t) => renameTab(t),
   projectMenu: projectCrumbMenu,
@@ -580,6 +583,16 @@ on('git', () => drawTop());
 on('search', (scope) => openSearch(scope));
 on('open-run', (id) => goHub(id ? 'run' : 'runs', id || undefined));
 on('open-tab', (id) => S.tabs.has(id) && setActive(id));
+on('open-session', (s) => s && openSession(s));
+// Links in replies open where Settings → Browser says: the Browser tab beside the conversation, or your own browser.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest?.('a[href]');
+  if (!a || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
+  if (!/^https?:/i.test(a.href) || !a.closest('#session, #panel, #runs') || browserPrefs().openLinks !== 'builtin') return;
+  if (!activeTab() || !canShowInside(a.href)) return;
+  e.preventDefault();
+  emit('browse', a.href);
+});
 on('panel:badges', () => syncOverview(mainEl));
 
 const homeHandlers = {
@@ -748,24 +761,24 @@ function paletteItems() {
   const t = activeTab();
   const dark = document.documentElement.dataset.mode === 'dark';
   const items = [
-    { group: 'General', icon: 'plus', label: 'New conversation', key: 'Ctrl+N', run: () => newSession() },
-    { group: 'General', icon: 'activity', label: 'Runs', key: 'Ctrl+2', run: () => goHub('runs') },
-    { group: 'General', icon: 'shield', label: 'Review: what waits for you', key: 'Ctrl+3', run: () => goHub('review') },
+    { group: 'General', icon: 'plus', label: 'New conversation', key: firstKey(S.ui.keys, 'new'), run: () => newSession() },
+    { group: 'General', icon: 'activity', label: 'Runs', key: firstKey(S.ui.keys, 'runs'), run: () => goHub('runs') },
+    { group: 'General', icon: 'shield', label: 'Review: what waits for you', key: firstKey(S.ui.keys, 'review'), run: () => goHub('review') },
     { group: 'General', icon: 'clock', label: 'Automations', run: () => goHub('automations') },
     { group: 'General', icon: 'plus', label: 'New conversation without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
-    { group: 'General', icon: 'cog', label: 'Settings', key: 'Ctrl+,', run: () => settingsDialog() },
+    { group: 'General', icon: 'cog', label: 'Settings', key: firstKey(S.ui.keys, 'settings'), run: () => settingsDialog() },
     { group: 'General', icon: 'key', label: 'Providers', run: () => settingsDialog('engine') },
     { group: 'General', icon: 'trash', label: 'Manage conversations…', run: openCleanup },
     { group: 'General', icon: 'activity', label: 'Diagnostics', run: openDiagnostics },
     { group: 'General', icon: 'compass', label: 'How ORBIX works', run: openHelp },
-    { group: 'General', icon: 'keyboard', label: 'Keyboard shortcuts', run: shortcutsDialog },
+    { group: 'General', icon: 'keyboard', label: 'Keyboard shortcuts', key: firstKey(S.ui.keys, 'shortcuts'), run: () => settingsDialog('keys') },
     { group: 'View', icon: dark ? 'sun' : 'moon', label: dark ? 'Light theme' : 'Dark theme', run: toggleTheme },
-    { group: 'View', icon: 'panel-left', label: 'Toggle sidebar', key: 'Ctrl+B', run: toggleSidebar },
+    { group: 'View', icon: 'panel-left', label: 'Toggle sidebar', key: firstKey(S.ui.keys, 'sidebar'), run: toggleSidebar },
   ];
   if (t) {
-    items.push({ group: 'View', icon: 'panel-right', label: 'Toggle side panel', key: 'Ctrl+J', run: togglePanel });
-    items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: 'Ctrl+Shift+F', run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Conversation', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Conversation', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
+    items.push({ group: 'View', icon: 'panel-right', label: 'Toggle side panel', key: firstKey(S.ui.keys, 'panel'), run: togglePanel });
+    items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: firstKey(S.ui.keys, 'zen'), run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Conversation', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Conversation', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
     for (const [k, l, ic] of [['run', 'Run inspector', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
     items.push({ group: 'Conversation', icon: 'pencil', label: 'Rename conversation…', run: () => renameTab(t) }, { group: 'Conversation', icon: 'copy', label: 'Copy conversation as Markdown', run: () => copyConversation(t) }, { group: 'Conversation', icon: 'x', label: 'Close conversation', run: () => closeWithCheck(t) });
     for (const c of t.commands) items.push({ group: 'Slash commands', icon: 'command', label: `/${c.name}`, hint: c.description, run: () => emit('insert', `/${c.name} `) });
@@ -773,6 +786,7 @@ function paletteItems() {
   // Every saved conversation, searchable by its title and by its first message.
   for (const s of S.sessions) items.push({ group: 'Conversations', scope: 'conversations', icon: 'message', label: s.title, hint: `${baseName(s.cwdDisplay || s.cwd)} · ${timeAgo(s.mtime)}`, text: s.preview, run: () => openSession(s) });
   for (const g of groupSessions().filter((x) => x.path)) items.push({ group: 'Projects', scope: 'projects', icon: 'folder', label: g.name, hint: `${g.sessions.length} conversation${g.sessions.length === 1 ? '' : 's'} · ${g.path}`, run: () => newSession(g.path) });
+  items.push(...settingsSearchItems());
   return items;
 }
 
@@ -793,34 +807,58 @@ function openSearch(scope) {
   palette(paletteItems, { files: activeTab()?.workspace ? searchFiles : null, scope });
 }
 
+/** What each changeable shortcut does (keys.mjs has their keys; Settings → Shortcuts changes them). */
+const ACTION_RUN = {
+  search: () => openSearch(),
+  files: () => openSearch(activeTab()?.workspace ? 'files' : undefined),
+  new: () => newSession(),
+  runs: () => goHub('runs'),
+  review: () => goHub('review'),
+  automations: () => goHub('automations'),
+  back: () => navGo(-1),
+  forward: () => navGo(1),
+  nextConv: () => cycle(1),
+  prevConv: () => cycle(-1),
+  sidebar: () => toggleSidebar(),
+  panel: () => togglePanel(),
+  nextPanelTab: () => stepPanelTab(1),
+  prevPanelTab: () => stepPanelTab(-1),
+  overview: () => topEl.querySelector('.tb-ov')?.click(),
+  shortcuts: () => settingsDialog('keys'),
+  settings: () => settingsDialog(),
+  focusInput: () => (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus()),
+  find: () => viewOf(activeTab())?.bar.openFind(),
+  outline: () => viewOf(activeTab())?.bar.openOutline(),
+  prevMine: () => viewOf(activeTab())?.timeline?.stepYou(-1),
+  nextMine: () => viewOf(activeTab())?.timeline?.stepYou(1),
+  sideQuestion: () => showTab('ask'),
+  inspector: () => showTab('run'),
+  zen: () => toggleZen(),
+  textBigger: () => textSize(1),
+  textSmaller: () => textSize(-1),
+  textReset: () => textSize(0),
+};
+// Actions that belong to an open conversation, and ones that wait while a dialog is open; otherwise the key does
+// what it would do anyway (Ctrl+F finds in the page on Home, for example).
+const NEEDS_TAB = new Set(['nextPanelTab', 'prevPanelTab', 'overview', 'find', 'outline', 'prevMine', 'nextMine', 'sideQuestion', 'inspector', 'zen']);
+const NO_DIALOG = new Set(['find', 'outline', 'prevMine', 'nextMine', 'inspector', 'zen', 'nextPanelTab', 'prevPanelTab']);
+const canRun = (a, e) => {
+  if (a.field === false && e.target.closest?.('input, textarea, select, [contenteditable]')) return false;
+  if (e.target.closest?.('.menu')) return false;
+  if (NEEDS_TAB.has(a.id) && !activeTab()) return false;
+  if (NO_DIALOG.has(a.id) && document.querySelector('.scrim')) return false;
+  if ((a.id === 'prevMine' || a.id === 'nextMine') && !viewOf(activeTab())?.timeline) return false;
+  return true;
+};
+
 addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
-  if (mod && !e.shiftKey && !e.altKey) {
-    const k = e.key.toLowerCase();
-    if (k === 'n') return e.preventDefault(), newSession();
-    if (k === 'k') return e.preventDefault(), openSearch();
-    if (k === ',') return e.preventDefault(), settingsDialog();
-    if (k === 'b') return e.preventDefault(), toggleSidebar();
-    if (k === 'j') return e.preventDefault(), togglePanel();
-    if (k === 'f' && activeTab() && !document.querySelector('.scrim')) return e.preventDefault(), viewOf(activeTab())?.bar.openFind();
-    if (k === '1') return e.preventDefault(), newSession();
-    if (k === '2') return e.preventDefault(), goHub('runs');
-    if (k === '3') return e.preventDefault(), goHub('review');
-    if (k === 'l') return e.preventDefault(), (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus());
-  }
-  // Ctrl+= / Ctrl+- / Ctrl+0: conversation text size (the same setting as Appearance → Message text size).
-  if (mod && !e.altKey && ['=', '+', '-', '0'].includes(e.key)) return e.preventDefault(), textSize(e.key === '0' ? 0 : e.key === '-' ? -1 : 1);
-  // Ctrl+Tab / Ctrl+Shift+Tab: the next / previous open conversation.
-  if (e.ctrlKey && !e.altKey && e.key === 'Tab') return e.preventDefault(), cycle(e.shiftKey ? -1 : 1);
-  // Ctrl+Alt+O: the Overview card.
-  if (e.ctrlKey && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o' && activeTab()) return e.preventDefault(), topEl.querySelector('.tb-ov')?.click();
-  // Alt+← / Alt+→: back and forward, outside text fields.
-  if (e.altKey && !mod && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.target.closest?.('input, textarea, select, [contenteditable]')) return e.preventDefault(), navGo(e.key === 'ArrowLeft' ? -1 : 1);
-  if (mod && e.shiftKey && !e.altKey && activeTab() && !document.querySelector('.scrim')) {
-    const k = e.key.toLowerCase();
-    if (k === 'r') return e.preventDefault(), showTab('run');
-    if (k === 'f') return e.preventDefault(), toggleZen();
-    if (k === 'o') return e.preventDefault(), viewOf(activeTab())?.bar.openOutline();
+  // Shortcuts you can change: the first action whose keys match. Some wait while you type in a text field.
+  const action = !e.defaultPrevented && actionFor(comboOf(e), S.ui.keys);
+  if (action && canRun(action, e)) {
+    e.preventDefault();
+    ACTION_RUN[action.id]?.();
+    return;
   }
   // Esc anywhere outside a text field stops the agent (fields, menus and dialogs handle Esc themselves first).
   if (e.key === 'Escape' && !mod && !e.defaultPrevented && !e.target.closest?.('input, textarea, select, .scrim, .menu')) {
@@ -837,12 +875,6 @@ addEventListener('keydown', (e) => {
   if (e.altKey && !mod && /^[1-9]$/.test(e.key)) {
     const t = [...S.tabs.values()][+e.key - 1];
     if (t) (e.preventDefault(), setActive(t.id));
-  }
-  // Alt+↑ / Alt+↓: the previous / next message of yours in the conversation (the timeline's jump).
-  if (e.altKey && !mod && !e.shiftKey && !e.defaultPrevented && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.target.closest?.('.scrim, .menu')) {
-    const t = activeTab();
-    const v = t && viewOf(t);
-    if (v?.timeline) (e.preventDefault(), v.timeline.stepYou(e.key === 'ArrowUp' ? -1 : 1));
   }
 });
 
@@ -896,6 +928,9 @@ async function boot() {
   });
   initNotify();
   initBackdrop();
+  // The Windows app's built-in browser: where downloads go, and a note when one is saved.
+  desktopBrowser()?.configure({ downloads: browserPrefs().downloads });
+  desktopBrowser()?.onDownload((d) => toast(d.state === 'completed' ? `Downloaded ${d.name}` : `Download ${d.state === 'cancelled' ? 'cancelled' : 'failed'}: ${d.name}`, d.state === 'completed' ? 'ok' : 'error', 3500));
   initRuns({ openProc: async (p) => (await adoptRunning([p]), setActive(p.id)) });
   loadSessions();
   connectEvents({

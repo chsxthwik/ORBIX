@@ -8,6 +8,11 @@ import { h, icon, iconBtn, logo, baseName, fmtElapsed, timeAgo } from './dom.js'
 import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 import { gitState, panelInfo, showTab } from './panels.js';
+import { firstKey } from './keys.mjs';
+
+/** The key of a shortcut as you set it (Settings → Shortcuts), for menus and hints. */
+const K = (id) => firstKey(S.ui.keys, id);
+const tip = (text, id) => (K(id) ? `${text} (${K(id)})` : text);
 
 /** Actions, set by main.js. */
 export const H = {};
@@ -71,7 +76,7 @@ function menus() {
       { label: 'About ORBIX', run: () => H.settings('about') },
       { label: 'Check for updates', run: () => H.settings('about') },
       '-',
-      { label: 'Settings', hint: 'Ctrl+,', run: () => H.settings() },
+      { label: 'Settings', hint: K('settings'), run: () => H.settings() },
       { label: 'Providers and models', run: () => H.settings('engine') },
       '-',
       { label: 'How ORBIX works', run: H.help },
@@ -79,35 +84,35 @@ function menus() {
       { label: 'Check my setup', run: H.diagnostics },
     ]],
     ['Workspace', [
-      { label: 'New conversation', hint: 'Ctrl+N', run: () => H.newSession() },
+      { label: 'New conversation', hint: K('new'), run: () => H.newSession() },
       { label: 'New conversation without saving it', run: () => H.newSession(undefined, { ephemeral: true }) },
       { label: 'Open project folder…', run: H.openFolder },
       '-',
-      { label: 'Runs', hint: 'Ctrl+2', run: () => H.goHub('runs') },
-      { label: 'Review', hint: 'Ctrl+3', run: () => H.goHub('review') },
+      { label: 'Runs', hint: K('runs'), run: () => H.goHub('runs') },
+      { label: 'Review', hint: K('review'), run: () => H.goHub('review') },
       { label: 'Automations', run: () => H.goHub('automations') },
-      { label: 'Search everything', hint: 'Ctrl+K', run: () => H.search() },
+      { label: 'Search everything', hint: K('search'), run: () => H.search() },
       '-',
       { label: 'Manage conversations…', run: H.manage },
     ]],
     ['View', [
-      { label: 'Sidebar', hint: 'Ctrl+B', on: H.sideShown(), run: H.toggleSidebar },
+      { label: 'Sidebar', hint: K('sidebar'), on: H.sideShown(), run: H.toggleSidebar },
       t ? { label: 'Overview', on: overviewWanted(), run: toggleOverview } : null,
-      t ? { label: 'Side panel', hint: 'Ctrl+J', on: H.panelShown(), run: H.togglePanel } : null,
-      t ? { label: 'Focus mode', hint: 'Ctrl+Shift+F', on: document.documentElement.classList.contains('zen'), run: () => H.zen() } : null,
+      t ? { label: 'Side panel', hint: K('panel'), on: H.panelShown(), run: H.togglePanel } : null,
+      t ? { label: 'Focus mode', hint: K('zen'), on: document.documentElement.classList.contains('zen'), run: () => H.zen() } : null,
       t ? { label: 'Wide reading column', on: document.documentElement.classList.contains('wide'), run: H.wide } : null,
       '-',
       { label: dark ? 'Light theme' : 'Dark theme', run: H.toggleTheme },
-      { label: 'Bigger text', hint: 'Ctrl+=', run: () => H.textSize(1) },
-      { label: 'Smaller text', hint: 'Ctrl+-', run: () => H.textSize(-1) },
-      { label: 'Reset text size', hint: 'Ctrl+0', run: () => H.textSize(0) },
+      { label: 'Bigger text', hint: K('textBigger'), run: () => H.textSize(1) },
+      { label: 'Smaller text', hint: K('textSmaller'), run: () => H.textSize(-1) },
+      { label: 'Reset text size', hint: K('textReset'), run: () => H.textSize(0) },
     ]],
     ['Window', [
-      { label: 'Back', hint: 'Alt+←', run: () => navGo(-1) },
-      { label: 'Forward', hint: 'Alt+→', run: () => navGo(1) },
+      { label: 'Back', hint: K('back'), run: () => navGo(-1) },
+      { label: 'Forward', hint: K('forward'), run: () => navGo(1) },
       '-',
-      { label: 'Next conversation', hint: 'Ctrl+Tab', run: () => H.cycle(1) },
-      { label: 'Previous conversation', hint: 'Ctrl+Shift+Tab', run: () => H.cycle(-1) },
+      { label: 'Next conversation', hint: K('nextConv'), run: () => H.cycle(1) },
+      { label: 'Previous conversation', hint: K('prevConv'), run: () => H.cycle(-1) },
       t ? { label: 'Close conversation', run: () => H.close(t) } : null,
       ...(S.tabs.size ? ['-', { header: 'Open conversations' }] : []),
       ...[...S.tabs.values()].slice(0, 9).map((x, i) => ({ label: x.name, hint: `Alt+${i + 1}`, on: x.id === S.active, run: () => H.open(x.id) })),
@@ -167,22 +172,22 @@ export function drawToolbar(el, { force = false } = {}) {
   topSig = sig;
   el.classList.toggle('busy', !!t?.streaming && !t.dead);
   const docked = H.panelShown() && !document.getElementById('app')?.classList.contains('overlay-panel');
-  const panelBtn = () => iconBtn('panel-right', 'Side panel (Ctrl+J)', H.togglePanel, 'tb-panel' + (H.panelShown() ? ' on' : ''));
-  const back = iconBtn('arrow-left', 'Back (Alt+←)', () => navGo(-1), 'tb-nav');
-  const fwd = iconBtn('arrow-right', 'Forward (Alt+→)', () => navGo(1), 'tb-nav');
+  const panelBtn = () => iconBtn('panel-right', tip('Side panel', 'panel'), H.togglePanel, 'tb-panel' + (H.panelShown() ? ' on' : ''));
+  const back = iconBtn('arrow-left', tip('Back', 'back'), () => navGo(-1), 'tb-nav');
+  const fwd = iconBtn('arrow-right', tip('Forward', 'forward'), () => navGo(1), 'tb-nav');
   back.disabled = !canGo(-1);
   fwd.disabled = !canGo(1);
   el.replaceChildren(...[
     h('div', { class: 'tb-lead' },
-      h('button', { class: 'tb-mark', type: 'button', title: 'New conversation (Ctrl+N)', 'aria-label': 'New conversation', onclick: () => H.newSession() }, logo(20, { alive: true })),
-      iconBtn('panel-left', 'Sidebar (Ctrl+B)', H.toggleSidebar, 'tb-side' + (H.sideShown() ? ' on' : '')),
+      h('button', { class: 'tb-mark', type: 'button', title: tip('New conversation', 'new'), 'aria-label': 'New conversation', onclick: () => H.newSession() }, logo(20, { alive: true })),
+      iconBtn('panel-left', tip('Sidebar', 'sidebar'), H.toggleSidebar, 'tb-side' + (H.sideShown() ? ' on' : '')),
       back, fwd,
-      iconBtn('search', 'Search everything (Ctrl+K)', () => H.search(), 'tb-search')),
+      iconBtn('search', tip('Search everything', 'search'), () => H.search(), 'tb-search')),
     h('div', { class: 'crumbs' }, crumbs(t, hub)),
     h('span', { class: 'grow tb-drag' }),
     t ? h('div', { class: 'tb-end' },
       iconBtn('more-v', 'Conversation actions', (e) => H.sessionMenu(t, e.currentTarget), 'tb-more'),
-      iconBtn('overview', 'Overview (Ctrl+Alt+O)', toggleOverview, 'tb-ov' + (overviewShown() ? ' on' : '')),
+      iconBtn('overview', tip('Overview', 'overview'), toggleOverview, 'tb-ov' + (overviewShown() ? ' on' : '')),
       docked ? null : panelBtn()) : null,
     // With the side panel docked, its switch sits above it, and the conversation's own buttons end where the conversation does.
     t && docked ? h('div', { class: 'tb-pz' }, panelBtn()) : null,

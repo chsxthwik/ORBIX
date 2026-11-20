@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.7.0 (2026-11-20)
+- **Settings, redesigned as in Antigravity.** A card over the workspace with the page list on the left: General, Application, Appearance, Shortcuts, Notifications, Providers, Models and Browser; Customizations (Instructions, Checks, Tools & MCP); a page for each project; Conversations and Worktrees; Give feedback and this copy of ORBIX at the bottom. Pill buttons, pill selects and quiet cards; × or Esc closes it. Ctrl+K finds any setting by name and opens its page.
+- **General.** Permission preset, Tool permissions (trusted commands, where commands run), Network access rules, what Enter does while the agent works (Steer or Queue; Alt+Enter does the other), the send key and following output.
+- **Network access rules.** Sites the agent may read with `web_fetch` without asking, and sites it may never read, also after a redirect. With an allowed list, every other site asks first, in every preset; helper agents read only listed sites.
+- **Shortcuts you can change.** Settings → Shortcuts lists every action with its keys: + records new keys, the bin removes them, Reset puts them back; a key taken from another action says so. New: Ctrl+P (find a file), Ctrl+U (Automations), Ctrl+[ and Ctrl+] (back and forward), Ctrl+Shift+. and Ctrl+Shift+, (side panel tabs), Ctrl+/ (shortcuts). Menus show your keys.
+- **Built-in browser in the Windows app.** The Browser tab is now a real browser view with its own session: any site, back, forward, reload, address suggestions from your history. Settings → Browser: open links from replies in it, the download folder, clear browsing history, clear its cookies and site data. Its pages get no access to ORBIX and no camera, microphone or location.
+- **Project pages.** Each project in Settings shows its folder, recent conversations, the AGENTS.md and `.agents/rules` files the agent reads (with their triggers), and its check command.
+- **Notifications.** A volume slider for the chime.
+- **Give feedback.** Bug report, feature request, model problem or general feedback, with optional version facts, opened as a GitHub issue you check before sending. Nothing is sent from ORBIX.
+- **Removed.** The Overview page of Settings, its search box (Ctrl+K does it now) and the separate shortcuts dialog.
+
 ## 3.6.0 (2026-11-20)
 - **Automations** (sidebar → Automations). A prompt that ORBIX starts by itself every hour, every day, on weekdays or every week, in a project, as a new conversation. Run now, turn on or off, edit, delete; the list shows the next and last run and whether one is working. They run while ORBIX is open: a time missed while it was closed is skipped, and a run still working is not started twice. Each run is an ordinary conversation, so in Ask first it waits for your OK in Review.
 - **Browser** (side panel). Lists the web apps running on this computer (the usual dev-server ports, with their page titles) and previews one in a sandboxed frame next to the conversation, with reload and "open in your browser". Type a port, a localhost address, a site or a search: other sites and searches open in your own browser. ORBIX allows frames only from localhost.

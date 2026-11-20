@@ -658,8 +658,8 @@ export function createTools({ backend, cwd, getSignal }) {
       return { text, details: { exitCode: code, timedOut, aborted, durationMs, wallTimeMs: durationMs, truncated, shell: useShell }, isError: code !== 0 || timedOut };
     },
 
-    async web_fetch(input, { allowHost, signal, vision } = {}) {
-      return webFetch(input, { signal: signal || getSignal(), allowHost, vision });
+    async web_fetch(input, { allowHost, signal, vision, denied } = {}) {
+      return webFetch(input, { signal: signal || getSignal(), allowHost, vision, denied });
     },
 
     async web_search(input, { search, signal } = {}) {

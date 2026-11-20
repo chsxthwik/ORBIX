@@ -102,11 +102,11 @@ try {
   await page.until(`document.querySelector('#sidebar .s-btn[data-path]') && !document.querySelector('#sidebar .s-row.archived')`, 'unarchived');
   // Settings is a page: Preferences → send with Ctrl+Enter makes Enter a new line; Back returns to the app.
   await page.key(',', { ctrl: true, keyCode: 188, code: 'Comma' });
-  await page.until(`document.querySelector('.modal.settings-page .set-back')`, 'Settings as a page');
-  await page.eval(`document.querySelector('#set-prefs').click()`);
-  await page.click('Ctrl+Enter', '.modal.settings-page');
-  await page.click('Back to app', '.modal.settings-page');
-  await page.until(`!document.querySelector('.modal.settings-page')`, 'back to the app');
+  await page.until(`document.querySelector('.modal.settings-card .set-tab.cur')`, 'Settings as a card');
+  await page.eval(`document.querySelector('#set-general').click()`);
+  await page.click('Ctrl+Enter', '.modal.settings-card');
+  await page.click('Close', '.modal.settings-card .set-main');
+  await page.until(`!document.querySelector('.modal.settings-card')`, 'back to the app');
   const sent = model.seen.length;
   await page.fill('#session textarea', 'one line');
   await page.eval(`document.querySelector('#session textarea').focus()`);
@@ -139,6 +139,47 @@ try {
   await page.click('Delete', '.modal');
   await page.until(`!document.querySelector('#runs .au-item')`, 'the automation deleted');
   say('conversation e2e: side question and automations');
+  // Shortcuts: record F7 for the sidebar in Settings → Shortcuts, use it, then put the defaults back.
+  await page.key(',', { ctrl: true, keyCode: 188, code: 'Comma' });
+  await page.until(`document.querySelector('.modal.settings-card')`, 'Settings');
+  await page.eval(`document.querySelector('#set-keys').click()`);
+  await page.eval(`document.querySelector('[aria-label="Add keys for Show or hide the sidebar"]').click()`);
+  await page.until(`document.querySelector('.kc-rec')`, 'recording keys');
+  await page.key('F7', { keyCode: 118, code: 'F7' });
+  await page.until(`(async () => ((await import('/js/store.js')).S.ui.keys?.sidebar || []).includes('F7'))()`, 'F7 saved for the sidebar');
+  assert(await page.eval(`return !!document.querySelector('.modal.settings-card')`), 'recording a key does not close Settings');
+  await page.key('Escape', { keyCode: 27, code: 'Escape' });
+  await page.until(`!document.querySelector('.modal.settings-card')`, 'Settings closed');
+  const side0 = await page.eval(`return !document.querySelector('#app').classList.contains('no-side')`);
+  await page.key('F7', { keyCode: 118, code: 'F7' });
+  await page.until(`(document.querySelector('#app').classList.contains('no-side')) === ${side0}`, 'F7 toggled the sidebar');
+  await page.key('F7', { keyCode: 118, code: 'F7' });
+  await page.eval(`(await import('/js/store.js')).savePrefs({ keys: {} })`);
+  // Ctrl+K finds a setting by name and opens its page.
+  await page.key('k', { ctrl: true, keyCode: 75, code: 'KeyK' });
+  await page.until(`document.querySelector('.palette input')`, 'search');
+  await page.fill('.palette input', 'network access');
+  await page.click('Network access rules', '.palette');
+  await page.until(`document.querySelector('.modal.settings-card .set-title')?.textContent === 'Network access rules'`, 'the network rules page');
+  await page.key('Escape', { keyCode: 27, code: 'Escape' });
+  await page.until(`!document.querySelector('.modal.settings-card')`, 'Settings closed');
+  say('conversation e2e: shortcuts and settings search');
+  if (DESKTOP) {
+    // The built-in browser shows a web page in the Windows app (a <webview> with its own session).
+    const http = await import('node:http');
+    const site = http.createServer((_q, r) => (r.writeHead(200, { 'content-type': 'text/html' }), r.end('<!doctype html><title>E2E page</title><h1>Hello from the browser tab</h1>')));
+    await new Promise((ok) => site.listen(0, '127.0.0.1', ok));
+    const url = `http://127.0.0.1:${site.address().port}/`;
+    await page.eval(`const st = await import('/js/store.js'); st.setActive([...st.S.tabs.keys()][0]);`);
+    await page.until(`(async () => !!(await import('/js/store.js')).activeTab())()`, 'a conversation in front');
+    await page.eval(`(await import('/js/store.js')).emit('browse', ${JSON.stringify(url)})`);
+    await page.until(`document.querySelector('#panel webview')`, 'the browser view');
+    await page.until(`(() => { try { return document.querySelector('#panel webview').getTitle() === 'E2E page'; } catch { return false; } })()`, 'the page loaded in the browser view', 20000);
+    await sleep(600);
+    await shot('browser-tab');
+    site.close();
+    say('conversation e2e: built-in browser');
+  }
   const bad = page.errors.filter((e) => e && !/favicon|Failed to load resource/i.test(e));
   assert(!bad.length, `no page errors: ${bad.join(' | ')}`);
   ok = true;

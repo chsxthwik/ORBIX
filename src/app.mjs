@@ -36,7 +36,7 @@ export function ping(port) {
 /**
  * Start the server, or find the one already running for this data folder.
  * Returns { url, existing, server, stop(code) }; `stop` saves, shuts the server down and removes the lock file.
- * `onQuit` runs when the app asks to quit (Settings → About → Quit ORBIX).
+ * `onQuit` runs when the app asks to quit (Settings → Application → Quit ORBIX).
  */
 export async function startOrbix({ port = 47821, onQuit } = {}) {
   initLog(path.join(DATA_DIR, 'logs', 'server.log'));

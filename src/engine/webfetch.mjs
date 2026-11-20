@@ -190,7 +190,7 @@ function decodeBody(buf, contentType) {
  * Fetch a URL. `isAllowedHost(host)` may permit a private/local host (e.g. the user mentioned it, or approved it).
  * Returns { text, details, isError }.
  */
-export async function webFetch({ url, max_chars: maxChars, offset = 0 } = {}, { signal, allowHost, vision } = {}) {
+export async function webFetch({ url, max_chars: maxChars, offset = 0 } = {}, { signal, allowHost, vision, denied } = {}) {
   let u;
   try {
     u = new URL(String(url || '').trim());
@@ -203,6 +203,8 @@ export async function webFetch({ url, max_chars: maxChars, offset = 0 } = {}, { 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (u.protocol !== 'http:' && u.protocol !== 'https:') return { text: `Only http and https URLs can be fetched (got ${u.protocol}).`, isError: true };
     if (u.username || u.password) return { text: 'URLs with embedded credentials are not fetched.', isError: true };
+    // Your network rules apply to every hop, so a redirect cannot lead to a denied site.
+    if (denied?.(u)) return { text: `Blocked by the user's network rules: ${u.host}${hop ? ` (reached by a redirect from ${chain.length ? 'an allowed page' : 'the page'})` : ''}. Do not retry this site.`, isError: true, details: { url: u.href, blocked: true } };
     const host = u.hostname.replace(/^\[|\]$/g, '');
     const literalPrivate = net.isIP(host) ? isPrivateAddress(host) : isLocalName(host);
     let allowPrivate = false;

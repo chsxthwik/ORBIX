@@ -133,14 +133,16 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `main.js` | start-up, layout, sidebar, keyboard shortcuts, routing events to views |
 | `shell.js`, `controls.js` | the window chrome (menu row, toolbar with back/forward and breadcrumbs, the Overview card, the sidebar's preview card) and the message box's "+" and permission chip |
 | `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
-| `updates.js` | update status in the sidebar and Settings → About |
+| `updates.js` | update status in the sidebar and Settings → Application |
 | `store.js` | client state and the reducer that turns session events into UI state |
 | `api.js` | HTTP calls and the SSE connection |
 | `home.js` | Home: task box, next actions, recent conversations and projects |
 | `session.js`, `tools.js`, `markdown.js`, `highlight.js`, `ansi.js` | conversation view and tool steps |
 | `composer.js` | message box: attachments, history, `/` and `@` pop-ups |
 | `panels.js` | side panel: Run, Review (a session on its own branch), Files, Changes (git), Plan (todos), Agents, Console |
-| `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings |
+| `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings (a card over the workspace; `settingsSearchItems` feeds Ctrl+K) |
+| `keys.mjs` | the shortcuts you can change: actions, default keys, `comboOf(event)`, your changes in `prefs.keys` |
+| `browser.js` | where links open, the Browser tab's addresses and history; `electron/browser.mjs` is the Windows app's browser session |
 | `brands.js` | provider logo marks, drawn inline |
 | `ascii.js` | orbit, decoding headline, typed examples and empty-panel art |
 | `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js` | dialogs and notifications |

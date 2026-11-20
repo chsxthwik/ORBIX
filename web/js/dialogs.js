@@ -316,16 +316,6 @@ export function syncExtDialogs(tab) {
 export const row = (label, control, hint) => h('div', { class: 'set-row' }, h('div', { class: 'set-k' }, h('div', { class: 'set-l' }, label), hint ? h('div', { class: 'set-hint' }, hint) : null), h('div', { class: 'set-v' }, control));
 export const toggle = (val, onchange, label) => h('label', { class: 'switch' }, h('input', { type: 'checkbox', role: 'switch', checked: val ? true : null, 'aria-label': label || null, onchange: (e) => onchange(e.target.checked) }), h('i'));
 
-/** Every keyboard shortcut: [keys, what it does]. */
-export const SHORTCUTS = [['Ctrl+N', 'New conversation'], ['Ctrl+1 / Ctrl+2 / Ctrl+3', 'New conversation, Runs, Review'], ['Alt+← / Alt+→', 'Back / forward'], ['Ctrl+K', 'Search conversations, files and commands'], ['Ctrl+,', 'Settings'], ['Ctrl+B', 'Sidebar'], ['Ctrl+J', 'Side panel'], ['Ctrl+Alt+O', 'Overview card'], ['Ctrl+L', 'Focus the message box'], ['Ctrl+F', 'Find in conversation'], ['Ctrl+Shift+O', 'Jump to one of your messages'], ['Ctrl+Shift+F', 'Focus mode'], ['Alt+1…9', 'Switch to an open conversation'], ['Ctrl+Tab', 'Next open conversation (Shift for the previous one)'], ['Ctrl+=', 'Bigger conversation text (Ctrl+- smaller, Ctrl+0 resets)'], ['Alt+↑ / Alt+↓', 'Previous / next message of yours'], ['Enter', 'Send'], ['Shift+Enter', 'New line'], ['Alt+Enter', 'Queue a message while the agent works'], ['Esc', 'Stop the agent'], ['/', 'Slash commands'], ['@', 'Mention a file'], ['↑', 'Recall your last message (when the box is empty)'], ['Select text', 'Ask about it or copy it, from the bar above the selection'], ['Right-click', 'On a conversation or project in the sidebar: its menu'], ['F2', 'Rename the conversation selected in the sidebar (or double-click it)'], ['P', 'Pin or unpin the conversation selected in the sidebar'], ['A', 'Archive or unarchive the conversation selected in the sidebar'], ['Del', 'Delete the conversation selected in the sidebar (asks first)'], ['↑ / ↓', 'Move through the sidebar list (Enter in its filter opens the first match)']];
-
-/** Keys as keycaps: "Ctrl+Shift+F" becomes three caps joined by plus signs. */
-export const keyCaps = (k) => k.split(' / ').map((alt, j) => [j ? h('span', { class: 'keys-or' }, 'or') : null, /\s/.test(alt) ? h('span', { class: 'keys-w' }, alt) : alt.split(/(?<=\S)\+(?=\S)/).map((x, i) => [i ? '+' : null, kbd(x)])]);
-
-export function shortcutsDialog() {
-  const rows = SHORTCUTS;
-  modal({ title: 'Keyboard shortcuts', size: 'sm', body: h('dl', { class: 'keys' }, rows.map(([k, d]) => [h('dt', null, keyCaps(k)), h('dd', null, d)])) });
-}
 
 /**
  * Search everything (Ctrl+K): commands, conversations, projects and, with `opts.files`, files of the open project.
@@ -414,7 +404,7 @@ export function palette(getItems, opts = {}) {
       const order = [];
       for (const [, it] of ranked) if (!order.includes(it.group)) order.push(it.group);
       items = order.flatMap((g) => ranked.filter(([, it]) => it.group === g).slice(0, scope === 'all' ? 8 : 60).map(([, it, hits]) => ({ ...it, hits })));
-    } else items = pool.slice(0, 80);
+    } else items = pool.filter((it) => !it.searchOnly).slice(0, 80); // settings show up once you type
     sel = Math.min(sel, Math.max(0, items.length - 1));
     let lastG = '';
     const fileErr = filesErr && inScope({ scope: 'files' }) && f.length >= 2 && !filesBusy

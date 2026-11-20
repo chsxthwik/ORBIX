@@ -7,10 +7,12 @@ const started = new Map(); // tab id -> when the current turn began
 let asked = false;
 
 /** The notification settings, with their defaults. */
-export const notifyPrefs = () => ({ done: true, input: true, onlyAway: true, sound: true, flash: true, ...(S.ui.notify || {}) });
+export const notifyPrefs = () => ({ done: true, input: true, onlyAway: true, sound: true, flash: true, volume: 0.8, ...(S.ui.notify || {}) });
 
-/** A soft two-note chime, made on the spot (no sound file). */
-function chime() {
+/** A soft two-note chime, made on the spot (no sound file). `volume` 0 to 1 (Settings → Notifications → Volume). */
+export function chime(volume = notifyPrefs().volume) {
+  const peak = 0.15 * Math.max(0, Math.min(1, Number(volume)));
+  if (!(peak > 0)) return;
   try {
     const ac = new AudioContext();
     const t = ac.currentTime;
@@ -20,7 +22,7 @@ function chime() {
       o.type = 'sine';
       o.frequency.value = f;
       g.gain.setValueAtTime(0.0001, t + i * 0.12);
-      g.gain.exponentialRampToValueAtTime(0.12, t + i * 0.12 + 0.02);
+      g.gain.exponentialRampToValueAtTime(peak, t + i * 0.12 + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.12 + 0.35);
       o.connect(g).connect(ac.destination);
       o.start(t + i * 0.12);

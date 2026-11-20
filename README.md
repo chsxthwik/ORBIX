@@ -40,7 +40,7 @@ Download `ORBIX-Setup` from the [latest release](https://github.com/chsxthwik/OR
 1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in (ChatGPT, xAI, OpenCode, OpenRouter), paste an API key and press **Check & save**, or connect a local model.
 2. Choose a project folder, describe a task and press <kbd>Enter</kbd>.
 
-ORBIX updates itself from GitHub releases: it downloads in the background and installs when you close it, or at once with **Restart** in the sidebar (Settings → About → Updates turns this off). Settings and conversations live in `%LOCALAPPDATA%\ORBIX` and stay through every update. There is no account and no subscription; you pay your provider directly, or nothing with a local model.
+ORBIX updates itself from GitHub releases: it downloads in the background and installs when you close it, or at once with **Restart** in the sidebar (Settings → Application → Updates turns this off). Settings and conversations live in `%LOCALAPPDATA%\ORBIX` and stay through every update. There is no account and no subscription; you pay your provider directly, or nothing with a local model.
 
 ## How you work in it
 
@@ -89,9 +89,9 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 | **Menu row and toolbar** | ORBIX, Workspace, View and Window menus. Back and forward (<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) across conversations, Runs and Review; search everything (<kbd>Ctrl</kbd>+<kbd>K</kbd>); where you are, with the conversation's state, running time and branch. |
 | **Sidebar** | New conversation, Runs, Review, Automations and Customizations; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
 | **Overview card** | Beside the conversation (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd>): Changes, Files, Terminal, Plan and the run inspector, plus helper agents and background runs when there are any. |
-| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Browser, Side question, Plan and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** finds the web apps running on this computer and previews one; **Side question** answers a quick question about the conversation while the agent keeps working. |
+| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Browser, Side question, Plan and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** starts on the web apps running on this computer; in the Windows app it is a real browser with its own session (any site, back and forward, downloads), in a web browser it shows only this computer's pages. **Side question** answers a quick question about the conversation while the agent keeps working. |
 | **Automations** | Prompts ORBIX starts by itself every hour, every day, on weekdays or every week, each as a new conversation in its project. Run now, turn on or off, edit. They run while ORBIX is open; in Ask first a run waits for your OK in Review. |
-| **Settings** | A page of its own (<kbd>Ctrl</kbd>+<kbd>,</kbd>, <kbd>Esc</kbd> returns): Preferences (send with Enter or Ctrl+Enter, follow output, Overview card, sidebar sorting and archive), Appearance, Notifications (finished, needs you, background only, sound, taskbar flash, a test), Shortcuts, the agent's Providers, Models, Permissions, Checks, Instructions and Tools, Projects, Worktrees and About. |
+| **Settings** | A card over the workspace, as in Antigravity (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> closes; <kbd>Ctrl</kbd>+<kbd>K</kbd> finds any setting). **General**: permission preset, tool permissions, network access rules, Steer or Queue while the agent works, the send key. **Application**: updates, data folder, help. **Appearance**, **Shortcuts** (change any key), **Notifications** (with volume), **Providers**, **Models**, **Browser** (where links open, downloads, history, site data). Customizations: Instructions, Checks, Tools & MCP. A page per project (folder, recent conversations, its instruction and rule files, its check command), Conversations (archived and recently deleted), Worktrees, and **Give feedback**. |
 | **Message box** | <kbd>+</kbd> adds files, a mention (<kbd>@</kbd>) or a command (<kbd>/</kbd>); the model and its thinking level; the permission chip; the context meter. |
 | **Conversation** | Folded steps, readable Markdown with code blocks and tables, a navigator of dots on the left edge (one per message of yours), find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). |
 
@@ -119,6 +119,7 @@ Approvals are a checkpoint, not a sandbox: the agent runs with your Windows user
 | Destructive commands (recursive delete, push, publish, history rewrite, system changes) | Asks | Asks | **Asks** |
 | Files outside the project folder | Asks | Asks | Runs |
 | MCP tools | Ask, unless the server marks them read-only | Ask, unless read-only | Run |
+| `web_fetch` | Runs; denied sites never, and with an allowed list other sites ask | Same | Same |
 | Project MCP servers and hooks | Do not start until you approve them | Same | Same |
 
 - **Local server:** listens only on `127.0.0.1`, behind a per-launch token in an `HttpOnly`, `SameSite=Strict` cookie; checks `Host` and `Origin`; serves the interface with a strict Content Security Policy.
@@ -141,24 +142,28 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 | **Slash commands** | Markdown files in `.omp/commands` or `.claude/commands`. `$ARGUMENTS` and `$1` to `$9` are filled in. |
 | **Hooks** | `hooks.json` in the data folder, or `.orbix/hooks.json` in a project. Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. Exit code 2 blocks the step and tells the model why. |
 | **Web search** | Settings → Tools & MCP: Brave Search, Tavily or your own SearXNG. |
+| **Network access rules** | Settings → General: sites `web_fetch` may read without asking, and sites it may never read (also after a redirect). With an allowed list, every other site asks first. |
 
 <details>
 <summary><b>Keyboard shortcuts</b></summary>
 <br>
 
+The defaults. Settings → Shortcuts changes any of them: <kbd>+</kbd> records new keys, the bin removes them.
+
 | Keys | Action |
 | --- | --- |
-| <kbd>Ctrl</kbd>+<kbd>K</kbd> | Search conversations, files, projects and commands |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd> / <kbd>Ctrl</kbd>+<kbd>P</kbd> | Search everything (settings too) / find a file |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | New conversation |
-| <kbd>Ctrl</kbd>+<kbd>2</kbd> / <kbd>Ctrl</kbd>+<kbd>3</kbd> | Runs / Review |
-| <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd> | Back / forward |
+| <kbd>Ctrl</kbd>+<kbd>2</kbd> / <kbd>Ctrl</kbd>+<kbd>3</kbd> / <kbd>Ctrl</kbd>+<kbd>U</kbd> | Runs / Review / Automations |
+| <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd> (or <kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>Ctrl</kbd>+<kbd>]</kbd>) | Back / forward |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd> | Sidebar / side panel / Overview card |
-| <kbd>Ctrl</kbd>+<kbd>,</kbd> | Settings |
+| <kbd>Ctrl</kbd>+<kbd>,</kbd> / <kbd>Ctrl</kbd>+<kbd>/</kbd> | Settings / keyboard shortcuts |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd> | Next / previous side panel tab |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | Focus the message box |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> | Find in the conversation / jump to one of your messages |
 | <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>9</kbd>, <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | Switch between open conversations |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>Alt</kbd>+<kbd>↓</kbd> | Previous / next message of yours |
-| <kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> | Send / queue a message while the agent works |
+| <kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> | While the agent works: steer / queue (Settings → General can swap them) |
 | <kbd>1</kbd> <kbd>2</kbd> <kbd>Esc</kbd> | Allow once / allow for the conversation / deny; <kbd>Esc</kbd> also stops the agent |
 
 </details>
