@@ -547,8 +547,11 @@ function fxLayer() {
 
 function launch(palette) {
   if (!fx?.isConnected) fxLayer();
+  // Over the workspace sheet's sides (never the sidebar or the side panel).
+  const r = document.querySelector('.main')?.getBoundingClientRect();
+  const left = r?.width ? r.left : 0, width = r?.width || FW;
   const side = Math.random() < 0.5 ? 0.05 + Math.random() * 0.17 : 0.78 + Math.random() * 0.17;
-  rockets.push({ x: FW * side, y0: FH + 4, y1: FH * (0.12 + Math.random() * 0.25), t0: fxT, dur: 0.75 + Math.random() * 0.3, palette });
+  rockets.push({ x: left + width * side, y0: FH + 4, y1: FH * (0.12 + Math.random() * 0.25), t0: fxT, dur: 0.75 + Math.random() * 0.3, palette });
   if (!fxRaf) (fxLast = performance.now()), (fxRaf = requestAnimationFrame(fxFrame));
 }
 

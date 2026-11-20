@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.5.1 (2026-11-20)
+- **Settings on wide screens.** On a large monitor the page list was squeezed to a sliver of icons (its left margin grew with the window). The page list and the page now sit together in the middle at any width.
+- **Deleted conversations can be restored.** Deleting a conversation moves it to the trash for 30 days instead of removing it at once. Settings → Projects → **Recently deleted** lists them with **Restore**, and **Empty** removes them for good.
+- **Side panel width.** The panel can now be as wide as you drag it (up to 720px, at most about half the window); before, it stopped at 560px while the drag handle kept going. Its tabs show only the current tab's name when the panel is narrow, so the last tabs are no longer cut off.
+- **Toolbar** follows the panel's real width, so the panel switch always sits above the panel.
+- **Fireworks** in scene themes go up at the sides of the conversation, no longer over the sidebar.
+- The current page in Settings keeps a quiet outline instead of a bright focus ring.
+
 ## 3.5.0 (2026-11-20)
 - **Settings is a page.** It opens over the workspace with Back to app (Esc also returns), a search box, and grouped pages: App (Preferences, Appearance, Notifications, Shortcuts), Agent (Providers, Models, Permissions, Checks, Instructions, Tools & MCP), Workspace (Projects, Worktrees) and About.
 - **Preferences** (new): send messages with Enter or with Ctrl+Enter (then Enter starts a new line), follow new output, the Overview card, how the sidebar sorts projects, and archived conversations.

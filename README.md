@@ -116,7 +116,7 @@ Approvals are a checkpoint, not a sandbox: the agent runs with your Windows user
 - **API keys:** encrypted for your Windows account with DPAPI, sent only to their own provider, never written to the log.
 - **What reaches your provider:** your messages, tool definitions, project rules and tool results, including the contents of files the agent reads.
 - **Other network use:** the models.dev catalog, update checks on GitHub (unless turned off), the sign-ins you use, and `web_fetch` / `web_search` when the agent calls them. **No telemetry.**
-- **On disk:** conversations are plain text in `%LOCALAPPDATA%\ORBIX` (or `data/` in a clone) and can contain anything that appeared in a chat; treat that folder as sensitive.
+- **On disk:** conversations are plain text in `%LOCALAPPDATA%\ORBIX` (or `data/` in a clone) and can contain anything that appeared in a chat; treat that folder as sensitive. A deleted conversation stays in its `trash` folder for 30 days (Settings → Projects → Recently deleted), then it is removed for good.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 

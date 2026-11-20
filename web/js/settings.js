@@ -281,7 +281,28 @@ function tabProjects(el, show, m) {
       }
     }, 'sm');
     el.append(h('div', { class: 'set-actions set-actions-top' }, add));
-    if (!groups.length) return el.append(h('p', { class: 'set-note' }, 'No projects yet. Open a folder to start.'));
+    const trash = h('div', { class: 'set-after' });
+    api.get('/api/sessions/trash').then(({ items }) => {
+      if (!items.length) return;
+      const empty = btn('Empty', async () => {
+        if (!(await confirmDialog('Empty recently deleted', `Delete ${items.length} conversation${items.length === 1 ? '' : 's'} for good? This cannot be undone.`, { ok: 'Delete for good', danger: true }))) return;
+        await api.post('/api/sessions/trash/empty').catch((e) => toast(e.message, 'error'));
+        draw();
+      }, 'sm danger');
+      trash.replaceChildren(group('Recently deleted', 'Deleted conversations stay here for 30 days, then they are removed for good.',
+        ...items.map((it) => row(h('span', { class: 'ell' }, it.title), btn('Restore', async () => {
+          try {
+            await api.post('/api/sessions/restore', { name: it.name });
+            await loadSessions();
+            toast('Restored', 'ok', 1400);
+            draw();
+          } catch (e) {
+            toast(e.message, 'error');
+          }
+        }, 'sm'), `${it.cwd ? `${baseName(it.cwd)} · ` : ''}deleted ${ago(it.deletedAt)}`)),
+        row('Empty recently deleted', empty)));
+    }).catch(() => {});
+    if (!groups.length) return el.append(h('p', { class: 'set-note' }, 'No projects yet. Open a folder to start.'), trash);
     el.append(h('div', { class: 'set-card' }, groups.map((g) => {
       const n = g.sessions.length;
       const acts = h('div', { class: 'row' },
@@ -299,6 +320,7 @@ function tabProjects(el, show, m) {
         }, 'sm') : null);
       return row(h('span', { class: 'proj-l' }, icon('folder', 14), g.name), acts, h('span', null, h('code', { class: 'about-path', title: g.path }, g.path), h('br'), `${n} conversation${n === 1 ? '' : 's'}${g.latest ? ` · last active ${ago(g.latest)}` : ''}`));
     })));
+    el.append(trash);
   };
   draw();
 }

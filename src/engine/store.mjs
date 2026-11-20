@@ -463,7 +463,64 @@ export async function listAgentSessions(backend) {
   return rows.filter(Boolean);
 }
 
-/** Delete saved agent conversations. Only files directly inside data/sessions/<project>/ are accepted. */
+// Deleted conversations go to data/trash for 30 days, so a delete can be undone (Settings → Projects → Recently
+// deleted). A trashed file is named <deleted-at>~<project folder>~<file name>, which is all a restore needs.
+const trashDir = () => path.join(DATA_DIR, 'trash');
+const TRASH_DAYS = 30;
+const TRASH_NAME = /^(\d{10,})~([A-Za-z0-9._-]+)~([^\\/~]+\.jsonl)$/;
+
+async function moveToTrash(file) {
+  const dir = trashDir();
+  await fs.promises.mkdir(dir, { recursive: true });
+  const to = path.join(dir, `${Date.now()}~${path.basename(path.dirname(file))}~${path.basename(file)}`);
+  try {
+    await fs.promises.rename(file, to);
+  } catch (e) {
+    if (e.code === 'ENOENT') return;
+    await fs.promises.copyFile(file, to); // another volume, or a handle that blocks a rename
+    await fs.promises.rm(file, { force: true });
+  }
+}
+
+/** What is in the trash, newest first, with each conversation's title; entries older than 30 days are removed. */
+export async function listTrash() {
+  const names = await fs.promises.readdir(trashDir()).catch(() => []);
+  const out = [];
+  for (const name of names) {
+    const m = TRASH_NAME.exec(name);
+    if (!m) continue;
+    const file = path.join(trashDir(), name);
+    const deletedAt = Number(m[1]);
+    if (Date.now() - deletedAt > TRASH_DAYS * 86400e3) {
+      await fs.promises.rm(file, { force: true });
+      continue;
+    }
+    const head = parseAgentHead(await readHead(file, HEAD_BYTES).catch(() => ''));
+    out.push({ name, deletedAt, title: head.title || makeTitle(head.first) || 'Untitled conversation', cwd: head.header?.cwd || '' });
+  }
+  return out.sort((a, b) => b.deletedAt - a.deletedAt);
+}
+
+/** Put a trashed conversation back where it was. */
+export async function restoreFromTrash(name) {
+  const m = TRASH_NAME.exec(String(name || ''));
+  if (!m) throw Object.assign(new Error('Not a deleted conversation'), { status: 400 });
+  const from = path.join(trashDir(), name);
+  const to = path.join(sessionsDir(), m[2], m[3]);
+  if (fs.existsSync(to)) throw Object.assign(new Error('A conversation with that file already exists'), { status: 409 });
+  await fs.promises.mkdir(path.dirname(to), { recursive: true });
+  await fs.promises.rename(from, to);
+  return to;
+}
+
+/** Delete everything in the trash for good. */
+export async function emptyTrash() {
+  const names = (await fs.promises.readdir(trashDir()).catch(() => [])).filter((n) => TRASH_NAME.test(n));
+  for (const n of names) await fs.promises.rm(path.join(trashDir(), n), { force: true });
+  return names.length;
+}
+
+/** Delete saved agent conversations (to the trash). Only files directly inside data/sessions/<project>/ are accepted. */
 export async function deleteAgentSessions(paths) {
   const root = path.resolve(sessionsDir());
   // Validate every path before deleting anything, so a bad entry never leaves a half-done batch.
@@ -475,7 +532,7 @@ export async function deleteAgentSessions(paths) {
   });
   for (const file of files) {
     closeSession(file);
-    await fs.promises.rm(file, { force: true });
+    await moveToTrash(file);
   }
   return files.length;
 }
