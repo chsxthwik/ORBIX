@@ -10,7 +10,7 @@ import { Backend, runProc } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
 import { DATA_DIR } from './store.mjs';
-import { EngineConfig, listAgentSessions, deleteAgentSessions, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
+import { EngineConfig, listAgentSessions, deleteAgentSessions, listTrash, restoreFromTrash, emptyTrash, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
 import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import * as pkce from './engine/oauth-pkce.mjs';
@@ -695,6 +695,11 @@ export class AppServer {
         if (!paths.every(isAgentSessionPath)) throw Object.assign(new Error('Only ORBIX conversations can be deleted'), { status: 400 });
         return { removed: await deleteAgentSessions(paths) };
       },
+
+      // Deleted conversations stay restorable for 30 days.
+      'GET /api/sessions/trash': async () => ({ items: await listTrash() }),
+      'POST /api/sessions/restore': async ({ body }) => ({ path: await restoreFromTrash(body.name) }),
+      'POST /api/sessions/trash/empty': async () => ({ removed: await emptyTrash() }),
 
       'POST /api/proc/start': async ({ body }) => {
         const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession, branch: body.branch === true });

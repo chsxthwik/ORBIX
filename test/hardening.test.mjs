@@ -136,6 +136,23 @@ describe('agent session storage', () => {
     assert.equal(await store.deleteAgentSessions([s.file]), 1);
     assert.equal(fs.existsSync(s.file), false);
   });
+  test('a deleted conversation goes to the trash and can be restored, or emptied for good', async () => {
+    const s = store.createSession({ cwd: 'C:\\trash', keyPath: 'c:\\trash', model: '', provider: '' });
+    store.appendEntry(s.file, { type: 'title', title: 'Keep me' });
+    store.closeSession(s.file);
+    await store.deleteAgentSessions([s.file]);
+    assert.equal(fs.existsSync(s.file), false, 'gone from the list');
+    let items = await store.listTrash();
+    const it = items.find((x) => x.title === 'Keep me');
+    assert.ok(it, 'in the trash with its title');
+    await assert.rejects(store.restoreFromTrash('../../evil.jsonl'), /Not a deleted conversation/);
+    assert.equal(await store.restoreFromTrash(it.name), s.file, 'back where it was');
+    assert.equal(fs.existsSync(s.file), true);
+    assert.equal((await store.listTrash()).some((x) => x.name === it.name), false);
+    await store.deleteAgentSessions([s.file]);
+    assert.ok((await store.emptyTrash()) >= 1);
+    assert.equal((await store.listTrash()).length, 0);
+  });
   test('the listing re-reads only changed files and forgets deleted ones', async () => {
     const b = new Backend({ kind: 'native' });
     const s = store.createSession({ cwd: 'C:\\list', keyPath: 'c:\\list', model: '', provider: '' });

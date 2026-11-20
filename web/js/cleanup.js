@@ -1,5 +1,5 @@
 // Deleting conversations: one at a time (sidebar) or in bulk (Manage conversations).
-// Deletion is permanent, so every path goes through an explicit confirmation.
+// Deleted conversations go to the trash for 30 days (Settings → Projects → Recently deleted); every delete still asks first.
 import { h, toast, timeAgo, baseName, clear } from './dom.js';
 import { api } from './api.js';
 import { loadSessions, closeTab, tabForSession } from './store.js';
@@ -33,7 +33,7 @@ async function deleteConversations(list) {
 
 export async function confirmDeleteConversation(s) {
   const versions = s.chain?.length > 1 ? `\n\nAll ${s.chain.length} saved versions will be deleted.` : '';
-  const ok = await confirmDialog('Delete conversation', `Delete “${s.title}”? This cannot be undone.${versions}`, { ok: 'Delete', danger: true });
+  const ok = await confirmDialog('Delete conversation', `Delete “${s.title}”? You can restore it from Settings → Projects for 30 days.${versions}`, { ok: 'Delete', danger: true });
   if (!ok) return false;
   try {
     await deleteConversations([s]);
@@ -84,7 +84,7 @@ export function openCleanup() {
   async function run() {
     const chosen = items.filter((s) => picked.has(s.id));
     if (!chosen.length) return;
-    const ok = await confirmDialog('Delete conversations', `Delete ${chosen.length} conversation${chosen.length === 1 ? '' : 's'}? This cannot be undone.`, { ok: 'Delete', danger: true });
+    const ok = await confirmDialog('Delete conversations', `Delete ${chosen.length} conversation${chosen.length === 1 ? '' : 's'}? You can restore them from Settings → Projects for 30 days.`, { ok: 'Delete', danger: true });
     if (!ok) return;
     del.disabled = true;
     try {
@@ -103,7 +103,7 @@ export function openCleanup() {
     refresh();
   } }, 'None'), h('span', { class: 'grow' }), countEl);
 
-  const m = modal({ title: 'Manage conversations', size: 'lg', body: h('div', { class: 'cl' }, quick, list, h('p', { class: 'set-note' }, 'Open conversations are skipped. Deleting cannot be undone.')), actions: [btn('Close', () => m.close()), del] });
+  const m = modal({ title: 'Manage conversations', size: 'lg', body: h('div', { class: 'cl' }, quick, list, h('p', { class: 'set-note' }, 'Open conversations are skipped. Deleted conversations can be restored from Settings → Projects for 30 days.')), actions: [btn('Close', () => m.close()), del] });
   draw();
   refresh();
   return m;

@@ -251,7 +251,9 @@ html.zen .main { border-left: 0; border-radius: 0; }
 }
 
 /* ================= toolbar over a docked side panel ================= */
-.tb-pz { display: flex; justify-content: flex-end; flex: none; width: calc(var(--panel-w) - 8px); }
+.tb-pz { display: flex; justify-content: flex-end; flex: none; width: calc(var(--panel-live, var(--panel-w)) - 8px); }
+/* The panel's tabs: below 720px only the current tab keeps its name (the others keep their icon and hint), so the row never overflows. */
+@container (max-width: 720px) { .panel .ptab:not(.cur) .lbl { display: none; } .panel .ptab:not(.cur) { padding-inline: 9px; } }
 
 /* ================= side panel: the first page ================= */
 .ph { display: flex; flex-direction: column; gap: 18px; padding: 14px 12px 20px; }
@@ -292,22 +294,24 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .modal.settings-page { width: 100%; max-width: none; height: 100%; max-height: none; border: 0; border-radius: 0; background: var(--bg); box-shadow: none; animation: none; }
 .modal.settings-page > .modal-h { display: none; }
 .modal.settings-page > .modal-b { height: 100%; border-top: 1px solid var(--line); }
-.settings-page .set-wrap { grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); height: 100%; }
-.settings-page .set-nav { gap: 6px; padding: 22px 16px 24px max(16px, calc((100vw - 1240px) / 2)); border-right: 0; background: transparent; }
-.settings-page .set-content { padding: 40px 48px 64px; }
-.settings-page .set-content > * { max-width: 760px; margin-inline: auto; }
+/* One centred column pair at any window width: the page list on the left, the page beside it. */
+.settings-page .set-wrap { grid-template-columns: 248px minmax(0, 860px); justify-content: center; column-gap: 32px; height: 100%; }
+.settings-page .set-nav { gap: 6px; min-width: 0; padding: 22px 0 24px; border-right: 0; background: transparent; }
+.settings-page .set-content { padding: 40px 24px 64px; }
+.settings-page .set-content > * { max-width: 800px; }
 .set-back { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; height: 30px; margin: 0 0 14px; padding: 0 10px 0 8px; border-radius: 7px; color: var(--fg-2); font-size: 13px; }
 .set-back:hover { background: var(--bg-hover); color: var(--fg); }
 .settings-page .set-find input[type=search] { border-color: transparent; background: transparent; }
 .settings-page .set-find input[type=search]:focus { border-color: var(--line-2); background: var(--bg-inset); }
 .settings-page .set-tab { height: 32px; border-radius: 7px; }
+.settings-page .set-tab:focus-visible { outline: 0; box-shadow: inset 0 0 0 1px var(--line-3); }
 .settings-page .set-nav-h { margin: 14px 0 2px; color: var(--fg-3); font-size: 11.5px; font-weight: 500; }
 .set-nav-gap { height: 12px; }
 .settings-page .set-title { font-size: 22px; letter-spacing: -.015em; }
 .set-actions-top { justify-content: flex-end; margin: -6px 0 12px; }
 .proj-l { display: inline-flex; align-items: center; gap: 8px; }
 .proj-l svg { color: var(--fg-3); }
-@media (max-width: 760px) { .settings-page .set-nav { padding: 12px; } .settings-page .set-content { padding: 20px 16px 40px; } }
+@media (max-width: 760px) { .settings-page .set-wrap { grid-template-columns: minmax(0, 1fr); column-gap: 0; } .settings-page .set-nav { padding: 12px; } .settings-page .set-content { padding: 20px 16px 40px; } }
 
 /* ================= sidebar, like Antigravity's ================= */
 .app .sidebar .side-new { border-color: transparent; background: var(--bg-raise); }
@@ -320,3 +324,4 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .sidebar .row-acts .ibtn { width: 24px; height: 24px; min-height: 24px; color: var(--fg-3); }
 .sidebar .row-acts .ibtn:hover { color: var(--fg); background: var(--bg-active); }
 .sidebar .foot-status.ok { flex: none; width: 30px; justify-content: center; padding: 0; }
+.set-after:not(:empty) { margin-top: 26px; }

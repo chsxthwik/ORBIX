@@ -131,6 +131,11 @@ function resizer(id, varName, key, min, max, fromRight, reset) {
 }
 resizer('#rs-side', '--side-w', 'sidebarW', SIDE_MIN, SIDE_MAX, false, SIDE_W);
 resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true, 380);
+// The toolbar puts the panel switch above the panel: it follows the panel's real width (CSS can narrow the panel).
+new ResizeObserver(([e]) => {
+  const w = Math.round(e.contentRect.width + 1); // + its left hairline
+  if (w > 1) document.documentElement.style.setProperty('--panel-live', `${w}px`);
+}).observe($('#panel'));
 
 // A session's status in the sidebar: ended, waiting for your OK, working, finished while you were away, or just open.
 const dotState = (t) => (t.dead ? 'dead' : t.dialogs?.some(isApproval) ? 'warn' : t.streaming ? 'run' : t.unread ? 'unread' : '');
