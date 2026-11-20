@@ -18,7 +18,7 @@ import * as oauth from './engine/oauth.mjs';
 import * as pkce from './engine/oauth-pkce.mjs';
 import { webSearch } from './engine/websearch.mjs';
 import { detectCheck } from './engine/verify.mjs';
-import { userInstructionsPath } from './engine/context.mjs';
+import { userInstructionsPath, projectRules } from './engine/context.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
 import { collect as collectDiagnostics } from './diagnostics.mjs';
 import * as fsapi from './fsapi.mjs';
@@ -66,6 +66,11 @@ const CSP = [
   "form-action 'none'",
   "frame-ancestors 'none'",
 ].join('; ');
+// In the Windows app the Browser tab is a <webview> that may show any web page (locked down in electron/browser.mjs);
+// a web browser gets frames from this computer only.
+// Electron's <webview> adds one style to its shadow root, ":host { display: flex; }": allowed by its hash, nothing else.
+const CSP_DESKTOP = CSP.replace('frame-src http://localhost:* http://127.0.0.1:*', 'frame-src http: https:').replace("style-src 'self'", "style-src 'self' 'sha256-XNfYdUW7S7AWSxlvq47SGsGIxvvzKwvUGdsFQQ/zXf4='");
+const cspFor = (req) => (/\bElectron\//.test(req?.headers['user-agent'] || '') ? CSP_DESKTOP : CSP);
 
 /** On every response: no sniffing, no framing, no referrer, and no use of our responses by other origins. */
 const SECURITY_HEADERS = {
@@ -102,7 +107,7 @@ function shapeResponse(type, res) {
 const BOOT = Date.now().toString(36); // part of every static file's ETag
 
 /**
- * "Windows 11 Pro (build 26100)" for Settings → About; empty when the system will not say. Windows 11 still calls
+ * "Windows 11 Pro (build 26100)" for Settings → Application; empty when the system will not say. Windows 11 still calls
  * itself Windows 10 in the registry name os.version() reads, so the build number decides (22000 and up is 11).
  */
 export function osName(version = os.version(), release = os.release()) {
@@ -455,7 +460,7 @@ export class AppServer {
         'cache-control': 'no-cache',
         etag,
         ...SECURITY_HEADERS,
-        'content-security-policy': CSP,
+        'content-security-policy': cspFor(req),
       };
       if (req?.headers['if-none-match'] === etag) {
         res.writeHead(304, headers);
@@ -580,6 +585,7 @@ export class AppServer {
       'POST /api/engine/settings': async ({ body }) => {
         if (body.approvals !== undefined) this.engineCfg.setApprovals(body.approvals);
         if (body.trusted !== undefined) this.engineCfg.setTrusted(body.trusted);
+        if (body.network !== undefined) this.engineCfg.setNetwork(body.network || {});
         if (body.verify !== undefined || body.review !== undefined) this.engineCfg.setChecks({ verify: body.verify, review: body.review });
         return { engine: this.engineCfg.publicView() };
       },
@@ -726,6 +732,8 @@ export class AppServer {
       'POST /api/sessions/restore': async ({ body }) => ({ path: await restoreFromTrash(body.name) }),
       'POST /api/sessions/trash/empty': async () => ({ removed: await emptyTrash() }),
 
+      // A project's instruction and rule files, for its page in Settings.
+      'GET /api/project/rules': async ({ q }) => projectRules(this.backend, wsPath(q)),
       'GET /api/devservers': async () => ({ servers: await findDevServers({ skip: [this.port] }) }),
 
       'GET /api/automations': async () => ({ items: this.automations.view() }),
@@ -856,7 +864,7 @@ export class AppServer {
         return {};
       },
 
-      // Settings → About: the data folder in Explorer. Takes no path, so it can open nothing else.
+      // Settings → Application: the data folder in Explorer. Takes no path, so it can open nothing else.
       'POST /api/reveal-data': async () => {
         await runProc('explorer.exe', [DATA_DIR], { timeout: 5000 }).catch(() => {}); // explorer.exe exits 1 even when it opened the folder
         return {};

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startUpdates, installOnQuit } from './updater.mjs';
+import { setupBrowser } from './browser.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -64,6 +65,8 @@ function createWindow(url) {
       sandbox: true,
       nodeIntegration: false,
       spellcheck: true,
+      // The side panel's Browser tab (see browser.mjs: each <webview> is locked down when it attaches).
+      webviewTag: true,
     },
   });
   win.once('ready-to-show', () => {
@@ -152,6 +155,7 @@ app.on('before-quit', (e) => {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   startUpdates({ restart: () => quit() }); // registers its IPC handlers at once; the updater itself loads after
+  setupBrowser(() => win);
   // Imported only now, so ORBIX_DATA above is set before the data folder is chosen.
   const { startOrbix } = await import('../src/app.mjs');
   orbix = await startOrbix({ onQuit: () => quit() });

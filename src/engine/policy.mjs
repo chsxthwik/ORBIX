@@ -67,3 +67,55 @@ export function destructiveReason(command, depth = 0) {
 }
 
 export const isDestructive = (command) => !!destructiveReason(command);
+
+// ---- Network access rules (Settings → General → Network access rules) ----
+// Sites the agent may read with web_fetch. A rule is a site ("example.com", which also covers its subdomains), only
+// the subdomains ("*.example.com"), a site and path ("example.com/docs"), or "*" for every site. Denied sites are
+// never fetched. When the allowed list has rules, only those sites are fetched without asking and every other site
+// asks first; when it is empty, every site that is not denied is fetched as before. A denied rule wins.
+
+/** A tidy rule list: lower-case sites, no scheme, no spaces, no duplicates, at most 200. */
+export function cleanSiteRules(list) {
+  const out = [];
+  for (const x of Array.isArray(list) ? list : []) {
+    let r = String(x ?? '').trim().replace(/^[a-z][\w+.-]*:\/\//i, '');
+    if (!r || /\s/.test(r) || r.length > 200) continue;
+    const slash = r.indexOf('/');
+    const host = (slash < 0 ? r : r.slice(0, slash)).toLowerCase().replace(/\.$/, '');
+    const rest = slash < 0 ? '' : r.slice(slash).replace(/\/+$/, '');
+    if (host !== '*' && !/^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/.test(host)) continue;
+    r = host + rest;
+    if (!out.includes(r)) out.push(r);
+    if (out.length >= 200) break;
+  }
+  return out;
+}
+
+/** Does one rule match this URL? */
+function ruleMatches(rule, u) {
+  if (rule === '*') return true;
+  const slash = rule.indexOf('/');
+  const hostRule = slash < 0 ? rule : rule.slice(0, slash);
+  const pathRule = slash < 0 ? '' : rule.slice(slash);
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const [hr, port] = hostRule.split(':');
+  if (port && String(u.port || (u.protocol === 'https:' ? 443 : 80)) !== port) return false;
+  const okHost = hr.startsWith('*.') ? host.endsWith(hr.slice(1)) : host === hr || host.endsWith(`.${hr}`);
+  if (!okHost) return false;
+  return !pathRule || u.pathname === pathRule || u.pathname.startsWith(pathRule.endsWith('/') ? pathRule : `${pathRule}/`);
+}
+
+/** 'deny' (never fetch), 'allow' (fetch without asking), 'ask' (allowed list in use, not on it) or 'any' (no rule). */
+export function siteVerdict(url, rules) {
+  let u;
+  try {
+    u = url instanceof URL ? url : new URL(String(url));
+  } catch {
+    return 'any';
+  }
+  const deny = rules?.deny || [];
+  const allow = rules?.allow || [];
+  if (deny.some((r) => ruleMatches(r, u))) return 'deny';
+  if (allow.some((r) => ruleMatches(r, u))) return 'allow';
+  return allow.length ? 'ask' : 'any';
+}

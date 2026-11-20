@@ -4,7 +4,7 @@ import path from 'node:path';
 import { clip } from '../util.mjs';
 import { invalidArgsText } from './tools.mjs';
 import { isTrustedCommand, trustableCommand } from './store.mjs';
-import { destructiveReason } from './policy.mjs';
+import { destructiveReason, siteVerdict } from './policy.mjs';
 
 // File tools whose path is checked against the project folder before they run.
 const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
@@ -42,6 +42,13 @@ export class ToolRuns {
     // A destructive command asks every time, in every mode: Turbo, "allow for this session", a trusted command and a
     // run's approved scope never cover it.
     if (call.name === 'bash' && destructiveReason(args?.command)) return true;
+    // web_fetch follows your network rules: a site on the allowed list runs, and with an allowed list in use any
+    // other site asks (denied sites never get here, see _runTool). Turbo does not skip this: it is a rule you wrote.
+    if (call.name === 'web_fetch') {
+      const v = siteVerdict(args?.url, this.config.data.network);
+      if (v === 'ask') return !this.allowAlways.has('web_fetch:site');
+      if (v === 'allow') return false;
+    }
     if (!this._needsApproval(call.name)) return false;
     if (mode === 'auto' || this.allowAlways.has(call.name)) return false;
     if (mode === 'edits' && (call.name === 'edit' || call.name === 'write')) return false;
@@ -80,6 +87,7 @@ export class ToolRuns {
     const a = call.arguments || {};
     if (this._outside(call, a)) return `${{ read: 'Read a file outside the project?', grep: 'Search outside the project?', glob: 'List files outside the project?', write: 'Write a file outside the project?', edit: 'Edit a file outside the project?' }[call.name]}  ${clip(String(a.path), 200)}`;
     if (this.mcp.has(call.name)) return `Allow MCP tool ${this.mcp.describe(call.name)}?  ${clip(JSON.stringify(a), 200)}`;
+    if (call.name === 'web_fetch') return `Read this page? The site is not on your allowed list.  ${clip(String(a.url ?? ''), 200)}`;
     const detail = call.name === 'bash' ? `${a.shell === 'powershell' ? '[PowerShell] ' : ''}${a.command ?? ''}` : a.path;
     const risk = call.name === 'bash' ? destructiveReason(a.command) : '';
     if (risk) return `Run this command? It ${risk}.  ${clip(String(detail ?? ''), 200)}`;
@@ -148,7 +156,7 @@ export class ToolRuns {
     const canTrust = !risky && call.name === 'bash' && args.shell !== 'powershell' && trustableCommand(args.command);
     const ans = await this._askUser(title, risky ? ['Allow once', 'Deny'] : canTrust ? ['Allow once', 'Allow for this session', 'Always allow this command', 'Deny'] : ['Allow once', 'Allow for this session', 'Deny']);
     if (!ans || ans === 'Deny') return { text: 'The user denied this action. Do not retry it; ask what they want instead.', isError: true };
-    if (ans === 'Allow for this session') this.allowAlways.add(this._outside(call, args) ? `${call.name}:outside` : call.name);
+    if (ans === 'Allow for this session') this.allowAlways.add(this._outside(call, args) ? `${call.name}:outside` : call.name === 'web_fetch' ? 'web_fetch:site' : call.name);
     else if (ans === 'Always allow this command' && canTrust) this.config.addTrusted(args.command);
     return undefined;
   }
@@ -182,6 +190,7 @@ export class ToolRuns {
       result = await this._hooked(call.name, args, signal, {
         // Asked after the PreToolUse hooks, so a hook can stop a call before you see it.
         gate: async () => {
+          if (call.name === 'web_fetch' && siteVerdict(args.url, this.config.data.network) === 'deny') return { text: 'Blocked by the user\'s network rules (Settings → General → Network access rules). Do not retry this site.', isError: true, details: { url: String(args.url ?? ''), blocked: true } };
           if (!this._mustAsk(call, args)) return undefined;
           const denied = await this._approve(call, args);
           t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you
@@ -192,7 +201,7 @@ export class ToolRuns {
           if (call.name === 'task') r = await this._runTask(call, conn);
           else if (call.name === 'artifact') r = await this._saveArtifact(args);
           else if (this.mcp.has(call.name)) r = await this.mcp.call(call.name, args, signal);
-          else r = await this.tools.run(call.name, args, { onUpdate, allowHost: (h) => this._allowHost(h), vision: this._vision(), search: () => this.config.searchConfig?.() });
+          else r = await this.tools.run(call.name, args, { onUpdate, allowHost: (h) => this._allowHost(h), vision: this._vision(), search: () => this.config.searchConfig?.(), denied: (u) => siteVerdict(u, this.config.data.network) === 'deny' });
           return r.images?.length && !this._vision() ? { ...r, images: undefined } : r;
         },
       });

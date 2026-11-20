@@ -33,7 +33,7 @@ const MODES = [
   ['auto', 'Turbo', 'bolt', 'Edits and commands run without asking, also outside the project. Destructive commands (deleting folders, pushing, publishing) still ask.'],
 ];
 
-/** The permission chip: one setting for every conversation (Settings → Permissions shows the same choice). */
+/** The permission chip: one setting for every conversation (Settings → General → Permission preset is the same choice). */
 export function permissionChip() {
   const btn = h('button', { class: 'cbtn c-perm', type: 'button', 'aria-haspopup': 'menu' });
   const set = async (mode) => {

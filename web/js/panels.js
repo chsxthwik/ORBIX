@@ -13,6 +13,7 @@ import { workingRuns } from './runs.js';
 import { renderMarkdown } from './markdown.js';
 import { asciiBar } from './ascii.js';
 import { openLink } from './engine.js';
+import { desktopBrowser, canShowInside, addressToUrl, rememberVisit } from './browser.js';
 
 const P = { tab: 'home', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
@@ -35,6 +36,17 @@ export function mountPanel(el) {
   body = h('div', { class: 'pbody' });
   root.append(tabsEl, body);
   on('active', () => resetFor(activeTab()));
+  // A link from a reply, with Settings → Browser → Open links in: Built-in browser.
+  on('browse', (url) => {
+    const t = activeTab();
+    if (!t) return;
+    const st = (t.browser ||= { url: '', view: null });
+    if (st.view && window.orbixDesktop?.browser) st.view.loadURL(url).catch(() => {});
+    else st.view = null;
+    st.url = url;
+    if (P.tab === 'browser' && document.querySelector('#panel')?.getClientRects().length) draw();
+    else showTab('browser');
+  });
   on('tab:panel', (tab, kind) => {
     if (tab !== activeTab()) return;
     if (kind === 'git') {
@@ -95,6 +107,13 @@ export function panelInfo(t) {
   const nTodo = (t?.todos || []).flatMap((p) => p.tasks || []).filter((x) => x.status !== 'completed' && x.status !== 'abandoned').length;
   const nAg = [...(t?.subagents?.values() || [])].filter((a) => /running|started|pending/.test(a.progress?.status || a.status || '')).length;
   return { tabs: TABS, badge: { changes: nChanges, todos: nTodo, agents: nAg, review: reviewCount(t) } };
+}
+
+/** The next (1) or previous (-1) side panel tab; opens the panel when it is closed. */
+export function stepPanelTab(dir) {
+  syncTabs(activeTab());
+  const i = TABS.findIndex(([k]) => k === P.tab);
+  showTab(TABS[(i + dir + TABS.length) % TABS.length][0]);
 }
 
 function drawTabs() {
@@ -203,56 +222,117 @@ function drawAsk(t) {
   setTimeout(() => box.focus({ preventScroll: true }), 0);
 }
 
-/** Is this an http page on this computer? Only those show inside ORBIX (see frame-src in server.mjs). */
-const localPage = (u) => {
-  try {
-    const x = new URL(u);
-    return x.protocol === 'http:' && (x.hostname === 'localhost' || x.hostname === '127.0.0.1');
-  } catch {
-    return false;
-  }
-};
-
 /**
- * Browser: preview the web app you are building, in the panel. It lists the dev servers running on this computer
- * (Vite, Next, Django…) and shows one in a sandboxed frame. Other sites, and searches, open in your own browser.
+ * Browser: a web page next to the conversation. It starts on the web apps running on this computer (Vite, Next,
+ * Django…). In the Windows app it is a real browser view with its own session (any site, back and forward, downloads);
+ * in a web browser it can show only this computer's pages, in a sandboxed frame. What it cannot show opens in your
+ * own browser. Each conversation keeps its own page.
  */
 function drawBrowser(t) {
-  const st = (t.browser ||= { url: '' });
-  const input = h('input', { class: 'br-url', type: 'text', value: st.url, placeholder: 'Search or enter a URL', 'aria-label': 'Address', spellcheck: false, autocomplete: 'off' });
+  const st = (t.browser ||= { url: '', view: null });
+  const desk = desktopBrowser();
+  const sugg = h('datalist', { id: `br-hist-${t.id}` }, (S.ui.browserHistory || []).slice(0, 30).map((u) => h('option', { value: u })));
+  const input = h('input', { class: 'br-url', type: 'text', value: st.url, placeholder: 'Search or enter a URL', 'aria-label': 'Address', spellcheck: false, autocomplete: 'off', list: sugg.id });
   const go = (raw) => {
-    let v = String(raw || '').trim();
+    const v = addressToUrl(raw);
     if (!v) return;
-    if (/^\d{2,5}$/.test(v)) v = `http://localhost:${v}/`;
-    else if (/^(localhost|127\.0\.0\.1)([:/]|$)/i.test(v)) v = `http://${v}`;
-    else if (!/^https?:\/\//i.test(v)) v = /^[^\s/]+\.[a-z]{2,}(\/\S*)?$/i.test(v) ? `https://${v}` : `https://duckduckgo.com/?q=${encodeURIComponent(v)}`;
-    if (localPage(v)) {
-      st.url = v;
-      return draw();
+    if (!canShowInside(v)) {
+      openLink(v);
+      return toast('Opened in your browser. In a web browser, ORBIX shows only pages on this computer.', 'ok', 2600);
     }
-    openLink(v);
-    toast('Opened in your browser. The panel shows only apps running on this computer.', 'ok', 2600);
+    rememberVisit(v);
+    if (st.view && st.url && desk) {
+      st.url = v;
+      input.value = v;
+      return st.view.loadURL(v).catch(() => {});
+    }
+    st.url = v;
+    draw();
   };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.isComposing) (e.preventDefault(), go(input.value));
+    if (e.key === 'Escape' && input.value !== st.url) (e.preventDefault(), e.stopPropagation(), (input.value = st.url));
   });
-  const frame = st.url ? h('iframe', { class: 'br-frame', src: st.url, title: `Preview of ${st.url}`, sandbox: 'allow-scripts allow-forms allow-same-origin allow-popups allow-modals', referrerpolicy: 'no-referrer' }) : null;
-  body.append(h('div', { class: 'p-bar br-bar' },
-    st.url ? iconBtn('arrow-left', 'Back to the list of running apps', () => ((st.url = ''), draw()), 'sm') : null,
-    input,
-    st.url ? iconBtn('refresh', 'Reload', () => (frame.src = st.url), 'sm') : iconBtn('refresh', 'Look again for running apps', () => draw(), 'sm'),
-    st.url ? iconBtn('external', 'Open in your browser', () => openLink(st.url), 'sm') : null));
-  if (frame) return body.append(h('div', { class: 'br-view' }, frame));
-  const list = h('div', { class: 'p-scroll pad br-list' }, skeleton(3));
-  body.append(list);
-  api.get('/api/devservers').then(({ servers }) => {
-    if (!list.isConnected) return;
-    replace(list,
-      servers.length ? h('h4', { class: 'br-h' }, 'Running on this computer') : null,
-      servers.length ? servers.map((s) => h('button', { class: 'ph-row br-row', type: 'button', title: s.url, onclick: () => go(s.url) }, h('span', { class: 'dot ok' }), h('span', { class: 'ell grow' }, s.title || `localhost:${s.port}`), h('span', { class: 'muted num' }, `:${s.port}`)))
-        : emptyState('files', 'No web app is running on the usual ports (3000, 5173, 8000, 8080…). Start your dev server, or ask the agent to, then look again. You can also type a port or a localhost address above.'));
-  }, (e) => list.isConnected && replace(list, errorState(e.message, { retry: () => draw() })));
-  setTimeout(() => input.focus({ preventScroll: true }), 0);
+  input.addEventListener('focus', () => input.select());
+  if (!st.url) {
+    body.append(h('div', { class: 'p-bar br-bar' }, input, iconBtn('refresh', 'Look again for running apps', () => draw(), 'sm')), sugg);
+    const list = h('div', { class: 'p-scroll pad br-list' }, skeleton(3));
+    body.append(list);
+    api.get('/api/devservers').then(({ servers }) => {
+      if (!list.isConnected) return;
+      replace(list,
+        servers.length ? h('h4', { class: 'br-h' }, 'Running on this computer') : null,
+        servers.length ? servers.map((s) => h('button', { class: 'ph-row br-row', type: 'button', title: s.url, onclick: () => go(s.url) }, h('span', { class: 'dot ok' }), h('span', { class: 'ell grow' }, s.title || `localhost:${s.port}`), h('span', { class: 'muted num' }, `:${s.port}`)))
+          : emptyState('files', `No web app is running on the usual ports (3000, 5173, 8000, 8080…). Start your dev server, or ask the agent to, then look again. ${desk ? 'You can also type any address or a search above.' : 'You can also type a port or a localhost address above.'}`));
+    }, (e) => list.isConnected && replace(list, errorState(e.message, { retry: () => draw() })));
+    setTimeout(() => input.focus({ preventScroll: true }), 0);
+    return;
+  }
+  const home = iconBtn('layers', 'Running apps', () => {
+    st.url = '';
+    st.view = null;
+    draw();
+  }, 'sm');
+  const ext = iconBtn('external', 'Open in your browser', () => openLink(st.url), 'sm');
+  if (!desk) {
+    // A web browser: this computer's pages in a sandboxed frame. The frame's own history is out of reach.
+    const frame = h('iframe', { class: 'br-frame', src: st.url, title: `Preview of ${st.url}`, sandbox: 'allow-scripts allow-forms allow-same-origin allow-popups allow-modals', referrerpolicy: 'no-referrer' });
+    body.append(h('div', { class: 'p-bar br-bar' }, home, input, iconBtn('refresh', 'Reload', () => (frame.src = st.url), 'sm'), ext), sugg, h('div', { class: 'br-view' }, frame));
+    return;
+  }
+  // The Windows app: a <webview> kept per conversation, so switching tabs does not lose the page.
+  const back = iconBtn('arrow-left', 'Back', () => st.view?.canGoBack() && st.view.goBack(), 'sm');
+  const fwd = iconBtn('arrow-right', 'Forward', () => st.view?.canGoForward() && st.view.goForward(), 'sm');
+  const reload = iconBtn('refresh', 'Reload', () => (st.loading ? st.view?.stop() : st.view?.reload()), 'sm');
+  const bar = h('div', { class: 'p-bar br-bar' }, back, fwd, reload, input, home, ext);
+  const err = h('div', { class: 'br-err', hidden: true });
+  const loading = h('div', { class: 'br-load', hidden: true });
+  let wv = st.view;
+  if (!wv) {
+    wv = h('webview', { class: 'br-frame', src: st.url, partition: 'persist:orbix-browser', allowpopups: '' });
+    st.view = wv;
+  }
+  const sync = () => {
+    if (!wv.isConnected) return;
+    try {
+      back.disabled = !wv.canGoBack();
+      fwd.disabled = !wv.canGoForward();
+    } catch {
+      back.disabled = fwd.disabled = true;
+    }
+    replace(reload, icon(st.loading ? 'x' : 'refresh', 14));
+    reload.title = st.loading ? 'Stop' : 'Reload';
+    loading.hidden = !st.loading;
+  };
+  // Listeners are added once per view; they update whatever bar is drawn now (bars are redrawn, views are kept).
+  if (!wv.dataset.wired) {
+    wv.dataset.wired = '1';
+    const now = () => body.querySelector('.br-url');
+    const nav = (e) => {
+      if (e.isMainFrame === false) return;
+      st.url = e.url;
+      const box = now();
+      if (box && document.activeElement !== box) box.value = e.url;
+      rememberVisit(e.url);
+      st.sync?.();
+    };
+    wv.addEventListener('did-navigate', nav);
+    wv.addEventListener('did-navigate-in-page', nav);
+    wv.addEventListener('did-start-loading', () => ((st.loading = true), (st.error = ''), st.sync?.()));
+    wv.addEventListener('did-stop-loading', () => ((st.loading = false), st.sync?.()));
+    wv.addEventListener('did-fail-load', (e) => {
+      if (!e.isMainFrame || e.errorCode === -3) return; // -3: the load was replaced by another one
+      st.error = `${e.errorDescription || 'The page did not load'} (${e.validatedURL || st.url})`;
+      st.sync?.();
+    });
+  }
+  st.sync = () => {
+    sync();
+    err.hidden = !st.error;
+    err.textContent = st.error || '';
+  };
+  body.append(bar, sugg, loading, err, h('div', { class: 'br-view' }, wv));
+  st.sync();
 }
 
 const emptyState = (kind, text) => h('div', { class: 'empty' }, asciiArt(kind), text);

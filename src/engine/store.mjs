@@ -11,6 +11,7 @@ import { PRESETS, clientFor, LIST_TIMEOUT } from './providers.mjs';
 import { setProviderOrg } from './openai.mjs';
 import { refreshSignIn } from './oauth-pkce.mjs';
 import { VERIFY_MODES } from './verify.mjs';
+import { cleanSiteRules } from './policy.mjs';
 
 /** How long a provider's model list is reused before it is asked for again. */
 const LIST_TTL = 60 * 1000;
@@ -52,6 +53,8 @@ export class EngineConfig {
       approvals: APPROVAL_MODES.includes(d.approvals) ? d.approvals : 'ask',
       // Commands that run without asking: exact text, or a prefix ending in " *" ("npm run *").
       trusted: cleanTrusted(d.trusted),
+      // Sites web_fetch may read (Settings → General → Network access rules): { allow, deny }, see policy.mjs.
+      network: { allow: cleanSiteRules(d.network?.allow), deny: cleanSiteRules(d.network?.deny) },
       providers: d.providers && typeof d.providers === 'object' ? d.providers : {},
       defaultModel: d.defaultModel || '',
       // Model roles (defaults for every session): "provider/model" or '' (= the session's current model).
@@ -215,6 +218,11 @@ export class EngineConfig {
     this.data.trusted = cleanTrusted(list);
     this.save();
   }
+  setNetwork({ allow, deny } = {}) {
+    const cur = this.data.network || { allow: [], deny: [] };
+    this.data.network = { allow: allow !== undefined ? cleanSiteRules(allow) : cur.allow, deny: deny !== undefined ? cleanSiteRules(deny) : cur.deny };
+    this.save();
+  }
   addTrusted(command) {
     this.setTrusted([...(this.data.trusted || []), command]);
   }
@@ -291,6 +299,7 @@ export class EngineConfig {
     return {
       approvals: this.data.approvals,
       trusted: this.data.trusted || [],
+      network: this.data.network || { allow: [], deny: [] },
       verify: this.data.verify,
       review: this.data.review,
       defaultModel: this.data.defaultModel,
