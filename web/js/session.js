@@ -23,19 +23,20 @@ import { projectTasks, sessionTasks } from './workspace.js';
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
 /** Conversation actions (the toolbar's ⋮ button and the conversation crumb). */
-export function sessionMenu(t, anchor, { rename, close, find, outline, inspect }) {
+export function sessionMenu(t, anchor, { rename, close, find, outline, inspect, pin }) {
   const cmd = (c) => t.commands.some((x) => x.name === c);
   popMenu(anchor, [
     { header: t.name },
-    { label: 'Find in conversation', hint: 'Ctrl+F', run: find },
-    { label: 'Your messages…', hint: 'Ctrl+Shift+O', run: outline },
-    { label: 'Run inspector', hint: 'Ctrl+Shift+R', run: inspect },
+    { icon: 'pencil', label: 'Rename…', run: rename },
+    pin ? { icon: 'bookmark', label: pin.on ? 'Unpin' : 'Pin', run: pin.run } : null,
     '-',
-    { label: 'Rename…', run: rename },
-    ...(cmd('compact') ? [{ label: 'Compact context', hint: '/compact', run: () => sendPrompt(t, '/compact').catch(() => {}) }] : []),
+    { icon: 'search', label: 'Find in conversation', hint: 'Ctrl+F', run: find },
+    { icon: 'list', label: 'Your messages…', hint: 'Ctrl+Shift+O', run: outline },
+    { icon: 'activity', label: 'Run inspector', hint: 'Ctrl+Shift+R', run: inspect },
+    ...(cmd('compact') ? [{ icon: 'layers', label: 'Compact context', hint: '/compact', run: () => sendPrompt(t, '/compact').catch(() => {}) }] : []),
     '-',
-    { label: 'Copy as Markdown', run: () => copyConversation(t) },
-    { label: 'Export as HTML', run: async () => {
+    { icon: 'copy', label: 'Copy as Markdown', run: () => copyConversation(t) },
+    { icon: 'external', label: 'Export as HTML', run: async () => {
       try {
         const r = await rpc(t.id, { type: 'export_html' }, 120000);
         const p = r.data?.path || r.data?.outputPath;
@@ -46,8 +47,8 @@ export function sessionMenu(t, anchor, { rename, close, find, outline, inspect }
       }
     } },
     '-',
-    { label: 'Close conversation', danger: true, run: close },
-  ], { align: 'end', minWidth: 240 });
+    { icon: 'x', label: 'Close conversation', danger: true, run: close },
+  ].filter(Boolean), { align: 'end', minWidth: 240 });
 }
 
 export async function copyConversation(t) {
@@ -242,6 +243,20 @@ const clock = (ts) => {
   if (ago === 1) return `Yesterday ${time}`;
   return `${d.toLocaleDateString([], { month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })}, ${time}`;
 };
+
+/** "now", "5m ago", "2h ago", then the date: when a message was sent, kept fresh by the minute (the exact time is the hint). */
+const ago = (ts) => {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  return s < 45 ? 'now' : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : clock(ts);
+};
+const msgTime = (ts) => h('time', { class: 'msg-time', dataset: { ts: String(ts) }, datetime: new Date(ts).toISOString(), title: new Date(ts).toLocaleString() }, ago(ts));
+setInterval(() => {
+  if (document.hidden) return;
+  for (const el of document.querySelectorAll('#session time.msg-time[data-ts]')) {
+    const text = ago(Number(el.dataset.ts));
+    if (el.textContent !== text) el.textContent = text;
+  }
+}, 30000);
 
 export class TabView {
   constructor(tab) {
@@ -798,7 +813,7 @@ export class TabView {
       }
       branch.disabled = false;
     });
-    const when = m.timestamp ? h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)) : null;
+    const when = m.timestamp ? msgTime(m.timestamp) : null;
     return h('div', { class: 'msg user' }, bubble, h('div', { class: 'msg-acts' }, when, copy, this.tab.dead ? null : edit, branch));
   }
 
@@ -830,7 +845,7 @@ export class TabView {
     // one keeps it for Retry.
     const ended = m.stopReason === 'error' || m.stopReason === 'aborted';
     if (!text && !ended) return wrap;
-    if (m.timestamp) acts.prepend(h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)));
+    if (m.timestamp) acts.prepend(msgTime(m.timestamp));
     // Which model wrote it, at the end of the row (the reply itself carries no name plate).
     const model = typeof m.model === 'string' ? m.model : '';
     if (model) acts.append(h('span', { class: 'msg-model', title: m.provider ? `${m.provider}/${model}` : model }, model));

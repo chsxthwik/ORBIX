@@ -9,14 +9,15 @@ import { ansiFragment } from './ansi.js';
 import { runInspector } from './run-inspector.js';
 import { coalesce } from './coalesce.mjs';
 import { drawReview, loadReview, reviewCount } from './review.js';
+import { workingRuns } from './runs.js';
 
-const P = { tab: 'files', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
+const P = { tab: 'home', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
 let body;
 let tabsEl;
 let inspector = null;
 
-const ALL_TABS = [['run', 'Run', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']];
+const ALL_TABS = [['home', 'Overview', 'overview'], ['run', 'Run', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']];
 // Review is there for a session on its own branch only.
 let TABS = ALL_TABS.filter(([k]) => k !== 'review');
 function syncTabs(t) {
@@ -38,11 +39,13 @@ export function mountPanel(el) {
       P.tree.clear(); // the agent may have created or removed files
       if (P.tab === 'files' && !P.file) draw();
     }
-    if ((kind === 'todos' && P.tab === 'todos') || (kind === 'agents' && P.tab === 'agents') || (kind === 'review' && P.tab === 'review')) draw();
+    if ((kind === 'todos' && P.tab === 'todos') || (kind === 'agents' && P.tab === 'agents') || (kind === 'review' && P.tab === 'review') || (P.tab === 'home' && kind !== 'git')) draw();
     if ((kind === 'git' || kind === 'review') && tab.worktree && P.tab === 'review') loadReview(tab, reviewRedraw);
     drawTabs();
   });
   on('tab:state', (tab) => tab === activeTab() && drawTabs());
+  on('runs', () => P.tab === 'home' && activeTab() && draw());
+  on('panel:badges', () => P.tab === 'home' && activeTab() && body.querySelector('.ph') && homeCounts());
   const refreshRun = coalesce((tab) => { if (!document.hidden && tab === activeTab() && P.tab === 'run') inspector?.update(tab); });
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&P.tab==='run'&&activeTab())inspector?.update(activeTab());});
   for (const event of ['tab:tool','tab:state','tab:status','tab:messages']) on(event, refreshRun);
@@ -110,7 +113,44 @@ function draw() {
   inspector = null;
   if (!t) return;
   if (P.tab === 'run') { inspector = runInspector(t, () => showTab('changes')); body.append(inspector.el); return; }
-  ({ files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole, review: (x) => drawReview(x, body, { redraw: reviewRedraw, viewFile }) })[P.tab](t);
+  ({ home: drawHome, files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole, review: (x) => drawReview(x, body, { redraw: reviewRedraw, viewFile }) })[P.tab](t);
+}
+
+/**
+ * The panel's first page: find a file, the panel's tools with their counts, the helper agents of this conversation
+ * and the runs working now. Everything else in the panel starts from here.
+ */
+/** Refresh the counts on the home page in place (git status arrives after it is drawn). */
+function homeCounts() {
+  const { badge } = panelInfo(activeTab());
+  for (const el of body.querySelectorAll('.ph-it[data-k]')) {
+    const n = badge[el.dataset.k] || 0;
+    let c = el.querySelector('.ph-n');
+    if (!n) c?.remove();
+    else if (c) c.textContent = n;
+    else el.append(h('span', { class: 'ph-n num' }, n));
+  }
+}
+
+function drawHome(t) {
+  const { tabs, badge } = panelInfo(t);
+  const find = h('button', { class: 'ph-find', type: 'button', onclick: () => emit('search', 'files') }, icon('search', 14), h('span', { class: 'grow' }, `Find a file in ${baseName(t.workspace) || 'the project'}`), h('kbd', null, 'Ctrl+K'));
+  const ITEMS = { review: ['Review', 'check'], changes: ['Changes', 'branch'], files: ['Open file', 'file'], console: ['Terminal', 'terminal'], todos: ['Plan', 'list'], run: ['Inspect', 'activity'] };
+  const have = new Set(tabs.map(([k]) => k));
+  const items = ['review', 'changes', 'files', 'console', 'todos', 'run'].filter((k) => have.has(k)).map((k) => h('button', { class: 'ph-it', type: 'button', dataset: { k }, onclick: () => showTab(k) }, icon(ITEMS[k][1], 15), h('span', { class: 'grow' }, ITEMS[k][0]), badge[k] ? h('span', { class: 'ph-n num' }, badge[k]) : null));
+  const helpers = [...(t.subagents?.values() || [])];
+  const runs = workingRuns();
+  const section = (title, n, rows, more) => h('section', { class: 'ph-sec' }, h('h4', null, title, h('span', { class: 'ph-n num' }, n)), rows, more || null);
+  body.append(h('div', { class: 'p-scroll ph' },
+    find,
+    h('nav', { class: 'ph-list', 'aria-label': 'Panel' }, items),
+    helpers.length ? section('Subagents', helpers.length, helpers.slice(0, 5).map((a) => {
+      const p = a.progress || a;
+      const st = p.status || a.status || 'pending';
+      const live = /running|started|pending/.test(st);
+      return h('button', { class: 'ph-row', type: 'button', onclick: () => showTab('agents'), title: (p.assignment || p.task || '').toString().slice(0, 300) }, live ? h('span', { class: 'dot run' }) : icon(/fail|error/.test(st) ? 'x' : 'check', 13), h('span', { class: 'ell' }, (p.assignment || p.task || p.id || 'Helper').toString().split('\n')[0]));
+    }), helpers.length > 5 ? h('button', { class: 'ph-more', type: 'button', onclick: () => showTab('agents') }, 'See all') : null) : null,
+    runs.length ? section('Background runs', runs.length, runs.slice(0, 5).map((r) => h('button', { class: 'ph-row', type: 'button', onclick: () => emit('open-run', r.id) }, h('span', { class: 'dot run' }), h('span', { class: 'ell' }, r.title))), runs.length > 5 ? h('button', { class: 'ph-more', type: 'button', onclick: () => emit('open-run', null) }, 'See all') : null) : null));
 }
 
 const emptyState = (kind, text) => h('div', { class: 'empty' }, asciiArt(kind), text);

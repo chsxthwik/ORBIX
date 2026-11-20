@@ -161,10 +161,12 @@ export function drawToolbar(el, { force = false } = {}) {
   const t = activeTab();
   const hub = !t && H.hubView();
   const g = t && gitState(t.workspace);
-  const sig = JSON.stringify([S.active, hub?.view, hub?.id, H.sideShown(), H.panelShown(), overviewWanted(), canGo(-1), canGo(1), t && [t.name, t.workspace, stateOf(t), t.worktree?.branch, g?.branch, g?.files?.length]]);
+  const sig = JSON.stringify([S.active, hub?.view, hub?.id, H.sideShown(), H.panelShown(), !!document.getElementById('app')?.classList.contains('overlay-panel'), overviewWanted(), canGo(-1), canGo(1), t && [t.name, t.workspace, stateOf(t), t.worktree?.branch, g?.branch, g?.files?.length]]);
   if (!force && sig === topSig && el.childElementCount) return;
   topSig = sig;
   el.classList.toggle('busy', !!t?.streaming && !t.dead);
+  const docked = H.panelShown() && !document.getElementById('app')?.classList.contains('overlay-panel');
+  const panelBtn = () => iconBtn('panel-right', 'Side panel (Ctrl+J)', H.togglePanel, 'tb-panel' + (H.panelShown() ? ' on' : ''));
   const back = iconBtn('arrow-left', 'Back (Alt+←)', () => navGo(-1), 'tb-nav');
   const fwd = iconBtn('arrow-right', 'Forward (Alt+→)', () => navGo(1), 'tb-nav');
   back.disabled = !canGo(-1);
@@ -179,8 +181,10 @@ export function drawToolbar(el, { force = false } = {}) {
     h('span', { class: 'grow tb-drag' }),
     t ? h('div', { class: 'tb-end' },
       iconBtn('more-v', 'Conversation actions', (e) => H.sessionMenu(t, e.currentTarget), 'tb-more'),
-      iconBtn('overview', 'Overview', toggleOverview, 'tb-ov' + (overviewShown() ? ' on' : '')),
-      iconBtn('panel-right', 'Side panel (Ctrl+J)', H.togglePanel, 'tb-panel' + (H.panelShown() ? ' on' : ''))) : null,
+      iconBtn('overview', 'Overview (Ctrl+Alt+O)', toggleOverview, 'tb-ov' + (overviewShown() ? ' on' : '')),
+      docked ? null : panelBtn()) : null,
+    // With the side panel docked, its switch sits above it, and the conversation's own buttons end where the conversation does.
+    t && docked ? h('div', { class: 'tb-pz' }, panelBtn()) : null,
   ].filter(Boolean));
 }
 

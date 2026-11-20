@@ -88,8 +88,10 @@ function toggleSidebar() {
 }
 function togglePanel() {
   if (!activeTab()) return;
-  if (narrowPanel.matches) (overlay.panel = !overlay.panel), applyPrefs(), drawTop();
-  else savePrefs({ rightPanel: S.ui.rightPanel === false });
+  // Opening the panel from the toolbar (or Ctrl+J) lands on its first page.
+  if (!panelShown()) return showTab('home');
+  if (narrowPanel.matches) (overlay.panel = false), applyPrefs(), drawTop();
+  else savePrefs({ rightPanel: false });
 }
 on('panel:open', () => {
   if (narrowPanel.matches && !overlay.panel) (overlay.panel = true), applyPrefs(), drawTop();
@@ -529,13 +531,18 @@ Object.assign(shell, {
   manage: openCleanup, search: () => openSearch(), toggleSidebar, togglePanel, sideShown, panelShown, toggleTheme, textSize, cycle,
   zen: () => toggleZen(), wide: toggleWide, hubView, workingCount, open: (id) => setActive(id), close: (t) => closeWithCheck(t), rename: (t) => renameTab(t),
   projectMenu: projectCrumbMenu,
-  sessionMenu: (t, anchor) => sessionMenu(t, anchor, { rename: () => renameTab(t), close: () => closeWithCheck(t), find: () => viewOf(t)?.bar.openFind(), outline: () => viewOf(t)?.bar.openOutline(), inspect: () => showTab('run') }),
+  sessionMenu: (t, anchor) => {
+    const s = S.sessions.find((x) => tabForSession(x) === t);
+    sessionMenu(t, anchor, { rename: () => renameTab(t), close: () => closeWithCheck(t), find: () => viewOf(t)?.bar.openFind(), outline: () => viewOf(t)?.bar.openOutline(), inspect: () => showTab('run'), pin: s ? { on: pinned().includes(s.path), run: () => togglePin(s) } : null });
+  },
 });
 on('chrome', () => {
   drawTop();
   drawMenubar(menuEl);
 });
 on('git', () => drawTop());
+on('search', (scope) => openSearch(scope));
+on('open-run', (id) => goHub(id ? 'run' : 'runs', id || undefined));
 on('panel:badges', () => syncOverview(mainEl));
 
 const homeHandlers = {

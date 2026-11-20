@@ -249,3 +249,38 @@ html.zen .main { border-left: 0; border-radius: 0; }
   .composer.busy::before, .v-in, .sidebar .dot.run::after, .sidebar .dot.warn { animation: none; }
   .composer.busy::before { background: color-mix(in srgb, var(--live) 45%, transparent); }
 }
+
+/* ================= toolbar over a docked side panel ================= */
+.tb-pz { display: flex; justify-content: flex-end; flex: none; width: calc(var(--panel-w) - 8px); }
+
+/* ================= side panel: the first page ================= */
+.ph { display: flex; flex-direction: column; gap: 18px; padding: 14px 12px 20px; }
+.ph-find { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-inset); color: var(--fg-3); font-size: 13px; text-align: left; transition: border-color var(--t1) var(--ease), color var(--t1) var(--ease); }
+.ph-find:hover { border-color: var(--line-2); color: var(--fg-2); }
+.ph-find kbd { opacity: .7; }
+.ph-list, .ph-sec { display: flex; flex-direction: column; gap: 1px; }
+.ph-it, .ph-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 30px; padding: 0 8px; border-radius: 7px; color: var(--fg-2); font-size: 13px; text-align: left; transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
+.ph-it svg { flex: none; color: var(--fg-3); }
+.ph-it:hover, .ph-row:hover { background: var(--bg-hover); color: var(--fg); }
+.ph-it:hover svg { color: var(--fg-2); }
+.ph-row { gap: 9px; color: var(--fg-2); }
+.ph-row > svg { flex: none; color: var(--fg-3); }
+.ph-row > .dot { margin: 0 2px; }
+.ph-sec h4 { display: flex; align-items: center; gap: 7px; height: 26px; margin: 0; padding: 0 8px; color: var(--fg-3); font: 500 12px/1 var(--font); }
+.ph-n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 5px; background: var(--bg-active); color: var(--fg-2); font: 500 11px/18px var(--font); text-align: center; }
+.ph-more { align-self: flex-start; height: 26px; margin-left: 8px; color: var(--fg-3); font-size: 12px; }
+.ph-more:hover { color: var(--fg); }
+
+/* ================= menus with icons ================= */
+.menu-ic { flex: none; color: var(--fg-3); }
+.menu-it:hover .menu-ic, .menu-it:focus-visible .menu-ic { color: var(--fg-2); }
+.menu-it.danger .menu-ic { color: currentColor; }
+
+/* ================= replies: detail ================= */
+:root { --code-ink: #E5C07B; }
+:root[data-mode=light] { --code-ink: #8A5A00; }
+.md code.ic:not(.pathref) { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--code-ink); }
+/* "Worked for 14s ›" stays one quiet line; what was done shows when you point at it or open it. */
+.work-h .work-facts { opacity: 0; transition: opacity var(--t2) var(--ease); }
+.work-h:hover .work-facts, .work-h:focus-visible .work-facts, details.work[open] > .work-h .work-facts { opacity: .85; }
+.msg-time { font-variant-numeric: tabular-nums; }

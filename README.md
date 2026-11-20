@@ -81,7 +81,7 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 | **Menu row and toolbar** | ORBIX, Workspace, View and Window menus. Back and forward (<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) across conversations, Runs and Review; search everything (<kbd>Ctrl</kbd>+<kbd>K</kbd>); where you are, with the conversation's state, running time and branch. |
 | **Sidebar** | New conversation, Runs, Review and Customizations; what is running; pinned conversations; your projects. Rest the pointer on a conversation for a preview card. |
 | **Overview card** | Beside the conversation (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd>): Changes, Files, Terminal, Plan and the run inspector, plus helper agents and background runs when there are any. |
-| **Side panel** | Files, Changes (stage, unstage, discard, commit), Plan, Agents, Console and the run inspector, plus Review for a conversation on its own branch (<kbd>Ctrl</kbd>+<kbd>J</kbd>). |
+| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Plan and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. |
 | **Message box** | <kbd>+</kbd> adds files, a mention (<kbd>@</kbd>) or a command (<kbd>/</kbd>); the model and its thinking level; the permission chip; the context meter. |
 | **Conversation** | Folded steps, readable Markdown with code blocks and tables, a navigator of dots on the left edge (one per message of yours), find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). |
 

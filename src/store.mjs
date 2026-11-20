@@ -11,7 +11,7 @@ const DEFAULTS = {
   version: 1,
   backend: { kind: 'wsl', distro: '' },
   workspaces: [],
-  ui: { theme: 'system', density: 'comfortable', showThinking: true, autoScroll: true, rightPanel: true, rightTab: 'files', sidebarW: 292, panelW: 380, fontSize: 14 },
+  ui: { theme: 'system', density: 'comfortable', showThinking: true, autoScroll: true, rightPanel: true, rightTab: 'home', sidebarW: 292, panelW: 380, fontSize: 14 },
 };
 
 /** Keys older versions saved for an external CLI engine (since removed); dropped on load so they never come back. */
