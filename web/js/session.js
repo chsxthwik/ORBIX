@@ -1,7 +1,7 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, spinner, errorState, fmtElapsed } from './dom.js';
+import { h, icon, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, spinner, errorState, fmtElapsed, lsGet, lsSet } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi, openTab, closeTab } from './store.js';
@@ -836,6 +836,8 @@ export class TabView {
       copy.addEventListener('click', () => copyButtonFeedback(copy, text));
       acts.append(copy);
     }
+    // 👍 / 👎, kept on this PC. 👎 also offers what to do next: answer again, another model, or report it.
+    if (text && m.timestamp) acts.append(...this.rateButtons(m));
     // A failed reply has Retry in its error box.
     if (m.stopReason === 'aborted' || (m.stopReason !== 'error' && this.tab.state?.features?.includes('regenerate'))) {
       const retry = h('button', { class: 'msg-act retry', type: 'button', title: 'Regenerate this reply' }, icon('refresh', 13), 'Retry');
@@ -852,6 +854,37 @@ export class TabView {
     if (model) acts.append(h('span', { class: 'msg-model', title: m.provider ? `${m.provider}/${model}` : model }, model));
     wrap.append(acts);
     return wrap;
+  }
+
+  /** 👍 and 👎 on a reply. The choice is stored in this browser profile only, per conversation and reply. */
+  rateButtons(m) {
+    const key = `rate.${this.tab.state?.sessionId || this.tab.resume || this.tab.id}.${m.timestamp}`;
+    const up = h('button', { class: 'msg-act rate', type: 'button', title: 'Good reply', 'aria-label': 'Good reply' }, icon('thumb-up', 13));
+    const down = h('button', { class: 'msg-act rate', type: 'button', title: 'Bad reply: retry, change model or report it', 'aria-label': 'Bad reply' }, icon('thumb-down', 13));
+    const show = (v) => {
+      up.setAttribute('aria-pressed', String(v === 1));
+      down.setAttribute('aria-pressed', String(v === -1));
+    };
+    const set = (v) => {
+      const next = lsGet(key, 0) === v ? 0 : v;
+      lsSet(key, next || null);
+      show(next);
+      return next;
+    };
+    show(lsGet(key, 0));
+    up.addEventListener('click', () => set(1));
+    down.addEventListener('click', () => {
+      if (set(-1) !== -1) return;
+      const model = typeof m.model === 'string' ? `${m.provider ? `${m.provider}/` : ''}${m.model}` : '';
+      const latest = this.tab.messages[this.tab.messages.length - 1] === m || this.els.get(this.tab.messages[this.tab.messages.length - 1])?.contains(down);
+      popMenu(down, [
+        { header: 'Not a good reply?' },
+        latest && !this.tab.streaming && !this.tab.dead ? { icon: 'refresh', label: 'Answer again', run: () => this.retry() } : null,
+        !this.tab.dead ? { icon: 'cpu', label: 'Use another model…', run: () => this.pickModel() } : null,
+        { icon: 'alert', label: 'Report a problem…', run: () => emit('feedback', { kind: 'model', text: `${model ? `Model: ${model}\n\n` : ''}What was wrong with the reply:\n` }) },
+      ].filter(Boolean));
+    });
+    return [up, down];
   }
 
   /** The first reply after your message carries the agent's name (later steps of the same turn do not). */

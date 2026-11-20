@@ -1135,7 +1135,6 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 .ov-cta strong { font-size: 14px; }
 .ov-cta p { margin-top: 2px; color: var(--fg-2); font-size: 13px; }
 .ov-cta .btn { flex: none; }
-.ov-ic { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--bg-active); color: var(--fg-2); }
 .pv-tools { top: -26px; margin: 0 0 8px; padding: 0 0 8px; }
 .pv-list { gap: 6px; }
 .pv-group { margin: 14px 2px 2px; color: var(--fg-3); font: 600 12px/1.3 var(--font); letter-spacing: 0; text-transform: none; }
@@ -1240,7 +1239,7 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 .about-maker-t strong { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
 .about-maker-t p { max-width: 46ch; margin: 2px 0 6px; color: var(--fg-2); font-size: 13px; line-height: 1.55; }
 @media (max-width: 640px) { .about-maker { flex-direction: column; align-items: flex-start; } .about-maker .ascii-comx { max-width: 100%; } }
-.pv-ic svg, .ov-ic svg { display: block; }
+.pv-ic svg { display: block; }
 .c-row .cbtn > svg.pv-mark:first-child { color: var(--fg); }
 .list-h.with-mark { display: flex; align-items: center; gap: 7px; }
 .list-h.with-mark svg { flex: none; color: var(--fg-2); }
@@ -1355,23 +1354,11 @@ html.zen .main { border: 0; }
 .run-st { align-self: flex-start; margin-top: 1px; }
 
 /* ================= settings: overview lines, two-way switches, shortcuts ================= */
-.ov-card { overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--bg-raise); }
-.ov-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 14px; color: var(--fg); text-align: left; transition: background-color var(--t1) var(--ease); }
-.ov-row + .ov-row { border-top: 1px solid var(--line); }
-button.ov-row:hover { background: var(--bg-hover); }
-.ov-row.static .ov-val { margin-right: 26px; } /* lines up with the values of the rows that have a chevron */
-button.ov-row:focus-visible { outline-offset: -2px; }
-.ov-row .ov-ic { width: 28px; height: 28px; border-radius: 7px; }
-.ov-l { flex: none; font-size: 13px; font-weight: 500; }
-.ov-val { flex: 1; min-width: 0; color: var(--fg-2); font-size: 13px; text-align: right; }
-.ov-val.ok { color: var(--ok); }
-.ov-val.warn { color: var(--warn); }
-.ov-go { flex: none; color: var(--fg-3); }
 .seg { display: inline-flex; padding: 2px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-field); }
 .seg button { height: 26px; padding: 0 12px; border-radius: 6px; color: var(--fg-2); font-size: 12px; font-weight: 500; transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
 .seg button:hover { color: var(--fg); }
 .seg button[aria-checked=true] { background: var(--bg-active); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-2); }
-@media (forced-colors: active) { .ov-card, .seg { border-color: CanvasText; } .seg button[aria-checked=true] { outline: 2px solid Highlight; } }
+@media (forced-colors: active) { .seg { border-color: CanvasText; } .seg button[aria-checked=true] { outline: 2px solid Highlight; } }
 
 /* ================= compact density ================= */
 .compact .s-btn, .compact .proj-btn { height: 26px; font-size: 13px; }

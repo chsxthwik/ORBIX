@@ -555,12 +555,22 @@ const KINDS = [
   ['general', 'General feedback', 'Anything else about ORBIX.', ''],
 ];
 
+let fbDraft = null; // { kind, text } from a 👎 on a reply
+
+/** Settings → Give feedback, started with a kind and some text (👎 → Report a problem). */
+export function openFeedback(draft) {
+  fbDraft = draft || null;
+  return openSettings('feedback');
+}
+
 function tabFeedback(el) {
-  let kind = 'bug';
+  const draft = fbDraft;
+  fbDraft = null;
+  let kind = KINDS.some(([k]) => k === draft?.kind) ? draft.kind : 'bug';
   const radios = h('div', { class: 'fb-kinds', role: 'radiogroup', 'aria-label': 'Feedback type' }, KINDS.map(([k, l]) => h('label', { class: 'fb-kind' }, h('input', { type: 'radio', name: 'fb-kind', value: k, checked: k === kind ? true : null, onchange: () => ((kind = k), sync()) }), h('span', null, l))));
   const guide = h('p', { class: 'set-note' });
   const title = h('input', { type: 'text', class: 'fb-title', placeholder: 'A short title', 'aria-label': 'Title', maxlength: 120 });
-  const text = h('textarea', { class: 'fb-text', rows: 8, 'aria-label': 'Description' });
+  const text = h('textarea', { class: 'fb-text', rows: 8, 'aria-label': 'Description' }, draft?.text || '');
   const diag = h('input', { type: 'checkbox', checked: true });
   const sync = () => {
     const k = KINDS.find(([x]) => x === kind);
@@ -595,7 +605,7 @@ function tabFeedback(el) {
       h('p', { class: 'set-note' }, 'Nothing is sent from ORBIX: the report opens in your browser as a new GitHub issue, and you send it from there. API keys, file contents and conversations are never included. Attach a screenshot there if it helps.')),
     h('div', { class: 'set-actions' }, btn('Continue on GitHub', submit, 'primary')));
   diag.addEventListener('change', () => (preview.hidden = !diag.checked));
-  setTimeout(() => text.focus({ preventScroll: true }), 0);
+  setTimeout(() => (text.focus({ preventScroll: true }), text.setSelectionRange(text.value.length, text.value.length)), 0);
 }
 
 // ================= worktrees =================

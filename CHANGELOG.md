@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.8.0 (2026-11-20)
+- **Chat first.** The side panel starts closed and opens when you ask for it (toolbar, Ctrl+J or the Overview card); the sidebar is narrower (240px; a width you dragged is kept); the conversation is a narrower, centred column. Existing setups switch to this once, on the first start of 3.8.
+- **Sharper replies.** Tighter line spacing and list rhythm, white bullets, calmer headings, inline code in amber on a faint ground with no border (file paths look the same and underline when you point at them), and a compact bubble for your messages.
+- **👍 and 👎 on every reply**, in one quiet row with copy, retry, the time and the model. Your mark stays on this PC; 👎 offers to answer again, switch the model, or report the problem (Settings → Give feedback, with the model filled in).
+- **Home** asks its question at a calmer size.
+- **Cleanup.** Removed the styles of the old Settings overview page and four exports nothing used.
+
 ## 3.7.0 (2026-11-20)
 - **Settings, redesigned.** A card over the workspace with the page list on the left: General, Application, Appearance, Shortcuts, Notifications, Providers, Models and Browser; Customizations (Instructions, Checks, Tools & MCP); a page for each project; Conversations and Worktrees; Give feedback and this copy of ORBIX at the bottom. Pill buttons, pill selects and quiet cards; × or Esc closes it. Ctrl+K finds any setting by name and opens its page.
 - **General.** Permission preset, Tool permissions (trusted commands, where commands run), Network access rules, what Enter does while the agent works (Steer or Queue; Alt+Enter does the other), the send key and following output.

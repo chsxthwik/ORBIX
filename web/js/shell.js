@@ -37,7 +37,7 @@ const step = (dir) => {
   for (let i = hist.at + dir; i >= 0 && i < hist.list.length; i += dir) if (alive(hist.list[i])) return i;
   return -1;
 };
-export const canGo = (dir) => step(dir) >= 0;
+const canGo = (dir) => step(dir) >= 0;
 export function navGo(dir) {
   const i = step(dir);
   if (i < 0) return;

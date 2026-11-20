@@ -13,7 +13,7 @@ import { openHelp } from './help.js';
 import { mountPanel, showTab, viewFile, stepPanelTab } from './panels.js';
 import { actionFor, comboOf, firstKey } from './keys.mjs';
 import { browserPrefs, desktopBrowser, canShowInside } from './browser.js';
-import { settingsSearchItems } from './settings.js';
+import { settingsSearchItems, openFeedback } from './settings.js';
 import { H as shell, drawMenubar, drawToolbar, tickToolbar, syncOverview, navRecord, navGo, bindHoverCards, updatedLabel } from './shell.js';
 import { folderPicker, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { onBoard, boardState } from './review.js';
@@ -50,12 +50,12 @@ const overlay = { side: false, panel: false };
 // Every theme belongs to a mode (dark or light); the mode drives color-scheme and anything that only needs to know which.
 const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light', orbix: 'dark', sunset: 'dark', koi: 'light', aurora: 'dark', dusk: 'dark' };
 /** The Windows app's interface size: a chosen factor, or on Auto one that fits the screen (larger on wide screens). */
-export function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth || 0) {
+function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth || 0) {
   if (typeof v === 'number' && v >= 0.5 && v <= 2) return v;
   return screenWidth >= 3000 ? 1.25 : screenWidth >= 2300 ? 1.15 : 1;
 }
 // The sidebar can be dragged between these widths (double-click the edge to reset).
-const SIDE_MIN = 220, SIDE_MAX = 440, SIDE_W = 264;
+const SIDE_MIN = 200, SIDE_MAX = 440, SIDE_W = 240;
 
 function applyPrefs() {
   const u = S.ui;
@@ -70,10 +70,10 @@ function applyPrefs() {
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
   root.classList.toggle('compact', u.density === 'compact');
   root.dataset.density = u.density === 'compact' ? 'compact' : 'comfortable';
-  root.style.setProperty('--side-w', Math.min(SIDE_MAX, Math.max(SIDE_MIN, u.sidebarW || 264)) + 'px');
+  root.style.setProperty('--side-w', Math.min(SIDE_MAX, Math.max(SIDE_MIN, u.sidebarW || SIDE_W)) + 'px');
   root.style.setProperty('--panel-w', (u.panelW || 380) + 'px');
   const side = narrowSide.matches ? overlay.side : u.sidebar !== false;
-  const panel = !!activeTab() && !isHub() && (narrowPanel.matches ? overlay.panel : u.rightPanel !== false);
+  const panel = !!activeTab() && !isHub() && (narrowPanel.matches ? overlay.panel : u.rightPanel === true); // closed until you open it
   appEl.classList.toggle('no-side', !side);
   appEl.classList.toggle('no-panel', !panel);
   appEl.classList.toggle('overlay-side', side && narrowSide.matches);
@@ -584,6 +584,7 @@ on('search', (scope) => openSearch(scope));
 on('open-run', (id) => goHub(id ? 'run' : 'runs', id || undefined));
 on('open-tab', (id) => S.tabs.has(id) && setActive(id));
 on('open-session', (s) => s && openSession(s));
+on('feedback', (draft) => openFeedback(draft));
 // Links in replies open where Settings → Browser says: the Browser tab beside the conversation, or your own browser.
 document.addEventListener('click', (e) => {
   const a = e.target.closest?.('a[href]');
@@ -905,6 +906,18 @@ async function adoptRunning(procs, { quiet = false } = {}) {
   return fresh;
 }
 
+/**
+ * Once, on the first start of 3.8: the chat-first layout (side panel closed until you open it, a narrower sidebar).
+ * A sidebar width you dragged yourself is kept; the old defaults (264 or 292) are not.
+ */
+function layoutOnce() {
+  if ((S.ui.layout || 0) >= 2) return;
+  const w = S.ui.sidebarW;
+  const patch = { layout: 2, rightPanel: false, ...(w === 264 || w === 292 || !w ? { sidebarW: SIDE_W } : {}) };
+  Object.assign(S.ui, patch); // before anything is drawn, so no redraw is needed
+  api.post('/api/prefs', { ui: patch }).catch(() => {});
+}
+
 async function boot() {
   initInterface();
   try {
@@ -913,6 +926,7 @@ async function boot() {
     setBanner(e.message);
     return;
   }
+  layoutOnce();
   applyPrefs();
   drawMenubar(menuEl);
   drawSidebar();
