@@ -3,6 +3,7 @@ import { h, toast, replace, spinner, errorState } from './dom.js';
 import { api } from './api.js';
 import { loadEngine, S } from './store.js';
 import { btn, confirmDialog } from './dialogs.js';
+import { openLink } from './engine.js';
 
 const SERVICES = [
   ['brave', 'Brave Search', 'Paste an API key from the Brave Search API (it has a free plan).', 'https://brave.com/search/api/'],
@@ -52,7 +53,7 @@ export async function renderSearchSettings(root) {
     key.hidden = sel.value === 'searxng' || !sel.value;
     url.hidden = sel.value !== 'searxng';
     key.placeholder = cur.provider === sel.value && cur.hasKey ? 'Key saved. Paste a new one to replace it.' : sel.value === 'searxng' ? 'Key (only if your server needs one)' : 'Paste your API key';
-    replace(help, svc ? [svc[2], ' ', h('button', { class: 'link', type: 'button', onclick: () => api.post('/api/open-url', { url: svc[3] }).catch((e) => toast(e.message, 'error')) }, 'Open the site')] : 'Without a search service, the agent can’t search the web. It can still read pages you give it.');
+    replace(help, svc ? [svc[2], ' ', h('button', { class: 'link', type: 'button', onclick: () => openLink(svc[3]) }, 'Open the site')] : 'Without a search service, the agent can’t search the web. It can still read pages you give it.');
   };
   sel.addEventListener('change', sync);
   sync();

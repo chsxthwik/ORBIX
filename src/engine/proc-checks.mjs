@@ -62,7 +62,7 @@ export class RunChecks {
     for (const m of msgs) {
       if (m.role !== 'toolResult') continue;
       if (edits.has(m.toolCallId)) found = null;
-      else if (m.toolName === 'bash' && sameCommand(args.get(m.toolCallId)?.command, command) && !m.details?.aborted) found = m.details || {};
+      else if (m.toolName === 'bash' && sameCommand(args.get(m.toolCallId)?.command, command) && !m.details?.aborted) found = { ...(m.details || {}), output: outputTail(stripSgr(textOf(m.content, '\n')), 4000) };
     }
     return found;
   }
@@ -91,8 +91,11 @@ export class RunChecks {
     const own = this._ranAfterEdits(command);
     if (own) {
       c.verifyOff = true; // it saw the output itself, so a failure is not sent back to it again
-      return own.exitCode === 0 ? note('passed', `Checks passed: ${command}`, { exitCode: 0, by: 'agent' }) : (note('failed', `Checks failed: ${command} (exit code ${own.exitCode})`, { exitCode: own.exitCode, by: 'agent' }), null);
+      const seen = { by: 'agent', ...(own.durationMs != null ? { durationMs: own.durationMs } : {}), ...(own.output ? { output: own.output } : {}) }; // the evidence, for the run's test log
+      return own.exitCode === 0 ? note('passed', `Checks passed: ${command}`, { exitCode: 0, ...seen }) : (note('failed', `Checks failed: ${command} (exit code ${own.exitCode})`, { exitCode: own.exitCode, ...seen }), null);
     }
+    // In a run whose approved scope covers commands, the plan approval already said yes to its checks.
+    if (this.runInfo?.scope()?.commands) c.verifyApproved = true;
     if (mode === 'ask' && !c.verifyApproved) {
       const ans = await this._askUser(`Check the changes with ${command}?`, ['Run the check', 'Skip']);
       if (ans !== 'Run the check') {

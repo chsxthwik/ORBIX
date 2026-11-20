@@ -1,6 +1,6 @@
 // Status bar: live, measured numbers only. Agent state and turn time, tokens, cost, tool calls,
 // git branch and changes, and where commands run. (Model and context use sit in the composer.)
-import { h, $, icon, fmtTokens, fmtCost } from './dom.js';
+import { h, $, icon, fmtTokens, fmtCost, fmtElapsed } from './dom.js';
 import { S, on, activeTab } from './store.js';
 import { gitState } from './panels.js';
 
@@ -8,7 +8,6 @@ let bar;
 let ticker;
 
 const sep = (cls = '') => h('span', { class: `sb-sep ${cls}`.trim(), 'aria-hidden': 'true' });
-const fmtElapsed = (sec) => (sec < 60 ? sec + 's' : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`);
 
 function drawStatus() {
   const t = activeTab();

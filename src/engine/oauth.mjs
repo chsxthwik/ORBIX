@@ -3,7 +3,7 @@
 // one-time code; we exchange it for a normal API key and store it encrypted like a pasted key.
 import crypto from 'node:crypto';
 import { clientFor, presetById } from './providers.mjs';
-import { escapeHtml as esc } from '../util.mjs';
+import { b64url, callbackPage as page } from './oauth-pkce.mjs';
 
 const ENDPOINTS = { auth: 'https://openrouter.ai/auth', exchange: 'https://openrouter.ai/api/v1/auth/keys' };
 export const CALLBACK_PATH = '/oauth/openrouter/callback';
@@ -11,8 +11,6 @@ const TTL = 10 * 60 * 1000;
 const pending = new Map(); // state -> {verifier, created, status, error, models}
 const STATE_RE = /^[A-Za-z0-9_-]{32}$/; // what startOpenRouter() issues (24 random bytes, base64url)
 const CODE_RE = /^[A-Za-z0-9._~-]{1,512}$/;
-
-const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 function prune() {
   const now = Date.now();
@@ -48,21 +46,6 @@ export function oauthStatus(state) {
 
 export function cancelOAuth(state) {
   pending.delete(String(state || ''));
-}
-
-function page(res, status, title, text) {
-  const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 "Segoe UI",system-ui,sans-serif;background:#0d0f13;color:#eef0f4}
-@media (prefers-color-scheme: light){body{background:#f4f5f8;color:#12151b}}main{max-width:420px;padding:28px;text-align:center}h1{font-size:20px;margin:0 0 8px}p{margin:0;opacity:.75}</style>
-</head><body><main><h1>${esc(title)}</h1><p>${esc(text)}</p></main></body></html>`;
-  res.writeHead(status, {
-    'content-type': 'text/html; charset=utf-8',
-    'cache-control': 'no-store',
-    'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-    'x-content-type-options': 'nosniff',
-    'referrer-policy': 'no-referrer',
-  });
-  res.end(body);
 }
 
 /**

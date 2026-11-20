@@ -2,7 +2,7 @@
 // on screen answers (once that message has scrolled away), and four tools for reading it:
 // find in conversation (Ctrl+F), an outline of your messages (Ctrl+Shift+O), a wider reading column, and focus
 // mode (Ctrl+Shift+F), which hides everything except the conversation.
-import { h, icon, iconBtn, lsGet, lsSet, debounce, rafThrottle } from './dom.js';
+import { h, icon, iconBtn, lsGet, lsSet, debounce, rafThrottle, fmtElapsed } from './dom.js';
 import { on, emit, textOf } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 
@@ -10,7 +10,6 @@ import { popMenu, isApproval } from './dialogs.js';
 export const barHandlers = { rename: null };
 
 const root = document.documentElement;
-const fmtElapsed = (sec) => (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`);
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
 // ================= focus mode and reading width =================

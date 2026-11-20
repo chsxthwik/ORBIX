@@ -21,7 +21,7 @@ Bring your own API key or run a local model.
 
 <br>
 
-<img src="docs/img/shots/approval.png" alt="ORBIX has read the project, explained why password reset links expire too soon, and waits with a one-line diff, the changed words marked, and Allow once, Allow for this session and Deny" width="100%">
+<img src="docs/img/shots/run.png" alt="A finished run in ORBIX: a timeline of every step on the left, the walkthrough on the right, and Apply changes and Discard at the top.">
 
 <sub>Screenshots use a sample project and a scripted local model; the tools in them really ran.</sub>
 
@@ -29,7 +29,7 @@ Bring your own API key or run a local model.
 
 Download the `ORBIX-Setup` installer from the [latest release](https://github.com/chsxthwik/ORBIX/releases/latest) and run it. It installs ORBIX for your Windows account, with a Start menu and desktop shortcut, and needs no administrator rights and no Node.js. The installer is not code-signed yet, so Windows SmartScreen asks for confirmation the first time (More info, then Run anyway).
 
-1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in with ChatGPT, xAI or OpenRouter, paste an API key and press **Check & save**, or connect a local model.
+1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in with ChatGPT, xAI, OpenCode or OpenRouter, paste an API key and press **Check & save**, or connect a local model.
 2. Open a project folder, describe a task and press <kbd>Enter</kbd>.
 
 ORBIX keeps itself up to date. It checks GitHub for a new version when it opens and every few hours, downloads it in the background and installs it when you close ORBIX; **Restart** at the bottom of the sidebar installs it at once. Settings → About → Updates has Check now and a switch to turn this off. Settings and conversations are kept in `%LOCALAPPDATA%\ORBIX`, so they stay through every update.
@@ -38,25 +38,33 @@ ORBIX runs on Windows 10 and 11, using WSL or native Windows to run commands. Th
 
 ## How a task runs
 
-ORBIX reads and searches your project without interrupting you. When the agent wants to change a file or run a command, it stops and shows you exactly what it will do. You answer with <kbd>1</kbd> (allow once), <kbd>2</kbd> (allow for this session) or <kbd>Esc</kbd> (deny).
+**Runs** (<kbd>Ctrl</kbd>+<kbd>2</kbd>) take one task from its description to changes you have reviewed. Pick a Git project, describe the task, and choose **Plan first** or **Straight to work**.
 
-When the reply ends, a summary lists every changed file with line counts. Each edit has **Undo this change**, and **Undo all** reverts the whole reply.
+1. **Plan.** The agent reads the code and saves an implementation plan, changing nothing. Comment on any passage or send feedback, and it writes a new revision.
+2. **Approve a scope.** The dialog shows the run's worktree, its branch and what you allow: file edits, or edits and commands. Files outside the worktree and destructive commands (recursive delete, push, publish, history rewrite) ask every time.
+3. **Work in a worktree.** Every run has its own git worktree and branch, so your checkout is untouched and several runs can work at once.
+4. **Review.** Each step in the timeline opens what it produced. Read the diff, the test log and the walkthrough.
+5. **Apply or discard.** Apply merges into the branch the run started from and keeps your own uncommitted work; a conflict changes nothing on either side. Discard removes the worktree and branch.
+
+**Review** (<kbd>Ctrl</kbd>+<kbd>3</kbd>) lists everything that waits for you across projects: approvals, plans, finished changes, interrupted runs. If ORBIX closes mid-run, the run says what was in flight and continues only when you say so.
+
+For a quick question or a small change, a conversation works as before: reading runs freely, edits and commands ask first (<kbd>1</kbd> allow once, <kbd>2</kbd> for the session, <kbd>Esc</kbd> deny), and every edit can be undone. When a reply ends, its steps fold into one line ("Worked for 14s · Read 2 files · Ran 1 command") above the answer.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/img/shots/home.png" alt="Home screen with the task box, project and model pickers, recent conversations and projects"></td>
-<td width="50%"><img src="docs/img/shots/done.png" alt="A finished task with the applied diff, Undo this change, passing tests and a summary of the changed file"></td>
+<td width="50%"><img src="docs/img/shots/review-queue.png" alt="The Review queue with an approval from a conversation and a finished run"></td>
+<td width="50%"><img src="docs/img/shots/run-changes.png" alt="A run's Changes tab with the changed files and the diff of one file"></td>
 </tr>
 <tr>
-<td><b>Start.</b> Pick a project and a model, then describe the task.</td>
-<td><b>Review.</b> The diff, the commands that ran and an undo for each change.</td>
+<td><b>Review.</b> Every decision that waits for you, with its buttons in place.</td>
+<td><b>Changes.</b> What a run changed, file by file, against where it started.</td>
 </tr>
 <tr>
-<td><img src="docs/img/shots/palette.png" alt="Search palette covering conversations, files, projects and commands"></td>
+<td><img src="docs/img/shots/done.png" alt="A finished reply: one Worked for line, the answer, and the changed file with Review and Undo all"></td>
 <td><img src="docs/img/shots/settings.png" alt="Settings open on Providers, with one connected server and a list of providers to add"></td>
 </tr>
 <tr>
-<td><b>Find anything.</b> <kbd>Ctrl</kbd>+<kbd>K</kbd> searches conversations, files, projects and commands.</td>
+<td><b>Conversations.</b> The steps fold into one line; open it to see each one.</td>
 <td><b>Connect a model.</b> Keys are checked with the provider before they are saved.</td>
 </tr>
 </table>
@@ -67,7 +75,7 @@ When the reply ends, a summary lists every changed file with line counts. Each e
 | --- | --- |
 | **Agent** | Tools for `read`, `write`, `edit`, `glob`, `grep`, `bash`, `todo`, `web_fetch` and `web_search`, plus `task`, which runs read-only helper agents side by side. Plan mode only reads. `/goal` keeps working for up to 6 rounds. Older messages are summarized when the context fills up. |
 | **Models** | 17 providers and any OpenAI-compatible server, including your ChatGPT plan without an API key. Live model lists, the thinking levels each model really accepts, and separate fast and plan models. Tokens and context show in the interface, and cost when the model's pricing is known. |
-| **Workspace** | Session tabs, and a side panel with Files, Changes (stage, unstage, discard, commit), Plan, Agents and Console. Branch from any of your messages, attach images and files, mention files with `@`, export a conversation to HTML. |
+| **Workspace** | Session tabs, and a side panel with Run, Files, Changes (stage, unstage, discard, commit), Plan, Agents and Console, plus Review for a session on its own branch. Branch from any of your messages, attach images and files, mention files with `@`, export a conversation to HTML. |
 | **Windows or WSL** | Commands, tools, MCP servers, git and hooks all run in one place: a WSL distribution, or Windows with `cmd.exe` or PowerShell. Paths are translated between the two. |
 | **Project context** | Follows `AGENTS.md` or `CLAUDE.md`, and supports MCP, skills, custom slash commands and hooks. |
 
@@ -79,7 +87,7 @@ When the reply ends, a summary lists every changed file with line counts. Each e
   <img src="docs/img/providers-light.png" alt="Anthropic, OpenAI (ChatGPT plan or API key), Google Gemini, xAI, Groq, Mistral, DeepSeek, OpenCode (Zen or Go plan), OpenRouter, Together AI, Fireworks AI, Cerebras, Moonshot (Kimi), Z.ai (GLM), Qwen, Ollama, LM Studio, and a custom server for any OpenAI-compatible endpoint" width="100%">
 </picture>
 
-**ChatGPT** uses the models on your ChatGPT Plus or Pro plan: sign in, no API key. It goes through the same sign-in and endpoint as the OpenAI Codex CLI, which is unofficial and can change. **xAI** and **OpenRouter** also offer a sign-in; sign-ins renew themselves.
+**ChatGPT** uses the models on your ChatGPT Plus or Pro plan: sign in, no API key. It goes through the same sign-in and endpoint as the OpenAI Codex CLI, which is unofficial and can change. **xAI**, **OpenCode** and **OpenRouter** also offer a sign-in; sign-ins renew themselves.
 
 Model lists come live from each provider and offer chat models only. Prices, context sizes and thinking support come from the [models.dev](https://models.dev) catalog, refreshed at most once a day, except where a provider reports them itself: the ChatGPT plan gives each model's context window and default thinking level, and ORBIX asks its API which levels a model accepts (a refused request, which costs nothing) and keeps the answer for a week. Thinking can be turned off only on models that allow it. The custom server slot works with vLLM, llama.cpp, a company gateway or anything else that speaks the OpenAI chat API.
 
@@ -99,7 +107,7 @@ Approvals are a checkpoint, not a sandbox. The agent runs with your Windows user
 - **Local server:** listens only on `127.0.0.1`, behind a per-launch token held in an `HttpOnly`, `SameSite=Strict` cookie. It checks `Host` and `Origin`, and serves the UI with a strict Content Security Policy.
 - **API keys:** encrypted for your Windows account with DPAPI, sent only to the provider they belong to, and never written to the log.
 - **What goes to your provider:** your messages, tool definitions, project rules and tool results, including the contents of files the agent reads.
-- **Other network use:** the models.dev catalog, the ChatGPT, xAI and OpenRouter sign-ins if you use them, and `web_fetch` and `web_search` when the agent calls them. ORBIX has no telemetry.
+- **Other network use:** the models.dev catalog, update checks on GitHub (unless you turn them off), the ChatGPT, xAI, OpenCode and OpenRouter sign-ins if you use them, and `web_fetch` and `web_search` when the agent calls them. ORBIX has no telemetry.
 - **On disk:** conversations are stored as plain text in the data folder (`%LOCALAPPDATA%\ORBIX`, or `data` in a clone) and can contain anything that appeared in a chat, so treat that folder as sensitive.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
@@ -112,7 +120,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
   <img src="docs/img/architecture-light.png" alt="A browser shows the ORBIX interface and talks over HTTP and SSE to a local Node.js server. The server runs one agent loop per conversation, which calls the selected model provider and runs tools, MCP servers and hooks. Conversations, settings and encrypted keys live in the data folder." width="100%">
 </picture>
 
-ORBIX is a local Node.js server and a browser interface written in plain ES modules. There is no bundler, framework or npm dependency. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools and storage.
+ORBIX is a local Node.js server and an interface written in plain ES modules, shown in an Electron window. There is no bundler or framework; the only npm package the app ships is electron-updater. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools and storage.
 
 ## Extending ORBIX
 
@@ -206,6 +214,7 @@ src/       the local server: HTTP API, event stream, WSL and Windows backend
 src/engine the agent: loop, model clients, tools, MCP, hooks, sessions
 web/       the interface: plain ES modules and CSS, no build step
 test/      regression tests on Node's built-in runner
+e2e/       npm run e2e: a run driven through the real interface in headless Chromium
 tools/     shots.mjs: the README and website screenshots, taken from a real ORBIX
 ```
 

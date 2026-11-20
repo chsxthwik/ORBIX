@@ -1,6 +1,6 @@
 // Plain titles for tool steps ("Ran npm test", "Edited src/auth.js"). No DOM here, so tests can import it.
 
-const resultText = (res) => (res?.content || []).filter((c) => c?.type === 'text').map((c) => c.text).join('\n');
+export const resultText = (res) => (res?.content || []).filter((c) => c?.type === 'text').map((c) => c.text).join('\n');
 
 /**
  * What a tool step did, in words: { verb, subject }. The verb follows the step: "Running" while it runs, "Run"

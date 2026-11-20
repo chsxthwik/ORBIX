@@ -4,6 +4,7 @@ import path from 'node:path';
 import { clip } from '../util.mjs';
 import { invalidArgsText } from './tools.mjs';
 import { isTrustedCommand, trustableCommand } from './store.mjs';
+import { destructiveReason } from './policy.mjs';
 
 // File tools whose path is checked against the project folder before they run.
 const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
@@ -38,6 +39,9 @@ export class ToolRuns {
     // A file outside the project folder is asked about every time, read-only or not (except under Allow everything):
     // text in the project could otherwise point the agent at ~/.ssh or a .env elsewhere and send it on with web_fetch.
     if (mode !== 'auto' && this._outside(call, args)) return !this.allowAlways.has(`${call.name}:outside`);
+    // A destructive command asks every time: "allow for this session", a trusted command and a run's approved scope
+    // never cover it. Only Allow everything, outside a run, lets it through.
+    if (call.name === 'bash' && (mode !== 'auto' || this.runInfo) && destructiveReason(args?.command)) return true;
     if (!this._needsApproval(call.name)) return false;
     if (mode === 'auto' || this.allowAlways.has(call.name)) return false;
     if (mode === 'edits' && (call.name === 'edit' || call.name === 'write')) return false;
@@ -77,6 +81,8 @@ export class ToolRuns {
     if (this._outside(call, a)) return `${{ read: 'Read a file outside the project?', grep: 'Search outside the project?', glob: 'List files outside the project?', write: 'Write a file outside the project?', edit: 'Edit a file outside the project?' }[call.name]}  ${clip(String(a.path), 200)}`;
     if (this.mcp.has(call.name)) return `Allow MCP tool ${this.mcp.describe(call.name)}?  ${clip(JSON.stringify(a), 200)}`;
     const detail = call.name === 'bash' ? `${a.shell === 'powershell' ? '[PowerShell] ' : ''}${a.command ?? ''}` : a.path;
+    const risk = call.name === 'bash' ? destructiveReason(a.command) : '';
+    if (risk) return `Run this command? It ${risk}.  ${clip(String(detail ?? ''), 200)}`;
     const verb = { bash: 'Run this command?', write: 'Write this file?', edit: 'Edit this file?' }[call.name] || `Allow ${call.name}?`;
     return `${verb}  ${clip(String(detail ?? ''), 200)}`;
   }
@@ -138,12 +144,24 @@ export class ToolRuns {
 
   /** Ask the user about a call that needs approval. Returns the denial result, or undefined when it may run. */
   async _approve(call, args, title = this._askTitle(call)) {
-    const canTrust = call.name === 'bash' && args.shell !== 'powershell' && trustableCommand(args.command);
-    const ans = await this._askUser(title, canTrust ? ['Allow once', 'Allow for this session', 'Always allow this command', 'Deny'] : ['Allow once', 'Allow for this session', 'Deny']);
+    const risky = call.name === 'bash' && !!destructiveReason(args.command); // asked every time, so no lasting choice is offered
+    const canTrust = !risky && call.name === 'bash' && args.shell !== 'powershell' && trustableCommand(args.command);
+    const ans = await this._askUser(title, risky ? ['Allow once', 'Deny'] : canTrust ? ['Allow once', 'Allow for this session', 'Always allow this command', 'Deny'] : ['Allow once', 'Allow for this session', 'Deny']);
     if (!ans || ans === 'Deny') return { text: 'The user denied this action. Do not retry it; ask what they want instead.', isError: true };
     if (ans === 'Allow for this session') this.allowAlways.add(this._outside(call, args) ? `${call.name}:outside` : call.name);
     else if (ans === 'Always allow this command' && canTrust) this.config.addTrusted(args.command);
     return undefined;
+  }
+
+  /** The `artifact` tool: a new revision of one of the run's documents. */
+  async _saveArtifact(args) {
+    if (!this.runInfo) return { text: 'This conversation is not a run, so there is nowhere to save an artifact.', isError: true };
+    try {
+      const r = await this.runInfo.writeArtifact({ kind: String(args.kind || ''), title: String(args.title || ''), content: String(args.content ?? '') });
+      return { text: r.unchanged ? `Unchanged: this is the same as revision ${r.rev} of the ${r.kind}.` : `Saved revision ${r.rev} of the ${r.kind}. The user can read and comment on it.`, details: { artifact: r.kind, rev: r.rev } };
+    } catch (e) {
+      return { text: e?.message || String(e), isError: true };
+    }
   }
 
   async _runTool(call, conn) {
@@ -157,7 +175,7 @@ export class ToolRuns {
         ? { text: 'Not run: this tool call was cut off because the reply reached the output token limit. Make smaller calls: for a large file, write the first part, then add the rest with edit.', isError: true }
         : { text: invalidArgsText(this._toolDefs().find((d) => d.name === call.name)), isError: true };
     } else if (this.planMode && !this._isReadOnly(call.name)) result = { text: 'Plan mode is on, so this tool is not available. Only read and plan; the user can turn plan mode off with /plan.', isError: true };
-    else if ((!this.defs.some((d) => d.name === call.name) && !this.mcp.has(call.name)) || (call.name === 'web_search' && !this._searchOn())) result = { text: `Unknown tool "${call.name}". Available tools: ${this._toolDefs().map((d) => d.name).join(', ')}.`, isError: true };
+    else if ((!this.defs.some((d) => d.name === call.name) && !this.mcp.has(call.name) && !(call.name === 'artifact' && this.runInfo)) || (call.name === 'web_search' && !this._searchOn())) result = { text: `Unknown tool "${call.name}". Available tools: ${this._toolDefs().map((d) => d.name).join(', ')}.`, isError: true };
     if (!result) {
       const signal = this.abortCtl.signal;
       const onUpdate = (text) => this._emit({ type: 'tool_execution_update', toolCallId: call.id, toolName: call.name, args, partialResult: { content: [{ type: 'text', text }], details: {} } });
@@ -172,6 +190,7 @@ export class ToolRuns {
         exec: async () => {
           let r;
           if (call.name === 'task') r = await this._runTask(call, conn);
+          else if (call.name === 'artifact') r = await this._saveArtifact(args);
           else if (this.mcp.has(call.name)) r = await this.mcp.call(call.name, args, signal);
           else r = await this.tools.run(call.name, args, { onUpdate, allowHost: (h) => this._allowHost(h), vision: this._vision(), search: () => this.config.searchConfig?.() });
           return r.images?.length && !this._vision() ? { ...r, images: undefined } : r;

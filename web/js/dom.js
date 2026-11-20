@@ -270,6 +270,8 @@ export function leave(el, { hide = false, then } = {}) {
 
 export const fmtTokens = (n) => (n == null ? '–' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(Math.round(n)));
 export const fmtCost = (c) => (c == null ? '–' : c < 0.01 && c > 0 ? '<$0.01' : '$' + c.toFixed(c < 1 ? 3 : 2));
+/** Whole seconds as 45s or 3m 07s (a running timer). */
+export const fmtElapsed = (sec) => (sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}m ${String(sec % 60).padStart(2, '0')}s`);
 export function fmtDuration(ms) {
   if (ms == null) return '';
   if (ms < 1000) return Math.round(ms) + 'ms';

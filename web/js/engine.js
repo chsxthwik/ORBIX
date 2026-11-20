@@ -5,7 +5,8 @@ import { loadEngine } from './store.js';
 import { confirmDialog } from './dialogs.js';
 import { brandMark } from './brands.js';
 
-const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
+/** Open a link in the default browser. */
+export const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
 
 let signIn = null; // {state, url, timer, provider} while a sign-in is waiting for the browser
 // How each sign-in is offered, and what the user should know before choosing it.

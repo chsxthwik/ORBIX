@@ -21,7 +21,7 @@ import { jwtClaims, chatgptAuth } from './chatgpt.mjs';
 import { escapeHtml as esc } from '../util.mjs';
 
 const form = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v != null)).toString();
-const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+export const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 async function postForm(url, fields, what) {
   const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' }, body: form(fields), signal: AbortSignal.timeout(30000) });
@@ -125,7 +125,8 @@ const CODE_RE = /^[A-Za-z0-9._~+/=-]{1,4096}$/;
 const pending = new Map(); // state -> { id, verifier, redirect, port, created, status, error, models }
 const servers = new Map(); // port -> http.Server
 
-function page(res, status, title, text) {
+/** The page the browser shows when a sign-in comes back to ORBIX (also used by the OpenRouter sign-in, oauth.mjs). */
+export function callbackPage(res, status, title, text) {
   const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 "Segoe UI",system-ui,sans-serif;background:#0d0f13;color:#eef0f4}
 @media (prefers-color-scheme: light){body{background:#f4f5f8;color:#12151b}}main{max-width:440px;padding:28px;text-align:center}h1{font-size:20px;margin:0 0 8px}p{margin:0;opacity:.75}</style>
@@ -152,7 +153,7 @@ function closeIfIdle(port) {
 async function listen(spec, config, ports) {
   for (const port of ports) {
     if (servers.has(port)) return port;
-    const srv = http.createServer((req, res) => onCallback(req, res, port, config).catch((e) => page(res, 500, 'Sign-in failed', e.message)));
+    const srv = http.createServer((req, res) => onCallback(req, res, port, config).catch((e) => callbackPage(res, 500, 'Sign-in failed', e.message)));
     srv.headersTimeout = 15000;
     srv.requestTimeout = 30000;
     try {
@@ -167,7 +168,7 @@ async function listen(spec, config, ports) {
       });
       srv.on('clientError', (_e, socket) => socket.destroy());
       // "localhost" can resolve to ::1 first; answer there too when the system has IPv6 loopback (best effort).
-      const v6 = http.createServer((req, res) => onCallback(req, res, port, config).catch((e) => page(res, 500, 'Sign-in failed', e.message)));
+      const v6 = http.createServer((req, res) => onCallback(req, res, port, config).catch((e) => callbackPage(res, 500, 'Sign-in failed', e.message)));
       v6.on('error', () => {});
       v6.on('clientError', (_e, socket) => socket.destroy());
       v6.listen(port, '::1');
@@ -322,14 +323,14 @@ async function onCallback(req, res, port, config) {
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
   const p0 = pending.get(url.searchParams.get('state') || '');
   const spec = p0 && SPECS[p0.id];
-  if (req.method !== 'GET' || !spec || url.pathname !== spec.path) return page(res, 404, 'Not found', 'This address only receives sign-ins started from ORBIX.');
+  if (req.method !== 'GET' || !spec || url.pathname !== spec.path) return callbackPage(res, 404, 'Not found', 'This address only receives sign-ins started from ORBIX.');
   const state = url.searchParams.get('state');
   const p = STATE_RE.test(state) ? p0 : null;
-  if (!p || p.status !== 'pending' || p.port !== port) return page(res, 400, 'Sign-in link not valid', 'This sign-in link was already used or was not started from ORBIX. Start again from the app.');
+  if (!p || p.status !== 'pending' || p.port !== port) return callbackPage(res, 400, 'Sign-in link not valid', 'This sign-in link was already used or was not started from ORBIX. Start again from the app.');
   const fail = (code, title, msg) => {
     Object.assign(p, { status: 'error', error: msg });
     setTimeout(() => closeIfIdle(port), 300);
-    return page(res, code, title, msg);
+    return callbackPage(res, code, title, msg);
   };
   if (Date.now() - p.created > TTL) return fail(400, 'Sign-in expired', 'The sign-in took longer than 10 minutes. Try again.');
   const code = url.searchParams.get('code');
@@ -338,7 +339,7 @@ async function onCallback(req, res, port, config) {
   try {
     await exchange(p, code);
     setTimeout(() => closeIfIdle(port), 300);
-    return page(res, 200, 'Signed in', `Signed in to ${spec.name}. You can close this tab and go back to ORBIX.`);
+    return callbackPage(res, 200, 'Signed in', `Signed in to ${spec.name}. You can close this tab and go back to ORBIX.`);
   } catch (e) {
     return fail(502, 'Sign-in failed', e.message);
   }

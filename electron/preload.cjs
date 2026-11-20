@@ -9,7 +9,6 @@ const arg = process.argv.find((a) => a.startsWith('--orbix-screen='));
 const screenWidth = arg ? Number(arg.slice('--orbix-screen='.length)) || 0 : 0;
 
 contextBridge.exposeInMainWorld('orbixDesktop', {
-  platform: process.platform,
   // For Settings → About and bug reports.
   versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
   screenWidth,

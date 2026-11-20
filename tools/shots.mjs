@@ -125,6 +125,26 @@ const SCENARIOS = [
   },
 ];
 
+// A run (Runs view): it plans first, then works in its own worktree after the plan is approved.
+const RUN_PLAN = '# Limit failed sign-ins\n\n## Goal\nAfter 5 wrong passwords for one email within a minute, `login()` refuses that email until the minute is over.\n\n## Changes\n- `src/limit.js` (new): counts failed attempts per lower-cased email in a one-minute window.\n- `src/auth.js`: check the limit before the password, and record each failure.\n- `test/limit.test.js` (new): five failures lock the email; a minute later it works again.\n\n## Verification\n`node --test test/limit.test.js`\n';
+const LIMIT_JS = "// Failed sign-ins per email, in a sliding one-minute window.\nconst WINDOW_MS = 60 * 1000;\nconst MAX_FAILS = 5;\nconst fails = new Map();\n\nexport function allowed(email, now = Date.now()) {\n  const list = (fails.get(email.toLowerCase()) || []).filter((t) => now - t < WINDOW_MS);\n  fails.set(email.toLowerCase(), list);\n  return list.length < MAX_FAILS;\n}\n\nexport function failed(email, now = Date.now()) {\n  const key = email.toLowerCase();\n  fails.set(key, [...(fails.get(key) || []), now]);\n}\n";
+const LIMIT_TEST = "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { allowed, failed } from '../src/limit.js';\n\ntest('five failures within a minute lock the email', () => {\n  for (let i = 0; i < 5; i++) failed('sam@shop.test', 1000);\n  assert.equal(allowed('Sam@Shop.test', 2000), false);\n  assert.equal(allowed('sam@shop.test', 62000), true);\n});\n";
+SCENARIOS.push({
+  match: /failed sign-ins/i,
+  steps: [
+    { text: 'I will read how sign-in works first.', tools: [['read', { path: 'src/auth.js' }], ['read', { path: 'src/users.js' }]] },
+    { text: '', tools: [['artifact', { kind: 'plan', title: 'Limit failed sign-ins', content: RUN_PLAN }]] },
+    { text: 'The plan is ready: a small limiter in `src/limit.js`, checked by `login()`, with a test.' },
+    { text: '', tools: [['write', { path: 'src/limit.js', content: LIMIT_JS }]] },
+    { text: '', tools: [['edit', { path: 'src/auth.js', old_string: "import { findByEmail } from './users.js';", new_string: "import { findByEmail } from './users.js';\nimport { allowed, failed } from './limit.js';" }]] },
+    { text: '', tools: [['edit', { path: 'src/auth.js', old_string: '  const user = findByEmail(email.trim());\n  if (!user || user.password !== `h4sh:${password}`) return null;', new_string: '  if (!allowed(email)) return null;\n  const user = findByEmail(email.trim());\n  if (!user || user.password !== `h4sh:${password}`) return (failed(email), null);' }]] },
+    { text: '', tools: [['write', { path: 'test/limit.test.js', content: LIMIT_TEST }]] },
+    { text: '', tools: [['bash', { command: 'node --test test/limit.test.js' }]] },
+    { text: '', tools: [['artifact', { kind: 'walkthrough', content: '# Walkthrough\n\n## What changed\n- `src/limit.js`: counts failed sign-ins per lower-cased email in a one-minute window; five failures lock the email.\n- `src/auth.js`: `login()` checks the limit first and records each wrong password.\n- `test/limit.test.js`: five failures lock the email, and it opens again after a minute.\n\n## Verification\n`node --test test/limit.test.js` passes: 1 test, 0 failures.\n' }]] },
+    { text: 'Done. Five wrong passwords lock an email for a minute; the tests pass.' },
+  ],
+});
+
 const textOfContent = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => x?.text || '').join('') : '');
 
 function scriptFor(body) {
@@ -416,17 +436,6 @@ async function scenes(page, project) {
   await panel(true);
   await showPanelTab(page, 'Files');
 
-  // Search (Ctrl+K), looking for a file.
-  await page.eval("document.querySelector('.c-ta')?.blur()");
-  await page.key('k', { ctrl: true, code: 'KeyK', keyCode: 75 });
-  await page.until("document.querySelector('.palette .pal-q')", 'the search palette');
-  await page.eval("document.querySelector('.palette .pal-q').focus()");
-  await page.type('auth');
-  await page.until("[...document.querySelectorAll('.pal-list .list-h')].some((x) => x.textContent === 'Files') && !document.querySelector('.pal-busy')", 'file results');
-  await page.capture('palette', { dsf: 4 / 3, webp: true });
-  await page.key('Escape', { code: 'Escape', keyCode: 27 });
-  await page.settle(300);
-
   // Settings on Providers.
   await page.eval("(await import('/js/store.js')).emit('settings', 'engine')");
   await page.until("document.querySelector('.settings .pv-list .pv-card')", 'the providers page');
@@ -437,14 +446,30 @@ async function scenes(page, project) {
 
   // An edit waiting for approval: approvals switch to "ask first" for this one.
   await page.eval("const { api } = await import('/js/api.js'); await api.post('/api/engine/settings', { approvals: 'ask' }); await (await import('/js/store.js')).loadEngine();");
+  // (It stays waiting: Home and the Review queue show it.)
   await converse(page, 'approval', { waitFor: 'approval' });
-  await page.capture('approval', { dsf: 2, webp: true, webpDsf: 4 / 3 });
 
   // Home, with that approval waiting and the conversations so far.
   await page.eval("(await import('/js/store.js')).emit('home')");
   await page.until("document.querySelector('.home .home-composer') && document.querySelector('.library-row')", 'Home');
   await page.eval("document.querySelector('.welcome')?.scrollTo({ top: 0 })");
   await page.capture('home', { dsf: 4 / 3, webp: true });
+
+  // A run: planned, approved, done in its own worktree, waiting for review.
+  const runId = await page.eval(`const { api } = await import('/js/api.js'); const j = await api.post('/api/runs/start', { workspace: window.__shotProject, task: 'Limit failed sign-ins: lock an email for a minute after 5 wrong passwords.', mode: 'plan' }); return j.run.id;`);
+  const runIs = (st) => `fetch('/api/runs', { headers: { 'x-orbix': '1' } }).then((r) => r.json()).then((j) => j.runs.find((x) => x.id === ${JSON.stringify(runId)})?.status === '${st}')`;
+  await page.until(`await ${runIs('awaiting_plan')}`, 'the plan');
+  await page.eval(`const { api } = await import('/js/api.js'); await api.post('/api/run/approve', { id: ${JSON.stringify(runId)}, commands: true, confirm: true });`);
+  await page.until(`await ${runIs('review')}`, 'the finished run', 30000);
+  await page.eval(`(await import('/js/runs.js')).openHub('run', ${JSON.stringify(runId)}); await new Promise((r) => setTimeout(r, 300));`);
+  await page.until("document.querySelector('#runs .art-doc')?.innerText.includes('What changed')", 'the walkthrough');
+  await page.capture('run', { dsf: 4 / 3, webp: true });
+  await page.eval("[...document.querySelectorAll('#runs .run-tab')].find((b) => b.textContent.startsWith('Changes')).click()");
+  await page.until("document.querySelectorAll('#runs .chg-file').length >= 3 && document.querySelector('#runs .chg-diff')?.innerText.includes('allowed')", 'the run diff');
+  await page.capture('run-changes', { dsf: 4 / 3, webp: true });
+  await page.eval("(await import('/js/runs.js')).openHub('review'); await new Promise((r) => setTimeout(r, 300));");
+  await page.until("document.querySelector('#runs .rq-item')", 'the Review queue');
+  await page.capture('review-queue', { dsf: 4 / 3, webp: true });
 }
 
 // ============================================================================ main

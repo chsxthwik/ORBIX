@@ -8,7 +8,6 @@
   --bg-hover: rgba(255,255,255,.045); --bg-active: rgba(255,255,255,.08); --bubble: #1A1A1E; --bubble-line: rgba(255,255,255,.06);
   --line: rgba(255,255,255,.07); --line-2: rgba(255,255,255,.11); --line-3: rgba(255,255,255,.2); --hi: transparent;
   --fg: #ECECEA; --fg-2: #A6A6A2; --fg-3: #7C7C78;
-  --glow: transparent;
   --shadow-1: none;
   --shadow-2: 0 12px 32px -16px rgba(0,0,0,.8);
   --shadow-sheet: none;
@@ -17,7 +16,7 @@
 /* ---- frame and sheet ---- */
 .app, .app:not(.overlay-side) .sidebar { background: var(--chrome); }
 .main { border-radius: 10px 10px 0 0; box-shadow: none; background: var(--bg); }
-.statusbar, .sb { color: var(--fg-3); }
+.statusbar { color: var(--fg-3); }
 
 /* ---- top bar: tabs read as plain titles; the current one is simply brighter ---- */
 .topbar { border-bottom-color: transparent; }
@@ -37,7 +36,7 @@
 .sbar:hover .sbar-meta { opacity: 1; }
 .sbar-title { font-weight: 500; color: var(--fg-2); }
 .sbar-title:hover { color: var(--fg); }
-.sbar .ibtn, .sbar-zen, .sbar-inspect { color: var(--fg-3); }
+.sbar .ibtn, .sbar-zen { color: var(--fg-3); }
 
 /* ---- the conversation ---- */
 /* Replies carry no name plate; the model shows in the reply's actions. Your own messages need no label either. */
@@ -65,7 +64,7 @@
 .tool.running .tool-sum { color: var(--fg-2); }
 .tool.error:not(.open) .tool-name { color: var(--err); }
 .tool-exit { background: transparent; padding: 0; }
-details.think > summary, .think-sum { color: var(--fg-3); }
+details.think > summary { color: var(--fg-3); }
 
 /* Errors read as a line of red text with a thin rule, not a red box. */
 .msg .errbox { border: 0; border-left: 2px solid var(--err-line); border-radius: 0; background: transparent; box-shadow: none; padding: 2px 0 2px 14px; }

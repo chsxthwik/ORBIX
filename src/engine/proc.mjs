@@ -1,6 +1,6 @@
 // The ORBIX agent: one conversation's agent loop (model streaming, tools, approvals, compaction, subagents, undo).
 // The server and UI drive it through request()/send() and its event stream (JSON frames: get_state, prompt,
-// agent_start/end, message_update, tool_execution_*, extension_ui_request). Its engine id on the wire is 'builtin'.
+// agent_start/end, message_update, tool_execution_*, extension_ui_request).
 // This file holds the lifecycle, the commands and the turn loop. The rest of the agent lives beside it, mixed into
 // this class (mixin.mjs): proc-models.mjs (model, thinking, connections), proc-tools.mjs (tool calls, approvals),
 // proc-checks.mjs (the check and review after a run) and proc-usage.mjs (tokens, cost, context fill).
@@ -28,6 +28,7 @@ import { RunChecks } from './proc-checks.mjs';
 import { ToolRuns, userMentionsHost } from './proc-tools.mjs';
 import { mixin } from './mixin.mjs';
 import { writeExport } from './export.mjs';
+import { ARTIFACT_DEF, runPrompt } from './artifact.mjs';
 
 const MAX_TURNS = 100;
 
@@ -72,15 +73,11 @@ export class AgentProc extends EventEmitter {
     this.worktreeState = null; // { state: 'merged' | 'kept' | 'discarded', hash, at } once you reviewed it
     this.opts = { resume, model, noSession };
     this.config = config;
-    this.engine = 'builtin';
-    this.ready = false;
     this.exited = false;
-    this.protocol = 'builtin';
     this.streaming = false;
     this.compacting = false;
     this.stderrTail = [];
     this.startedAt = Date.now();
-    this.info = { type: 'ready', engine: 'builtin' };
     this.cache = { commands: [] };
     this.messages = [];
     this.title = '';
@@ -115,6 +112,8 @@ export class AgentProc extends EventEmitter {
     this.run = null;
     this.roles = { fast: '', plan: '' }; // this session's override of the model roles ("provider/model"); '' = use the saved default
     this.goal = null; // { text, round, max } while /goal is running
+    // Set by the run controller when this conversation works on a run: { id, phase(), writeArtifact(args) }.
+    this.runInfo = null;
     this.envFacts = null; // environment block of the system prompt, captured once (stable prefix for caching)
     this.defs = toolDefsFor(backend);
     this.tools = createTools({ backend, cwd: workspace, getSignal: () => this.abortCtl?.signal });
@@ -165,7 +164,6 @@ export class AgentProc extends EventEmitter {
     }
     this._envFacts().catch(() => {}); // warm up (git status) while the user types
     await this._refreshMeta(false).catch(() => {});
-    this.ready = true;
     this.cache.commands = await this._commands().catch(() => []);
     this._emit({ type: 'available_commands_update', commands: this.cache.commands });
     return this;
@@ -311,7 +309,7 @@ export class AgentProc extends EventEmitter {
   }
 
   _isReadOnly(name) {
-    return READ_ONLY.has(name) || this.mcp.isReadOnly(name);
+    return READ_ONLY.has(name) || name === 'artifact' || this.mcp.isReadOnly(name);
   }
 
   _needsApproval(name) {
@@ -324,7 +322,7 @@ export class AgentProc extends EventEmitter {
   }
 
   _toolDefs() {
-    const defs = [...this.defs.filter((d) => d.name !== 'web_search' || this._searchOn()), ...this.mcp.toolDefs()];
+    const defs = [...this.defs.filter((d) => d.name !== 'web_search' || this._searchOn()), ...(this.runInfo ? [ARTIFACT_DEF] : []), ...this.mcp.toolDefs()];
     return this.planMode ? defs.filter((d) => this._isReadOnly(d.name)) : defs;
   }
 
@@ -598,7 +596,9 @@ export class AgentProc extends EventEmitter {
     const [env, rules, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null)]).then(([own, mine]) => (mine ? [...own, mine] : own)), subagent ? [] : this._skills()]);
     const model = this.model ? `${this.provider ? this.provider + '/' : ''}${this.model}` : '';
     if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules }), tools);
-    return buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode });
+    // A run has its own phase instructions; the generic plan-mode text would contradict them.
+    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo });
+    return this.runInfo ? `${base}\n\n${runPrompt({ phase: this.runInfo.phase(), branch: this.worktree?.branch, baseBranch: this.worktree?.baseBranch })}` : base;
   }
 
   _skills() {

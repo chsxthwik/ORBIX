@@ -5,7 +5,7 @@ import { api } from './api.js';
 import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { toggleWide } from './workbench.js';
 import { modal, btn, confirmDialog, row, toggle, SHORTCUTS, keyCaps } from './dialogs.js';
-import { renderEngineSettings } from './engine.js';
+import { renderEngineSettings, openLink } from './engine.js';
 import { brandMark } from './brands.js';
 import { renderModelRoles } from './models.js';
 import { renderMcpSettings } from './mcp.js';
@@ -486,7 +486,6 @@ function whereRow() {
 
 const COMX_URL = 'https://comx-site.vercel.app';
 const ISSUES_URL = 'https://github.com/chsxthwik/ORBIX/issues';
-const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
 
 const RELEASES_URL = 'https://github.com/chsxthwik/ORBIX/releases';
 
