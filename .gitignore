@@ -4,6 +4,3 @@ data/
 dist/
 # Screenshots from `npm run e2e -- --shots`: local evidence only (they show local paths)
 docs/evidence/*.png
-
-# Worktrees of feature branches kept inside the folder by other tools: never part of main
-/ORBIX-WT/

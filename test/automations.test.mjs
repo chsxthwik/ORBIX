@@ -1,0 +1,63 @@
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { Automations, nextRun, describeSchedule, cleanSchedule } from '../src/automations.mjs';
+
+const at = (y, mo, d, h, mi) => new Date(y, mo - 1, d, h, mi).getTime();
+
+describe('automation schedules', () => {
+  test('every hour fires at its minute, after the given time', () => {
+    assert.equal(nextRun({ every: 'hour', minute: 15 }, at(2026, 11, 20, 10, 0)), at(2026, 11, 20, 10, 15));
+    assert.equal(nextRun({ every: 'hour', minute: 15 }, at(2026, 11, 20, 10, 15)), at(2026, 11, 20, 11, 15));
+  });
+  test('every day, weekdays and a weekly day', () => {
+    assert.equal(nextRun({ every: 'day', hour: 9, minute: 0 }, at(2026, 11, 20, 10, 0)), at(2026, 11, 21, 9, 0));
+    // Nov 20, 2026 is a Friday: the next weekday 09:00 after Friday 10:00 is Monday.
+    assert.equal(nextRun({ every: 'weekday', hour: 9, minute: 0 }, at(2026, 11, 20, 10, 0)), at(2026, 11, 23, 9, 0));
+    assert.equal(nextRun({ every: 'week', day: 3, hour: 18, minute: 30 }, at(2026, 11, 20, 10, 0)), at(2026, 11, 25, 18, 30));
+  });
+  test('schedules are checked and described plainly', () => {
+    assert.throws(() => cleanSchedule({ every: 'minute' }), /how often/);
+    assert.equal(describeSchedule({ every: 'weekday', hour: 18, minute: 5 }), 'Weekdays at 18:05');
+    assert.equal(describeSchedule({ every: 'week', day: 1, hour: 9, minute: 0 }), 'Every Monday at 09:00');
+  });
+});
+
+describe('the automation list', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-auto-'));
+  let clock = at(2026, 11, 20, 8, 59);
+  const started = [];
+  const busy = new Set();
+  const make = () => new Automations({ dir, now: () => clock, start: async (a) => (started.push(a.id), `p${started.length}`), alive: (id) => busy.has(id) });
+
+  test('creates, saves and reloads; a due one starts once and waits for its next time', async () => {
+    const list = make();
+    const a = list.upsert({ prompt: 'Run the tests and report failures', project: 'C:\\shop', schedule: { every: 'day', hour: 9, minute: 0 } });
+    assert.equal(a.name, 'Run the tests and report failures');
+    assert.equal(a.nextAt, at(2026, 11, 20, 9, 0));
+    clock = at(2026, 11, 20, 9, 0, 10);
+    await list.tick();
+    assert.deepEqual(started, [a.id]);
+    assert.equal(list.view()[0].nextAt, at(2026, 11, 21, 9, 0));
+    await list.tick();
+    assert.equal(started.length, 1, 'not twice for one time');
+    const again = make();
+    assert.equal(again.view().length, 1, 'kept on disk');
+    assert.equal(again.view()[0].lastStatus, 'started');
+  });
+  test('Run now refuses while the last run still works; a missing prompt is refused', async () => {
+    const list = make();
+    const a = list.view()[0];
+    busy.add(a.lastProc);
+    await assert.rejects(list.run(a.id), /still working/);
+    busy.clear();
+    await list.run(a.id);
+    assert.equal(started.length, 2);
+    assert.throws(() => list.upsert({ prompt: '', project: 'C:\\x', schedule: { every: 'day' } }), /what it should do/);
+    assert.equal(list.remove(a.id), 1);
+    assert.equal(make().view().length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

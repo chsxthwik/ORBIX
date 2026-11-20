@@ -115,6 +115,30 @@ try {
   assert(model.seen.length === sent && (await page.eval(`return document.querySelector('#session textarea').value`)).includes('one line'), 'with Ctrl+Enter to send, Enter does not send');
   await page.eval(`(await import('/js/store.js')).savePrefs({ sendKey: 'enter' }); document.querySelector('#session textarea').value = ''; document.querySelector('#session textarea').dispatchEvent(new Event('input', { bubbles: true }));`);
   say('conversation e2e: archive, Settings page and send key');
+  // Side question: /btw is answered in the side panel, from the conversation, with no tools and nothing added to it.
+  const msgsBefore = await page.eval(`return document.querySelectorAll('#session .msg').length`);
+  const seenBefore = model.seen.length;
+  await page.fill('#session textarea', '/btw which file did you change?');
+  await page.eval(`document.querySelector('#session textarea').focus()`);
+  await page.key('Enter', { keyCode: 13, code: 'Enter' });
+  await page.until(`document.querySelector('#panel .ask-q') && !document.querySelector('#panel .ask-qa .pending')`, 'the side question answered', 20000);
+  assert(await page.eval(`return !!document.querySelector('#panel .ask-a, #panel .ask-err')`), 'an answer (or its error) in the panel');
+  assert(model.seen.length === seenBefore + 1 && model.seen.at(-1).tools.length === 0, 'one model call, without tools');
+  assert((await page.eval(`return document.querySelectorAll('#session .msg').length`)) === msgsBefore, 'nothing added to the conversation');
+  // Automations: add one, run it now (a new conversation joins the sidebar), then delete it.
+  await page.click('Automations', '#sidebar .side-nav');
+  await page.until(`document.querySelector('#runs .au-new')`, 'the Automations page');
+  await page.click('New automation', '#runs');
+  await page.fill('#runs .au-form textarea', 'Say hello from the automation.');
+  await page.click('Add automation', '#runs');
+  await page.until(`document.querySelector('#runs .au-item')`, 'the automation listed');
+  const tabsBefore = await page.eval(`return (await import('/js/store.js')).S.tabs.size`);
+  await page.click('Run now', '#runs .au-item');
+  await page.until(`(async () => (await import('/js/store.js')).S.tabs.size > ${tabsBefore})()`, 'the automation opened a conversation', 20000);
+  await page.click('Delete', '#runs .au-item');
+  await page.click('Delete', '.modal');
+  await page.until(`!document.querySelector('#runs .au-item')`, 'the automation deleted');
+  say('conversation e2e: side question and automations');
   const bad = page.errors.filter((e) => e && !/favicon|Failed to load resource/i.test(e));
   assert(!bad.length, `no page errors: ${bad.join(' | ')}`);
   ok = true;

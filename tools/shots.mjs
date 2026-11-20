@@ -470,6 +470,14 @@ async function scenes(page, project) {
   await page.eval("(await import('/js/runs.js')).openHub('review'); await new Promise((r) => setTimeout(r, 300));");
   await page.until("document.querySelector('#runs .rq-item')", 'the Review queue');
   await page.capture('review-queue', { dsf: 4 / 3, webp: true });
+
+  // Automations: two scheduled prompts, one of them off.
+  await page.eval(`const { api } = await import('/js/api.js');
+    await api.post('/api/automations', { name: 'Morning test report', prompt: 'Run the tests and tell me what fails, with a fix for each.', project: window.__shotProject, schedule: { every: 'weekday', hour: 9, minute: 0 } });
+    await api.post('/api/automations', { name: 'Weekly dependency check', prompt: 'List outdated dependencies and the risk of updating each one. Do not change files.', project: window.__shotProject, schedule: { every: 'week', day: 1, hour: 8, minute: 30 }, enabled: false });
+    (await import('/js/runs.js')).openHub('automations'); await new Promise((r) => setTimeout(r, 300));`);
+  await page.until("document.querySelectorAll('#runs .au-item').length === 2", 'the automations');
+  await page.capture('automations', { dsf: 4 / 3, webp: true });
 }
 
 // ============================================================================ main

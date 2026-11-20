@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.6.0 (2026-11-20)
+- **Automations** (sidebar → Automations). A prompt that ORBIX starts by itself every hour, every day, on weekdays or every week, in a project, as a new conversation. Run now, turn on or off, edit, delete; the list shows the next and last run and whether one is working. They run while ORBIX is open: a time missed while it was closed is skipped, and a run still working is not started twice. Each run is an ordinary conversation, so in Ask first it waits for your OK in Review.
+- **Browser** (side panel). Lists the web apps running on this computer (the usual dev-server ports, with their page titles) and previews one in a sandboxed frame next to the conversation, with reload and "open in your browser". Type a port, a localhost address, a site or a search: other sites and searches open in your own browser. ORBIX allows frames only from localhost.
+- **Side question** (side panel, or `/btw <question>` in the message box). Ask about the conversation while the agent keeps working: what it changed, why, where something is. The answer comes from the conversation so far, with no tools, and is not added to it.
+- **Rule files with triggers.** Markdown files in the project's `.agents/rules` folder, as in Antigravity. Front matter `trigger: always_on` (the default) puts a rule in every prompt; `model_decision` (with a `description`) and `glob` (with `globs`) list it for the agent to read when it applies; `manual` only when you @mention it.
+- **Fixes.** The toolbar lost the page name (Runs, Review, Automations) in windows narrower than 900px; side-question text was set in the code font.
+- **Cleanup.** Five merged feature branches and a stale worktree rule in `.gitignore` removed; the website's release list keeps the main releases and links to the rest.
+
 ## 3.5.1 (2026-11-20)
 - **Settings on wide screens.** On a large monitor the page list was squeezed to a sliver of icons (its left margin grew with the window). The page list and the page now sit together in the middle at any width.
 - **Deleted conversations can be restored.** Deleting a conversation moves it to the trash for 30 days instead of removing it at once. Settings → Projects → **Recently deleted** lists them with **Restore**, and **Empty** removes them for good.

@@ -10,6 +10,9 @@ import { runInspector } from './run-inspector.js';
 import { coalesce } from './coalesce.mjs';
 import { drawReview, loadReview, reviewCount } from './review.js';
 import { workingRuns } from './runs.js';
+import { renderMarkdown } from './markdown.js';
+import { asciiBar } from './ascii.js';
+import { openLink } from './engine.js';
 
 const P = { tab: 'home', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
@@ -17,7 +20,7 @@ let body;
 let tabsEl;
 let inspector = null;
 
-const ALL_TABS = [['home', 'Overview', 'overview'], ['run', 'Run', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']];
+const ALL_TABS = [['home', 'Overview', 'overview'], ['run', 'Run', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['ask', 'Side question', 'message'], ['console', 'Console', 'terminal'], ['browser', 'Browser', 'globe']];
 // Review is there for a session on its own branch only.
 let TABS = ALL_TABS.filter(([k]) => k !== 'review');
 function syncTabs(t) {
@@ -113,7 +116,7 @@ function draw() {
   inspector = null;
   if (!t) return;
   if (P.tab === 'run') { inspector = runInspector(t, () => showTab('changes')); body.append(inspector.el); return; }
-  ({ home: drawHome, files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole, review: (x) => drawReview(x, body, { redraw: reviewRedraw, viewFile }) })[P.tab](t);
+  ({ home: drawHome, ask: drawAsk, browser: drawBrowser, files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole, review: (x) => drawReview(x, body, { redraw: reviewRedraw, viewFile }) })[P.tab](t);
 }
 
 /**
@@ -135,9 +138,9 @@ function homeCounts() {
 function drawHome(t) {
   const { tabs, badge } = panelInfo(t);
   const find = h('button', { class: 'ph-find', type: 'button', onclick: () => emit('search', 'files') }, icon('search', 14), h('span', { class: 'grow' }, `Find a file in ${baseName(t.workspace) || 'the project'}`), h('kbd', null, 'Ctrl+K'));
-  const ITEMS = { review: ['Review', 'check'], changes: ['Changes', 'branch'], files: ['Open file', 'file'], console: ['Terminal', 'terminal'], todos: ['Plan', 'list'], run: ['Inspect', 'activity'] };
+  const ITEMS = { review: ['Review', 'check'], changes: ['Changes', 'branch'], files: ['Open file', 'file'], console: ['Terminal', 'terminal'], ask: ['Side question', 'message'], browser: ['Browser', 'globe'], todos: ['Plan', 'list'], run: ['Inspect', 'activity'] };
   const have = new Set(tabs.map(([k]) => k));
-  const items = ['review', 'changes', 'files', 'console', 'todos', 'run'].filter((k) => have.has(k)).map((k) => h('button', { class: 'ph-it', type: 'button', dataset: { k }, onclick: () => showTab(k) }, icon(ITEMS[k][1], 15), h('span', { class: 'grow' }, ITEMS[k][0]), badge[k] ? h('span', { class: 'ph-n num' }, badge[k]) : null));
+  const items = ['review', 'changes', 'files', 'console', 'browser', 'ask', 'todos', 'run'].filter((k) => have.has(k)).map((k) => h('button', { class: 'ph-it', type: 'button', dataset: { k }, onclick: () => showTab(k) }, icon(ITEMS[k][1], 15), h('span', { class: 'grow' }, ITEMS[k][0]), badge[k] ? h('span', { class: 'ph-n num' }, badge[k]) : null));
   const helpers = [...(t.subagents?.values() || [])];
   const runs = workingRuns();
   const section = (title, n, rows, more) => h('section', { class: 'ph-sec' }, h('h4', null, title, h('span', { class: 'ph-n num' }, n)), rows, more || null);
@@ -151,6 +154,105 @@ function drawHome(t) {
       return h('button', { class: 'ph-row', type: 'button', onclick: () => showTab('agents'), title: (p.assignment || p.task || '').toString().slice(0, 300) }, live ? h('span', { class: 'dot run' }) : icon(/fail|error/.test(st) ? 'x' : 'check', 13), h('span', { class: 'ell' }, (p.assignment || p.task || p.id || 'Helper').toString().split('\n')[0]));
     }), helpers.length > 5 ? h('button', { class: 'ph-more', type: 'button', onclick: () => showTab('agents') }, 'See all') : null) : null,
     runs.length ? section('Background runs', runs.length, runs.slice(0, 5).map((r) => h('button', { class: 'ph-row', type: 'button', onclick: () => emit('open-run', r.id) }, h('span', { class: 'dot run' }), h('span', { class: 'ell' }, r.title))), runs.length > 5 ? h('button', { class: 'ph-more', type: 'button', onclick: () => emit('open-run', null) }, 'See all') : null) : null));
+}
+
+/**
+ * Side question (/btw): ask about the conversation without interrupting it. The answer comes from the conversation so
+ * far, with no tools, and is not added to it. Questions and answers stay in this panel while the window is open.
+ */
+export async function askSide(t, q) {
+  const text = String(q || '').trim();
+  if (!text || t.dead) return;
+  t.sideQA ||= [];
+  const item = { q: text, a: '', at: Date.now(), busy: true };
+  t.sideQA.push(item);
+  // Show the answer where it lands: open the panel on Side question, also when it was closed or is a narrow overlay.
+  if (P.tab !== 'ask' || !document.querySelector('#panel')?.getClientRects().length) showTab('ask');
+  else if (activeTab() === t) draw();
+  try {
+    const r = await rpc(t.id, { type: 'side_question', text }, 130000);
+    if (r?.success === false || r?.ok === false) throw new Error(r.error || 'The model could not answer');
+    item.a = r?.data?.text || '';
+    item.model = r?.data?.model || '';
+  } catch (e) {
+    item.err = e.message;
+  }
+  item.busy = false;
+  if (activeTab() === t && P.tab === 'ask') draw();
+}
+
+function drawAsk(t) {
+  const list = t.sideQA || [];
+  const box = h('textarea', { class: 'ask-in', rows: 2, placeholder: 'Ask about this conversation. The agent keeps working.', 'aria-label': 'Side question' });
+  const send = () => {
+    const q = box.value;
+    box.value = '';
+    askSide(t, q);
+  };
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) (e.preventDefault(), send());
+  });
+  const log = h('div', { class: 'p-scroll pad ask-log' },
+    list.length ? list.map((it) => h('div', { class: 'ask-qa' },
+      h('div', { class: 'ask-q' }, it.q),
+      it.busy ? h('div', { class: 'pending' }, asciiBar(), h('span', { class: 'pending-l' }, 'Thinking'))
+        : it.err ? h('div', { class: 'ask-err' }, it.err)
+        : h('div', { class: 'ask-a' }, renderMarkdown(it.a), it.model ? h('div', { class: 'ask-m' }, it.model) : null))) : emptyState('users', 'Ask a quick question about this conversation, even while the agent works: what it changed, why, where something is. It answers without tools and does not add to the conversation. You can also type /btw in the message box.'));
+  body.append(log, h('div', { class: 'ask-bar' }, box, iconBtn('send', 'Ask (Enter)', send, 'ask-go')));
+  log.scrollTop = log.scrollHeight;
+  setTimeout(() => box.focus({ preventScroll: true }), 0);
+}
+
+/** Is this an http page on this computer? Only those show inside ORBIX (see frame-src in server.mjs). */
+const localPage = (u) => {
+  try {
+    const x = new URL(u);
+    return x.protocol === 'http:' && (x.hostname === 'localhost' || x.hostname === '127.0.0.1');
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Browser: preview the web app you are building, in the panel. It lists the dev servers running on this computer
+ * (Vite, Next, Django…) and shows one in a sandboxed frame. Other sites, and searches, open in your own browser.
+ */
+function drawBrowser(t) {
+  const st = (t.browser ||= { url: '' });
+  const input = h('input', { class: 'br-url', type: 'text', value: st.url, placeholder: 'Search or enter a URL', 'aria-label': 'Address', spellcheck: false, autocomplete: 'off' });
+  const go = (raw) => {
+    let v = String(raw || '').trim();
+    if (!v) return;
+    if (/^\d{2,5}$/.test(v)) v = `http://localhost:${v}/`;
+    else if (/^(localhost|127\.0\.0\.1)([:/]|$)/i.test(v)) v = `http://${v}`;
+    else if (!/^https?:\/\//i.test(v)) v = /^[^\s/]+\.[a-z]{2,}(\/\S*)?$/i.test(v) ? `https://${v}` : `https://duckduckgo.com/?q=${encodeURIComponent(v)}`;
+    if (localPage(v)) {
+      st.url = v;
+      return draw();
+    }
+    openLink(v);
+    toast('Opened in your browser. The panel shows only apps running on this computer.', 'ok', 2600);
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) (e.preventDefault(), go(input.value));
+  });
+  const frame = st.url ? h('iframe', { class: 'br-frame', src: st.url, title: `Preview of ${st.url}`, sandbox: 'allow-scripts allow-forms allow-same-origin allow-popups allow-modals', referrerpolicy: 'no-referrer' }) : null;
+  body.append(h('div', { class: 'p-bar br-bar' },
+    st.url ? iconBtn('arrow-left', 'Back to the list of running apps', () => ((st.url = ''), draw()), 'sm') : null,
+    input,
+    st.url ? iconBtn('refresh', 'Reload', () => (frame.src = st.url), 'sm') : iconBtn('refresh', 'Look again for running apps', () => draw(), 'sm'),
+    st.url ? iconBtn('external', 'Open in your browser', () => openLink(st.url), 'sm') : null));
+  if (frame) return body.append(h('div', { class: 'br-view' }, frame));
+  const list = h('div', { class: 'p-scroll pad br-list' }, skeleton(3));
+  body.append(list);
+  api.get('/api/devservers').then(({ servers }) => {
+    if (!list.isConnected) return;
+    replace(list,
+      servers.length ? h('h4', { class: 'br-h' }, 'Running on this computer') : null,
+      servers.length ? servers.map((s) => h('button', { class: 'ph-row br-row', type: 'button', title: s.url, onclick: () => go(s.url) }, h('span', { class: 'dot ok' }), h('span', { class: 'ell grow' }, s.title || `localhost:${s.port}`), h('span', { class: 'muted num' }, `:${s.port}`)))
+        : emptyState('files', 'No web app is running on the usual ports (3000, 5173, 8000, 8080…). Start your dev server, or ask the agent to, then look again. You can also type a port or a localhost address above.'));
+  }, (e) => list.isConnected && replace(list, errorState(e.message, { retry: () => draw() })));
+  setTimeout(() => input.focus({ preventScroll: true }), 0);
 }
 
 const emptyState = (kind, text) => h('div', { class: 'empty' }, asciiArt(kind), text);

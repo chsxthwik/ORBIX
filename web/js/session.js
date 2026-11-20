@@ -9,7 +9,7 @@ import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
 import { asciiBar, asciiOrbit } from './ascii.js';
-import { viewFile, reviewChanges } from './panels.js';
+import { viewFile, reviewChanges, askSide } from './panels.js';
 import { conversationToMarkdown } from './exporter.js';
 import { Composer } from './composer.js';
 import { addContext, permissionChip } from './controls.js';
@@ -1302,6 +1302,12 @@ export class TabView {
       // Enter on an empty box does nothing; only the stop button (or Esc) stops the agent.
       if (fromButton && t.streaming) abort(t);
       return;
+    }
+    // /btw <question>: a side question, answered in the side panel without interrupting the agent.
+    const btw = /^\/btw\s+([\s\S]+)/.exec(p.text || '');
+    if (btw && !p.images?.length) {
+      this.composer.reset(p.raw);
+      return askSide(t, btw[1]);
     }
     this.composer.reset(p.raw);
     const svg = this.sendBtn.querySelector('svg');

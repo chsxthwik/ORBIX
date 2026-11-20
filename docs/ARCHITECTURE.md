@@ -20,7 +20,7 @@ Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ───�
 
 ## The server (`src/server.mjs`)
 
-- **Static files:** `web/` and `assets/`, with a strict Content Security Policy (no inline scripts or styles, no remote loads).
+- **Static files:** `web/` and `assets/`, with a strict Content Security Policy (no inline scripts or styles, no remote loads; frames only from `localhost` and `127.0.0.1`, for the Browser tab).
 - **Access control:** every request needs the token cookie, except `/api/ping` and the OpenRouter sign-in callback. It also checks the `Host` header (DNS rebinding), `Origin` / `Sec-Fetch-Site` (other local pages), and requires an `x-orbix: 1` header on writes.
 - **Events:** one Server-Sent Events stream, `GET /api/events`. It carries `{p, e}` (an event from session `p`) and `{g}` (global: `hello`, `procs`). High-frequency updates are coalesced every 40 ms.
 - **API groups** (all JSON):
@@ -29,7 +29,9 @@ Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ───�
 |---|---|---|
 | App | `/api/state`, `/api/env`, `/api/backend`, `/api/prefs`, `/api/diagnostics`, `/api/quit` | settings, where commands run, health checks |
 | Projects | `/api/workspaces`, `/api/workspaces/remove` | the project list |
-| Conversations | `/api/sessions`, `/api/sessions/delete` | saved conversations (only ORBIX's own files can be deleted) |
+| Conversations | `/api/sessions`, `/api/sessions/delete`, `/api/sessions/trash`, `/api/sessions/restore` | saved conversations (only ORBIX's own files can be deleted; deleted ones stay in the trash for 30 days) |
+| Automations | `/api/automations`, `/api/automations/delete`, `/api/automations/run` | scheduled prompts (`src/automations.mjs`) |
+| Browser | `/api/devservers` | web apps running on this computer, for the side panel's Browser tab (`src/devservers.mjs`) |
 | Sessions | `/api/proc/start`, `/api/proc/stop`, `/api/procs`, `/api/proc/ui`, `/api/rpc`, `/api/reply` | open, drive and close agent sessions |
 | AI providers | `/api/engine*` | keys, OpenRouter sign-in, models, approvals, web search |
 | Tools | `/api/mcp*`, `/api/hooks*` | MCP servers and hooks |
@@ -96,6 +98,15 @@ A session opened from its saved file is connected to its run again (`adopt`).
 The interface (`web/js/runs.js`, `web/css/runs.css`) has three views in the `#runs` section: Runs, Review (one queue
 of everything that waits for you) and the page of one run (timeline, documents, changes, feedback, decision bar). The
 server sends `{g: 'run', run}` on every change.
+
+## Automations (`src/automations.mjs`)
+
+A prompt that ORBIX sends by itself, in a project, as a new conversation: every hour (at a minute), every day,
+on weekdays or every week (at a time). `data/automations.json` holds them. A timer checks every 30 seconds; each due
+one starts through the server (`startAutomation`: open a session, send the prompt, name it), and moves to its next
+time. Times missed while ORBIX was closed are skipped, not caught up, and a run still working is not started twice.
+Approvals work as in any conversation: in Ask first a run waits in Review. The page is `web/js/automations.js`
+(sidebar → Automations, in the `#runs` section).
 
 ## Where commands run (`src/backend.mjs`)
 

@@ -19,6 +19,7 @@ import { toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
 import { sideUpdate } from './updates.js';
 import { initBackdrop, SCENES } from './backdrop.js';
+import { refreshAutomations } from './automations.js';
 import { initRuns, openHub, closeHub, isHub, hubView, draw as drawHub, onRunEvent, reviewCount, workingCount } from './runs.js';
 
 const views = new Map();
@@ -352,6 +353,7 @@ function drawSidebar() {
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
       ((v) => h('button', { class: 'side-link' + (v === 'runs' || v === 'run' ? ' cur' : ''), type: 'button', title: 'Every run across projects (Ctrl+2)', 'aria-current': v === 'runs' || v === 'run' ? 'page' : null, onclick: () => goHub('runs') }, icon('activity', 15), h('span', null, 'Runs'), workingCount() ? h('span', { class: 'side-count quiet num', title: `${workingCount()} working` }, workingCount()) : null))(hubView()?.view),
       h('button', { class: 'side-link' + (hubView()?.view === 'review' ? ' cur' : ''), type: 'button', title: 'What waits for you (Ctrl+3)', 'aria-current': hubView()?.view === 'review' ? 'page' : null, onclick: () => goHub('review') }, icon('shield', 15), h('span', null, 'Review'), reviewCount() ? h('span', { class: 'side-count num', title: `${reviewCount()} waiting for you`, 'aria-label': `${reviewCount()} waiting for you` }, reviewCount()) : null),
+      h('button', { class: 'side-link' + (hubView()?.view === 'automations' ? ' cur' : ''), type: 'button', title: 'Tasks ORBIX starts by itself on a schedule', 'aria-current': hubView()?.view === 'automations' ? 'page' : null, onclick: () => goHub('automations') }, icon('clock', 15), h('span', null, 'Automations')),
       h('button', { class: 'side-link', type: 'button', title: 'Instructions, skills, tools and MCP servers', onclick: () => settingsDialog('tools') }, icon('puzzle', 15), h('span', null, 'Customizations'))),
     h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
@@ -749,6 +751,7 @@ function paletteItems() {
     { group: 'General', icon: 'plus', label: 'New conversation', key: 'Ctrl+N', run: () => newSession() },
     { group: 'General', icon: 'activity', label: 'Runs', key: 'Ctrl+2', run: () => goHub('runs') },
     { group: 'General', icon: 'shield', label: 'Review: what waits for you', key: 'Ctrl+3', run: () => goHub('review') },
+    { group: 'General', icon: 'clock', label: 'Automations', run: () => goHub('automations') },
     { group: 'General', icon: 'plus', label: 'New conversation without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
     { group: 'General', icon: 'cog', label: 'Settings', key: 'Ctrl+,', run: () => settingsDialog() },
@@ -850,7 +853,7 @@ const setBanner = (msg) => {
 };
 
 /** Open a tab for every running session this window does not show yet. Returns the ids it just loaded. */
-async function adoptRunning(procs) {
+async function adoptRunning(procs, { quiet = false } = {}) {
   const fresh = new Set();
   for (const p of procs) {
     if (S.tabs.has(p.id)) continue;
@@ -865,7 +868,7 @@ async function adoptRunning(procs) {
     tab.ready = true;
     for (const ev of tab.buffer.splice(0)) routeEvent(p.id, ev);
   }
-  if (!S.active && S.tabs.size && !homeRequested) setActive([...S.tabs.keys()][0]);
+  if (!quiet && !S.active && S.tabs.size && !homeRequested) setActive([...S.tabs.keys()][0]);
   else emit('tabs');
   return fresh;
 }
@@ -899,7 +902,13 @@ async function boot() {
     onEvent: routeEvent,
     onGlobal: async (g) => {
       if (g.g === 'hello') onHello(g.procs, await adoptRunning(g.procs));
-      else if (g.g === 'procs') onProcs(g.procs);
+      else if (g.g === 'procs') {
+        onProcs(g.procs);
+        // An automation started a conversation: it joins the sidebar (Running) without taking the screen.
+        const fresh = g.procs.filter((p) => p.automation && !S.tabs.has(p.id));
+        if (fresh.length) adoptRunning(fresh, { quiet: true });
+        if (hubView()?.view === 'automations') refreshAutomations();
+      }
       else if (g.g === 'run' || g.g === 'run_removed') onRunEvent(g);
     },
     onOpen: () => {

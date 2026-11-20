@@ -10,6 +10,8 @@ import { Backend, runProc } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
 import { DATA_DIR } from './store.mjs';
+import { Automations } from './automations.mjs';
+import { findDevServers } from './devservers.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, listTrash, restoreFromTrash, emptyTrash, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
 import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
@@ -56,7 +58,8 @@ const CSP = [
   "style-src 'self'",
   "script-src 'self'",
   "connect-src 'self'",
-  "frame-src 'none'",
+  // The side panel's Browser tab previews web apps running on this computer, and nothing else.
+  "frame-src http://localhost:* http://127.0.0.1:*",
   "worker-src 'none'",
   "object-src 'none'",
   "base-uri 'none'",
@@ -130,6 +133,14 @@ export class AppServer {
     this.server = http.createServer((req, res) => this.handle(req, res).catch((e) => this.fail(res, e)));
     this.server.keepAliveTimeout = 5000;
     this.runs = new RunController(this);
+    // Automations: prompts sent on a schedule, each as a new conversation in its project.
+    this.automations = new Automations({
+      start: (a) => this.startAutomation(a),
+      alive: (id) => {
+        const p = this.procs.get(id);
+        return !!p && (p.streaming || p.pendingAsk?.size > 0);
+      },
+    });
     this.routes = this.buildRoutes();
     setInterval(() => this.heartbeat(), 15000).unref();
   }
@@ -142,6 +153,7 @@ export class AppServer {
         this.server.off('error', onErr);
         this.port = this.server.address().port;
         this.hosts = new Set([`127.0.0.1:${this.port}`, `localhost:${this.port}`]);
+        this.automations.begin();
         resolve(this.port);
       });
     });
@@ -169,6 +181,7 @@ export class AppServer {
 
   async shutdown() {
     log('shutdown');
+    this.automations.stop();
     await Promise.all([...this.procs.values()].map((p) => p.stop(2500).catch(() => {})));
     for (const c of this.clients) {
       try {
@@ -194,8 +207,20 @@ export class AppServer {
   heartbeat() {
     for (const c of this.clients) c.write(': ping\n\n');
   }
+  /** Start one automation: a new conversation in its project, named after it, with its prompt sent. Returns the proc id. */
+  async startAutomation(a) {
+    const proc = await this.startProc({ workspace: a.project, model: a.model || undefined });
+    proc.automation = a.id;
+    await proc.request({ type: 'prompt', message: a.prompt });
+    // The conversation file exists once the first message is saved; then it takes the automation's name.
+    for (let i = 0; i < 50 && !proc.session; i++) await new Promise((r) => setTimeout(r, 100));
+    if (proc.session) await proc.request({ type: 'set_session_name', name: a.name }).catch(() => {});
+    this.broadcastProcs();
+    return proc.id;
+  }
+
   procList() {
-    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, title: p.title || '', streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null, run: p.runId || '' }));
+    return [...this.procs.values()].map((p) => ({ automation: p.automation || '', id: p.id, workspace: p.workspace, title: p.title || '', streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null, run: p.runId || '' }));
   }
   broadcastProcs() {
     this.broadcast({ g: 'procs', procs: this.procList() });
@@ -700,6 +725,16 @@ export class AppServer {
       'GET /api/sessions/trash': async () => ({ items: await listTrash() }),
       'POST /api/sessions/restore': async ({ body }) => ({ path: await restoreFromTrash(body.name) }),
       'POST /api/sessions/trash/empty': async () => ({ removed: await emptyTrash() }),
+
+      'GET /api/devservers': async () => ({ servers: await findDevServers({ skip: [this.port] }) }),
+
+      'GET /api/automations': async () => ({ items: this.automations.view() }),
+      'POST /api/automations': async ({ body }) => ({ item: this.automations.upsert(body), items: this.automations.view() }),
+      'POST /api/automations/delete': async ({ body }) => ({ removed: this.automations.remove(String(body.id || '')), items: this.automations.view() }),
+      'POST /api/automations/run': async ({ body }) => {
+        await this.automations.run(String(body.id || ''));
+        return { items: this.automations.view() };
+      },
 
       'POST /api/proc/start': async ({ body }) => {
         const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession, branch: body.branch === true });

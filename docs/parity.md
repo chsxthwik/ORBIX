@@ -74,19 +74,19 @@ run tests → inspect diffs and artifacts → give feedback → apply or discard
 | 3.2 | Concurrent conversations | Several runs work at once, each in its own worktree | Done | `runs.test.mjs` "two runs work at the same time" |
 | 3.3 | Message queueing while the agent works | Feedback sent to a working run is queued and read at its next step | Existing | `test/agent.test.mjs` |
 | 3.4 | Subagents (`research`, `browser`, `self`; custom agents; states Running/Idle/Killed; depth 10) | `task` tool: read-only helper agents in parallel, listed in the Agents panel. No custom agents, no write-capable subagents, no parent-child run records. | Partial | |
-| 3.5 | Background tasks with **Cancel Task** | Not implemented as a separate queue | Not started | |
+| 3.5 | Background tasks with **Cancel Task** | Runs work in the background, each in its own worktree, with **Stop**; the side panel's first page lists the runs working now with "See all". No separate queue for agent-started shell tasks. | Partial | `test/runs.test.mjs` |
 | 3.6 | Task list / task groups | **Unknown** for the App (documented for the IDE only). ORBIX has a `tasks` artifact kind and the existing to-do list. | Unknown | |
 | 3.7 | Screenshots, browser recordings as artifacts | Not implemented | Not started | Needs 3.9 |
 | 3.8 | Inline comments on diff lines with line numbers | Comments attach to a whole changed file | Partial | |
-| 3.9 | Built-in browser, browser agent, site/upload/download approval prompts | Not implemented | Not started | Isolated profile and the documented prompts are specified in the research notes |
+| 3.9 | Built-in browser, browser agent, site/upload/download approval prompts | Side panel → **Browser**: lists the web apps running on this computer (dev-server ports on 127.0.0.1, with their page titles) and previews one in a sandboxed frame; other sites and searches open in your own browser. No browser agent (the model cannot click or read the page). | Partial | `test/devservers.test.mjs`; CSP allows frames from localhost only |
 | 3.10 | Partial acceptance of changes | Whole-run apply or discard only | Not started | **Undocumented** in the benchmark beyond stage/unstage/discard in Review |
 | 3.11 | Review: stage, unstage, discard, commit, amend, push | Changes panel of a conversation: stage, unstage, discard, commit | Existing (no amend/push) | `test/gitwrite.test.mjs` |
 | 3.12 | Checkpoints and **Confirm Undo** with the list of files | Every edit records the previous content; `/undo` and Undo buttons | Existing | `test/engine.test.mjs`; benchmark behavior is changelog-only |
-| 3.13 | Rules (`AGENTS.md`, `.agents/rules/*.md` with `trigger` frontmatter) | `AGENTS.md` / `CLAUDE.md` up the folder tree | Partial (no rule triggers) | |
+| 3.13 | Rules (`AGENTS.md`, `.agents/rules/*.md` with `trigger` frontmatter) | `AGENTS.md` / `CLAUDE.md` up the folder tree, and `.agents/rules/*.md` with `trigger`: `always_on` (default) is in every prompt, `model_decision` and `glob` are listed with their description or patterns for the agent to read when they apply, `manual` only when you @mention it | Done | `test/rules.test.mjs` |
 | 3.14 | Skills (`SKILL.md`, progressive disclosure, `/<skill>`) | Skills and Markdown command files | Existing | `test/slashprompts.test.mjs` |
 | 3.15 | MCP (stdio and HTTP, per-server controls, OAuth, lazy tools) | stdio and HTTP servers, project servers need a one-time OK | Existing (no OAuth, no lazy loading) | `test/engine.test.mjs` |
 | 3.16 | Hooks (`SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`; decisions) | `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`; exit code 2 blocks | Partial | `test/features.test.mjs` |
-| 3.17 | Automations and `/schedule` | Not implemented | Not started | Unattended runs must deny anything that would ask (documented) |
+| 3.17 | Automations and `/schedule` | Sidebar → **Automations**: a prompt that runs every hour, every day, on weekdays or every week, in a project, as a new conversation; Run now, on/off, edit, delete. Runs while ORBIX is open; a missed time is skipped; a run still working is not started twice. | Partial (no `/schedule`) | `test/automations.test.mjs`, `e2e/conversation.mjs`. Differs: an automation's run waits for your OK in Review instead of denying what would ask |
 | 3.18 | Permission presets (Request Review, Default, Auto, Turbo) and the `action(target)` rule engine | Three approval modes plus trusted commands and the run scope | Partial | |
 | 3.19 | Terminal sandbox | Not implemented | Not started | The benchmark's Windows mechanism is **undocumented**; it needs Windows 11 24H2 |
 | 3.20 | SSH hosts (v2.33.0) | Not implemented | Not started | Needs a Linux host to verify |
@@ -94,6 +94,7 @@ run tests → inspect diffs and artifacts → give feedback → apply or discard
 | 3.22 | GitHub pull request status pills | Not implemented | Not started | Needs a GitHub token to verify |
 | 3.23 | Models: one vendor's list plus a few others | Any provider: Anthropic, OpenAI, ChatGPT plan, Gemini, xAI, Groq, Mistral, DeepSeek, OpenCode, OpenRouter, Together, Fireworks, Cerebras, Moonshot, Z.ai, Qwen, Ollama, LM Studio and any OpenAI-compatible server. Keys are encrypted with Windows DPAPI. | Existing, beyond the benchmark | `test/providers.test.mjs` |
 | 3.24 | `/goal`, `/compact`, search | Present | Existing | `test/engine.test.mjs`, `test/features.test.mjs` |
+| 3.27 | Side question (ask about the conversation while the agent works) | Side panel → **Side question**, or `/btw <question>` in the message box: answered from the conversation with no tools, not added to it, the agent keeps working | Done | `e2e/conversation.mjs` |
 | 3.25 | Multi-agent orchestrators (`/boost`, `/swarm`, `/teamwork`, `/run-workflow`), Remote Control, Remote Agents, Marketplace, voice | Not implemented | Not started | Several depend on the vendor's cloud |
 | 3.26 | Windows 10 and ARM64 builds | x64 installer only | Not started | Tracked separately; no ARM64 or Windows 10 machine to verify on |
 
