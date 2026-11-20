@@ -116,6 +116,16 @@ ipcMain.on('orbix:titlebar', (e, { bg, fg }) => {
   } catch {}
 });
 
+// The page asks for attention (an agent finished or needs you): flash the taskbar button until the window is focused.
+ipcMain.on('orbix:flash', (e) => {
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (!w || w.isFocused()) return;
+  try {
+    w.flashFrame(true);
+    w.once('focus', () => w.flashFrame(false));
+  } catch {}
+});
+
 async function quit() {
   if (quitting) return;
   quitting = true;

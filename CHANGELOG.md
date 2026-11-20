@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.5.0 (2026-11-20)
+- **Settings is a page.** It opens over the workspace with Back to app (Esc also returns), a search box, and grouped pages: App (Preferences, Appearance, Notifications, Shortcuts), Agent (Providers, Models, Permissions, Checks, Instructions, Tools & MCP), Workspace (Projects, Worktrees) and About.
+- **Preferences** (new): send messages with Enter or with Ctrl+Enter (then Enter starts a new line), follow new output, the Overview card, how the sidebar sorts projects, and archived conversations.
+- **Notifications** (new): choose when ORBIX tells you (finished, needs you, only in the background) and how: a Windows notification (with the permission state and an Allow button), a soft chime, and a taskbar flash in the Windows app that stops when you open the window. "Send a test" tries it.
+- **Projects** (new): every project folder with its path, conversations and last activity; start a conversation there, show it in Explorer, open another folder, or remove one from the list (files stay).
+- **Worktrees** (new): the runs and conversations that work on their own branch, with their branch and state; open them or show their folder.
+- **Sidebar.**
+  - **Archive** a conversation from its row or with A: it leaves the list and stays on disk; the filter menu shows archived conversations again, and Preferences can unarchive them all.
+  - The filter button is now a menu: filter, sort projects by recent activity or by name, show archived.
+  - A conversation shows a state only when it has one (working, needs you, unread, ended); the empty circle on open, idle conversations is gone.
+  - The footer is Settings and one quiet dot for the model connection (its name in the hint); without a connection it says so, with Connect.
+  - New conversation is a filled button, as in Antigravity.
+
 ## 3.4.3 (2026-11-20)
 - **Side panel first page.** Opening the side panel (toolbar button or Ctrl+J) lands on a first page, as in Antigravity: find a file in the project, Changes, Open file, Terminal, Plan and Inspect with their counts, then the conversation's subagents and the runs working now, each with "See all".
 - **Toolbar follows the layout.** With the side panel docked, the conversation's ⋮ and Overview buttons end where the conversation ends, and the panel switch sits above the panel.

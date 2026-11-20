@@ -284,3 +284,39 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .work-h .work-facts { opacity: 0; transition: opacity var(--t2) var(--ease); }
 .work-h:hover .work-facts, .work-h:focus-visible .work-facts, details.work[open] > .work-h .work-facts { opacity: .85; }
 .msg-time { font-variant-numeric: tabular-nums; }
+
+/* ================= Settings as a page (as in OpenCode and Antigravity) ================= */
+/* It covers the workspace below the menu row, so the window buttons and menus stay where they are. */
+.scrim:has(> .modal.settings-page) { inset: var(--mb-h) 0 0 0; padding: 0; place-items: stretch; background: var(--bg); animation: set-in var(--t3) var(--ease-out); }
+@keyframes set-in { from { opacity: 0; transform: translateY(6px); } }
+.modal.settings-page { width: 100%; max-width: none; height: 100%; max-height: none; border: 0; border-radius: 0; background: var(--bg); box-shadow: none; animation: none; }
+.modal.settings-page > .modal-h { display: none; }
+.modal.settings-page > .modal-b { height: 100%; border-top: 1px solid var(--line); }
+.settings-page .set-wrap { grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); height: 100%; }
+.settings-page .set-nav { gap: 6px; padding: 22px 16px 24px max(16px, calc((100vw - 1240px) / 2)); border-right: 0; background: transparent; }
+.settings-page .set-content { padding: 40px 48px 64px; }
+.settings-page .set-content > * { max-width: 760px; margin-inline: auto; }
+.set-back { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; height: 30px; margin: 0 0 14px; padding: 0 10px 0 8px; border-radius: 7px; color: var(--fg-2); font-size: 13px; }
+.set-back:hover { background: var(--bg-hover); color: var(--fg); }
+.settings-page .set-find input[type=search] { border-color: transparent; background: transparent; }
+.settings-page .set-find input[type=search]:focus { border-color: var(--line-2); background: var(--bg-inset); }
+.settings-page .set-tab { height: 32px; border-radius: 7px; }
+.settings-page .set-nav-h { margin: 14px 0 2px; color: var(--fg-3); font-size: 11.5px; font-weight: 500; }
+.set-nav-gap { height: 12px; }
+.settings-page .set-title { font-size: 22px; letter-spacing: -.015em; }
+.set-actions-top { justify-content: flex-end; margin: -6px 0 12px; }
+.proj-l { display: inline-flex; align-items: center; gap: 8px; }
+.proj-l svg { color: var(--fg-3); }
+@media (max-width: 760px) { .settings-page .set-nav { padding: 12px; } .settings-page .set-content { padding: 20px 16px 40px; } }
+
+/* ================= sidebar, like Antigravity's ================= */
+.app .sidebar .side-new { border-color: transparent; background: var(--bg-raise); }
+.sidebar .side-new:hover { border-color: transparent; background: var(--bg-raise-2); }
+.sidebar .side-new.cur { border-color: transparent; background: var(--bg-raise-2); }
+.sidebar .proj-btn .proj-ic { opacity: .85; }
+.sidebar .s-btn .dot { flex: none; }
+.sidebar .s-row.archived .s-btn { color: var(--fg-3); font-style: italic; }
+.sidebar .row-acts { gap: 0; }
+.sidebar .row-acts .ibtn { width: 24px; height: 24px; min-height: 24px; color: var(--fg-3); }
+.sidebar .row-acts .ibtn:hover { color: var(--fg); background: var(--bg-active); }
+.sidebar .foot-status.ok { flex: none; width: 30px; justify-content: center; padding: 0; }

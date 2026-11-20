@@ -2,6 +2,7 @@
 // `/` command and `@` file pop-ups. The owner adds its own buttons (`row`) and decides what "send" does.
 import { h, icon, replace, toast, lsGet, lsSet, baseName, leave } from './dom.js';
 import { api } from './api.js';
+import { S } from './store.js';
 
 const MAX_IMAGES = 6;
 const MAX_IMAGE = 12 * 1024 * 1024;
@@ -324,6 +325,8 @@ export class Composer {
       if (e.key === 'Escape') return e.preventDefault(), e.stopPropagation(), this.closePopup();
     }
     if (e.key === 'Enter' && !e.shiftKey) {
+      // Settings → Preferences → Send messages with Ctrl+Enter: a plain Enter is a new line (Alt+Enter still queues).
+      if (S.ui?.sendKey === 'ctrl' && !e.ctrlKey && !e.metaKey && !e.altKey) return;
       e.preventDefault();
       this.o.onSubmit(e.altKey);
       return;
