@@ -1,30 +1,19 @@
-// Session timeline: a rail in the right margin of a conversation that maps every step, top to bottom, at its real
-// position in the transcript. Your messages (orange), file changes (teal), commands, reads, and errors (red).
-// Hover a mark to see what it was; click it to jump there; drag on the rail to scrub. A box shows the part of the
-// conversation on screen. Alt+↑ / Alt+↓ jump between your messages.
-// It is built from what the transcript shows (the rendered cards and messages), so it can never drift from it.
+// The navigator: a rail at the left edge of a conversation with one dot per turn (each message of yours), at its
+// real position in the transcript, and a red mark where something failed. The dot of the turn you are reading is
+// lit. Hover a dot to see the message and when you sent it; click to jump there; drag on the rail to scrub.
+// Alt+↑ / Alt+↓ jump between your messages. Built from the rendered transcript, so it never drifts from it.
 import { h, rafThrottle } from './dom.js';
 
-const KIND = {
-  you: { label: 'You' },
-  edit: { label: 'Changed' },
-  cmd: { label: 'Ran' },
-  read: { label: 'Looked at' },
-  web: { label: 'Web' },
-  agent: { label: 'Helpers' },
-  err: { label: 'Error' },
-};
-const toolKind = (name) => (name === 'edit' || name === 'write' ? 'edit' : name === 'bash' ? 'cmd' : name === 'task' ? 'agent' : name === 'web_fetch' || name === 'web_search' ? 'web' : 'read');
-const MIN_GAP = 3; // px: marks closer than this merge visually (the rail stays readable on long sessions)
+const KIND = { you: { label: 'You' }, err: { label: 'Error' } };
+const MIN_GAP = 6; // px: marks closer than this merge
 
 export class Timeline {
   /** view: the session view (needs .root, .scroller, .tin, .dock). */
   constructor(view) {
     this.view = view;
     this.track = h('div', { class: 'tl-track' });
-    this.box = h('div', { class: 'tl-view', 'aria-hidden': 'true' });
     this.tip = h('div', { class: 'tl-tip', role: 'tooltip', hidden: true });
-    this.el = h('div', { class: 'tl', role: 'navigation', 'aria-label': 'Conversation timeline', hidden: true }, this.track, this.box, this.tip);
+    this.el = h('div', { class: 'tl', role: 'navigation', 'aria-label': 'Conversation navigator', hidden: true }, this.track, this.tip);
     this.marks = [];
     this.dead = false;
     this.refresh = rafThrottle(() => this._refresh());
@@ -52,20 +41,14 @@ export class Timeline {
     this.marks = [];
   }
 
-  /** Items from the transcript as it is drawn now. */
+  /** Turns and failures, from the transcript as it is drawn now. */
   _items() {
     const out = [];
-    for (const el of this.view.tin.querySelectorAll('.msg.user, .tool[data-id], .errbox')) {
-      if (el.classList.contains('errbox')) {
-        out.push({ el, kind: 'err', text: el.textContent.trim().split('\n')[0].slice(0, 90) });
-      } else if (el.classList.contains('user')) {
+    for (const el of this.view.tin.querySelectorAll('.msg.user, .errbox')) {
+      if (el.classList.contains('errbox')) out.push({ el, kind: 'err', text: el.textContent.trim().split('\n')[0].slice(0, 90) });
+      else {
         const text = (el.querySelector('.bubble')?.textContent || el.textContent).trim().replace(/\s+/g, ' ');
-        out.push({ el, kind: 'you', text: text.slice(0, 90) });
-      } else {
-        const name = el.dataset.tool || '';
-        const failed = el.classList.contains('error') || el.classList.contains('denied');
-        const sum = (el.querySelector('.tool-sum')?.textContent || '').trim();
-        out.push({ el, kind: failed ? 'err' : toolKind(name), tool: name, text: `${name}${sum ? ' · ' + sum : ''}`.slice(0, 90), failed });
+        out.push({ el, kind: 'you', text: text.slice(0, 120), when: el.querySelector('.msg-time')?.textContent || '' });
       }
     }
     return out;
@@ -76,8 +59,8 @@ export class Timeline {
     const sc = this.view.scroller;
     const H = sc.scrollHeight;
     const items = this._items();
-    // Only worth a rail when the conversation is longer than about two screens and has a few steps.
-    const show = H > sc.clientHeight * 1.6 && items.length >= 4 && this.view.root.clientWidth > 900;
+    // Worth a rail once there are a few turns and more than a screen and a half to move through.
+    const show = H > sc.clientHeight * 1.5 && items.filter((x) => x.kind === 'you').length >= 2 && this.view.root.clientWidth > 560;
     this.el.hidden = !show;
     if (!show) return;
     // The rail spans the transcript area above the message box.
@@ -93,15 +76,14 @@ export class Timeline {
     this.marks = [];
     for (const it of items) {
       const y = ((pos(it.el) + Math.min(it.el.offsetHeight, 40) / 2) / H) * trackH;
-      // A cluster of the same kind becomes one mark; your messages and errors always get their own.
-      if (y - lastY < MIN_GAP && it.kind === lastKind && it.kind !== 'you' && it.kind !== 'err') {
-        const prev = this.marks[this.marks.length - 1];
-        prev.items.push(it);
+      // Marks closer than a few pixels merge, so a long conversation stays readable.
+      if (y - lastY < MIN_GAP && it.kind === lastKind) {
+        this.marks[this.marks.length - 1].items.push(it);
         continue;
       }
       const m = h('button', { class: `tl-mark ${it.kind}`, type: 'button', tabindex: '-1', 'aria-label': `${KIND[it.kind].label}: ${it.text}` });
       m.style.top = `${y}px`;
-      const rec = { m, y, items: [it] };
+      const rec = { m, y, at: pos(it.el), items: [it] };
       m.addEventListener('pointerenter', () => this._showTip(rec));
       m.addEventListener('pointerleave', () => (this.tip.hidden = true));
       m.addEventListener('click', (e) => {
@@ -117,20 +99,21 @@ export class Timeline {
     this._place();
   }
 
-  /** The box that shows which part of the conversation is on screen. */
+  /** Light the dot of the turn being read: the last one that starts above a third of the way down the screen. */
   _place() {
     if (this.dead || this.el.hidden) return;
     const sc = this.view.scroller;
-    const trackH = this.track.clientHeight || 1;
-    const H = sc.scrollHeight || 1;
-    this.box.style.top = `${(sc.scrollTop / H) * trackH}px`;
-    this.box.style.height = `${Math.max(14, (sc.clientHeight / H) * trackH)}px`;
+    const line = sc.scrollTop + sc.clientHeight / 3;
+    let cur = null;
+    for (const r of this.marks) if (r.items[0].kind === 'you' && r.at <= line) cur = r;
+    cur ||= this.marks.find((r) => r.items[0].kind === 'you');
+    for (const r of this.marks) r.m.classList.toggle('cur', r === cur);
   }
 
   _showTip(rec) {
     const first = rec.items[0];
     const more = rec.items.length > 1 ? ` (+${rec.items.length - 1} more)` : '';
-    this.tip.replaceChildren(h('span', { class: `tl-tip-k ${first.kind}` }, KIND[first.kind].label), h('span', { class: 'tl-tip-t' }, first.text + more));
+    this.tip.replaceChildren(h('span', { class: `tl-tip-k ${first.kind}` }, first.when ? `${KIND[first.kind].label} · ${first.when}` : KIND[first.kind].label), h('span', { class: 'tl-tip-t' }, first.text + more));
     this.tip.style.top = `${rec.y}px`;
     this.tip.hidden = false;
   }

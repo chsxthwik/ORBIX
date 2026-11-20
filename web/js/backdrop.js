@@ -611,8 +611,7 @@ function column() {
 }
 
 /**
- * The veil: the sheet colour over the reading column, soft at its edges, plus a band under the tab row so tab titles
- * never sit on the picture. The narrower the open space beside the column, the stronger the veil, so a small window
+ * The veil: the sheet colour over the reading column, soft at its edges. The narrower the open space beside the column, the stronger the veil, so a small window
  * keeps its text clear and the scene simply recedes.
  */
 function paintVeil() {
@@ -638,21 +637,6 @@ function paintVeil() {
   g.globalAlpha = 1;
   g.fillStyle = lg;
   g.fillRect(0, 0, W, H);
-  // the tab row: solid under the titles, fading out just below
-  g.globalCompositeOperation = 'source-over';
-  const top = parseFloat(css('--top-h', '46')) || 46;
-  const tg = g.createLinearGradient(0, 0, 0, top + 40);
-  tg.addColorStop(0, 'rgba(0,0,0,1)');
-  tg.addColorStop(top / (top + 40), 'rgba(0,0,0,.85)');
-  tg.addColorStop(1, 'rgba(0,0,0,0)');
-  const band = offscreen(), bgc = sized(band, W, top + 40);
-  bgc.fillStyle = bg;
-  bgc.fillRect(0, 0, W, top + 40);
-  bgc.globalCompositeOperation = 'destination-in';
-  bgc.fillStyle = tg;
-  bgc.fillRect(0, 0, W, top + 40);
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.drawImage(band, 0, 0);
 }
 
 function size(force) {

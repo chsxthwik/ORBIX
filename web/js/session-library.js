@@ -36,7 +36,7 @@ export function sessionLibrary(H) {
           savePrefs({pinned:current.includes(s.path)?current.filter(p=>p!==s.path):[s.path,...current].slice(0,20)});draw();
         }},icon('bookmark',14)));
     }):!S.sessions.length?[h('div',{class:'library-empty'},h('strong',null,'No sessions yet'),h('p',null,'Describe a task above to start one. Your conversations will be listed here.'))]
-      :[h('div',{class:'library-empty'},h('strong',null,state.filter==='pinned'?'No pinned sessions':state.filter==='open'?'No open sessions':'No matching sessions'),h('p',null,state.filter==='pinned'?'Pin a conversation to find it here.':state.filter==='open'?'Sessions open in a tab are listed here.':'Try another search or filter.'),h('button',{class:'link',type:'button',onclick:()=>{state.query='';state.filter='all';search.value='';filters.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===0)));draw();}},'Show all sessions'))]));
+      :[h('div',{class:'library-empty'},h('strong',null,state.filter==='pinned'?'No pinned sessions':state.filter==='open'?'No open sessions':'No matching sessions'),h('p',null,state.filter==='pinned'?'Pin a conversation to find it here.':state.filter==='open'?'Conversations open in this window are listed here.':'Try another search or filter.'),h('button',{class:'link',type:'button',onclick:()=>{state.query='';state.filter='all';search.value='';filters.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===0)));draw();}},'Show all sessions'))]));
     if(matches.length>100)list.append(h('p',{class:'library-limit'},'Showing 100 sessions. Search to narrow the list.'));
   }
   draw();mounted={el,refresh:draw};return el;

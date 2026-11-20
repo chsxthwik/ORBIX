@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.4.0 (2026-11-20)
+- **A desktop shell like the Antigravity App.**
+  - A menu row (ORBIX, Workspace, View, Window) and a toolbar: the mark (a new conversation), the sidebar switch, **Back** and **Forward** (Alt+← / Alt+→) across conversations, Runs and Review, search, and where you are: project / conversation, with its state, running time and branch. In the Windows app the menu row is the title bar.
+  - The tab strip, the bar above each conversation and the status bar are gone. Their actions moved to the toolbar's ⋮ menu (find, your messages, run inspector, rename, export, close) and the menus; open conversations are in the sidebar and the Window menu.
+  - **Overview** card beside the conversation (Ctrl+Alt+O): Changes, Files, Terminal, Plan and Inspect open the side panel; Subagents and Background runs show when there are any. In a small window the button opens the side panel instead.
+  - Sidebar: **New conversation**, Runs, Review and **Customizations** (instructions, tools and MCP); rest the pointer on a conversation for a card with its project, last update, branch and state; pin from the row.
+- **Message box.** "Ask anything, @ to mention, / for actions". **+** adds files, a mention or a command; the model and its thinking level sit together; the **permission chip** sets what runs without asking: Ask first, Auto edits or Turbo (destructive commands and files outside the project still ask). A round send button.
+- **Conversation.** No name plates above messages; times and actions sit under each reply. The step rail on the right became a navigator on the left edge: one dot per message of yours, the one you are reading lit.
+- **Dark theme.** Neutral near-black: the frame darker than the sheet, quieter lines.
+- **Home working tree.** Home shows the selected project's Git branch and changed-file count without sending a model request. Refresh leaves the draft intact, and starting a session uses the folder and mode selected when Start was pressed.
+- **ASCII art.** The new-chat orbit has a lit planet with an atmosphere, a node that lights the planet as it passes, meteors, a decode-in intro, and speeds up while you type; the working bar is a comet (a ripple while thinking); empty panels have new art that inks in.
+- **Cleanup.** Removed the tab strip, status bar, session bar, sidebar brand row and icon rail with their styles (about 300 lines of CSS), merged two style layers, and removed unused imports.
+
 ## 3.3.0 (2026-11-20)
 - **Runs.** A run takes one task from its description to changes you have reviewed. Start one from Runs (Ctrl+2): pick the project, describe the task, and choose Plan first or Straight to work.
   - Every run works in its own git worktree and branch, so your checkout is untouched until you apply, and several runs can work at once.

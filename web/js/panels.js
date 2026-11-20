@@ -63,10 +63,10 @@ function resetFor(tab) {
   }
   drawTabs();
   draw();
-  if (tab) loadGit(P.tab !== 'changes'); // the status bar shows the branch, so load it for every tab
+  if (tab) loadGit(P.tab !== 'changes'); // the toolbar shows the branch, so load it for every tab
 }
 
-/** Git status of the active project, once loaded (for the status bar). */
+/** Git status of the active project, once loaded (for the toolbar's branch). */
 export const gitState = (ws) => (ws && ws === P.ws ? P.git : null);
 
 export function showTab(name) {
@@ -82,13 +82,19 @@ export function showTab(name) {
   if (name === 'console') setTimeout(() => body.querySelector('.console-in input')?.focus(), 0);
 }
 
-function drawTabs() {
-  const t = activeTab();
+/** The panel's tabs for a session and the counts on them (also shown on the Overview card). */
+export function panelInfo(t) {
   syncTabs(t);
   const nChanges = P.git?.files?.length || 0;
   const nTodo = (t?.todos || []).flatMap((p) => p.tasks || []).filter((x) => x.status !== 'completed' && x.status !== 'abandoned').length;
   const nAg = [...(t?.subagents?.values() || [])].filter((a) => /running|started|pending/.test(a.progress?.status || a.status || '')).length;
-  const badge = { changes: nChanges, todos: nTodo, agents: nAg, review: reviewCount(t) };
+  return { tabs: TABS, badge: { changes: nChanges, todos: nTodo, agents: nAg, review: reviewCount(t) } };
+}
+
+function drawTabs() {
+  const t = activeTab();
+  const { badge } = panelInfo(t);
+  queueMicrotask(() => emit('panel:badges'));
   replace(tabsEl, TABS.map(([k, l, ic], index) => h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), type: 'button', role: 'tab', 'aria-label':l, tabindex:P.tab===k?'0':'-1', 'aria-selected': String(P.tab === k), title: l, onclick: () => showTab(k), onkeydown:e=>{
     let next;
     if(e.key==='ArrowRight')next=(index+1)%TABS.length;

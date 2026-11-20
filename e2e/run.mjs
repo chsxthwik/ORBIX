@@ -3,7 +3,7 @@
 //
 //   node e2e/run.mjs            run everything (about a minute); exit code 0 only when every step passed
 //   node e2e/run.mjs --keep     keep the temporary folder (server log, data folder, fixture repository)
-//   node e2e/run.mjs --shots    also write screenshots to docs/evidence/
+//   node e2e/run.mjs --shots    refresh the screenshots and workflow report in docs/evidence/
 //
 // What it proves, clicking the same buttons you would:
 //   open a Git repository, describe a task, see the plan, comment on it and get a revision, approve it with a scope,
@@ -302,8 +302,11 @@ async function main() {
     model.server.close();
     const passed = results.filter((r) => r.ok).length;
     say(`\n${passed}/${results.length} steps passed${ok ? '' : ' — FAILED'}`);
-    fs.mkdirSync(EVID, { recursive: true });
-    fs.writeFileSync(path.join(EVID, 'e2e-run-workflow.json'), JSON.stringify({ at: new Date().toISOString(), platform: `${process.platform} ${process.arch}`, node: process.version, browser: path.basename(page.exe), ok, results }, null, 2) + '\n');
+    if (SHOTS || KEEP || !ok) {
+      const dir = SHOTS && ok ? EVID : root;
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'e2e-run-workflow.json'), JSON.stringify({ at: new Date().toISOString(), platform: `${process.platform} ${process.arch}`, node: process.version, browser: path.basename(page.exe), ok, results }, null, 2) + '\n');
+    }
     if (KEEP || !ok) say(`Kept: ${root}`);
     else {
       await sleep(800);

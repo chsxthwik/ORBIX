@@ -2,7 +2,7 @@
 // Deletion is permanent, so every path goes through an explicit confirmation.
 import { h, toast, timeAgo, baseName, clear } from './dom.js';
 import { api } from './api.js';
-import { S, loadSessions, closeTab, tabForSession } from './store.js';
+import { loadSessions, closeTab, tabForSession } from './store.js';
 import { modal, btn, confirmDialog } from './dialogs.js';
 
 const DAY = 86400000;

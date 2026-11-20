@@ -16,32 +16,8 @@
 /* ---- frame and sheet ---- */
 .app, .app:not(.overlay-side) .sidebar { background: var(--chrome); }
 .main { border-radius: 10px 10px 0 0; box-shadow: none; background: var(--bg); }
-.statusbar { color: var(--fg-3); }
 
-/* ---- top bar: tabs read as plain titles; the current one is simply brighter ---- */
-.topbar { border-bottom-color: transparent; }
-.tab { height: 30px; border-radius: 8px; background: transparent; color: var(--fg-3); }
-.tab:hover { background: var(--bg-hover); color: var(--fg-2); }
-.tab.cur { background: var(--bg-active); color: var(--fg); box-shadow: none; }
-.tab.cur::after { display: none; }
-.tab .dot.open { display: none; }
-.workspace-command { border-color: transparent; background: transparent; }
-.workspace-command:hover { background: var(--bg-hover); }
-
-/* ---- session bar: a quiet header; labels give way to icons, status shows only when it says something ---- */
-.sbar { border-bottom-color: transparent; background: transparent; }
-.sbar-state.ok { padding: 0; border: 0; background: none; }
-.sbar-state.ok .num { display: none; }
-.sbar-meta { opacity: 0; transition: opacity var(--t2) var(--ease); }
-.sbar:hover .sbar-meta { opacity: 1; }
-.sbar-title { font-weight: 500; color: var(--fg-2); }
-.sbar-title:hover { color: var(--fg); }
-.sbar .ibtn, .sbar-zen { color: var(--fg-3); }
-
-/* ---- the conversation ---- */
 /* Replies carry no name plate; the model shows in the reply's actions. Your own messages need no label either. */
-.msg-by.asst-by { display: none; }
-.msg.user > .msg-by { display: none; }
 .bubble { border-color: transparent; background: var(--bubble); box-shadow: none; border-radius: 18px; }
 .msg-acts { margin-top: -2px; }
 .msg-act { height: 24px; padding: 0 6px; font-size: 12px; }
@@ -107,8 +83,6 @@ details.think > summary { color: var(--fg-3); }
 /* ---- Home: the question in plain ink; the project name keeps the accent ---- */
 .home-title { background: none; -webkit-text-fill-color: currentColor; color: var(--fg); letter-spacing: -.03em; }
 .home-title-p { background: none; -webkit-text-fill-color: currentColor; color: var(--accent); }
-.home .home-composer, .home .home-composer:focus-within { border: 1px solid var(--line-2); background: var(--bg-raise); box-shadow: none; }
-.home .home-composer:focus-within { border-color: var(--line-3); }
 .home .ws-recipe { border-color: var(--line); background: transparent; box-shadow: none; transform: none; }
 .home .ws-recipe:hover { border-color: var(--line-2); background: var(--bg-hover); color: var(--fg); transform: none; box-shadow: none; }
 .home-proj, button.home-proj:hover { background: var(--bg-raise); box-shadow: none; transform: none; }
@@ -125,7 +99,7 @@ button.home-proj:hover .home-proj-ic { border-color: var(--line-2); background: 
 .dot.ok, .dot.warn { box-shadow: none; }
 
 @media (forced-colors: active) {
-  .tool.done .tool-dur, .tool.done .st.ok, .sbar-meta, .side-new kbd { opacity: 1; }
+  .tool.done .tool-dur, .tool.done .st.ok, .side-new kbd { opacity: 1; }
 }
 
 /* Session message box: the same flat slab when focused; the hairline brightens, nothing glows around it. */
@@ -137,12 +111,11 @@ button.home-proj:hover .home-proj-ic { border-color: var(--line-2); background: 
 /* The guide line beside the current conversation stays neutral; the row's own fill marks it. */
 .proj > .s-row.cur { border-left-color: var(--line-3); }
 
-/* ---- window frame: the workspace fills the window above the status bar, with no rounding overflow at any zoom ---- */
+/* ---- window frame: the workspace fills the window below the toolbar, with no rounding overflow at any zoom ---- */
 body { display: flex; flex-direction: column; height: 100vh; }
 .app { flex: 1 1 auto; height: auto; min-height: 0; }
-#statusbar { flex: none; }
 
 /* ---- sidebar: one inset for every row, so the button, links, filter, projects and footer share both edges ---- */
-.app:not(.rail) .sidebar .side-new { margin-inline: 10px; }
-.app:not(.rail) .sidebar .side-nav { padding-inline: 10px; }
-.app:not(.rail) .sidebar .side-search { margin-inline: 10px; }
+.app .sidebar .side-new { margin-inline: 10px; }
+.app .sidebar .side-nav { padding-inline: 10px; }
+.app .sidebar .side-search { margin-inline: 10px; }

@@ -24,9 +24,7 @@ what they get, as written in the public documentation. Model wording, internals 
 | **Not started** | No implementation. |
 | **Unknown** | The benchmark's behavior is not documented, so there is nothing to match yet. |
 
-Evidence: `npm test` = `node --test` (821 tests: 820 pass, 1 skipped). `npm run e2e` = `node e2e/run.mjs` and `node e2e/conversation.mjs` (15 + 1 scenarios through the
-real interface against the deterministic model fixture; results in `docs/evidence/e2e-run-workflow.json`; `-- --shots` writes
-screenshots to `docs/evidence/`, which stay local because they show local paths).
+Evidence: `npm test` = `node --test` (821 tests: 820 pass, 1 skipped). `npm run e2e` runs 15 workflow steps plus Home and conversation checks against the deterministic model fixture. `node e2e/conversation.mjs --desktop` passed those Home and conversation checks in the packaged Windows Electron window. The recorded workflow report is in `docs/evidence/e2e-run-workflow.json`; pass `--shots` directly to either test script to capture local screenshots.
 
 ## 1. The first complete workflow
 
@@ -58,9 +56,15 @@ run tests → inspect diffs and artifacts → give feedback → apply or discard
 | 2.2 | No single inbox is documented (the word does not appear); a needs-attention icon marks conversations | **Review** (Ctrl+3): one queue across projects for approvals, plans to approve, changes to review, questions, interrupted and failed runs, with the decision buttons in place and a count in the sidebar. | Done | e2e steps 8, 9, 11 (`06-review-queue.png`) |
 | 2.3a | Agent steps grouped into collapsible **Worked for** rows, changed-file cards with **Review** | A finished turn's steps fold into one "Worked for 14s" row with what was done; the reply stays below it; a "N files changed" card with Review and Undo all. | Done | `e2e/conversation.mjs` (`12-conversation-folded.png`, `13-conversation-steps.png`) |
 | 2.3 | Agent steps grouped in collapsible rows | Run **Timeline**: each step is one row (a call with its result, an approval with your answer) and opens what it produced: the document revision, the file's diff, the test log. | Done | e2e step 3 |
-| 2.4 | Keyboard: Ctrl+K search, Ctrl+J terminal, Ctrl+D split | Ctrl+1 Home, Ctrl+2 Runs, Ctrl+3 Review, Ctrl+K search, Ctrl+Enter sends. Split view is not implemented. | Partial | e2e step 14 |
+| 2.4 | Keyboard: Ctrl+K search, Ctrl+J terminal, Ctrl+D split, Ctrl+Alt+O Overview | Ctrl+1 new conversation, Ctrl+2 Runs, Ctrl+3 Review, Ctrl+K search, Ctrl+Alt+O Overview, Alt+←/→ back and forward, Ctrl+Enter sends. Ctrl+J toggles the side panel (not a terminal). Split view is not implemented. | Partial | e2e step 14 |
 | 2.5 | High-DPI rendering | Tested at device scale factor 2. | Done | e2e step 14 |
 | 2.6 | Accessible focus, loading/empty/error states | Rows and actions are buttons with focus rings; one `aria-current` page; skeletons, empty states and error states with Retry on every view. | Partial (no screen-reader pass yet) | e2e step 14 |
+| 2.8 | Window layout: menu bar, toolbar with Back, Forward and "Search Conversations", sidebar and title bar on one background, filled toggle buttons, a top-left icon that starts a new conversation (docs: search, changelog v2.28–v2.30) | Menu row (ORBIX, Workspace, View, Window) as the title bar; toolbar with the mark (new conversation), sidebar switch, Back/Forward (Alt+←/→) across conversations and views, search, project / conversation breadcrumbs with state and branch; toggles filled while open. Menu items are ORBIX's own: the benchmark's menu contents are not documented. | Done | `e2e/conversation.mjs` (menu row, breadcrumb, Back) |
+| 2.9 | Overview panel: toggle at the top right (Ctrl+Alt+O), Review / Files / Terminal rows, Subagents and Background Tasks sections, empty sections hidden, an overlay in small windows (docs: side-panel) | Overview card with Changes (or Review on a branch), Files, Terminal, Plan and Inspect, which open the side panel; Subagents and Background runs only when there are any. In a small window the button opens the side panel. No Extensions row and no per-section customization. | Partial | `e2e/conversation.mjs` (card shown with the panel closed; Files opens the panel) |
+| 2.10 | Composer permission picker (Request Review / Default / Auto / Turbo), "+" Add Context, model picker with the thinking level (docs: permissions, at-mentions, models) | Permission chip with Ask first / Auto edits / Turbo (the same setting as Settings → Permissions; destructive commands always ask); "+" for files, @ mention and / commands; model and thinking level side by side. No sandbox tiers and no voice input. | Partial | manual check; unit tests for the policy |
+| 2.11 | Conversation navigator: a rail at the left edge with one dot per turn, hover preview (changelog v2.28.1) | Dots on the left edge, one per message of yours and a mark per error, the turn being read lit; hover shows the message and its time; click jumps; drag scrubs; Alt+↑/↓. | Done | manual check (`timeline.js`) |
+| 2.12 | Hover card on a conversation with project, state (Action required / Working / Unread) and pin on hover (changelog v2.7.1, v2.17.0, v2.28.0) | Preview card after a short rest: title, project, last update, branch, state, first line; pin and ⋯ on the row. No archive. | Done | manual check |
+| 2.7 | Project context before a task | Home shows the selected Git branch and changed-file count without a model, and refresh preserves the draft. | Done | `node e2e/conversation.mjs --desktop` |
 
 ## 3. Extended parity (not part of the first workflow)
 
@@ -100,12 +104,13 @@ run tests → inspect diffs and artifacts → give feedback → apply or discard
 | The same three benchmark tasks on the Antigravity App | No Antigravity account or install on the test machine | Run the three tasks in `e2e/lib.mjs` (`SCENARIOS`) by hand on both products and record them here |
 | A real model provider through a run | The end-to-end tests use the deterministic fixture. A ChatGPT-plan model was reachable from this machine, but a full run with it was not recorded. | Start ORBIX, connect a provider, start a run on a fixture repository |
 | Install, complete the workflow, uninstall on a clean Windows 11 | No clean Windows environment; the developer machine already has ORBIX installed | `npm run dist`, then run `dist\ORBIX-Setup-<version>.exe` on a clean machine, `npm run e2e`, uninstall from Settings > Apps |
-| The packaged Electron window (the tests drive the same interface in a Chromium window) | Not automated yet | Launch `dist\win-unpacked\ORBIX.exe --remote-debugging-port=9222` and point `e2e/run.mjs` at it |
+| Full Runs workflow in the packaged Electron window | Automated Home and conversation checks pass in the packaged app; the restart and apply suite still runs in a standalone Chromium window. | `node e2e/conversation.mjs --desktop` for packaged Home/conversation; `node e2e/run.mjs` for the Runs suite |
 
 ## 5. Commands
 
 ```
 npm test          # unit and integration tests (node --test)
-npm run e2e       # the workflow through the interface; add -- --shots for screenshots, -- --keep to keep the data
+npm run e2e       # the workflow through the interface, using a standalone Chromium window
 npm run dist      # Windows installer: dist\ORBIX-Setup-<version>.exe
+node e2e/conversation.mjs --desktop  # Home and conversation in dist\win-unpacked\ORBIX.exe
 ```

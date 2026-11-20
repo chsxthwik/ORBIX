@@ -1,18 +1,12 @@
 /* Workspace surfaces. Effects stay on small elements; text and scrolling stay still. */
 
 .sidebar .side-new { border-color:var(--line-2); }
-.sbar .sbar-state { background:transparent; border-color:var(--line-2); }
 :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
-.ibtn:focus-visible,.ptab:focus-visible,.tab:focus-visible { outline-offset:-2px; }
+.ibtn:focus-visible, .ptab:focus-visible { outline-offset:-2px; }
 @media(forced-colors:active) {
   .sidebar .side-link.cur { border:1px solid Highlight; box-shadow:none; }
 }
-/* Sidebar and brand finish: depth belongs to controls, motion to small details. */
-.sidebar .side-top { height:72px; padding-inline:16px; }
-.sidebar .brand { height:46px; }
-.sidebar .brand-mark { position:relative; display:grid; place-items:center; border:1px solid var(--accent-line); background:var(--accent-soft); box-shadow:inset 0 1px 0 var(--hi); }
-.sidebar .wordmark { font-size:15px; font-weight:600; }
-.sidebar .brand:hover .brand-mark { border-color:var(--accent); }
+/* Sidebar finish: depth belongs to controls, motion to small details. */
 .sidebar .side-new { margin:5px 12px 16px; background:var(--bg-raise); box-shadow:inset 0 1px 0 var(--hi); }
 .sidebar .side-new:hover { border-color:var(--line-3); background:var(--bg-hover); }
 .sidebar .side-nav { padding-inline:4px; }
@@ -31,42 +25,16 @@
 .ibtn:hover:not(:disabled) { background:var(--bg-active); color:var(--fg); }
 .session .send { box-shadow:inset 0 1px 0 #ffffff30; transition:transform var(--t2) var(--ease), filter var(--t2) var(--ease), box-shadow var(--t3) var(--ease); }
 .session .send:hover:not(:disabled) { filter:brightness(1.06); }
-.app.rail .sidebar .side-top { padding-inline:10px; }
-.app.rail .sidebar .side-new { margin-inline:8px; }
-.app.rail .sidebar .side-foot { margin-inline:5px; }
-@media(prefers-reduced-motion:no-preference) {
-  .sidebar .brand-mark { transition:border-color var(--t3) var(--ease), box-shadow var(--t3) var(--ease), transform var(--t3) var(--ease); }
-}
+
 @media(prefers-reduced-motion:reduce) {
-  .ibtn, .send, .brand-mark { transition:none !important; transform:none !important; }
+  .ibtn, .send { transition:none !important; transform:none !important; }
 }
-
-.topbar { padding-inline: 14px; border-bottom: 1px solid var(--line); }
-
-.workspace-command { display: inline-flex; align-items: center; gap: 10px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--fg-3); font-size: 13px; transition: background var(--t2) var(--ease), color var(--t2) var(--ease); }
-.workspace-command:hover { background: var(--bg-hover); color: var(--fg); }
-.workspace-command kbd { height: 18px; font-size: 11px; background: transparent; }
 
 .side-new { box-shadow: none; }
 .side-link.cur { background: var(--bg-active); }
 .side-h { margin-top: 18px; font-size: 12px; }
-.sbar-title { font-weight: 550; }
-.sbar-state { font-size: 12px; }
 .ptab.cur { color: var(--fg); background: var(--bg-active); }
 .ptab svg { display: block; }
-
-@media (max-width: 560px) {
-  .workspace-command > span, .workspace-command kbd { display: none; }
-
-
-
-
-  .sbar-meta, .sbar-ctx { display: none; }
-}
-
-@media (forced-colors: active) {
-  .workspace-command { border-color: ButtonText; }
-}
 
 /* Shared interface controls and harness panels. */
 
@@ -80,7 +48,7 @@
 .tip-keys kbd { height:17px; min-width:17px; padding:0 4px; border-bottom-width:1px; font-size:11px; color:var(--fg-2); }
 @keyframes tip-in { from { opacity:0; transform:translateY(-3px) scale(.98); } }
 @keyframes tip-up { from { opacity:0; transform:translateY(3px) scale(.98); } }
-:is(.run-filter, .sbar-zen, .ibtn):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+:is(.run-filter, .ibtn):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .search-clear { position:absolute; right:7px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:27px; height:27px; border-radius:8px; color:var(--fg-3); }
 .search-clear:hover { color:var(--fg); background:var(--bg-active); }
 .search-clear[hidden] { display:none; }
@@ -116,13 +84,10 @@
 :root[data-theme=dark] { --accent:#c2dc8b; --accent-solid:#c2dc8b; --accent-soft:rgba(194,220,139,.09); --accent-line:rgba(194,220,139,.32); --live:#c2dc8b; --live-soft:rgba(194,220,139,.08); --live-line:rgba(194,220,139,.32); --pa:#c2dc8b; }
 .app { background:var(--chrome); }
 .main,.panel { border-radius:14px; box-shadow:none; }
-.topbar { min-height:46px; }
-.brand-mark { background:transparent; border:0; box-shadow:none; }
 .side-new { background:transparent; }
 .sidebar .side-h { font:600 12px/1.3 var(--font); letter-spacing:0; text-transform:none; }
 
 .sbar-wrap { backdrop-filter:none; background:var(--bg); }
-.sbar { height:42px; }
 .ptabs { overflow-x:auto; flex:none; scrollbar-width:none; padding:6px; }
 .ptab { flex:none; height:32px; }
 .pbody:has(.run-inspector) { overflow-y:auto; }
@@ -156,17 +121,14 @@
 .run-inspector .run-row-detail { color:var(--fg-3); font:12px/1.6 var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; }
 .run-duration { color:var(--fg-3); font-size:12px; font-variant-numeric:tabular-nums; }
 .run-footnote { margin-top:20px; font-size:12px; color:var(--fg-3); line-height:1.6; }
-.topbar { container-type:inline-size; }
-@container (max-width:600px) { .topbar .workspace-command>span,.topbar .workspace-command kbd { display:none; } .topbar .workspace-command { padding-inline:8px; } }
+
 /* The conversation keeps a readable width: a docked panel gives way (down to 300px) before the main sheet does. */
 @media(min-width:1101px) {
   .app:not(.overlay-panel) .panel { flex:0 1 var(--panel-w); width:auto; min-width:300px; max-width:min(44vw,560px); }
   .app:not(.overlay-panel) .main { min-width:min(560px, 50vw); }
 }
-@media(max-width:1600px) { .app:not(.no-panel) .sbar-ctx,.app:not(.no-panel) .sbar-meta { display:none; } }
-@container (max-width:420px) { .ptab .lbl { display:none; } .ptabs { justify-content:space-between; } .ptab { padding-inline:12px; } }
 
-@media(max-width:560px) { .sbar-title { max-width:95px; } .run-open { font-size:0; gap:0; } }
+@container (max-width:420px) { .ptab .lbl { display:none; } .ptabs { justify-content:space-between; } .ptab { padding-inline:12px; } }
 
 /* Final edge pass: use stroke contrast to carry hierarchy, not glow.
    It stays out of the way of a system that asks for more contrast, so the stronger hairlines in app.css still apply. */
@@ -212,7 +174,6 @@
 .msg .md { line-height: 1.65; overflow-wrap: anywhere; }
 .msg .md pre { overflow-x: auto; overscroll-behavior-inline: contain; }
 .msg .md table { max-width: 100%; }
-.msg-by { padding-block: 4px; }
 .msg-acts { opacity: 0; transform: none; }
 .msg:last-child > .msg-acts { opacity: 1; }
 .msg:hover > .msg-acts, .msg-acts:focus-within { opacity: 1; }
@@ -234,7 +195,6 @@
 
 /* Shared appearance controls and response surfaces. */
 .session .msg.user { padding:0; border:0; background:transparent; }
-.session .msg.asst .msg-by { margin-bottom:2px; }
 .session .msg-acts { margin-top:-2px; margin-bottom:-8px; }
 .session .md pre { border:1px solid var(--line-2); border-radius:12px; }
 .session .md blockquote { border-left:2px solid var(--accent-line); padding-left:16px; }
@@ -261,24 +221,16 @@
 .btn.sm { height:var(--control-small); min-height:var(--control-small); }
 .ibtn { width:var(--control-height); height:var(--control-height); min-height:var(--control-height); padding:0; }
 .ibtn.sm { width:var(--control-small); height:var(--control-small); min-height:var(--control-small); }
-/* The top bar stretches its children; like the icon buttons beside it, Search keeps its own height, centred. */
-.workspace-command { align-self:center; min-height:var(--control-height); line-height:1.2; }
 .session .c-row { gap:6px; align-items:center; }
 .c-row .cbtn { height:var(--control-height); min-height:var(--control-height); padding-inline:10px; border-radius:var(--control-radius); line-height:1; max-width:min(260px,100%); }
 .session .send { height:var(--control-height); min-height:var(--control-height); border-radius:var(--control-radius); }
 .session .send { width:var(--control-height); padding:0; }
 
-:is(.btn, .ibtn, .cbtn, .send, .workspace-command, .msg-act) > svg { display:block; flex-shrink:0; }
-:is(.btn, .ibtn, .workspace-command) > svg:not(.logo):not(.pv-mark) { width:16px; height:16px; }
+:is(.btn, .ibtn, .cbtn, .send, .msg-act) > svg { display:block; flex-shrink:0; }
+:is(.btn, .ibtn) > svg:not(.logo):not(.pv-mark) { width:16px; height:16px; }
 .send > svg { width:18px; height:18px; }
 .cbtn > svg.pv-mark { width:18px; height:18px; }
 .cbtn > .cbtn-chev { width:12px; height:12px; }
-.sidebar .brand { align-items:center; gap:10px; }
-.sidebar .brand-mark { flex:0 0 36px; width:36px; height:36px; padding:0; border-radius:11px; }
-.sidebar .brand .logo { width:26px; height:26px; flex:none; }
-.sidebar .wordmark { line-height:1; letter-spacing:.1em; }
-.app.rail .sidebar .brand { width:36px; justify-content:center; }
-.asst-by > .logo { width:16px; height:16px; flex:none; }
 /* One height for sidebar rows, one for filters and pins; small controls round a little less than full-size ones. */
 :root { --row-height:34px; --control-chip:28px; --control-radius-sm:8px; }
 .side-new { height:var(--control-height); border-radius:var(--control-radius); }
@@ -286,25 +238,11 @@
 .ibtn { border-radius:var(--control-radius); }
 .btn.sm, .ibtn.sm { border-radius:var(--control-radius-sm); }
 
-.sbar-title, .sbar-zen { height:var(--control-chip); border-radius:var(--control-radius-sm); }
-.tb-ws { border-radius:var(--control-radius-sm); }
-
 @media(pointer:coarse) {
   :root { --control-height:44px; --control-small:40px; --row-height:40px; --control-chip:38px; }
   .msg-act { min-height:44px; }
 }
 
-/* The session bar answers to its own width: at a narrow column Inspect and Focus keep their icons and drop their words
-   (their names stay in the hint and for screen readers), so nothing is pushed past the edge. */
-.sbar-wrap { container: sbar / inline-size; }
-@container sbar (max-width: 640px) {
-  .sbar .sbar-zen { gap: 0; padding-inline: 7px; font-size: 0; }
-  .sbar .sbar-zen svg { width: 15px; height: 15px; }
-  .sbar .sbar-title { min-width: 0; }
-}
-@container sbar (max-width: 420px) {
-  .sbar .sbar-state { padding-inline: 8px; font-size: 0; gap: 0; }
-}
 
 /* Finish pass. The message box keeps its send button on the right at any width; long labels give way first. */
 .dock-col { container: dock / inline-size; }
@@ -315,7 +253,3 @@
   .session .c-row .cbtn > .cbtn-chev { display: none; }
   .session .ctx-meter { padding-inline: 4px; }
 }
-
-/* Top bar toggles are almost always on: they show state with ink, not a filled square. */
-.topbar .ibtn.on { background: transparent; color: var(--fg-2); }
-.topbar .ibtn.on:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }

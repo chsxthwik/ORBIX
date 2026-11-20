@@ -1,17 +1,18 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner, errorState, fmtElapsed } from './dom.js';
+import { h, icon, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, spinner, errorState, fmtElapsed } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi, openTab, closeTab } from './store.js';
 import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
-import { asciiOrbit } from './ascii.js';
+import { asciiBar, asciiOrbit } from './ascii.js';
 import { viewFile, reviewChanges } from './panels.js';
 import { conversationToMarkdown } from './exporter.js';
 import { Composer } from './composer.js';
+import { addContext, permissionChip } from './controls.js';
 import { Timeline } from './timeline.js';
 
 // How each thinking level reads in the interface.
@@ -21,10 +22,15 @@ import { projectTasks, sessionTasks } from './workspace.js';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
-/** Session actions (topbar "more" button). */
-export function sessionMenu(t, anchor, { rename, close }) {
+/** Conversation actions (the toolbar's ⋮ button and the conversation crumb). */
+export function sessionMenu(t, anchor, { rename, close, find, outline, inspect }) {
   const cmd = (c) => t.commands.some((x) => x.name === c);
   popMenu(anchor, [
+    { header: t.name },
+    { label: 'Find in conversation', hint: 'Ctrl+F', run: find },
+    { label: 'Your messages…', hint: 'Ctrl+Shift+O', run: outline },
+    { label: 'Run inspector', hint: 'Ctrl+Shift+R', run: inspect },
+    '-',
     { label: 'Rename…', run: rename },
     ...(cmd('compact') ? [{ label: 'Compact context', hint: '/compact', run: () => sendPrompt(t, '/compact').catch(() => {}) }] : []),
     '-',
@@ -40,8 +46,8 @@ export function sessionMenu(t, anchor, { rename, close }) {
       }
     } },
     '-',
-    { label: 'Close session', danger: true, run: close },
-  ], { align: 'end' });
+    { label: 'Close conversation', danger: true, run: close },
+  ], { align: 'end', minWidth: 240 });
 }
 
 export async function copyConversation(t) {
@@ -264,7 +270,7 @@ export class TabView {
     this.jump = h('button', { class: 'jump', type: 'button', hidden: true, onclick: () => this.scrollBottom(true) }, icon('arrow-down', 14), 'Latest');
     this.queue = h('div', { class: 'queue' });
     this.composer = new Composer({
-      placeholder: 'Message ORBIX',
+      placeholder: 'Ask anything, @ to mention, / for actions',
       label: 'Message',
       state: t,
       workspace: () => t.workspace,
@@ -277,11 +283,12 @@ export class TabView {
     this.ta = this.composer.ta;
     this.sendBtn = h('button', { class: 'send', type: 'button', onclick: () => this.onSend(false, true) });
     this.modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model', onclick: () => this.pickModel() });
-    this.thinkBtn = h('button', { class: 'cbtn', type: 'button', title: 'Thinking level', 'aria-haspopup': 'menu', onclick: (e) => this.pickThinking(e.currentTarget) });
+    this.thinkBtn = h('button', { class: 'cbtn c-effort', type: 'button', title: 'Thinking level', 'aria-haspopup': 'menu', onclick: (e) => this.pickThinking(e.currentTarget) });
+    this.permBtn = permissionChip();
     this.planBtn = h('button', { class: 'cbtn plan', type: 'button', title: 'Plan mode: the agent reads and proposes a plan, but changes nothing', onclick: () => this.togglePlan() });
     this.ctx = h('span', { class: 'ctx-meter' });
     this.statusLine = h('div', { class: 'c-status', 'aria-live': 'polite' });
-    this.composer.el.append(h('div', { class: 'c-row' }, iconBtn('paperclip', 'Attach images or text files', () => this.composer.openFilePicker()), this.modelBtn, this.thinkBtn, this.planBtn, h('span', { class: 'grow' }), this.ctx, this.sendBtn));
+    this.composer.el.append(h('div', { class: 'c-row' }, addContext(this.composer), h('span', { class: 'c-model' }, this.modelBtn, this.thinkBtn), this.planBtn, h('span', { class: 'grow' }), this.ctx, this.permBtn.el, this.sendBtn));
     this.dockCol = h('div', { class: 'dock-col' }, this.queue, this.composer.el, this.statusLine);
     this.dock = h('div', { class: 'dock' }, this.jump, this.dockCol);
     this.root = h('div', { class: 'session-inner' }, this.scroller, this.dock, h('div', { class: 'drop-hint', 'aria-hidden': 'true' }, icon('paperclip', 18), 'Drop images or text files to attach'));
@@ -385,16 +392,17 @@ export class TabView {
     const m = t.model;
     const dead = t.dead;
     this.ta.disabled = dead;
-    this.ta.placeholder = dead ? 'This session has ended' : t.streaming ? 'Add guidance, or press Esc to stop' : 'Message ORBIX';
+    this.ta.placeholder = dead ? 'This session has ended' : t.streaming ? 'Add guidance, or press Esc to stop' : 'Ask anything, @ to mention, / for actions';
     this.composer.el.classList.toggle('busy', !!t.streaming);
     this.updateSend();
 
     this.modelBtn.hidden = dead;
-    this.modelBtn.replaceChildren(brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
+    this.modelBtn.replaceChildren(brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'));
+    this.permBtn.update(dead);
     const efforts = m?.thinking?.efforts || [];
     const lvl = st?.thinkingLevel || 'off';
     this.thinkBtn.hidden = dead || !(m?.reasoning || efforts.length);
-    this.thinkBtn.replaceChildren(icon('brain', 14), h('span', null, lvl === 'off' ? 'Thinking off' : `Thinking: ${thinkingLabel(lvl).toLowerCase()}`), icon('chevron-down', 12, 'cbtn-chev'));
+    this.thinkBtn.replaceChildren(h('span', null, lvl === 'off' ? 'Thinking off' : thinkingLabel(lvl)), icon('chevron-down', 12, 'cbtn-chev'));
     this.thinkBtn.title = m?.thinking?.canOff === false ? 'How hard the model thinks. This model always thinks, so there is no Off.' : 'How hard the model thinks before it answers';
     this.thinkBtn.classList.toggle('on', lvl !== 'off');
     const hasPlan = !!st && 'planMode' in st;
@@ -421,7 +429,6 @@ export class TabView {
     this.updateStatus();
     this.updatePending();
     this.refreshActs();
-    this.bar.update();
   }
 
   /** The send button follows the text box: send, steer while working, or stop. Cheap enough for every keystroke. */
@@ -662,7 +669,7 @@ export class TabView {
     // Suggested first tasks for this project; the row keeps its height while the folder is read, so nothing jumps.
     const tasks = h('div', { class: 'ce-tasks-slot' });
     this.emptyEl = h('div', { class: 'chat-empty' },
-      asciiOrbit({ cols: 52, rows: 14 }).el,
+      asciiOrbit({ cols: 56, rows: 16 }).el,
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
       h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
       tasks,
@@ -680,7 +687,7 @@ export class TabView {
       .then((list) => this.emptyEl === empty && tasks.replaceChildren(sessionTasks(this.composer, list)));
   }
 
-  /** Three dots at the end while the agent works but nothing streams yet (between steps). */
+  /** The working bar at the end while the agent works but nothing streams yet (between steps). */
   updatePending() {
     const t = this.tab;
     const idle = !t.streaming || t.dead || this.approvalDlg || (this.liveEl && this.liveEl.childElementCount);
@@ -692,10 +699,13 @@ export class TabView {
     if (!this.pendingEl) {
       // Between steps: what the agent is waiting on, and for how long, beside the moving bar.
       const label = h('span', { class: 'pending-l' });
-      this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-live': 'off' }, h('span', { class: 'ascii-bar', 'aria-hidden': 'true' }), label);
+      const bar = asciiBar();
+      this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-live': 'off' }, bar, label);
       const tick = () => {
         if (!this.pendingEl) return;
         const [what, , since] = this.nowDoing();
+        const kind = this.stepKey === 'think' ? 'think' : 'work';
+        if (bar.dataset.kind !== kind) bar.dataset.kind = kind;
         const secs = Math.max(0, Math.floor((Date.now() - since) / 1000));
         const text = secs >= 3 ? `${what} · ${fmtElapsed(secs)}` : what;
         if (label.textContent !== text) label.textContent = text;
@@ -778,7 +788,7 @@ export class TabView {
       this.focus();
     });
     const canBranch = m.id && this.tab.state?.features?.includes('branch') && !this.tab.dead;
-    const branch = canBranch ? h('button', { class: 'msg-act', type: 'button', title: 'Open a new tab with the conversation up to here. Your files are not changed.' }, icon('branch', 13), 'Branch') : null;
+    const branch = canBranch ? h('button', { class: 'msg-act', type: 'button', title: 'Start a new conversation with the messages up to here. Your files are not changed.' }, icon('branch', 13), 'Branch') : null;
     branch?.addEventListener('click', async () => {
       branch.disabled = true;
       try {
@@ -788,8 +798,8 @@ export class TabView {
       }
       branch.disabled = false;
     });
-    const by = h('div', { class: 'msg-by' }, h('span', null, 'You'), m.timestamp ? h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)) : null);
-    return h('div', { class: 'msg user' }, by, bubble, h('div', { class: 'msg-acts' }, copy, this.tab.dead ? null : edit, branch));
+    const when = m.timestamp ? h('time', { class: 'msg-time', title: new Date(m.timestamp).toLocaleString() }, clock(m.timestamp)) : null;
+    return h('div', { class: 'msg user' }, bubble, h('div', { class: 'msg-acts' }, when, copy, this.tab.dead ? null : edit, branch));
   }
 
   renderAssistant(m, idx, onPath, reuse = null) {
@@ -802,8 +812,7 @@ export class TabView {
     if (m.stopReason === 'error' && m.errorMessage) wrap.append(this.errorBox(m.errorMessage));
     else if (m.stopReason === 'aborted') wrap.append(h('div', { class: 'note' }, icon('stop', 12), h('span', null, 'Stopped')));
     if (!wrap.childElementCount) return null;
-    if (this.firstOfTurn(idx)) wrap.prepend(this.byline(m));
-    else wrap.classList.add('cont');
+    if (!this.firstOfTurn(idx)) wrap.classList.add('cont');
     const text = blocks.filter((b) => b.type === 'text' && b.text?.trim()).map((b) => b.text.trim()).join('\n\n');
     const acts = h('div', { class: 'msg-acts' });
     if (text) {
@@ -833,11 +842,6 @@ export class TabView {
   firstOfTurn(idx) {
     const p = this.tab.messages[idx - 1];
     return !p || p.role === 'user' || p.role === '_cmd';
-  }
-
-  byline(m) {
-    const model = typeof m?.model === 'string' ? m.model : this.tab.model?.id || '';
-    return h('div', { class: 'msg-by asst-by' }, logo(14), h('span', null, 'ORBIX'), model ? h('span', { class: 'by-model' }, model) : null);
   }
 
   /** A failed reply: the provider's message, what to do about it, and Retry (shown on the latest reply only). */
@@ -976,8 +980,6 @@ export class TabView {
     const els = steps.map((m) => this.els.get(m)).filter((el) => el?.isConnected && el.parentNode === this.tin);
     if (!els.length) return old; // already folded
     const first = els[0];
-    // The agent's name stays at the top of the turn, above the fold.
-    const by = first.querySelector(':scope > .asst-by');
     const head = h('summary', { class: 'work-h' },
       icon('chevron-right', 12, 'chev'),
       h('span', { class: 'work-l' }, st.secs != null ? `Worked for ${fmtElapsed(st.secs)}` : 'Worked'),
@@ -989,7 +991,6 @@ export class TabView {
       fold.open = this.workOpen.has(key);
     }
     if (!old) first.before(fold);
-    if (by) fold.before(by);
     const body = fold.lastChild;
     for (const el of els) {
       el.classList.remove('enter');
@@ -1129,7 +1130,6 @@ export class TabView {
     }
     if (!this.liveEl) {
       this.liveEl = h('div', { class: 'msg asst live enter' });
-      if (this.firstOfTurn(t.messages.length)) this.liveEl.append((this.liveEl._by = this.byline(live)));
       this.tin.insertBefore(this.liveEl, this.pendingEl || null);
       this.liveBlocks = [];
       this.emptyEl?.remove();
@@ -1185,7 +1185,6 @@ export class TabView {
     if (!el) return;
     const after = this.liveBlocks.slice(0, i).reverse().find((x) => x?.el?.isConnected)?.el;
     if (after) after.after(el);
-    else if (this.liveEl._by?.isConnected) this.liveEl._by.after(el);
     else this.liveEl.prepend(el);
   }
 

@@ -8,36 +8,11 @@ import { confirmDialog, isApproval } from './dialogs.js';
 
 // ---- Starting a session on its own branch -----------------------------------------------------------------------
 
-const repoOf = new Map(); // project path -> true | false | Promise (is it a git repository with a commit?)
-
-/** Whether `project` is a git repository; asks once per folder and calls `then` when the answer arrives. */
-function isRepo(project, then) {
-  const v = repoOf.get(project);
-  if (typeof v === 'boolean') return v;
-  if (!v)
-    repoOf.set(
-      project,
-      api
-        .get(`/api/git/status?ws=${encodeURIComponent(project)}`)
-        .then((r) => !!r.git?.repo)
-        .catch(() => false)
-        .then((ok) => {
-          repoOf.set(project, ok);
-          then?.();
-        }),
-    );
-  return false;
-}
-
 /**
- * The "Separate branch" toggle of the new-session box: shown for git projects only. `state.branch` is the choice.
- * Returns null when the project is not a git repository (or the answer is not in yet; `redraw` runs when it is).
+ * The "Separate branch" toggle of the new-session box. Home supplies its working-tree status.
  */
-export function branchToggle(state, project, redraw) {
-  if (!project || !isRepo(project, redraw)) {
-    state.branch = false;
-    return null;
-  }
+export function branchToggle(state, isRepo, redraw) {
+  if (!isRepo) return null;
   const on = !!state.branch;
   return h(
     'button',
