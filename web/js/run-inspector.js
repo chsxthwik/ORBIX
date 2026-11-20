@@ -16,7 +16,7 @@ export function runInspector(tab, showChanges) {
     filter=key; filters.forEach((b,i)=>b.setAttribute('aria-pressed', String(['all','running','error'][i]===key))); signature='';update(current);
   } }, key==='all'?'All activity':key==='running'?'Running':'Failures'));
   const el = h('section', { class:'run-inspector', 'aria-label':'Run inspector' },
-    h('div', { class:'run-heading' }, h('h2',null,'Session activity'), h('button',{class:'link',type:'button',onclick:()=>{
+    h('div', { class:'run-heading' }, h('h2',null,'Conversation activity'), h('button',{class:'link',type:'button',onclick:()=>{
       const s=summarizeRun(current); copyText(s.rows.map(r=>`${r.status}\t${r.name}\t${r.detail}${r.exit != null ? `\texit ${r.exit}`:''}`).join('\n') || 'No tool activity recorded.');
     }},'Copy log')),metrics,usage,
     h('div',{class:'run-section-head'},h('h3',null,'Edited paths'),h('button',{type:'button',class:'link',onclick:showChanges},'Review diffs')),files,

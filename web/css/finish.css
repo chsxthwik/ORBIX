@@ -3,11 +3,7 @@
    so every theme follows; Dark gets a neutral, deeper palette of its own below. */
 
 /* ---- Dark: neutral graphite, the workspace sheet darker than the frame around it ---- */
-:root:not([data-mode=light]):not([data-theme=midnight]):not([data-scene]) {
-  --chrome: #111114; --bg-side: #111114; --bg: #08080A; --bg-raise: #141418; --bg-raise-2: #1B1B20; --bg-modal: #131316; --bg-inset: #0B0B0D; --bg-field: #0E0E11;
-  --bg-hover: rgba(255,255,255,.045); --bg-active: rgba(255,255,255,.08); --bubble: #1A1A1E; --bubble-line: rgba(255,255,255,.06);
-  --line: rgba(255,255,255,.07); --line-2: rgba(255,255,255,.11); --line-3: rgba(255,255,255,.2); --hi: transparent;
-  --fg: #ECECEA; --fg-2: #A6A6A2; --fg-3: #7C7C78;
+:root:not([data-mode=light]):not([data-theme=midnight]):not([data-scene]) { --hi: transparent;
   --shadow-1: none;
   --shadow-2: 0 12px 32px -16px rgba(0,0,0,.8);
   --shadow-sheet: none;
@@ -15,13 +11,11 @@
 
 /* ---- frame and sheet ---- */
 .app, .app:not(.overlay-side) .sidebar { background: var(--chrome); }
-.main { border-radius: 10px 10px 0 0; box-shadow: none; background: var(--bg); }
 
 /* Replies carry no name plate; the model shows in the reply's actions. Your own messages need no label either. */
-.bubble { border-color: transparent; background: var(--bubble); box-shadow: none; border-radius: 18px; }
+.bubble { border-color: transparent; }
 .msg-acts { margin-top: -2px; }
-.msg-act { height: 24px; padding: 0 6px; font-size: 12px; }
-.msg-model { padding: 0 6px; color: var(--fg-3); font-size: 12px; }
+.msg-model { padding: 0 6px; }
 
 /* Tool steps: one quiet line each, like a log. The icon tile and the rail go; status keeps its colour only when it
    needs you (waiting, failed). Durations and the success tick appear under the pointer. */
@@ -46,19 +40,15 @@ details.think > summary { color: var(--fg-3); }
 .msg .errbox { border: 0; border-left: 2px solid var(--err-line); border-radius: 0; background: transparent; box-shadow: none; padding: 2px 0 2px 14px; }
 
 /* ---- the message box: a dark slab with one hairline; the send button is a plain disc ---- */
-.composer { border-color: var(--line-2); background: var(--bg-raise); box-shadow: none; border-radius: 16px; }
+.composer { border-color: var(--line-2); }
 .composer:focus-within { border-color: var(--line-3); box-shadow: none; }
-.composer.busy { border-color: var(--line-2); }
-.send { border-radius: 50%; box-shadow: none; }
-.send:hover:not(:disabled) { box-shadow: none; }
-.send:disabled { background: var(--bg-active); }
-.c-row .cbtn { border-color: transparent; background: transparent; color: var(--fg-3); }
-.c-row .cbtn:hover:not(:disabled) { border-color: transparent; background: var(--bg-hover); color: var(--fg); }
-.c-row .cbtn.on { border-color: transparent; background: var(--bg-active); color: var(--fg); }
+.c-row .cbtn { border-color: transparent; }
+.c-row .cbtn:hover:not(:disabled) { border-color: transparent; }
+.c-row .cbtn.on { border-color: transparent; }
 .c-status { color: var(--fg-3); }
 
 /* ---- timeline: grey marks; colour comes back under the pointer ---- */
-.tl { opacity: .55; transition: opacity var(--t2) var(--ease); }
+.tl { transition: opacity var(--t2) var(--ease); }
 .tl:hover { opacity: 1; }
 .tl:not(:hover) .tl-mark { filter: grayscale(1); }
 
@@ -66,7 +56,6 @@ details.think > summary { color: var(--fg-3); }
 .btn.primary, .send:not(.stop):not(:disabled) { background: var(--fg); border-color: var(--fg); color: var(--bg); box-shadow: none; }
 .btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 86%, var(--bg)); box-shadow: none; transform: none; }
 .btn.primary:active:not(:disabled), .send:not(.stop):not(:disabled):active { transform: scale(.98); box-shadow: none; }
-.send.stop { background: transparent; color: var(--err); box-shadow: inset 0 0 0 1px var(--err-line); }
 
 /* ---- sidebar ---- */
 .side-new { border-color: transparent; background: var(--bg-active); box-shadow: none; }
@@ -112,7 +101,6 @@ button.home-proj:hover .home-proj-ic { border-color: var(--line-2); background: 
 .proj > .s-row.cur { border-left-color: var(--line-3); }
 
 /* ---- window frame: the workspace fills the window below the toolbar, with no rounding overflow at any zoom ---- */
-body { display: flex; flex-direction: column; height: 100vh; }
 .app { flex: 1 1 auto; height: auto; min-height: 0; }
 
 /* ---- sidebar: one inset for every row, so the button, links, filter, projects and footer share both edges ---- */

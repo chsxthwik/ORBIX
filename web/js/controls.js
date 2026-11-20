@@ -30,7 +30,7 @@ export function addContext(composer) {
 const MODES = [
   ['ask', 'Ask first', 'shield', 'Each file edit and command waits for your OK.'],
   ['edits', 'Auto edits', 'pencil', 'File edits run without asking (each can be undone); commands wait for your OK.'],
-  ['auto', 'Turbo', 'bolt', 'Edits and commands run without asking. Destructive commands and files outside the project still ask.'],
+  ['auto', 'Turbo', 'bolt', 'Edits and commands run without asking, also outside the project. Destructive commands (deleting folders, pushing, publishing) still ask.'],
 ];
 
 /** The permission chip: one setting for every conversation (Settings → Permissions shows the same choice). */
@@ -38,7 +38,7 @@ export function permissionChip() {
   const btn = h('button', { class: 'cbtn c-perm', type: 'button', 'aria-haspopup': 'menu' });
   const set = async (mode) => {
     if (mode === (S.engine?.approvals || 'ask')) return;
-    if (mode === 'auto' && !(await confirmDialog('Turn on Turbo', 'The agent will edit files and run commands without asking. Edits can be undone; commands cannot. Destructive commands (deleting folders, pushing, publishing) and files outside the project still ask.', { ok: 'Turn on Turbo', danger: true }))) return;
+    if (mode === 'auto' && !(await confirmDialog('Turn on Turbo', 'The agent will edit files and run commands without asking, also outside the project folder. Edits can be undone; commands cannot. Destructive commands (deleting folders, pushing, publishing) still ask.', { ok: 'Turn on Turbo', danger: true }))) return;
     try {
       await api.post('/api/engine/settings', { approvals: mode });
       await loadEngine();

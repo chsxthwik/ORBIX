@@ -556,10 +556,23 @@ function viewFor(tab) {
   return v;
 }
 
+/** The view that just came on screen settles in (a short fade and rise), once per change of view, not per redraw. */
+let shownKey = '';
+function settleIn(el, key) {
+  if (key === shownKey) return;
+  const first = !shownKey;
+  shownKey = key;
+  if (first || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  el.classList.remove('v-in');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('v-in');
+}
+
 function showActive() {
   const t = activeTab();
   const hub = !t && isHub() && hubView();
   navRecord(t ? { kind: 'tab', id: t.id } : hub ? { kind: 'hub', view: hub.view, id: hub.id } : { kind: 'home' });
+  queueMicrotask(() => settleIn(t ? sessEl : hub ? runsEl : homeEl, t ? `tab:${t.id}` : hub ? `hub:${hub.view}:${hub.id || ''}` : 'home'));
   applyPrefs();
   drawTop();
   drawSidebar();

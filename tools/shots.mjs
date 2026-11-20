@@ -426,8 +426,8 @@ async function scenes(page, project) {
   await page.eval(toEnd);
   await page.capture('done', { dsf: 4 / 3, webp: true });
 
-  // Themes: the same finished task, in Dark and Light and in two of the scene themes (ORBIX, Synthwave).
-  for (const [theme, webp] of [['dark', false], ['light', true], ['orbix', false], ['sunset', false]]) {
+  // Themes: the same finished task in Light and in the ORBIX scene theme (Dark is the main shot above).
+  for (const [theme, webp] of [['light', true], ['orbix', false]]) {
     await setTheme(page, theme);
     await page.eval(toEnd);
     await page.capture(`theme-${theme}`, { dsf: 1, webp });

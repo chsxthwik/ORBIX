@@ -902,7 +902,7 @@ export class AgentProc extends EventEmitter {
       // reading a file or fetching a host cannot be side-stepped with the task tool.
       runTool: (c, signal) => {
         const input = c.arguments || {};
-        // A helper agent cannot ask you, so it does not reach outside the project unless approvals are Allow everything.
+        // A helper agent cannot ask you, so it does not reach outside the project unless approvals are Turbo.
         if (this.config.data.approvals !== 'auto' && this._outside(c, input)) return { text: `Not run: ${input.path} is outside the project folder. Helper agents only read inside it; say in your answer that the main agent should read it.`, isError: true };
         return this._hooked(c.name, input, signal, { exec: () => this.tools.run(c.name, input, { signal, allowHost: (h) => this._allowHost(h), vision, search: () => this.config.searchConfig?.() }) });
       },

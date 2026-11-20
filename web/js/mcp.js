@@ -56,7 +56,7 @@ function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) 
   const save = btn('Save', async () => {
     try {
       await api.post('/api/mcp/save', { name: nameIn.value.trim(), config: parse(), oldName: isNew ? null : name });
-      toast('Saved. Open sessions use it from their next message.', 'ok', 3000);
+      toast('Saved. Open conversations use it from their next message.', 'ok', 3000);
       done(true);
     } catch (e) {
       toast(e.message, 'error', 7000);
@@ -112,7 +112,7 @@ export async function renderMcpSettings(root) {
     if (editable) {
       actions.push(btn('Edit', () => editor(edit, { name: s.name, config: s.config, isNew: false }, (saved) => (saved ? reload() : replace(edit)))));
       actions.push(btn('Remove', async () => {
-        if (!(await confirmDialog('Remove MCP server', `Remove "${s.name}"? Open sessions stop using it with their next message.`, { ok: 'Remove', danger: true }))) return;
+        if (!(await confirmDialog('Remove MCP server', `Remove "${s.name}"? Open conversations stop using it with their next message.`, { ok: 'Remove', danger: true }))) return;
         try {
           await api.post('/api/mcp/remove', { name: s.name });
           reload();
@@ -135,7 +135,7 @@ export async function renderMcpSettings(root) {
   const proj = data.project;
   replace(
     root,
-    h('p', { class: 'set-note' }, 'MCP servers add tools such as databases, browsers or issue trackers. They start with your first message in a session and stop when it closes.'),
+    h('p', { class: 'set-note' }, 'MCP servers add tools such as databases, browsers or issue trackers. They start with your first message in a conversation and stop when it closes.'),
     h('h4', { class: 'set-sub' }, 'Built-in tools'),
     h('div', { class: 'mcp-builtin' }, BUILTIN.map(([n, d, asks]) => h('div', { class: 'mcp-tool' }, h('code', null, n), h('span', { class: `tag${asks ? ' warn' : ''}` }, asks ? 'Asks first' : 'No approval'), h('span', { class: 'muted' }, d)))),
     h('div', { class: 'mcp-head' }, h('h4', { class: 'set-sub' }, 'Your MCP servers'), btn('Add server', () => editor(edit, {}, (saved) => (saved ? reload() : replace(edit))), 'primary sm')),
@@ -148,7 +148,7 @@ export async function renderMcpSettings(root) {
           h('p', { class: 'muted small', title: proj.file }, proj.exists ? `From ${proj.file}. Edit that file to change them. Each one starts only after you allow it once.` : `No .mcp.json in this project. Add one at ${proj.file} to share servers with everyone who works on it.`),
           proj.servers.length ? h('div', { class: 'cards' }, proj.servers.map((s) => card(s, false))) : null,
         ]
-      : h('p', { class: 'muted small' }, 'Open a session to see the servers its project defines in .mcp.json.'),
+      : h('p', { class: 'muted small' }, 'Open a conversation to see the servers its project defines in .mcp.json.'),
     searchBox,
     hooksBox,
     h('h4', { class: 'set-sub' }, 'Skills and commands'),

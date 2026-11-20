@@ -16,7 +16,7 @@ export function renderModelRoles(root, engine) {
   if (!engine.providers.some((p) => p.configured)) return replace(root);
   const dl = h('datalist', { id: 'models-all' });
   const rows = ROLES.map(([role, label, hint]) => {
-    const input = h('input', { type: 'text', class: 'role-in', list: 'models-all', value: engine.models?.[role] || '', placeholder: 'Session model', spellcheck: 'false', autocomplete: 'off', 'aria-label': label });
+    const input = h('input', { type: 'text', class: 'role-in', list: 'models-all', value: engine.models?.[role] || '', placeholder: 'Conversation model', spellcheck: 'false', autocomplete: 'off', 'aria-label': label });
     const save = btn('Save', async () => {
       save.disabled = true;
       try {
@@ -37,7 +37,7 @@ export function renderModelRoles(root, engine) {
     save.classList.add(SAVED);
     return row(label, h('div', { class: 'role-ctl' }, input, save), hint);
   });
-  replace(root, h('p', { class: 'set-note' }, 'Leave a box empty to use the session’s own model. In a session, /model fast and /model plan change these for that session only.'), h('div', { class: 'set-card' }, rows), dl);
+  replace(root, h('p', { class: 'set-note' }, 'Leave a box empty to use the conversation’s own model. In a conversation, /model fast and /model plan change these for that conversation only.'), h('div', { class: 'set-card' }, rows), dl);
   api.get('/api/engine/models').then((r) => {
     replace(dl, r.models.map((m) => h('option', { value: `${m.provider}/${m.id}` }, `${m.providerName}: ${m.name}`)));
     if (r.errors?.length) toast(r.errors[0], 'info', 5000);

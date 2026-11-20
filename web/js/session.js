@@ -127,7 +127,7 @@ function errorHelp(msg) {
   if (/\b(401|403)\b|unauthori[sz]ed|invalid.{0,20}(api.?)?key|incorrect api key|authentication|no api key/i.test(m)) return { hint: 'Check the key in Providers, or sign in again if you connected with a sign-in.', act: 'Open Providers', run: () => emit('settings', 'engine') };
   if (/\b429\b|rate.?limit|quota|overloaded|capacity|too many requests/i.test(m)) return { hint: 'The provider is busy, or your quota is used up. Wait a moment and try again.' };
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|fetch failed|network|socket hang up|timed? ?out/i.test(m)) return { hint: 'ORBIX couldn’t reach the provider. Check your internet connection, or make sure your local model server is running.' };
-  if (/context|too long|maximum.{0,20}tokens|token limit/i.test(m) && /exceed|maximum|limit|too long|reduce/i.test(m)) return { hint: 'The conversation is too long for this model. Compact it with /compact, or start a new session.' };
+  if (/context|too long|maximum.{0,20}tokens|token limit/i.test(m) && /exceed|maximum|limit|too long|reduce/i.test(m)) return { hint: 'The conversation is too long for this model. Compact it with /compact, or start a new conversation.' };
   if (/model.{0,40}(not found|does not exist|not support|unknown|unavailable)|no such model/i.test(m)) return { hint: 'Choose another model.', act: 'Choose model', run: 'model' };
   return null;
 }
@@ -392,7 +392,7 @@ export class TabView {
     const m = t.model;
     const dead = t.dead;
     this.ta.disabled = dead;
-    this.ta.placeholder = dead ? 'This session has ended' : t.streaming ? 'Add guidance, or press Esc to stop' : 'Ask anything, @ to mention, / for actions';
+    this.ta.placeholder = dead ? 'This conversation has ended' : t.streaming ? 'Add guidance, or press Esc to stop' : 'Ask anything, @ to mention, / for actions';
     this.composer.el.classList.toggle('busy', !!t.streaming);
     this.updateSend();
 
@@ -1233,7 +1233,7 @@ export class TabView {
     this.pendingEl?.remove();
     this.pendingEl = null;
     const detail = [d.message, d.stderr?.length ? d.stderr.join('\n') : ''].filter(Boolean).join('\n\n');
-    this.tin.append(errorState(detail, { title: `This session ended${d.code != null ? ` (exit code ${d.code})` : ''}.`, retry: () => this.reopen(), retryLabel: 'Reopen session', cls: 'enter' }));
+    this.tin.append(errorState(detail, { title: `This conversation ended${d.code != null ? ` (exit code ${d.code})` : ''}.`, retry: () => this.reopen(), retryLabel: 'Reopen conversation', cls: 'enter' }));
     this.updateComposer();
     this.refreshActs();
     if (scroll) this.scrollBottom(true);
