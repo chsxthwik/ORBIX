@@ -74,10 +74,6 @@ details.think > summary { color: var(--fg-3); }
 .home-title-p { background: none; -webkit-text-fill-color: currentColor; color: var(--accent); }
 .home .ws-recipe { border-color: var(--line); background: transparent; box-shadow: none; transform: none; }
 .home .ws-recipe:hover { border-color: var(--line-2); background: var(--bg-hover); color: var(--fg); transform: none; box-shadow: none; }
-.home-proj, button.home-proj:hover { background: var(--bg-raise); box-shadow: none; transform: none; }
-button.home-proj:hover { border-color: var(--line-2); }
-button.home-proj:hover .home-proj-ic { border-color: var(--line-2); background: transparent; color: var(--fg); }
-.library-row:hover .library-main strong { color: var(--fg); }
 
 /* ---- panels, menus and dialogs: flat surfaces over a dim, unblurred workspace ---- */
 .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; }

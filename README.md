@@ -74,11 +74,19 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 </tr>
 <tr>
 <td><img src="docs/img/shots/automations.png" alt="The Automations page: a weekday test report at 09:00 and a weekly dependency check that is off, each with Run now, Edit and Delete"></td>
-<td><img src="docs/img/shots/settings.png" alt="Settings on the Providers page, with a list of AI providers"></td>
+<td><img src="docs/img/shots/customizations.png" alt="The Customizations page: a featured Playwright card and MCP servers by category, each with an add button"></td>
 </tr>
 <tr>
 <td><b>Automations.</b> Prompts that run on a schedule, each as a new conversation.</td>
-<td><b>Settings.</b> A page of its own: providers, models, permissions and more.</td>
+<td><b>Customizations.</b> MCP servers in one click, and what is installed.</td>
+</tr>
+<tr>
+<td><img src="docs/img/shots/settings.png" alt="Settings, a card over the workspace, on the Providers page"></td>
+<td></td>
+</tr>
+<tr>
+<td><b>Settings.</b> One card: General, Appearance, Shortcuts, Providers and more.</td>
+<td></td>
 </tr>
 </table>
 
@@ -90,8 +98,10 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 | **Sidebar** | New conversation, Runs, Review, Automations and Customizations; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
 | **Overview card** | Beside the conversation (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd>): Changes, Files, Terminal, Plan and the run inspector, plus helper agents and background runs when there are any. |
 | **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Browser, Side question, Plan and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** starts on the web apps running on this computer; in the Windows app it is a real browser with its own session (any site, back and forward, downloads), in a web browser it shows only this computer's pages. **Side question** answers a quick question about the conversation while the agent keeps working. |
-| **Automations** | Prompts ORBIX starts by itself every hour, every day, on weekdays or every week, each as a new conversation in its project. Run now, turn on or off, edit. They run while ORBIX is open; in Ask first a run waits for your OK in Review. |
-| **Settings** | A card over the workspace (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> closes; <kbd>Ctrl</kbd>+<kbd>K</kbd> finds any setting). **General**: permission preset, tool permissions, network access rules, Steer or Queue while the agent works, the send key. **Application**: updates, data folder, help. **Appearance**, **Shortcuts** (change any key), **Notifications** (with volume), **Providers**, **Models**, **Browser** (where links open, downloads, history, site data). Customizations: Instructions, Checks, Tools & MCP. A page per project (folder, recent conversations, its instruction and rule files, its check command), Conversations (archived and recently deleted), Worktrees, and **Give feedback**. |
+| **Automations** | Prompts ORBIX starts by itself every hour, every day, on weekdays or every week, each as a new conversation in its project. **Create with Prompt** turns one sentence ("every weekday at 9am, run the tests") into the schedule and the task. Run now, turn on or off, edit. In Ask first a run waits for your OK in Review. |
+| **Customizations** | Marketplace and Installed, with one search box. The marketplace adds well-known MCP servers in one click (Playwright, Chrome DevTools, Context7, GitHub, Supabase, Figma, Notion, Stripe and more); Installed lists your MCP servers, skills and the project's rules. |
+| **Home** | The ORBIX mark and a greeting; suggestions and the message box at the bottom, with the project and the project-folder or separate-branch choice on a strip on top of the box. |
+| **Settings** | A card over the workspace (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> closes; <kbd>Ctrl</kbd>+<kbd>K</kbd> finds any setting). **General**: permission preset, tool permissions, network access rules, Steer or Queue while the agent works, the send key. **Application**: prevent sleep while agents work, keep running in the tray, Windows notification settings, WSL, updates, data folder, help. **Appearance** (steps Default or Verbose, theme, contrast, font, font size, your own colours, conversation width, screen reader mode), **Shortcuts** (change any key), **Notifications** (with volume), **Providers**, **Models**, **Browser** (where links open, downloads, history, site data). Customizations: Instructions, Checks, Tools & MCP. A page per project (folder, recent conversations, its instruction and rule files, its check command), Conversations (archived and recently deleted), Worktrees, and **Give feedback**. |
 | **Message box** | <kbd>+</kbd> adds files, a mention (<kbd>@</kbd>) or a command (<kbd>/</kbd>); the model and its thinking level; the permission chip; the context meter. |
 | **Conversation** | A centred column; the steps of a turn fold into one "Worked for…" line above the answer. Readable Markdown with code blocks and tables; under each reply copy, 👍, 👎 (answer again, another model, or report it) and retry. A navigator of dots on the left edge (one per message of yours), find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). The side panel stays closed until you open it. |
 

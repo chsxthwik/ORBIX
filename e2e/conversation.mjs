@@ -187,6 +187,10 @@ try {
     await shot('browser-tab');
     site.close();
     say('conversation e2e: built-in browser');
+    // Settings → Application in the Windows app: the tray and keeping the PC awake switch on and off cleanly.
+    assert(await page.eval(`return !!window.orbixDesktop.system`), 'the system bridge');
+    await page.eval(`const st = await import('/js/store.js'); await st.savePrefs({ tray: true, preventSleep: true }); await new Promise((r) => setTimeout(r, 3500)); await st.savePrefs({ tray: false, preventSleep: false }); await new Promise((r) => setTimeout(r, 500));`);
+    say('conversation e2e: tray and prevent sleep');
   }
   const bad = page.errors.filter((e) => e && !/favicon|Failed to load resource/i.test(e));
   assert(!bad.length, `no page errors: ${bad.join(' | ')}`);

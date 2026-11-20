@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.9.0 (2026-11-20)
+- **Home.** The ORBIX mark and a greeting with your first name in the middle ("Hey Ravi, what should we build today?", a different one at each start); three suggestions and the message box at the bottom, in the conversation's column. The project and where the conversation works (project folder or a separate branch) sit on a strip on top of the box, with the branch and working tree; the project menu lists recent projects first. Start is a round send button. The Recent conversations and Projects lists are gone from Home (the sidebar has both).
+- **Customizations page** (sidebar → Customizations): Marketplace and Installed, with one search box. The marketplace adds well-known MCP servers in one click: Playwright, Chrome DevTools, Firecrawl, Exa, Context7, Sequential Thinking, Memory, GitHub, Supabase, Filesystem, Figma, Notion and Stripe (it asks for a token or folder when one is needed). Installed lists your MCP servers with their state (test, edit or remove each), the skills, and the project's instruction and rule files.
+- **Automations: Create with Prompt.** One sentence such as "Every weekday at 9am, run the tests and tell me what fails" fills in the schedule and the task for you to check. The page has Create with Prompt and New at the top.
+- **Settings → Appearance:** Conversation steps (Default folds a turn's steps, Verbose keeps them open), the theme as three icons, Contrast (Default or Strong), Font (Geist, Segoe UI, system font), Font size, your own Background, Foreground and Accent colours with a reset, Conversation width (Narrow, Default, Wide, Fill), and Screen reader mode (no motion, steps open).
+- **Settings → Application** in the Windows app: Prevent sleep while an agent works, Keep running in the tray (closing the window hides ORBIX so automations keep running), Windows' notification settings, and the WSL distribution to run commands in.
+- **Permissions menu** in the message box shows each preset with what it allows.
+- **Removed:** the Home lists and their styles (about 70 rules), `session-library.js`, the keyboard hints at the foot of Home, and the marketing lines at the top of Settings → Application.
+
 ## 3.8.0 (2026-11-20)
 - **Chat first.** The side panel starts closed and opens when you ask for it (toolbar, Ctrl+J or the Overview card); the sidebar is narrower (240px; a width you dragged is kept); the conversation is a narrower, centred column. Existing setups switch to this once, on the first start of 3.8.
 - **Sharper replies.** Tighter line spacing and list rhythm, white bullets, calmer headings, inline code in amber on a faint ground with no border (file paths look the same and underline when you point at them), and a compact bubble for your messages.

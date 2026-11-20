@@ -4,7 +4,7 @@
 import { h, icon, iconBtn, toast, replace, clear, logo, errorState, loadingState, copyText, timeAgo, baseName, kbd } from './dom.js';
 import { api } from './api.js';
 import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
-import { toggleWide } from './workbench.js';
+import { colWidth, setColWidth } from './workbench.js';
 import { modal, btn, confirmDialog, row, toggle, folderPicker } from './dialogs.js';
 import { notifyPrefs, attention, notifyPermission, askNotifyPermission, chime } from './notify.js';
 import { allRuns } from './runs.js';
@@ -645,37 +645,92 @@ async function tabModels(el, show) {
 function tabLook(el) {
   const u = S.ui;
   const theme = u.theme || 'system';
-  const card = ([v, l]) => h('button', { class: 'theme-c', type: 'button', role: 'radio', 'aria-checked': String(theme === v), onclick: (e) => {
+  const setTheme = (v) => {
     const apply = () => savePrefs({ theme: v });
     // A soft crossfade between themes.
     if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(apply);
     else apply();
+  };
+  const card = ([v, l]) => h('button', { class: 'theme-c', type: 'button', role: 'radio', 'aria-checked': String(theme === v), onclick: (e) => {
+    setTheme(v);
     for (const b of e.currentTarget.closest('.set-wrap, .modal, body').querySelectorAll('.theme-c')) b.setAttribute('aria-checked', String(b === e.currentTarget));
   } }, themePreview(v), h('span', { class: 'theme-n' }, h('span', null, l), icon('check', 13, 'theme-ok')));
   const themes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Theme' }, [['system', 'System'], ['dark', 'Dark'], ['light', 'Light'], ['midnight', 'Midnight'], ['frost', 'Frost']].map(card));
   const scenes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Scene theme' }, [['orbix', 'ORBIX'], ['sunset', 'Synthwave'], ['koi', 'Koi pond'], ['aurora', 'Aurora'], ['dusk', 'Halftone dusk']].map(card));
-  const val = h('span', { class: 'num range-v' }, `${u.fontSize || 14}px`);
-  const size = h('input', { type: 'range', min: 12, max: 18, step: 1, value: u.fontSize || 14, 'aria-label': 'Message text size', oninput: () => ((val.textContent = size.value + 'px'), savePrefs({ fontSize: +size.value })) });
+  // Theme as three icons (System, Light, Dark); the presets below choose any of the themes.
+  const modeOf = (t) => (t === 'system' ? 'system' : ['light', 'frost'].includes(t) ? 'light' : 'dark');
+  const modeSeg = h('div', { class: 'seg seg-ic', role: 'radiogroup', 'aria-label': 'Theme' }, [['system', 'monitor', 'System'], ['light', 'sun', 'Light'], ['dark', 'moon', 'Dark']].map(([v, ic, l]) => h('button', { type: 'button', role: 'radio', title: l, 'aria-label': l, 'aria-checked': String(modeOf(theme) === v), onclick: (e) => {
+    for (const x of e.currentTarget.parentNode.children) x.setAttribute('aria-checked', String(x === e.currentTarget));
+    setTheme(v);
+    for (const b of el.querySelectorAll('.theme-c')) b.setAttribute('aria-checked', 'false');
+  } }, icon(ic, 14))));
+  const sizes = [12, 13, 14, 15, 16, 17, 18];
+  const fontSize = pick('Font size', sizes.map((n) => [String(n), `${n}px`]), String(u.fontSize || 14), (v) => savePrefs({ fontSize: Number(v) }));
+  const font = pick('Font', [['geist', 'Geist'], ['segoe', 'Segoe UI'], ['system', 'System font']], ['segoe', 'system'].includes(u.font) ? u.font : 'geist', (v) => savePrefs({ font: v }));
+  // Your own colours for the theme in use: background, text and accent. Empty = the theme's own.
+  const colors = { ...(u.colors || {}) };
+  const css = getComputedStyle(document.documentElement);
+  const toHex = (v) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(String(v).trim());
+    if (m) return `#${m[1].toUpperCase()}`;
+    const c = document.createElement('canvas').getContext('2d');
+    c.fillStyle = String(v).trim() || '#000';
+    return /^#[0-9a-f]{6}$/i.test(c.fillStyle) ? c.fillStyle.toUpperCase() : '#000000';
+  };
+  const colorRow = (key, label, cssVar) => {
+    const now = () => colors[key] || toHex(css.getPropertyValue(cssVar));
+    const swatch = h('input', { type: 'color', class: 'clr-sw', value: now(), 'aria-label': `${label} colour` });
+    const hex = h('input', { type: 'text', class: 'clr-hex', value: now().slice(1), maxlength: 6, spellcheck: 'false', 'aria-label': `${label} hex` });
+    const save = (v) => {
+      if (!/^#[0-9a-f]{6}$/i.test(v)) return;
+      colors[key] = v.toUpperCase();
+      swatch.value = v;
+      hex.value = v.slice(1).toUpperCase();
+      savePrefs({ colors: { ...colors } });
+      reset.disabled = false;
+    };
+    swatch.addEventListener('input', () => save(swatch.value));
+    hex.addEventListener('change', () => save(`#${hex.value.replace(/^#/, '')}`));
+    hex.addEventListener('keydown', (e) => e.key === 'Enter' && hex.blur());
+    return row(label, h('label', { class: 'clr' }, swatch, h('span', { class: 'clr-hash' }, '#'), hex));
+  };
+  const reset = btn('Reset', () => {
+    savePrefs({ colors: {} });
+    replace(el);
+    tabLook(el);
+  }, 'sm');
+  reset.disabled = !Object.keys(colors).length;
   el.append(
-    h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Theme'), themes),
+    group('Chat', null,
+      row('Conversation steps', seg('Conversation steps', [['default', 'Default'], ['verbose', 'Verbose']], u.steps === 'verbose' ? 'verbose' : 'default', (v) => savePrefs({ steps: v })), 'Default folds each turn’s steps into “Worked for…” above the answer. Verbose keeps them open.'),
+      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'The model’s reasoning above its reply, folded until you open it.')),
+    group('Appearance', null,
+      row('Theme', modeSeg),
+      row('Contrast', seg('Contrast', [['default', 'Default'], ['strong', 'Strong']], u.contrast === 'strong' ? 'strong' : 'default', (v) => savePrefs({ contrast: v }))),
+      row('Font', font),
+      row('Font size', fontSize, 'The size of the conversation’s text. Ctrl+= and Ctrl+- change it too.')),
+    h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Presets'), themes),
+    group('Colors', 'Your own background, text and accent for the theme in use. Hover colours, borders and muted text follow from them.',
+      colorRow('bg', 'Background', '--bg'),
+      colorRow('fg', 'Foreground', '--fg'),
+      colorRow('accent', 'Accent', '--accent'),
+      row('Theme colours', reset, 'Back to the theme’s own colours.')),
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Scenes'),
       h('p', { class: 'set-note' }, 'Themes with a moving picture behind the conversation. Text stays on a calm column in the middle, the scene speeds up while the agent works, and fireworks go up when a task finishes.'),
       scenes,
       h('div', { class: 'set-card scene-opts' },
-      row('Animate scenes', toggle(u.sceneMotion !== false, (v) => savePrefs({ sceneMotion: v }), 'Animate scenes'), 'Turn this off to keep the picture still. Scenes also stay still when Windows is set to reduce motion.'),
-      row('Preview the finish', btn('Fireworks', () => previewCelebration()), 'Shows what happens in a scene theme when the agent finishes a task.'))),
-    group('Reading', null,
-      row('Message text size', h('div', { class: 'row' }, size, val)),
-      h('p', { class: 'fs-sample' }, 'The quick brown fox: this is how replies will read.'),
-      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'Shows the model’s reasoning above its reply, folded until you open it.')),
-    group('Layout', null,
+        row('Animate scenes', toggle(u.sceneMotion !== false, (v) => savePrefs({ sceneMotion: v }), 'Animate scenes'), 'Turn this off to keep the picture still. Scenes also stay still when Windows is set to reduce motion.'),
+        row('Preview the finish', btn('Fireworks', () => previewCelebration()), 'Shows what happens in a scene theme when the agent finishes a task.'))),
+    group('Chat layout', null,
+      row('Conversation width', seg('Conversation width', [['narrow', 'Narrow'], ['default', 'Default'], ['wide', 'Wide'], ['fill', 'Fill']], colWidth(), (v) => setColWidth(v)), 'The widest the conversation and the message box get.'),
       window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales everything in the window. Auto picks a size for your screen and goes larger on wide, high-resolution screens.') : null,
       row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on the screen.'),
-      row('Reading column', seg('Reading column', [['normal', 'Normal'], ['wide', 'Wide']], document.documentElement.classList.contains('wide') ? 'wide' : 'normal', (v) => (v === 'wide') !== document.documentElement.classList.contains('wide') && toggleWide()), 'Wide suits long diffs and tables. The View menu has the same switch.'),
       row('Overview card', toggle(u.overview !== false, (v) => savePrefs({ overview: v }), 'Overview card'), 'The card beside the conversation with Changes, Files, Terminal and Plan.')),
     group('Sidebar', null,
       row('Sort projects', seg('Sort projects', [['recent', 'Recent activity'], ['name', 'Name']], u.sortProjects === 'name' ? 'name' : 'recent', (v) => savePrefs({ sortProjects: v }))),
-      row('Show archived conversations', toggle(u.showArchived === true, (v) => savePrefs({ showArchived: v }), 'Show archived conversations'), 'Archived conversations stay on disk; Settings → Conversations lists them.')));
+      row('Show archived conversations', toggle(u.showArchived === true, (v) => savePrefs({ showArchived: v }), 'Show archived conversations'), 'Archived conversations stay on disk; Settings → Conversations lists them.')),
+    group('Accessibility', null,
+      row('Screen reader mode', toggle(u.screenReader === true, (v) => savePrefs({ screenReader: v }), 'Screen reader mode'), 'No animation or moving pictures, and each turn’s steps stay open so they are read in order.')));
 }
 
 /** Interface size in the Windows app: Auto, or a fixed scale. */
@@ -981,16 +1036,16 @@ function tabApplication(el, show) {
         b2.textContent = 'Copied';
         setTimeout(() => (b2.textContent = 'Copy version info'), 1600);
       }, 'sm about-copy')),
-    h('p', { class: 'about-lead' }, 'A coding agent that works inside your projects, on your own computer. It reads freely, asks before it edits a file or runs a command, and lets you undo every edit.'),
-    h('ul', { class: 'about-facts' },
-      h('li', null, icon('shield', 15), h('div', null, h('strong', null, 'Asks first'), h('span', null, 'Edits and commands wait for your OK.'))),
-      h('li', null, icon('undo', 15), h('div', null, h('strong', null, 'Undo any edit'), h('span', null, 'Every file change can be reverted.'))),
-      h('li', null, icon('key', 15), h('div', null, h('strong', null, 'Your keys stay here'), h('span', null, 'Encrypted for your Windows account.')))),
+    window.orbixDesktop?.system ? group('General', null,
+      row('Prevent sleep', toggle(S.ui.preventSleep === true, (on) => savePrefs({ preventSleep: on }), 'Prevent sleep'), 'Keep the computer awake while an agent works, so a long task or an automation is not cut off.'),
+      row('Keep running in the tray', toggle(S.ui.tray === true, (on) => savePrefs({ tray: on }), 'Keep running in the tray'), 'Closing the window hides ORBIX to the notification area, so automations keep running. Quit it from the tray icon.')) : '',
+    window.orbixDesktop?.system ? group('Notifications', null,
+      row('Notification settings', btn('Open Windows settings', () => window.orbixDesktop.system.openNotifications(), 'sm'), 'How Windows shows ORBIX’s notifications (banners, sound, Do not disturb). What ORBIX tells you about is in Settings → Notifications.')) : '',
+    group('Windows Subsystem for Linux', 'Run commands, tools, git and MCP servers in a WSL distribution instead of Windows.', whereRow()),
     h('div', { class: 'about-upd' }, updatesGroup()),
     group('This copy', null,
       v ? row('Runtime', h('span', { class: 'about-v num' }, `Electron ${v.electron}`), `With Chromium ${v.chrome} and Node.js ${v.node}.`) : null,
       S.env.app.os ? row('System', h('span', { class: 'about-v' }, S.env.app.os)) : null,
-      row('Commands run in', h('span', { class: 'about-v' }, b.kind === 'wsl' ? `WSL${b.distro ? ` · ${b.distro}` : ''}` : 'Windows'), h('span', null, 'Change it in ', h('button', { class: 'link', type: 'button', onclick: () => show('behavior') }, 'Tool permissions'), '.')),
       data ? row('Data folder', btn('Open', () => api.post('/api/reveal-data').catch((e) => toast(e.message, 'error')), 'sm'), h('span', null, h('code', { class: 'about-path', title: data }, data), h('br'), 'Settings, conversations and logs live here and stay through every update.')) : null),
     group('Help', null,
       row('How ORBIX works', btn('Open', () => openHelp(), 'sm'), 'A short guide to connecting a model, approvals, undo and project rules.'),

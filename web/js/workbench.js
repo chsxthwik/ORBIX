@@ -10,7 +10,19 @@ const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
 // ================= focus mode and reading width =================
 
-root.classList.toggle('wide', lsGet('wide', false) === true);
+// Conversation width (Settings → Appearance): narrow, default, wide or fill. "wide" is also the View menu's switch.
+const WIDTHS = ['narrow', 'default', 'wide', 'fill'];
+export const colWidth = () => (WIDTHS.includes(lsGet('colw', '')) ? lsGet('colw', '') : lsGet('wide', false) === true ? 'wide' : 'default');
+export function setColWidth(v) {
+  const w = WIDTHS.includes(v) ? v : 'default';
+  root.classList.toggle('col-narrow', w === 'narrow');
+  root.classList.toggle('wide', w === 'wide');
+  root.classList.toggle('col-fill', w === 'fill');
+  lsSet('colw', w);
+  lsSet('wide', w === 'wide');
+  emit('zen');
+}
+setColWidth(colWidth());
 
 export const zenOn = () => root.classList.contains('zen');
 /** Focus mode lasts until it is switched off or the window is reloaded; it is not a saved setting. */
@@ -19,10 +31,7 @@ export function toggleZen(force) {
   emit('zen');
 }
 export function toggleWide() {
-  const wide = !root.classList.contains('wide');
-  root.classList.toggle('wide', wide);
-  lsSet('wide', wide);
-  emit('zen');
+  setColWidth(root.classList.contains('wide') ? 'default' : 'wide');
 }
 
 // ================= find =================

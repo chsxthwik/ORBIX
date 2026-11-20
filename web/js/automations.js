@@ -3,7 +3,8 @@
 import { h, icon, replace, toast, baseName, timeAgo, errorState, skeleton } from './dom.js';
 import { api } from './api.js';
 import { S, emit, groupSessions } from './store.js';
-import { btn, confirmDialog, toggle } from './dialogs.js';
+import { btn, confirmDialog, toggle, modal } from './dialogs.js';
+import { parseSchedule } from './schedule.mjs';
 
 let items = null;
 let error = '';
@@ -130,6 +131,22 @@ function row(a) {
         }, 'sm danger'))));
 }
 
+/** Create with Prompt: one sentence with the task and when; the form opens filled in for you to check. */
+function createWithPrompt(root) {
+  const ta = h('textarea', { class: 'au-ask', rows: 3, placeholder: 'For example: Every weekday at 9am, run the tests and tell me what fails, with a fix for each.', 'aria-label': 'The task and when it runs' });
+  const go = () => {
+    const text = ta.value.trim();
+    if (!text) return ta.focus();
+    const { schedule, prompt, found } = parseSchedule(text);
+    form = { enabled: true, project: projects()[0]?.[0] || '', prompt: prompt || text, schedule };
+    m.close();
+    drawAutomations(root);
+    toast(found ? 'Check the schedule and the task, then add it.' : 'No time was found, so it runs every day at 09:00. Change it below.', found ? 'ok' : 'info', 3500);
+  };
+  ta.addEventListener('keydown', (e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), go()));
+  const m = modal({ title: 'Create with Prompt', size: 'sm', body: h('div', { class: 'au-ask-b' }, h('p', { class: 'muted small' }, 'Say what it should do and when: every hour, every day, on weekdays or on a day of the week, at a time.'), ta), actions: [btn('Cancel', () => m.close()), btn('Continue', go, 'primary')] });
+}
+
 /** Draw the page into `root` (the hub section). */
 export function drawAutomations(root) {
   host = root;
@@ -144,13 +161,14 @@ export function drawAutomations(root) {
   }
   replace(root,
     h('div', { class: 'hub' },
-      h('header', { class: 'hub-head' },
+      h('header', { class: 'hub-head au-head' },
         h('h1', null, 'Automations'),
-        h('p', { class: 'muted' }, 'Tasks that ORBIX starts by itself on a schedule, each as a new conversation in its project.'),
-        form ? null : btn('New automation', () => ((form = { enabled: true, project: projects()[0]?.[0] || '' }), drawAutomations(root)), 'primary au-new')),
+        form ? null : h('div', { class: 'au-head-acts' },
+          h('button', { class: 'btn sm au-ai', type: 'button', onclick: () => createWithPrompt(root) }, icon('bolt', 13), 'Create with Prompt'),
+          h('button', { class: 'btn sm au-new', type: 'button', 'aria-label': 'New automation', onclick: () => ((form = { enabled: true, project: projects()[0]?.[0] || '' }), drawAutomations(root)) }, icon('plus', 13), 'New'))),
       ask ? h('p', { class: 'au-note' }, icon('shield', 13), 'With Ask first or Auto edits, a run waits for your OK on commands. Review lists what it waits for.') : null,
       form ? editor() : null,
-      error ? errorState(error, { retry: () => ((error = ''), load()) }) : !items ? skeleton(3) : !items.length && !form ? h('div', { class: 'empty' }, icon('clock', 22), h('span', null, 'No automations yet.'), h('span', { class: 'small' }, 'For example: every weekday at 09:00, “run the tests and tell me what fails”.')) : h('div', { class: 'au-list' }, items.map(row))));
+      error ? errorState(error, { retry: () => ((error = ''), load()) }) : !items ? skeleton(3) : !items.length && !form ? h('div', { class: 'au-empty' }, h('b', null, 'No automations yet'), h('span', null, 'Run a prompt on a schedule, like a morning summary of yesterday’s changes. Each run opens as a new conversation in its project.')) : h('div', { class: 'au-list' }, items.map(row))));
 }
 
 /** Refresh the list (another window changed it, or a run started or ended). */

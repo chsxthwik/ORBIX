@@ -28,9 +28,9 @@ export function addContext(composer) {
 }
 
 const MODES = [
-  ['ask', 'Ask first', 'shield', 'Each file edit and command waits for your OK.'],
-  ['edits', 'Auto edits', 'pencil', 'File edits run without asking (each can be undone); commands wait for your OK.'],
-  ['auto', 'Turbo', 'bolt', 'Edits and commands run without asking, also outside the project. Destructive commands (deleting folders, pushing, publishing) still ask.'],
+  ['ask', 'Ask first', 'shield', 'Every edit and command waits for your OK.'],
+  ['edits', 'Auto edits', 'pencil', 'Edits run (each can be undone); commands ask.'],
+  ['auto', 'Turbo', 'bolt', 'Edits and commands run; destructive ones still ask.'],
 ];
 
 /** The permission chip: one setting for every conversation (Settings → General → Permission preset is the same choice). */
@@ -49,7 +49,7 @@ export function permissionChip() {
   };
   btn.addEventListener('click', () => {
     const cur = S.engine?.approvals || 'ask';
-    popMenu(btn, [{ header: 'Without asking, the agent may' }, ...MODES.map(([k, label]) => ({ label, hint: k === 'ask' ? 'read' : k === 'edits' ? 'edit' : 'edit, run', on: cur === k, run: () => set(k) }))], { align: 'end', minWidth: 230 });
+    popMenu(btn, [{ header: 'Permissions' }, ...MODES.map(([k, label, ic, desc]) => ({ icon: ic, label, desc, sel: cur === k, run: () => set(k) }))], { align: 'end', minWidth: 300 });
   });
   const update = (hidden = false) => {
     const mode = MODES.find((m) => m[0] === (S.engine?.approvals || 'ask')) || MODES[0];

@@ -269,6 +269,7 @@ export class TabView {
     this.approvalEl = null;
     this.thinkOpen = new Set();
     this.workOpen = new Set(); // turns whose steps you unfolded (by the key of your message)
+    this.workShut = new Set(); // with Settings → Appearance → Conversation steps: Verbose, turns you folded
     this.els = new WeakMap(); // message -> its element
     this.toolQ = new Set();
     this.tab.afterUndo = () => this.refreshSummary();
@@ -351,7 +352,7 @@ export class TabView {
       const d = e.target;
       if (d.classList?.contains('think') && d.dataset.key) d.open ? this.thinkOpen.add(d.dataset.key) : this.thinkOpen.delete(d.dataset.key);
       else if (d.classList?.contains('work') && d.dataset.key) {
-        d.open ? this.workOpen.add(d.dataset.key) : this.workOpen.delete(d.dataset.key);
+        d.open ? (this.workOpen.add(d.dataset.key), this.workShut.delete(d.dataset.key)) : (this.workOpen.delete(d.dataset.key), this.workShut.add(d.dataset.key));
         if (d.open) for (const c of d.querySelectorAll('.tool.open')) c._fill?.();
       }
     }, true);
@@ -1037,7 +1038,8 @@ export class TabView {
     if (old) old.firstChild.replaceWith(head);
     else {
       fold.append(head, h('div', { class: 'work-b' }));
-      fold.open = this.workOpen.has(key);
+      // Default: each turn's steps fold into "Worked for…"; Verbose (or screen reader mode) keeps them open.
+      fold.open = S.ui.steps === 'verbose' || S.ui.screenReader === true ? !this.workShut.has(key) : this.workOpen.has(key);
     }
     if (!old) first.before(fold);
     const body = fold.lastChild;
