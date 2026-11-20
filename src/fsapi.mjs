@@ -69,7 +69,12 @@ export async function listDir(backend, p, { dirsOnly = false } = {}) {
       if (e.isSymbolicLink()) {
         try {
           isDir = (await fs.promises.stat(path.join(host, e.name))).isDirectory();
-        } catch {}
+          // Windows keeps compatibility junctions such as "Default User" and "Application Data" that nobody may
+          // open (EPERM): leave out a linked folder that cannot be listed, so the picker never offers a dead end.
+          if (isDir) await (await fs.promises.opendir(path.join(host, e.name))).close();
+        } catch (err) {
+          if (isDir && (err.code === 'EPERM' || err.code === 'EACCES')) return;
+        }
       }
       if (dirsOnly && !isDir) return;
       if (isDir && HIDDEN_DIRS.has(e.name)) return;

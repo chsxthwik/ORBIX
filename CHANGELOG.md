@@ -1,5 +1,8 @@
 # Changelog
 
+## 3.4.2 (2026-11-20)
+- **Folder picker.** Windows' locked compatibility folders (such as `C:\Users\Default User` and `Application Data` in your profile) are no longer listed; opening one only failed with "access denied".
+
 ## 3.4.1 (2026-11-20)
 - **Turbo asks before destructive commands.** In every mode, including Turbo, a command that deletes folders recursively, pushes, publishes, rewrites history or changes the system waits for your OK. (3.4.0 already said so; now it is true outside runs as well.) Turbo still reads and writes outside the project folder without asking, and the Turbo confirmation says so.
 - **Easier to read.** Replies get a calmer rhythm: clearer headings and lists, quiet inline code, file paths that stand out (click one to open it), one clean frame around code blocks (the double border is gone), tables that highlight the row under the pointer, and the time, copy and model under every reply.
