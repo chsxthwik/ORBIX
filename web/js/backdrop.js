@@ -41,7 +41,7 @@ let W = 0, H = 0, dpr = 1, T = 0, last = 0, drawn = 0;
 let sparks = [], rockets = []; // fireworks in the air (window coordinates)
 
 const busy = () => [...S.tabs.values()].some((t) => t.streaming && !t.dead);
-const animated = () => !still.matches && S.ui?.sceneMotion !== false;
+const animated = () => !still.matches && S.ui?.sceneMotion !== false && S.ui?.screenReader !== true;
 
 // ---------------------------------------------------------------- shared pieces
 

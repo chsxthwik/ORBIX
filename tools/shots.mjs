@@ -440,7 +440,7 @@ async function scenes(page, project) {
   await page.eval("(await import('/js/store.js')).emit('settings', 'engine')");
   await page.until("document.querySelector('.settings .pv-list .pv-card')", 'the providers page');
   await page.eval('document.activeElement?.blur()');
-  await page.capture('settings', { dsf: 4 / 3, webp: true });
+  await page.capture('settings', { dsf: 4 / 3 });
   await page.key('Escape', { code: 'Escape', keyCode: 27 });
   await page.settle(300);
 
@@ -451,7 +451,7 @@ async function scenes(page, project) {
 
   // Home, with that approval waiting and the conversations so far.
   await page.eval("(await import('/js/store.js')).emit('home')");
-  await page.until("document.querySelector('.home .home-composer') && document.querySelector('.library-row')", 'Home');
+  await page.until("document.querySelector('.home .home-composer') && document.querySelector('.home .home-status')", 'Home');
   await page.eval("document.querySelector('.welcome')?.scrollTo({ top: 0 })");
   await page.capture('home', { dsf: 4 / 3, webp: true });
 
@@ -478,6 +478,11 @@ async function scenes(page, project) {
     (await import('/js/runs.js')).openHub('automations'); await new Promise((r) => setTimeout(r, 300));`);
   await page.until("document.querySelectorAll('#runs .au-item').length === 2", 'the automations');
   await page.capture('automations', { dsf: 4 / 3, webp: true });
+
+  // Customizations: the marketplace of MCP servers.
+  await page.eval("(await import('/js/runs.js')).openHub('customizations'); await new Promise((r) => setTimeout(r, 300));");
+  await page.until("document.querySelector('#runs .cz-hero')", 'the marketplace');
+  await page.capture('customizations', { dsf: 4 / 3, webp: true });
 }
 
 // ============================================================================ main

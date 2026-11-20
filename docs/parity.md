@@ -99,6 +99,10 @@ run tests → inspect diffs and artifacts → give feedback → apply or discard
 | 3.29 | Keyboard shortcuts you can change (add, remove per action) | Settings → Shortcuts: + records keys, the bin removes, Reset; keys named by their place on the keyboard | Done | `test/keys.test.mjs`, `e2e/conversation.mjs` |
 | 3.30 | Network access rules (allowed and denied URLs for reading) | Allowed and denied sites for `web_fetch`, checked on every redirect; an allowed list makes other sites ask, in every preset | Done | `test/network.test.mjs` |
 | 3.31 | Conversation view: side panel closed by default, centred column, "Worked for" above the answer, copy / 👍 / 👎 under replies | Same; 👎 offers answer again, another model or a prefilled report. Marks stay on this PC (Antigravity sends them to Google). | Done | `e2e/conversation.mjs` |
+| 3.32 | Home: mark and greeting, suggestions and the composer at the bottom, project picker and Local Checkout on the composer | Same; the choice is project folder or a separate branch (a worktree). No SSH hosts and no "No project". | Done | `e2e/conversation.mjs` home steps |
+| 3.33 | Customizations page: Marketplace / Installed, search, featured card, plugin catalog | Marketplace of 13 MCP servers with exact configs (no OAuth servers); Installed: MCP servers, skills, rules. No plugins or custom agents. | Partial | `test/catalog.test.mjs` |
+| 3.34 | Automations: Create with Prompt | One sentence parsed locally into schedule and task, shown in the form to check | Done | `test/schedule.test.mjs` |
+| 3.35 | Settings → Appearance (steps, theme, contrast, font, colours, width, screen reader) and Application (prevent sleep, menu bar / tray, notification settings, WSL, updates) | All of these; the tray stands in for the macOS menu bar. No Remote Control. | Done | |
 | 3.25 | Multi-agent orchestrators (`/boost`, `/swarm`, `/teamwork`, `/run-workflow`), Remote Control, Remote Agents, Marketplace, voice | Not implemented | Not started | Several depend on the vendor's cloud |
 | 3.26 | Windows 10 and ARM64 builds | x64 installer only | Not started | Tracked separately; no ARM64 or Windows 10 machine to verify on |
 

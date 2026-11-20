@@ -1,6 +1,6 @@
 // ORBIX for Windows. The local server runs inside this process and the window shows its interface over 127.0.0.1
 // with the session token. Closing the window stops the server (unless another ORBIX already ran it).
-import { app, BrowserWindow, Menu, nativeTheme, shell, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, shell, ipcMain, screen, Tray, powerSaveBlocker } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -105,6 +105,13 @@ function createWindow(url) {
     if (items.length) Menu.buildFromTemplate(items).popup({ window: win });
   });
 
+  // Settings → Application → Keep running in the tray: closing the window hides it; the tray icon brings it back.
+  win.on('close', (e) => {
+    if (tray && !quitting) {
+      e.preventDefault();
+      win.hide();
+    }
+  });
   win.on('closed', () => (win = null));
   win.loadURL(url);
 }
@@ -129,6 +136,38 @@ ipcMain.on('orbix:flash', (e) => {
   } catch {}
 });
 
+// ---- Settings → Application: keep the PC awake while agents work, and keep running in the tray ----
+let tray = null;
+let awake = null;
+const showWin = () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+};
+const fromWin = (e) => e.sender === win?.webContents;
+ipcMain.on('orbix:keep-awake', (e, on) => {
+  if (!fromWin(e)) return;
+  if (on && awake == null) awake = powerSaveBlocker.start('prevent-app-suspension');
+  else if (!on && awake != null) (powerSaveBlocker.stop(awake), (awake = null));
+});
+ipcMain.on('orbix:tray', (e, on) => {
+  if (!fromWin(e)) return;
+  if (on && !tray) {
+    tray = new Tray(path.join(ROOT, 'assets', 'icon.ico'));
+    tray.setToolTip('ORBIX');
+    tray.setContextMenu(Menu.buildFromTemplate([{ label: 'Open ORBIX', click: showWin }, { type: 'separator' }, { label: 'Quit ORBIX', click: () => quit() }]));
+    tray.on('click', showWin);
+  } else if (!on && tray) {
+    tray.destroy();
+    tray = null;
+  }
+});
+// Windows' own notification settings for ORBIX (Settings → Application → Notifications).
+ipcMain.on('orbix:open-system', (e, what) => {
+  if (fromWin(e) && what === 'notifications') shell.openExternal('ms-settings:notifications');
+});
+
 async function quit() {
   if (quitting) return;
   quitting = true;
@@ -140,11 +179,7 @@ async function quit() {
   }
 }
 
-app.on('second-instance', () => {
-  if (!win) return;
-  if (win.isMinimized()) win.restore();
-  win.focus();
-});
+app.on('second-instance', () => showWin());
 app.on('window-all-closed', () => quit());
 app.on('before-quit', (e) => {
   if (quitting) return;

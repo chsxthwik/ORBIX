@@ -6,12 +6,13 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
 import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
-import { Backend, runProc } from './backend.mjs';
+import { Backend, runProc, isWinPath } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
 import { DATA_DIR } from './store.mjs';
 import { Automations } from './automations.mjs';
 import { findDevServers } from './devservers.mjs';
+import { discoverSkills } from './engine/skills.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, listTrash, restoreFromTrash, emptyTrash, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
 import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
@@ -50,6 +51,19 @@ export function trackOpenUi(open, ev) {
     if (ASK_METHODS.has(ev.method) && ev.id != null) open.set(ev.id, ev);
     else if (ev.method === 'cancel') open.delete(ev.targetId);
   } else if (ev.type === 'agent_end' && ev.isTerminal !== false) open.clear();
+}
+
+/** The Windows account's first name for Home's greeting ("RAVI" → "Ravi"), or '' for a generic account name. */
+export function firstName(raw = (() => {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return '';
+  }
+})()) {
+  const w = String(raw || '').trim().split(/[\s._-]+/)[0] || '';
+  if (!/^\p{L}[\p{L}'’]{1,23}$/u.test(w) || /^(admin|administrator|user|owner|root|guest|default|pc|windows)$/i.test(w)) return '';
+  return w[0].toUpperCase() + w.slice(1).toLowerCase();
 }
 
 const CSP = [
@@ -477,7 +491,7 @@ export class AppServer {
   stateSnapshot() {
     const d = this.store.data;
     return {
-      app: { version: VERSION, pid: process.pid, data: DATA_DIR, os: osName() },
+      app: { version: VERSION, pid: process.pid, data: DATA_DIR, os: osName(), user: firstName() },
       backend: { kind: d.backend.kind, distro: d.backend.distro, error: this.envInfo.error || null },
       workspaces: d.workspaces,
       ui: d.ui,
@@ -734,6 +748,14 @@ export class AppServer {
 
       // A project's instruction and rule files, for its page in Settings.
       'GET /api/project/rules': async ({ q }) => projectRules(this.backend, wsPath(q)),
+      // Skills the agent can use: the project's (.agents/skills, .claude/skills, .omp/skills) and your own, for Customizations.
+      'GET /api/skills': async ({ q }) => {
+        const ws = q.ws || this.store.data.workspaces?.[0]?.path || '';
+        if (!ws) return { skills: [] };
+        const join = (root, rel) => (isWinPath(root) ? path.win32.join(root, rel) : path.posix.join(root, rel));
+        const skills = await discoverSkills({ hostRoot: this.backend.hostPath(ws), displayRoot: ws, join }).catch(() => []);
+        return { skills: skills.map(({ hostPath, ...s }) => s) };
+      },
       'GET /api/devservers': async () => ({ servers: await findDevServers({ skip: [this.port] }) }),
 
       'GET /api/automations': async () => ({ items: this.automations.view() }),

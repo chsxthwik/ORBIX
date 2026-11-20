@@ -4,6 +4,7 @@
 //   a run   its timeline (each step links to its output, diff or document), the plan, the changes, the test log
 //           and the walkthrough, with comments, feedback and the decision that is yours to make
 import { drawAutomations, refreshAutomations } from './automations.js';
+import { drawCustomizations, leaveCustomizations } from './customize.js';
 import { h, icon, iconBtn, replace, toast, timeAgo, baseName, spinner, skeleton, errorState, fmtDuration, debounce } from './dom.js';
 import { api } from './api.js';
 import { S, on, emit, setActive, replyUi } from './store.js';
@@ -93,7 +94,7 @@ export function onRunEvent(g) {
 }
 
 export function openHub(view, id) {
-  hub = view === 'run' ? { view, id } : { view: ['review', 'automations'].includes(view) ? view : 'runs' };
+  hub = view === 'run' ? { view, id } : { view: ['review', 'automations', 'customizations'].includes(view) ? view : 'runs' };
   if (!loaded) refresh();
   emit('hub');
 }
@@ -741,6 +742,8 @@ export function draw() {
   // Keep what is being typed in the task box across a redraw.
   const typed = root.querySelector('.run-new textarea');
   const keep = typed ? { v: typed.value, f: document.activeElement === typed, s: typed.selectionStart } : null;
+  if (hub.view === 'customizations') return drawCustomizations(root);
+  leaveCustomizations();
   if (hub.view === 'automations') return drawAutomations(root);
   if (hub.view === 'review') drawReview();
   else drawRuns();

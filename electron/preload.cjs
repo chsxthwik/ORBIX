@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
   // Flash the taskbar button until the window is focused (Settings → Notifications).
   flash: () => ipcRenderer.send('orbix:flash'),
   setZoom: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, Number(factor) || 1))),
+  // Settings → Application: keep the PC awake while agents work, keep running in the tray, Windows' notification settings.
+  system: {
+    keepAwake: (on) => ipcRenderer.send('orbix:keep-awake', on === true),
+    tray: (on) => ipcRenderer.send('orbix:tray', on === true),
+    openNotifications: () => ipcRenderer.send('orbix:open-system', 'notifications'),
+  },
   // The built-in browser (side panel → Browser): its own session, downloads and site data (Settings → Browser).
   browser: {
     configure: (cfg) => ipcRenderer.invoke('orbix:browser:configure', { downloads: typeof cfg?.downloads === 'string' ? cfg.downloads : '' }),

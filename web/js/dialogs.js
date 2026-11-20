@@ -99,7 +99,8 @@ export function popMenu(anchor, items, { align = 'start', minWidth = 200 } = {})
   if (!anchor.isConnected || !anchor.getClientRects().length) return () => {};
   const r = anchor.getBoundingClientRect();
   const m = h('div', { class: 'menu', role: 'menu' },
-    items.map((it) => (it === '-' ? h('div', { class: 'menu-sep', role: 'separator' }) : it.header ? h('div', { class: 'menu-h' }, it.header) : h('button', { class: 'menu-it' + (it.danger ? ' danger' : ''), type: 'button', role: it.on != null ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': it.on != null ? String(!!it.on) : null, onclick: () => pick(it) }, it.on != null ? h('span', { class: 'menu-check' }, it.on ? icon('check', 14) : null) : it.icon ? icon(it.icon, 14, 'menu-ic') : null, h('span', { class: 'menu-l' }, it.label), it.hint ? h('span', { class: 'menu-hint' }, it.hint) : null))));
+    // An item: { label, icon?, hint?, desc? (a second line), on? (a check in front), sel? (a check at the end, as a radio), danger? }.
+    items.map((it) => (it === '-' ? h('div', { class: 'menu-sep', role: 'separator' }) : it.header ? h('div', { class: 'menu-h' }, it.header) : h('button', { class: 'menu-it' + (it.danger ? ' danger' : '') + (it.desc ? ' two' : ''), type: 'button', role: it.sel != null ? 'menuitemradio' : it.on != null ? 'menuitemcheckbox' : 'menuitem', 'aria-checked': it.sel != null ? String(!!it.sel) : it.on != null ? String(!!it.on) : null, onclick: () => pick(it) }, it.on != null ? h('span', { class: 'menu-check' }, it.on ? icon('check', 14) : null) : it.icon ? icon(it.icon, 14, 'menu-ic') : null, h('span', { class: 'menu-l' }, it.label, it.desc ? h('small', { class: 'menu-d' }, it.desc) : null), it.hint ? h('span', { class: 'menu-hint' }, it.hint) : null, it.sel ? icon('check', 14, 'menu-sel') : null))));
   m.style.minWidth = Math.max(minWidth, r.width) + 'px';
   document.body.append(m);
   const mw = m.offsetWidth;

@@ -57,6 +57,51 @@ function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth || 0) 
 // The sidebar can be dragged between these widths (double-click the edge to reset).
 const SIDE_MIN = 200, SIDE_MAX = 440, SIDE_W = 240;
 
+/** Settings → Appearance: font, contrast, your own colours, and screen reader mode. */
+const FONTS = { geist: '', segoe: "'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif", system: 'system-ui, sans-serif' };
+const LOOK_VARS = ['--bg', '--chrome', '--bg-side', '--bg-raise', '--bg-raise-2', '--bg-inset', '--bg-field', '--bg-modal', '--bubble', '--menubar', '--fg', '--fg-2', '--fg-3', '--accent', '--accent-solid', '--accent-soft', '--accent-line', '--on-accent'];
+const hexOk = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+/** Black or white text on a colour, whichever reads better. */
+const onColor = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.4 ? '#0B0B0E' : '#FFFFFF';
+};
+function applyLook(u, root) {
+  if (FONTS[u.font]) root.style.setProperty('--font', FONTS[u.font]);
+  else root.style.removeProperty('--font');
+  root.classList.toggle('contrast-strong', u.contrast === 'strong');
+  root.classList.toggle('sr', u.screenReader === true);
+  for (const v of LOOK_VARS) root.style.removeProperty(v);
+  const c = u.colors || {};
+  const light = root.dataset.mode === 'light';
+  if (hexOk(c.bg)) {
+    const set = (k, v) => root.style.setProperty(k, v);
+    const toward = light ? '#000' : '#fff';
+    set('--bg', c.bg);
+    set('--chrome', `color-mix(in srgb, ${c.bg} 82%, ${light ? '#fff' : '#000'})`);
+    set('--bg-side', `color-mix(in srgb, ${c.bg} 82%, ${light ? '#fff' : '#000'})`);
+    set('--menubar', `color-mix(in srgb, ${c.bg} 90%, ${toward})`);
+    set('--bg-raise', `color-mix(in srgb, ${c.bg} 94%, ${toward})`);
+    set('--bg-raise-2', `color-mix(in srgb, ${c.bg} 89%, ${toward})`);
+    set('--bg-modal', `color-mix(in srgb, ${c.bg} 96%, ${toward})`);
+    set('--bg-inset', `color-mix(in srgb, ${c.bg} 90%, ${light ? '#fff' : '#000'})`);
+    set('--bg-field', `color-mix(in srgb, ${c.bg} 96%, ${toward})`);
+    set('--bubble', `color-mix(in srgb, ${c.bg} 88%, ${toward})`);
+  }
+  if (hexOk(c.fg)) {
+    root.style.setProperty('--fg', c.fg);
+    root.style.setProperty('--fg-2', `color-mix(in srgb, ${c.fg} 70%, var(--bg))`);
+    root.style.setProperty('--fg-3', `color-mix(in srgb, ${c.fg} 50%, var(--bg))`);
+  }
+  if (hexOk(c.accent)) {
+    root.style.setProperty('--accent', c.accent);
+    root.style.setProperty('--accent-solid', c.accent);
+    root.style.setProperty('--accent-soft', `color-mix(in srgb, ${c.accent} 12%, transparent)`);
+    root.style.setProperty('--accent-line', `color-mix(in srgb, ${c.accent} 42%, transparent)`);
+    root.style.setProperty('--on-accent', onColor(c.accent));
+  }
+}
+
 function applyPrefs() {
   const u = S.ui;
   const root = document.documentElement;
@@ -68,6 +113,7 @@ function applyPrefs() {
   else delete root.dataset.scene;
   lsSet('look', { theme: name });
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
+  applyLook(u, root);
   root.classList.toggle('compact', u.density === 'compact');
   root.dataset.density = u.density === 'compact' ? 'compact' : 'comfortable';
   root.style.setProperty('--side-w', Math.min(SIDE_MAX, Math.max(SIDE_MIN, u.sidebarW || SIDE_W)) + 'px');
@@ -357,7 +403,7 @@ function drawSidebar() {
       ((v) => h('button', { class: 'side-link' + (v === 'runs' || v === 'run' ? ' cur' : ''), type: 'button', title: 'Every run across projects (Ctrl+2)', 'aria-current': v === 'runs' || v === 'run' ? 'page' : null, onclick: () => goHub('runs') }, icon('activity', 15), h('span', null, 'Runs'), workingCount() ? h('span', { class: 'side-count quiet num', title: `${workingCount()} working` }, workingCount()) : null))(hubView()?.view),
       h('button', { class: 'side-link' + (hubView()?.view === 'review' ? ' cur' : ''), type: 'button', title: 'What waits for you (Ctrl+3)', 'aria-current': hubView()?.view === 'review' ? 'page' : null, onclick: () => goHub('review') }, icon('shield', 15), h('span', null, 'Review'), reviewCount() ? h('span', { class: 'side-count num', title: `${reviewCount()} waiting for you`, 'aria-label': `${reviewCount()} waiting for you` }, reviewCount()) : null),
       h('button', { class: 'side-link' + (hubView()?.view === 'automations' ? ' cur' : ''), type: 'button', title: 'Tasks ORBIX starts by itself on a schedule', 'aria-current': hubView()?.view === 'automations' ? 'page' : null, onclick: () => goHub('automations') }, icon('clock', 15), h('span', null, 'Automations')),
-      h('button', { class: 'side-link', type: 'button', title: 'Instructions, skills, tools and MCP servers', onclick: () => settingsDialog('tools') }, icon('puzzle', 15), h('span', null, 'Customizations'))),
+      h('button', { class: 'side-link' + (hubView()?.view === 'customizations' ? ' cur' : ''), type: 'button', title: 'MCP servers, skills and rules; a marketplace of tools to add', 'aria-current': hubView()?.view === 'customizations' ? 'page' : null, onclick: () => goHub('customizations') }, icon('puzzle', 15), h('span', null, 'Customizations'))),
     h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
       pinnedList(term),
@@ -766,6 +812,7 @@ function paletteItems() {
     { group: 'General', icon: 'activity', label: 'Runs', key: firstKey(S.ui.keys, 'runs'), run: () => goHub('runs') },
     { group: 'General', icon: 'shield', label: 'Review: what waits for you', key: firstKey(S.ui.keys, 'review'), run: () => goHub('review') },
     { group: 'General', icon: 'clock', label: 'Automations', run: () => goHub('automations') },
+    { group: 'General', icon: 'puzzle', label: 'Customizations: MCP servers, skills and rules', run: () => goHub('customizations') },
     { group: 'General', icon: 'plus', label: 'New conversation without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
     { group: 'General', icon: 'cog', label: 'Settings', key: firstKey(S.ui.keys, 'settings'), run: () => settingsDialog() },
@@ -942,6 +989,20 @@ async function boot() {
   });
   initNotify();
   initBackdrop();
+  // Settings → Application in the Windows app: the tray, and keeping the PC awake while an agent works.
+  const sys = window.orbixDesktop?.system;
+  if (sys) {
+    let tray = null;
+    let awake = null;
+    const syncSystem = () => {
+      if ((S.ui.tray === true) !== tray) sys.tray((tray = S.ui.tray === true));
+      const want = S.ui.preventSleep === true && [...S.tabs.values()].some((t) => t.streaming && !t.dead);
+      if (want !== awake) sys.keepAwake((awake = want));
+    };
+    on('prefs', syncSystem);
+    setInterval(syncSystem, 3000);
+    syncSystem();
+  }
   // The Windows app's built-in browser: where downloads go, and a note when one is saved.
   desktopBrowser()?.configure({ downloads: browserPrefs().downloads });
   desktopBrowser()?.onDownload((d) => toast(d.state === 'completed' ? `Downloaded ${d.name}` : `Download ${d.state === 'cancelled' ? 'cancelled' : 'failed'}: ${d.name}`, d.state === 'completed' ? 'ok' : 'error', 3500));
