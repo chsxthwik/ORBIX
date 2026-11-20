@@ -2,8 +2,7 @@
 // open; the Windows app shows any web page in its own browser session (separate cookies, downloads to a folder you
 // choose); a plain web browser can only show pages on this computer inside ORBIX. Visited addresses feed the address
 // bar's suggestions and can be cleared.
-import { S, savePrefs, activeTab, emit } from './store.js';
-import { openLink } from './engine.js';
+import { S, savePrefs } from './store.js';
 
 /** { openLinks: 'external' | 'builtin', downloads: folder or '' (= the Downloads folder) }. */
 export const browserPrefs = () => ({ openLinks: 'external', downloads: '', ...(S.ui.browser || {}) });
@@ -12,7 +11,7 @@ export const browserPrefs = () => ({ openLinks: 'external', downloads: '', ...(S
 export const desktopBrowser = () => window.orbixDesktop?.browser || null;
 
 /** Is this an http page on this computer? */
-export function localPage(raw) {
+function localPage(raw) {
   try {
     const u = new URL(raw);
     return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
@@ -51,10 +50,3 @@ export function rememberVisit(url) {
 }
 
 export const clearBrowserHistory = () => savePrefs({ browserHistory: [] });
-
-/** Open a link from a reply: in the Browser tab when you chose the built-in browser and it can show it there. */
-export function openUrl(url) {
-  if (browserPrefs().openLinks === 'builtin' && activeTab() && canShowInside(url)) return emit('browse', url), true;
-  openLink(url);
-  return false;
-}

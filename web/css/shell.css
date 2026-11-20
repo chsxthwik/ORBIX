@@ -473,3 +473,41 @@ html.zen .main { border-left: 0; border-radius: 0; }
 @keyframes br-load { from { background-position: -40% 0; } to { background-position: 140% 0; } }
 .br-err { flex: none; padding: 8px 12px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--err) 8%, transparent); color: var(--err); font-size: 12.5px; overflow-wrap: anywhere; }
 webview.br-frame { display: flex; }
+
+/* ================= sharp: the density and weight of Antigravity's conversation view ================= */
+/* A narrower sidebar and reading column, tighter line rhythm, quieter inline code and replies that end in one row
+   of small actions. Every size stays relative to the text size you choose (Appearance → Message text size). */
+:root { --col: clamp(560px, 38vw, 664px); }
+.tin { gap: 20px; }
+.msg .md, .md { line-height: 1.6; }
+.md > * + * { margin-top: .62em; }
+.md > :is(h1, h2, h3, h4) { margin-top: 1.15em; }
+.md > :is(h1, h2, h3, h4) + * { margin-top: .45em; }
+.md :is(h1, h2, h3) { font-weight: 600; letter-spacing: -.01em; }
+.md h1 { font-size: 1.24em; } .md h2 { font-size: 1.12em; } .md h3 { font-size: 1.02em; }
+.md ul, .md ol { padding-left: 1.25em; }
+.md li + li { margin-top: .16em; }
+.md li > :is(ul, ol) { margin-top: .16em; }
+.md li::marker { color: var(--fg-2); }
+.md strong { font-weight: 600; color: var(--fg); }
+/* Inline code: amber on a faint ground, no border; a file path looks the same and underlines when you point at it. */
+.md code.ic, .md code.ic.pathref { padding: .06em .34em; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--fg) 5.5%, transparent); color: var(--code-ink); font-size: .85em; text-decoration: none; }
+.md code.pathref:hover { background: color-mix(in srgb, var(--fg) 9%, transparent); text-decoration: underline dotted; text-underline-offset: 3px; }
+/* Your message: a compact bubble. */
+.bubble { padding: 7px 13px; border-radius: 14px; }
+/* A reply ends in one quiet row: copy, 👍, 👎, retry, then when and which model. */
+.msg.asst > .msg-acts { gap: 2px; margin-top: 2px; opacity: .8; }
+.msg-acts .msg-time { order: 10; }
+.msg-acts .msg-model { order: 11; color: var(--fg-3); font-size: 11.5px; }
+.msg-act { width: 26px; height: 26px; padding: 0; justify-content: center; color: var(--fg-3); }
+.msg-act:hover { color: var(--fg); }
+.msg-act.rate[aria-pressed=true] { color: var(--fg); }
+.msg-act.rate[aria-pressed=true] svg { fill: currentColor; fill-opacity: .2; }
+.msg.user .msg-act { width: auto; padding: 0 7px; }
+/* The sidebar: tighter rows, quieter selection. */
+.app .sidebar .side-new { height: 30px; margin-bottom: 6px; }
+.sidebar .side-link, .sidebar .proj-btn, .sidebar .s-btn, .sidebar .foot-set { height: 28px; }
+.sidebar .side-h { margin-top: 12px; }
+.sidebar .s-row.cur .s-btn, .sidebar .side-link.cur { font-weight: 400; }
+/* Home asks quietly. */
+.home-title { font-size: clamp(22px, .9cqw + 15px, 30px); font-weight: 600; letter-spacing: -.02em; }

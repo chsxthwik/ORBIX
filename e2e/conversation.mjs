@@ -91,6 +91,14 @@ try {
   await page.eval(`document.querySelector('#topbar .tb-nav').click()`);
   await page.until(`!document.querySelector('#session').hidden && /explain sign-in/i.test(document.querySelector('#topbar .crumb.cur')?.textContent || '')`, 'Back returns to the conversation');
   say('conversation e2e: menu row, toolbar, Overview and back');
+  // 👍 on a reply stays marked; 👎 offers what to do next.
+  await page.eval(`[...document.querySelectorAll('#session .msg.asst [aria-label="Good reply"]')].pop().click()`);
+  assert(await page.eval(`return [...document.querySelectorAll('#session .msg.asst [aria-label="Good reply"]')].pop().getAttribute('aria-pressed') === 'true'`), '👍 marks the reply');
+  await page.eval(`[...document.querySelectorAll('#session .msg.asst [aria-label="Bad reply"]')].pop().click()`);
+  await page.until(`document.querySelector('.menu') && /Report a problem/.test(document.querySelector('.menu').textContent)`, 'the 👎 menu');
+  await page.key('Escape', { keyCode: 27, code: 'Escape' });
+  await page.eval(`[...document.querySelectorAll('#session .msg.asst [aria-label="Bad reply"]')].pop().click()`); // un-mark
+  assert(await page.eval(`return [...document.querySelectorAll('#session .msg.asst [aria-label="Bad reply"]')].pop().getAttribute('aria-pressed') === 'false'`), '👎 toggles off');
   // Sidebar: archive a conversation (A on its row), then bring it back from the filter menu.
   await page.eval(`(await import('/js/store.js')).loadSessions()`);
   await page.until(`document.querySelector('#sidebar .s-btn[data-path]')`, 'the conversation in the sidebar');
