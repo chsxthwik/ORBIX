@@ -67,6 +67,14 @@ describe('files outside the project', () => {
     assert.equal(ask('auto', 'read', '../secret.txt'), false);
     assert.equal(ask('ask', 'read', '../secret.txt', ['read:outside']), false);
   });
+  test('a destructive command asks in every mode, Turbo and an approval for the session included', () => {
+    const run = (approvals, command, allow = []) => AgentProc.prototype._mustAsk.call({ config: { data: { approvals, trusted: ['git'] } }, allowAlways: new Set(allow), tools: T, _outside: AgentProc.prototype._outside, _needsApproval: (n) => ['write', 'edit', 'bash'].includes(n) }, { name: 'bash' }, { command });
+    for (const mode of ['ask', 'edits', 'auto']) {
+      assert.equal(run(mode, 'rm -rf build'), true, mode);
+      assert.equal(run(mode, 'git push origin main', ['bash']), true, mode);
+    }
+    assert.equal(run('auto', 'npm test'), false, 'Turbo runs an ordinary command');
+  });
 });
 
 describe('edit and line endings', () => {

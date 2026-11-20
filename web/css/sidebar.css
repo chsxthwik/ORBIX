@@ -6,29 +6,21 @@
    and the current row is a filled pill with a hairline. The brand row shares the top bar's height, so the logo, the
    tabs and the window buttons sit on one line. */
 
-.sidebar { --sb-pad: 10px; --sb-ic: 30px; }
 
 /* ---- New session: the one outlined control ---- */
-.app .sidebar .side-new { height: 36px; margin: 2px var(--sb-pad) 10px; padding: 0 8px 0 10px; gap: 9px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-raise); font-weight: 550; font-size: 13.5px; }
-.sidebar .side-new:hover { border-color: var(--line-3); background: var(--bg-raise-2); }
-.sidebar .side-new svg { color: var(--fg-2); }
 .sidebar .side-new kbd { margin-left: auto; opacity: 0; transition: opacity var(--t2) var(--ease); }
 .sidebar .side-new:hover kbd, .sidebar .side-new:focus-visible kbd { opacity: .8; }
 
 /* ---- links (Home, Search, Settings) ---- */
-.app .sidebar .side-nav { gap: 2px; padding: 0 var(--sb-pad) 6px; }
-.sidebar .side-link { height: 34px; gap: 10px; margin: 0; padding: 0 10px; border-radius: 8px; color: var(--fg-2); font-size: 13.5px; font-weight: 450; }
-.sidebar .side-link svg { color: var(--fg-3); }
+.sidebar .side-link { margin: 0; }
 .sidebar .side-link:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .side-link:hover svg { color: var(--fg-2); }
-.sidebar .side-link.cur { background: var(--bg-active); color: var(--fg); font-weight: 550; box-shadow: inset 0 0 0 1px var(--line); }
 .sidebar .side-link.cur svg { color: var(--fg); }
 .sidebar .side-link kbd { opacity: 0; transition: opacity var(--t2) var(--ease); }
 .sidebar .side-link:hover kbd { opacity: .8; }
 
 /* ---- section headers: Running, Pinned, Projects ---- */
-.app .sidebar .side-scroll { padding: 4px var(--sb-pad) 12px; }
-.sidebar .side-h { height: 30px; margin-top: 10px; padding: 0 2px 0 10px; color: var(--fg-3); font: 500 12px/1 var(--font); letter-spacing: 0; text-transform: none; }
+.sidebar .side-h { letter-spacing: 0; text-transform: none; }
 .sidebar .side-scroll > .side-h:first-child, .sidebar .side-scroll > :first-child .side-h { margin-top: 0; }
 .side-h-acts { display: flex; gap: 0; }
 .side-h-acts .ibtn { color: var(--fg-3); }
@@ -44,8 +36,8 @@
 /* ---- projects ---- */
 .sidebar .proj { margin-bottom: 4px; }
 .sidebar .proj-head { padding: 0; }
-.sidebar .proj-btn { height: 32px; gap: 0; padding: 0 8px 0 0; border-radius: 8px; color: var(--fg-2); font-size: 13.5px; font-weight: 500; }
-.sidebar .proj-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.sidebar .proj-btn { gap: 0; padding: 0 8px 0 0; border-radius: 8px; }
+.sidebar .proj-btn:hover { background: var(--bg-hover); }
 .sidebar .proj-btn .chev { display: none; }
 .sidebar .proj-btn .proj-ic { width: var(--sb-ic); color: var(--fg-3); }
 .sidebar .proj-btn:hover .proj-ic { color: var(--fg-2); }
@@ -56,15 +48,14 @@
 .app .sidebar .proj > .s-more,
 .app .sidebar .proj > .s-none { margin: 0; padding: 0; border: 0; }
 .app .sidebar .s-row { margin-bottom: 1px; }
-.sidebar .s-btn { position: relative; height: 32px; gap: 8px; padding: 0 10px 0 var(--sb-ic); border-radius: 8px; color: var(--fg-2); font-size: 13.5px; font-weight: 400; }
+.sidebar .s-btn { position: relative; gap: 8px; padding: 0 10px 0 var(--sb-ic); font-weight: 400; }
 .sidebar .s-btn:hover { background: var(--bg-hover); color: var(--fg); }
-.sidebar .s-row.cur .s-btn { background: var(--bg-active); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
 .sidebar .s-btn > .dot { position: absolute; left: calc(var(--sb-ic) / 2 - 3.5px); top: 50%; margin: 0; transform: translateY(-50%); }
 .proj > .s-row > .s-btn > .dot.open { background-color: transparent; }
 .sidebar .s-btn .s-br { color: var(--fg-3); }
 /* finished while you were elsewhere: the title stands out until you open it */
 .sidebar .s-row.unread .s-btn { color: var(--fg); font-weight: 550; }
-.sidebar .s-when { color: var(--fg-3); font-size: 12px; }
+.sidebar .s-when { color: var(--fg-3); }
 .sidebar .s-more { height: 28px; padding: 0 10px 0 var(--sb-ic); border-radius: 8px; color: var(--fg-3); font-size: 12.5px; }
 .sidebar .s-more svg { display: none; }
 .sidebar .s-none { padding: 4px 10px 6px var(--sb-ic); color: var(--fg-3); font-size: 12.5px; }
@@ -75,11 +66,11 @@
 .sidebar .pin-sec .s-btn > .dot { position: static; transform: none; }
 
 /* ---- Running (the agents board) ---- */
-.sidebar .run-row { min-height: 44px; gap: 10px; padding: 6px 10px; border-radius: 8px; }
-.sidebar .run-row.cur { background: var(--bg-active); box-shadow: inset 0 0 0 1px var(--line); }
+.sidebar .run-row { gap: 10px; padding: 6px 10px; }
+.sidebar .run-row.cur { background: var(--bg-active); }
 
 /* ---- footer: Settings on the left, the model connection on the right ---- */
-.app .sidebar .side-foot { display: flex; align-items: center; gap: 4px; margin: 0; padding: 8px var(--sb-pad) 10px; border-top: 1px solid var(--line); }
+.app .sidebar .side-foot { display: flex; align-items: center; gap: 4px; margin: 0; }
 .sidebar .foot-set { flex: 1 1 auto; width: auto; min-width: 0; }
 .sidebar .foot-status { flex: 0 1 auto; max-width: 55%; height: 30px; gap: 7px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--fg-3); font-size: 12px; }
 .sidebar .foot-status:hover { background: var(--bg-hover); color: var(--fg); }

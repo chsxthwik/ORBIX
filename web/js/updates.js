@@ -37,7 +37,7 @@ export const setAutoUpdates = (on) => bridge?.setAuto(on).then(take, (e) => toas
 export async function restartToUpdate() {
   if (S.update?.state !== 'ready') return;
   const busy = [...S.tabs.values()].filter((t) => !t.dead && (t.streaming || t.dialogs?.length)).length;
-  if (busy && !(await confirmDialog(`Update to ORBIX ${S.update.version}`, `${busy === 1 ? 'A session is' : `${busy} sessions are`} still working. Restarting stops ${busy === 1 ? 'it' : 'them'} now; you can open ${busy === 1 ? 'it' : 'them'} again from the sidebar after the update.`, { ok: 'Restart and update' }))) return;
+  if (busy && !(await confirmDialog(`Update to ORBIX ${S.update.version}`, `${busy === 1 ? 'A conversation is' : `${busy} conversations are`} still working. Restarting stops ${busy === 1 ? 'it' : 'them'} now; you can open ${busy === 1 ? 'it' : 'them'} again from the sidebar after the update.`, { ok: 'Restart and update' }))) return;
   toast('Installing the update. ORBIX opens again in a few seconds.', 'info', 20000);
   bridge.restart().catch((e) => toast(e.message, 'error'));
 }

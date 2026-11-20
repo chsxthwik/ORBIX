@@ -21,11 +21,9 @@
 .home-title {
   max-width: 26ch;
   margin: 0;
-  color: var(--fg);
   font-size: clamp(26px, 1.6cqw + 16px, 42px);
   font-weight: 600;
   line-height: 1.12;
-  letter-spacing: -.03em;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
@@ -156,13 +154,11 @@
   padding: 0 14px 0 12px;
   border: 1px solid var(--line-2);
   border-radius: 999px;
-  background: transparent;
   color: var(--fg-2);
   font-size: 13px;
   transition: border-color var(--t1) var(--ease), background-color var(--t1) var(--ease), color var(--t1) var(--ease);
 }
 .home .ws-recipe svg { flex: none; color: var(--fg-3); transition: color var(--t1) var(--ease); }
-.home .ws-recipe:hover { border-color: var(--line-3); background: var(--bg-hover); color: var(--fg); }
 .home .ws-recipe:hover svg { color: var(--fg-2); }
 .home .ws-recipe:active { transform: scale(.98); transition-duration: 60ms; }
 
@@ -252,7 +248,7 @@
   text-align: left;
   transition: border-color var(--t1) var(--ease), background-color var(--t1) var(--ease), transform var(--t1) var(--ease);
 }
-button.home-proj:hover { border-color: var(--line-3); background: var(--bg-raise-2); }
+button.home-proj:hover { background: var(--bg-raise-2); }
 button.home-proj:active { transform: scale(.985); transition-duration: 60ms; }
 .home-proj:focus-visible { outline-offset: 2px; }
 .home-proj-ic { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-inset); color: var(--fg-2); }

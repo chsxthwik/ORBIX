@@ -56,7 +56,7 @@ const FIND = [
   ['Reading column', 'look', 'wide width'],
   ['Show model thinking', 'look', 'reasoning'],
   ['Keyboard shortcuts', 'keys', 'keys hotkeys'],
-  ['Default model for new sessions', 'start', 'model home'],
+  ['Default model for new conversations', 'start', 'model home'],
   ['Updates', 'about', 'update upgrade new version check download install release'],
 ];
 
@@ -166,11 +166,11 @@ function tabStart(el, show, m) {
     ready ? '' : h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'Connect a model to start'), h('p', null, 'Use an API key, a sign-in or a model on this PC. Nothing else needs to be installed.')), btn('Connect a model', () => show('engine'), 'primary')),
     card('Agent',
       line(connected[0] ? brandMark(connected[0].id, 16) : 'key', 'Providers', ready ? connected.map((p) => (p.models != null ? `${p.name} · ${p.models} model${p.models === 1 ? '' : 's'}` : p.name)).join(', ') : 'None connected', 'engine', ready ? '' : 'warn'),
-      line('message', 'Default model for new sessions', hm?.id ? hm.name || hm.id : 'Chosen on Home, under the task box', null),
-      line('bolt', 'Fast model', roles.fast ? short(roles.fast) : 'Same as the session', 'models'),
-      line('map', 'Plan model', roles.plan ? short(roles.plan) : 'Same as the session', 'models')),
+      line('message', 'Default model for new conversations', hm?.id ? hm.name || hm.id : 'Chosen on Home, under the task box', null),
+      line('bolt', 'Fast model', roles.fast ? short(roles.fast) : 'Same as the conversation', 'models'),
+      line('map', 'Plan model', roles.plan ? short(roles.plan) : 'Same as the conversation', 'models')),
     card('Safety',
-      line('shield', 'File edits and commands', auto ? 'Run without asking' : eng.approvals === 'edits' ? 'Edits run, commands ask' : 'Ask me first', 'behavior', auto ? 'warn' : 'ok'),
+      line('shield', 'File edits and commands', auto ? 'Turbo: run without asking' : eng.approvals === 'edits' ? 'Auto edits: commands ask' : 'Ask first', 'behavior', auto ? 'warn' : 'ok'),
       line('check', 'Trusted commands', (eng.trusted || []).length ? `${eng.trusted.length} command${eng.trusted.length === 1 ? '' : 's'}` : 'None', 'behavior'),
       line('check', 'Checks after edits', [{ off: 'Off', ask: 'Ask first', always: 'Always' }[eng.verify || 'ask'], eng.review === false ? 'no review' : 'with a review'].join(', '), 'checks'),
       line('terminal', 'Commands run in', b.kind === 'wsl' ? (b.distro ? `WSL · ${b.distro}` : 'WSL') : 'Windows', 'behavior')),
@@ -296,7 +296,7 @@ function tabKeys(el) {
 function tabBehavior(el) {
   const mode = S.engine?.approvals || 'ask';
   const set = async (value, card) => {
-    if (value === 'auto' && !(await confirmDialog('Allow everything', 'The agent will edit files and run commands without asking. Every file edit can still be undone, but commands cannot.', { ok: 'Allow everything', danger: true }))) return;
+    if (value === 'auto' && !(await confirmDialog('Turn on Turbo', 'The agent will edit files and run commands without asking, also outside the project folder. Every file edit can still be undone, but commands cannot. Destructive commands (deleting folders, pushing, publishing) still ask.', { ok: 'Turn on Turbo', danger: true }))) return;
     try {
       await api.post('/api/engine/settings', { approvals: value });
       await loadEngine();
@@ -313,9 +313,9 @@ function tabBehavior(el) {
   el.append(
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'File edits and commands'), h('p', { class: 'set-note' }, 'Reading and searching never ask.'),
       h('div', { class: 'perms', role: 'radiogroup', 'aria-label': 'File edits and commands' },
-        choice('ask', 'shield', 'Ask me first', 'Each file edit and command waits for your OK.', 'Recommended'),
-        choice('edits', 'pencil', 'Allow edits, ask before commands', 'File edits run without asking, and each one can be undone. Commands still wait for your OK.'),
-        choice('auto', 'bolt', 'Allow everything', 'File edits and commands run without asking. Edits can be undone; commands cannot.'))),
+        choice('ask', 'shield', 'Ask first', 'Each file edit and command waits for your OK.', 'Recommended'),
+        choice('edits', 'pencil', 'Auto edits', 'File edits run without asking, and each one can be undone. Commands still wait for your OK.'),
+        choice('auto', 'bolt', 'Turbo', 'File edits and commands run without asking. Edits can be undone; commands cannot. Destructive commands still ask.'))),
     trustedGroup(),
     group('Running', null, whereRow(), row('Follow new output', toggle(S.ui.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Scrolls to the newest text while a reply streams in, unless you have scrolled up.')));
 }
@@ -372,7 +372,7 @@ function tabChecks(el) {
   el.append(
     group('After the agent changes files', 'The check runs when the agent says it is done. If the check fails, the agent gets its output and fixes the cause before it replies.',
       row('Run the project’s check', seg('Run the project’s check', [['off', 'Off'], ['ask', 'Ask'], ['always', 'Always']], eng.verify || 'ask', (v) => save({ verify: v })), 'Off never runs it. Ask lets you choose each time. Always runs it like any other command, so it still waits for your OK unless the command is trusted.'),
-      row('Review the changes', toggle(eng.review !== false, (v) => save({ review: v }), 'Review the changes'), 'Before the reply, the fast model (or the session’s model) reads the changes once and reports real defects for the agent to fix. It is skipped when fewer than 5 lines changed.')),
+      row('Review the changes', toggle(eng.review !== false, (v) => save({ review: v }), 'Review the changes'), 'Before the reply, the fast model (or the conversation’s model) reads the changes once and reports real defects for the agent to fix. It is skipped when fewer than 5 lines changed.')),
     checkCommandGroup(activeTab()?.workspace || homeProject()));
 }
 
@@ -420,7 +420,7 @@ function tabRules(el) {
     try {
       const r = await api.post('/api/instructions', { text: ta.value });
       saved = ta.value = r.text;
-      status.textContent = r.text ? 'Saved. New messages in every session follow these instructions.' : 'Cleared.';
+      status.textContent = r.text ? 'Saved. New messages in every conversation follow these instructions.' : 'Cleared.';
       sync();
     } catch (e) {
       toast(e.message, 'error');
@@ -591,9 +591,9 @@ function tabAbout(el, show) {
     h('nav', { class: 'about-links', 'aria-label': 'ORBIX links' }, extLink('Website', SITE_URL), extLink('GitHub', REPO_URL), extLink('Release notes', RELEASES_URL), extLink('License', LICENSE_URL)),
     group(null, null,
       row('Quit ORBIX', btn('Quit', async () => {
-        if (await confirmDialog('Quit ORBIX', 'Stop all sessions and close ORBIX?', { ok: 'Quit', danger: true })) {
+        if (await confirmDialog('Quit ORBIX', 'Stop all conversations and close ORBIX?', { ok: 'Quit', danger: true })) {
           await api.post('/api/quit').catch(() => {});
         }
-      }, 'sm danger'), 'Stops every running session and closes the window. A downloaded update installs now.')),
+      }, 'sm danger'), 'Stops every running conversation and closes the window. A downloaded update installs now.')),
     h('p', { class: 'about-legal' }, '© 2026 chsxthwik. Licensed under FSL-1.1-MIT: free to use, and each release becomes MIT two years after it ships. Geist and Geist Mono are used under the SIL Open Font License.'));
 }

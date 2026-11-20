@@ -36,12 +36,12 @@ export class ToolRuns {
   /** Whether this call waits for the user, given the approval mode, what was allowed this session and trusted commands. */
   _mustAsk(call, args) {
     const mode = this.config.data.approvals;
-    // A file outside the project folder is asked about every time, read-only or not (except under Allow everything):
-    // text in the project could otherwise point the agent at ~/.ssh or a .env elsewhere and send it on with web_fetch.
+    // A file outside the project folder is asked about every time, read-only or not (except under Turbo): text in the
+    // project could otherwise point the agent at ~/.ssh or a .env elsewhere and send it on with web_fetch.
     if (mode !== 'auto' && this._outside(call, args)) return !this.allowAlways.has(`${call.name}:outside`);
-    // A destructive command asks every time: "allow for this session", a trusted command and a run's approved scope
-    // never cover it. Only Allow everything, outside a run, lets it through.
-    if (call.name === 'bash' && (mode !== 'auto' || this.runInfo) && destructiveReason(args?.command)) return true;
+    // A destructive command asks every time, in every mode: Turbo, "allow for this session", a trusted command and a
+    // run's approved scope never cover it.
+    if (call.name === 'bash' && destructiveReason(args?.command)) return true;
     if (!this._needsApproval(call.name)) return false;
     if (mode === 'auto' || this.allowAlways.has(call.name)) return false;
     if (mode === 'edits' && (call.name === 'edit' || call.name === 'write')) return false;

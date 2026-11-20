@@ -96,7 +96,7 @@ function deck() {
   if (C) return C;
   const comp = new Composer({
     placeholder: 'Ask anything, @ to mention, / for actions',
-    label: 'Task for the new session',
+    label: 'Task for the new conversation',
     cls: 'home-composer',
     state: draft,
     workspace: () => draft.project,
@@ -115,8 +115,8 @@ function updateStart(box) {
   const label = starting ? 'Starting…' : !draft.project ? 'Open folder' : !engineReady() ? 'Connect a model' : 'Start';
   box.go.disabled = starting;
   box.go.textContent = label;
-  box.go.setAttribute('aria-label', label === 'Start' ? 'Start session' : label);
-  box.go.title = label === 'Start' ? 'Start session (Enter)' : label;
+  box.go.setAttribute('aria-label', label === 'Start' ? 'Start' : label);
+  box.go.title = label === 'Start' ? 'Start (Enter)' : label;
   box.el.classList.toggle('busy', starting);
 }
 
@@ -170,7 +170,7 @@ export function drawHome(root, H) {
     });
 
     const m = homeModel();
-    const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new session' }, brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
+    const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new conversation' }, brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
     modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
       load: () => loadHomeModels(draft.project),
       // Without an open session the list comes from a short-lived agent, which takes a moment to start.
@@ -334,7 +334,7 @@ function attention(H) {
     const s = S.sessions.find((x) => tabForSession(x) === t);
     return h('button', { class: `home-alert ${wait ? 'wait' : 'run'}`, type: 'button', onclick: () => (s ? H.openSession(s) : setActive(t.id)) },
       h('span', { class: 'dot ' + (wait ? 'warn' : 'run') }),
-      h('span', { class: 'home-alert-t ell' }, s?.title || t.name || 'Session'),
+      h('span', { class: 'home-alert-t ell' }, s?.title || t.name || 'Conversation'),
       h('span', { class: 'home-alert-p ell' }, baseName(t.workspace || '')),
       h('span', { class: 'home-alert-s' }, wait ? 'Needs your OK' : 'Working'),
       icon('chevron-right', 14));
@@ -362,7 +362,7 @@ function checklist(H, projects) {
     !s.done && s.run ? h('button', { class: 'btn sm', type: 'button', onclick: s.run }, s.act) : null)));
 }
 
-const footKeys = () => h('div', { class: 'home-keys' }, [['Ctrl+K', 'search'], ['Ctrl+N', 'new session'], ['/', 'commands'], ['@', 'mention a file'], ['Ctrl+,', 'settings']].map(([k, l]) => h('span', null, kbd(k), ' ', l)));
+const footKeys = () => h('div', { class: 'home-keys' }, [['Ctrl+K', 'search'], ['Ctrl+N', 'new conversation'], ['/', 'commands'], ['@', 'mention a file'], ['Ctrl+,', 'settings']].map(([k, l]) => h('span', null, kbd(k), ' ', l)));
 
 // ================= first run =================
 
@@ -424,7 +424,7 @@ function projectsCard(H, projects) {
       const cur = g.path === draft.project;
       const n = g.sessions.length;
       const meta = `${n} conversation${n === 1 ? '' : 's'}${last(g) ? ` · ${timeAgo(last(g))}` : ''}`;
-      return h('button', { class: 'home-proj' + (cur ? ' cur' : ''), type: 'button', title: `Start the next session in ${g.path}`, 'aria-pressed': String(cur), onclick: () => pick(g) },
+      return h('button', { class: 'home-proj' + (cur ? ' cur' : ''), type: 'button', title: `Start the next conversation in ${g.path}`, 'aria-pressed': String(cur), onclick: () => pick(g) },
         h('span', { class: 'home-proj-ic', 'aria-hidden': 'true' }, icon(cur ? 'folder-open' : 'folder', 16)),
         h('span', { class: 'home-proj-m' }, h('span', { class: 'home-proj-t ell' }, g.name), h('span', { class: 'home-proj-p ell' }, meta)),
         cur ? icon('check', 15, 'home-proj-cur') : null);

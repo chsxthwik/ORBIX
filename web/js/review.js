@@ -20,7 +20,7 @@ export function branchToggle(state, isRepo, redraw) {
       class: 'cbtn branch-pick' + (on ? ' on' : ''),
       type: 'button',
       'aria-pressed': String(on),
-      title: on ? 'The session works on a new branch in its own folder. You review and merge it when it is done. Click to work in the project folder instead.' : 'Work on a new branch in a separate folder, so several sessions can run at once without touching each other.',
+      title: on ? 'The conversation works on a new branch in its own folder. You review and merge it when it is done. Click to work in the project folder instead.' : 'Work on a new branch in a separate folder, so several conversations can run at once without touching each other.',
       onclick: () => {
         state.branch = !on;
         redraw();
@@ -76,7 +76,7 @@ const letter = (f) => (f.untracked ? 'U' : f.status === 'D' ? 'D' : f.status ===
 export function drawReview(t, body, { redraw, viewFile }) {
   const r = rs(t);
   const wt = t.worktree;
-  if (!wt) return body.append(h('div', { class: 'empty' }, 'This session works in the project folder. Start a session with "Separate branch" to review its work here before it lands.'));
+  if (!wt) return body.append(h('div', { class: 'empty' }, 'This conversation works in the project folder. Start one with "Separate branch" to review its work here before it lands.'));
   if (r.diff) return drawFileDiff(t, body, r, redraw, viewFile);
   if (!r.data && !r.loading && !r.err) loadReview(t, redraw);
 
@@ -130,7 +130,7 @@ function actions(t, d, r, redraw) {
   const merged = wt.state === 'merged';
   const news = d.pending || d.ahead == null || d.ahead > 0; // something not in the base branch yet
   const canMerge = d.files.length > 0 && news && !!wt.baseBranch && !d.main?.dirty && (!d.main || d.main.branch === wt.baseBranch);
-  const mergeBtn = h('button', { class: 'btn primary sm', type: 'button', disabled: busy || !canMerge, title: !wt.baseBranch ? 'The session started on a detached HEAD: merge it with git yourself.' : !news ? `Everything on this branch is in ${wt.baseBranch}.` : '' }, r.busy === 'merge' ? 'Merging…' : `Merge into ${wt.baseBranch || 'base'}`);
+  const mergeBtn = h('button', { class: 'btn primary sm', type: 'button', disabled: busy || !canMerge, title: !wt.baseBranch ? 'The conversation started on a detached HEAD: merge it with git yourself.' : !news ? `Everything on this branch is in ${wt.baseBranch}.` : '' }, r.busy === 'merge' ? 'Merging…' : `Merge into ${wt.baseBranch || 'base'}`);
   const keepBtn = h('button', { class: 'btn sm', type: 'button', disabled: busy || merged || wt.state === 'kept' }, 'Keep branch');
   const dropBtn = h('button', { class: 'btn sm danger', type: 'button', disabled: busy }, r.busy === 'discard' ? 'Removing…' : merged ? 'Remove branch' : 'Discard');
   mergeBtn.addEventListener('click', () => merge(t, d, r, redraw));
@@ -187,7 +187,7 @@ async function discard(t, d, r, redraw) {
   const lost = merged ? '' : d.files.length ? `\n\nThe ${d.files.length} changed file${d.files.length === 1 ? '' : 's'} on it are lost. This cannot be undone.` : '';
   const ok = await confirmDialog(
     merged ? 'Remove this branch?' : 'Discard this branch?',
-    `The session's folder is removed, ${wt.branch} is deleted and the session closes.${merged ? ` Its work is already in ${wt.baseBranch}.` : ''}${lost}`,
+    `The session's folder is removed, ${wt.branch} is deleted and the conversation closes.${merged ? ` Its work is already in ${wt.baseBranch}.` : ''}${lost}`,
     { ok: merged ? 'Remove' : 'Discard', danger: !merged },
   );
   if (!ok) return;

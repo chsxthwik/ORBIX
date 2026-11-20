@@ -86,7 +86,7 @@ export class Tab {
     this.retry = null;
   }
   get name() {
-    return makeTitle(this.title) || makeTitle(this.firstUserText()) || baseName(this.worktree?.source || this.workspace) || 'Session';
+    return makeTitle(this.title) || makeTitle(this.firstUserText()) || baseName(this.worktree?.source || this.workspace) || 'Conversation';
   }
   firstUserText() {
     const m = this.messages.find((x) => x.role === 'user');

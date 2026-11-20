@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.4.1 (2026-11-20)
+- **Turbo asks before destructive commands.** In every mode, including Turbo, a command that deletes folders recursively, pushes, publishes, rewrites history or changes the system waits for your OK. (3.4.0 already said so; now it is true outside runs as well.) Turbo still reads and writes outside the project folder without asking, and the Turbo confirmation says so.
+- **Easier to read.** Replies get a calmer rhythm: clearer headings and lists, quiet inline code, file paths that stand out (click one to open it), one clean frame around code blocks (the double border is gone), tables that highlight the row under the pointer, and the time, copy and model under every reply.
+- **Alive while it works.** The words beside the working bar shimmer, a thin light travels round the message box while the agent works, and each view settles in with a short fade when you switch.
+- **Sidebar.** A working conversation shows a spinning ring, one that needs you pulses amber, and the empty-project note lines up with the conversation titles.
+- **Overview card** shows in narrower windows too: the reading column moves over to make room.
+- **Words.** "Conversation" everywhere the interface said "session"; the permission modes are named the same in Settings and in the message box (Ask first, Auto edits, Turbo).
+- **Cleanup.** Removed 337 style declarations that later rules overrode, unused styles (old approval chip, a layout container nothing used), a stale architecture picture (it still showed the old C# host) in favour of a diagram in the README, and two unused screenshots. The README is rewritten for 3.4.
+
 ## 3.4.0 (2026-11-20)
 - **A desktop shell.**
   - A menu row (ORBIX, Workspace, View, Window) and a toolbar: the mark (a new conversation), the sidebar switch, **Back** and **Forward** (Alt+← / Alt+→) across conversations, Runs and Review, search, and where you are: project / conversation, with its state, running time and branch. In the Windows app the menu row is the title bar.

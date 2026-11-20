@@ -89,5 +89,5 @@ export async function renderHooksSettings(root, ws) {
     block('Your hooks', data.user, 'user'),
     proj
       ? block('This project', proj, 'project', proj.exists ? (proj.hooks.length ? (proj.trusted ? 'You allowed these.' : 'Each one asks for your OK the first time it runs.') : null) : 'Add .orbix/hooks.json to share hooks with everyone who works on this project. Each person is asked once before they run.')
-      : h('p', { class: 'muted small' }, 'Open a session to see the hooks of its project (.orbix/hooks.json).'));
+      : h('p', { class: 'muted small' }, 'Open a conversation to see the hooks of its project (.orbix/hooks.json).'));
 }
