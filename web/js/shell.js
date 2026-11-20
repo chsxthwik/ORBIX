@@ -85,6 +85,7 @@ function menus() {
       '-',
       { label: 'Runs', hint: 'Ctrl+2', run: () => H.goHub('runs') },
       { label: 'Review', hint: 'Ctrl+3', run: () => H.goHub('review') },
+      { label: 'Automations', run: () => H.goHub('automations') },
       { label: 'Search everything', hint: 'Ctrl+K', run: () => H.search() },
       '-',
       { label: 'Manage conversations…', run: H.manage },
@@ -152,7 +153,7 @@ function crumbs(t, hub) {
       branch ? h('button', { class: 'crumb-br', type: 'button', title: n ? `Branch ${branch} · ${n} changed file${n === 1 ? '' : 's'}` : `Branch ${branch}`, onclick: () => showTab(t.worktree ? 'review' : 'changes') }, icon('branch', 12), h('span', { class: 'ell' }, h('bdi', null, branch)), n ? h('b', { class: 'num' }, n) : null) : null,
     ];
   }
-  if (hub) return [h('span', { class: 'crumb cur static' }, hub.view === 'review' ? 'Review' : 'Runs')];
+  if (hub) return [h('span', { class: 'crumb cur static' }, { review: 'Review', automations: 'Automations' }[hub.view] || 'Runs')];
   return [h('span', { class: 'crumb cur static' }, 'New conversation')];
 }
 

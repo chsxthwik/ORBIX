@@ -65,7 +65,7 @@ body { display: flex; flex-direction: column; height: 100vh; background: var(--c
 .crumb-br:hover { border-color: var(--line-2); color: var(--fg); }
 .crumb-br b { color: var(--fg-2); font-weight: 500; }
 .tb-end { display: flex; align-items: center; gap: 2px; flex: none; }
-@media (max-width: 900px) { .crumb-br, .crumb-st > :not(.dot) { display: none; } .crumbs > .crumb:first-child, .crumbs > .crumb-sep { display: none; } }
+@media (max-width: 900px) { .crumb-br, .crumb-st > :not(.dot) { display: none; } .crumbs > .crumb:first-child:not(:last-child), .crumbs > .crumb-sep { display: none; } }
 
 /* ================= sidebar ================= */
 .sidebar { --sb-pad: 8px; --sb-ic: 28px; }
@@ -325,3 +325,49 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .sidebar .row-acts .ibtn:hover { color: var(--fg); background: var(--bg-active); }
 .sidebar .foot-status.ok { flex: none; width: 30px; justify-content: center; padding: 0; }
 .set-after:not(:empty) { margin-top: 26px; }
+
+/* ================= Automations (sidebar → Automations) ================= */
+.hub-head .au-new { margin-top: 12px; }
+.au-note { display: flex; align-items: center; gap: 7px; margin: -4px 0 16px; color: var(--fg-3); font-size: 12.5px; }
+.au-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; padding: 16px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--bg-raise); animation: rise var(--t3) var(--ease-out); }
+.au-form h2 { margin: 0 0 2px; font-size: 14px; }
+.au-form input[type=text], .au-form textarea, .au-form select, .au-form input[type=time], .au-form input[type=number] { width: 100%; min-height: 34px; padding: 7px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-field); color: var(--fg); font-size: 13px; }
+.au-form textarea { resize: vertical; line-height: 1.5; }
+.au-form :is(input, textarea, select):focus { border-color: var(--line-3); outline: none; }
+.au-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.au-f { display: flex; flex-direction: column; gap: 4px; min-width: 130px; color: var(--fg-3); font-size: 12px; }
+.au-f.grow { flex: 1 1 260px; }
+.au-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.au-list { display: flex; flex-direction: column; gap: 8px; }
+.au-item { display: flex; gap: 16px; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-raise); transition: border-color var(--t1) var(--ease); }
+.au-item:hover { border-color: var(--line-2); }
+.au-item.off { opacity: .62; }
+.au-main { flex: 1 1 auto; min-width: 0; }
+.au-title { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.au-title svg { flex: none; color: var(--fg-3); }
+.au-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 5px; color: var(--fg-3); font-size: 12.5px; }
+.au-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.au-prompt { display: -webkit-box; margin: 8px 0 0; color: var(--fg-2); font-size: 13px; line-height: 1.5; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.au-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex: none; }
+
+/* ================= Side question (side panel) ================= */
+.ask-log { display: flex; flex-direction: column; gap: 16px; }
+.ask-qa { display: flex; flex-direction: column; gap: 8px; }
+.ask-q, .ask-a, .ask-in { font-family: var(--font); }
+.ask-q { align-self: flex-end; max-width: 92%; padding: 7px 12px; border-radius: 14px; background: var(--bubble); font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.ask-a .md { font-size: 13px; }
+.ask-m { margin-top: 4px; color: var(--fg-3); font-size: 11.5px; }
+.ask-err { color: var(--err); font-size: 13px; }
+.ask-bar { display: flex; align-items: flex-end; gap: 6px; flex: none; padding: 10px 12px 12px; border-top: 1px solid var(--line); }
+.ask-in { flex: 1; min-height: 38px; max-height: 160px; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-field); color: var(--fg); font: inherit; font-size: 13px; resize: none; }
+.ask-in:focus { border-color: var(--line-3); outline: none; }
+.ask-go { flex: none; }
+
+/* Side panel → Browser: the address bar, the running apps, and the preview frame. */
+.br-bar { gap: 4px; padding: 0 6px; }
+.br-url { flex: 1; min-width: 0; height: 28px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-field); color: var(--fg); font: inherit; font-size: 12.5px; }
+.br-url:focus { border-color: var(--line-3); outline: none; }
+.br-h { margin: 2px 8px 6px; color: var(--fg-3); font-size: 11.5px; font-weight: 500; }
+.br-row .num { font-size: 12px; }
+.br-view { flex: 1; min-height: 0; display: flex; background: #fff; }
+.br-frame { flex: 1; width: 100%; height: 100%; border: 0; background: #fff; }

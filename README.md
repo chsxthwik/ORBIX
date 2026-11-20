@@ -72,6 +72,14 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 <td><b>Changes.</b> What a run changed, file by file.</td>
 <td><b>Home.</b> Pick a project and model, then describe the task.</td>
 </tr>
+<tr>
+<td><img src="docs/img/shots/automations.png" alt="The Automations page: a weekday test report at 09:00 and a weekly dependency check that is off, each with Run now, Edit and Delete"></td>
+<td><img src="docs/img/shots/settings.png" alt="Settings on the Providers page, with a list of AI providers"></td>
+</tr>
+<tr>
+<td><b>Automations.</b> Prompts that run on a schedule, each as a new conversation.</td>
+<td><b>Settings.</b> A page of its own: providers, models, permissions and more.</td>
+</tr>
 </table>
 
 ## The window
@@ -79,9 +87,10 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 | Part | What it does |
 | --- | --- |
 | **Menu row and toolbar** | ORBIX, Workspace, View and Window menus. Back and forward (<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) across conversations, Runs and Review; search everything (<kbd>Ctrl</kbd>+<kbd>K</kbd>); where you are, with the conversation's state, running time and branch. |
-| **Sidebar** | New conversation, Runs, Review and Customizations; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
+| **Sidebar** | New conversation, Runs, Review, Automations and Customizations; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
 | **Overview card** | Beside the conversation (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd>): Changes, Files, Terminal, Plan and the run inspector, plus helper agents and background runs when there are any. |
-| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Plan and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. |
+| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Browser, Side question, Plan and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** finds the web apps running on this computer and previews one; **Side question** answers a quick question about the conversation while the agent keeps working. |
+| **Automations** | Prompts ORBIX starts by itself every hour, every day, on weekdays or every week, each as a new conversation in its project. Run now, turn on or off, edit. They run while ORBIX is open; in Ask first a run waits for your OK in Review. |
 | **Settings** | A page of its own (<kbd>Ctrl</kbd>+<kbd>,</kbd>, <kbd>Esc</kbd> returns): Preferences (send with Enter or Ctrl+Enter, follow output, Overview card, sidebar sorting and archive), Appearance, Notifications (finished, needs you, background only, sound, taskbar flash, a test), Shortcuts, the agent's Providers, Models, Permissions, Checks, Instructions and Tools, Projects, Worktrees and About. |
 | **Message box** | <kbd>+</kbd> adds files, a mention (<kbd>@</kbd>) or a command (<kbd>/</kbd>); the model and its thinking level; the permission chip; the context meter. |
 | **Conversation** | Folded steps, readable Markdown with code blocks and tables, a navigator of dots on the left edge (one per message of yours), find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). |
@@ -125,6 +134,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 | Feature | Where it lives |
 | --- | --- |
 | **Project rules** | `AGENTS.md`, `CLAUDE.md` or `.omp/AGENTS.md` in the project. `/init` writes a first version. |
+| **Rule files** | `.agents/rules/*.md` in the project. Front matter `trigger:` `always_on` (default, in every prompt), `model_decision` (with a `description`: the agent reads it when it applies), `glob` (with `globs`: for matching files) or `manual` (only when you @mention it). |
 | **Your instructions** | Settings → Instructions: followed in every project. |
 | **MCP servers** | Customizations (Settings → Tools & MCP), or `.mcp.json` in the project. Stdio and HTTP. |
 | **Skills** | A folder with a `SKILL.md` in `.agents/skills`, `.claude/skills` or `.omp/skills`. |
@@ -169,6 +179,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 | `/review [focus]` | Review uncommitted changes for bugs and risks |
 | `/commit [notes]` | Write a message for the staged changes and commit |
 | `/branch` | Continue in a new conversation from here; files are not reverted |
+| `/btw <question>` | Ask about the conversation in the side panel while the agent keeps working; nothing is added to it |
 | `/goal <text>` | Keep working on a goal by itself, for up to 6 rounds |
 | `/memory`, `/hooks`, `/mcp`, `/skills`, `/help` | The project memory file, hooks, MCP servers, skills and help |
 

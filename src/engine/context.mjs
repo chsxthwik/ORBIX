@@ -53,6 +53,49 @@ export async function loadInstructions(backend, workspace) {
   return found;
 }
 
+/** `---` front matter at the top of a rule file: { data: { key: value }, body }. Values are plain strings. */
+export function frontMatter(text) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  if (!m) return { data: {}, body: text };
+  const data = {};
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^\s*([A-Za-z_][\w-]*)\s*:\s*(.*?)\s*$/.exec(line);
+    if (kv) data[kv[1].toLowerCase()] = kv[2].replace(/^["']|["']$/g, '');
+  }
+  return { data, body: text.slice(m[0].length) };
+}
+
+const RULE_TRIGGERS = new Set(['always_on', 'model_decision', 'glob', 'manual']);
+
+/**
+ * Rules in the project's .agents/rules folder, each a Markdown file whose front matter says when
+ * it applies: `trigger: always_on` (the default) is part of every prompt; `model_decision` and `glob` are listed with
+ * their description or file patterns, and the agent reads them when they apply; `manual` only when you @mention it.
+ * Returns { always: [{ path, text, truncated }], listed: [{ path, trigger, description, globs }] }.
+ */
+export async function loadRules(backend, workspace) {
+  const dir = path.join(path.resolve(backend.hostPath(workspace)), '.agents', 'rules');
+  const names = (await fs.promises.readdir(dir).catch(() => [])).filter((n) => n.toLowerCase().endsWith('.md')).sort().slice(0, 40);
+  const always = [];
+  const listed = [];
+  let total = 0;
+  for (const name of names) {
+    const file = path.join(dir, name);
+    const text = ((await cachedText(file, CAP * 4).catch(() => null)) || '').trim();
+    if (!text) continue;
+    const { data, body } = frontMatter(text);
+    const trigger = RULE_TRIGGERS.has(data.trigger) ? data.trigger : 'always_on';
+    const shown = path.join(workspace, '.agents', 'rules', name);
+    if (trigger === 'always_on') {
+      if (total >= CAP) continue;
+      const clipped = body.trim().slice(0, CAP - total);
+      total += clipped.length;
+      always.push({ path: shown, text: clipped, truncated: clipped.length < body.trim().length });
+    } else if (trigger !== 'manual') listed.push({ path: shown, trigger, description: data.description || '', globs: data.globs || '' });
+  }
+  return { always, listed };
+}
+
 /** One-level listing of a folder for an @mention: folders first (with /), then files with sizes. */
 async function folderListing(host) {
   const ents = (await fs.promises.readdir(host, { withFileTypes: true })).filter((e) => !(e.isDirectory() && SKIP_DIRS.has(e.name)));

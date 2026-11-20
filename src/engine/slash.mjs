@@ -162,6 +162,12 @@ export async function runSlash(agent, text) {
       agent._out(sk.length ? sk.map((s) => `- **${s.name}**: ${s.description || '(no description)'}  \n  \`${s.path}\``).join('\n') : 'No skills found. Put a folder with a SKILL.md in `.agents/skills`, `.claude/skills` or `.omp/skills` of the project.');
       return true;
     }
+    case 'btw': {
+      // The window sends /btw to the side panel itself; here (a message with images, or another client) it answers inline.
+      if (!args) return agent._out('Usage: /btw <question>. It is answered from the conversation, without tools, and not added to it.'), true;
+      agent._sideQuestion({ text: args }).then((r) => agent._out(`**Side question:** ${args}\n\n${r.text}`)).catch((e) => agent._out(`Side question failed: ${e.message}`));
+      return true;
+    }
     case 'cost': {
       const s = agent._stats();
       const cu = s.contextUsage;

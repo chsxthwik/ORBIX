@@ -74,7 +74,7 @@ export async function environmentFacts(backend, workspace, { git: withGit = true
  * The full system prompt. `rules`: [{ path, text, truncated }] nearest first (as loadInstructions returns them);
  * `skills`: the skills section text; `mcp`: the MCP section text.
  */
-export function buildSystemPrompt({ env, model, approvals, rules = [], skills = '', mcp = '', planMode = false }) {
+export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex = [], skills = '', mcp = '', planMode = false }) {
   const parts = [CORE];
   parts.push(
     [
@@ -95,6 +95,9 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], skills = 
   if (rules.length) {
     const ordered = [...rules].reverse(); // repository root first, the folder closest to the project last (it wins)
     parts.push(`# Project instructions\nFollow these instructions from the project. When they conflict, the later (more specific) file wins.\n\n${ordered.map((r) => `<instructions path="${r.path}"${r.truncated ? ' truncated="true"' : ''}>\n${r.text}\n</instructions>`).join('\n\n')}`);
+  }
+  if (ruleIndex.length) {
+    parts.push(`# Project rules that apply sometimes\nThese rules from .agents/rules are not loaded yet. When one applies (by its description, or because you work on files matching its patterns), read its file with the read tool first and follow it.\n${ruleIndex.map((r) => `- ${r.path}${r.trigger === 'glob' ? ` (for files matching ${r.globs || 'its patterns'})` : ''}${r.description ? `: ${r.description}` : ''}`).join('\n')}`);
   }
   if (skills) parts.push(skills.trim());
   if (mcp) parts.push(mcp.trim());

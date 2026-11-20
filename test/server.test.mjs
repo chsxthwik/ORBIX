@@ -891,7 +891,7 @@ describe('security headers', () => {
     assert.equal(r.status, 200);
     const csp = r.headers['content-security-policy'];
     assert.doesNotMatch(csp, /unsafe-inline|unsafe-eval/);
-    for (const d of ["default-src 'self'", "script-src 'self'", "style-src 'self'", "frame-src 'none'", "worker-src 'none'", "object-src 'none'", "frame-ancestors 'none'"]) assert.ok(csp.includes(d), d);
+    for (const d of ["default-src 'self'", "script-src 'self'", "style-src 'self'", "frame-src http://localhost:* http://127.0.0.1:*", "worker-src 'none'", "object-src 'none'", "frame-ancestors 'none'"]) assert.ok(csp.includes(d), d);
   });
   test('static files, API answers, the token redirect and 401s all carry the same protective headers', async () => {
     const answers = [

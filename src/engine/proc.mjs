@@ -11,8 +11,8 @@ import { isWinPath } from '../backend.mjs';
 import * as providers from './providers.mjs';
 import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor, invalidArgsText } from './tools.mjs';
 import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession } from './store.mjs';
-import { loadInstructions, readMentions, promptAttachments, promptImages, loadUserInstructions } from './context.mjs';
-import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, rebuildSession, summarize, tokenScale } from './compact.mjs';
+import { loadInstructions, readMentions, promptAttachments, promptImages, loadUserInstructions, loadRules } from './context.mjs';
+import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, rebuildSession, summarize, tokenScale, transcript } from './compact.mjs';
 import { runTasks, SUBAGENT_TOOLS } from './subagent.mjs';
 import { TurnAssembler, collectTurn } from './assemble.mjs';
 import { HookRunner } from './hooks.mjs';
@@ -44,6 +44,7 @@ const CONTINUE_TEXT = 'Your previous reply was cut off by the output token limit
 /** Optional protocol features this engine supports (the UI shows the matching actions). */
 const FEATURES = ['regenerate', 'edit_message', 'attachments', 'prompt_status', 'branch'];
 const GOAL_ROUNDS = 6;
+const SIDE_SYSTEM = 'You answer a side question about a coding conversation, without tools and without continuing its task. Answer from the conversation shown, briefly and exactly; say plainly when the conversation does not contain the answer.';
 const TITLE_SYSTEM = 'You name chat sessions. Reply with only a title of at most 6 words for the conversation that starts with the message below: no quotes, no trailing punctuation, same language as the message.';
 
 
@@ -243,6 +244,8 @@ export class AgentProc extends EventEmitter {
         }
         return this._prompt(text, all, att.attachments, cmd, ok);
       }
+      case 'side_question':
+        return ok(await this._sideQuestion(cmd));
       case 'regenerate':
         return ok(await this._regenerate(cmd));
       case 'branch':
@@ -593,11 +596,15 @@ export class AgentProc extends EventEmitter {
   }
 
   async _system({ subagent = false, tools } = {}) {
-    const [env, rules, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null)]).then(([own, mine]) => (mine ? [...own, mine] : own)), subagent ? [] : this._skills()]);
+    const [env, found, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null), loadRules(this.backend, this.workspace).catch(() => ({ always: [], listed: [] }))]), subagent ? [] : this._skills()]);
+    const [own, mine, projectRules] = found;
+    // Nearest first (as loadInstructions returns them): .agents/rules that always apply, then AGENTS.md up the tree, then yours.
+    const rules = [...projectRules.always, ...own, ...(mine ? [mine] : [])];
+    const ruleIndex = projectRules.listed;
     const model = this.model ? `${this.provider ? this.provider + '/' : ''}${this.model}` : '';
-    if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules }), tools);
+    if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules, ruleIndex }), tools);
     // A run has its own phase instructions; the generic plan-mode text would contradict them.
-    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo });
+    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, ruleIndex, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo });
     return this.runInfo ? `${base}\n\n${runPrompt({ phase: this.runInfo.phase(), branch: this.worktree?.branch, baseBranch: this.worktree?.baseBranch })}` : base;
   }
 
@@ -865,6 +872,24 @@ export class AgentProc extends EventEmitter {
     const out = { path: r.file, id: r.id, title, workspace: this.workspace, messages: r.count, text };
     this._emit({ type: 'branch_created', ...out });
     return out;
+  }
+
+  /**
+   * A side question (/btw): answered from the conversation so far, without tools, and not added to the conversation,
+   * so it works while the agent is busy. Uses the fast model when one is chosen.
+   */
+  async _sideQuestion(cmd) {
+    const q = String(cmd.text || '').trim();
+    if (!q) throw new Error('Ask a question');
+    if (q.length > 4000) throw new Error('Keep a side question under 4,000 characters');
+    const conn = (await this._roleConnSafe('fast')) || (await this._connect());
+    const ctx = transcript(this.messages, 60000);
+    const text = `${ctx ? `<conversation>\n${ctx}\n</conversation>\n\n` : ''}Side question (answer it; do not continue the task):\n${q}`;
+    const msg = await collectTurn(conn.stream({ system: SIDE_SYSTEM, messages: [{ role: 'user', content: [{ type: 'text', text }], timestamp: Date.now() }], tools: [], signal: AbortSignal.timeout(120000), maxTokens: 2000, thinking: undefined }));
+    if (msg.stopReason === 'error') throw new Error(msg.errorMessage || 'The model could not answer');
+    this._addUsage(msg.usage, this._costOf(msg.usage, conn.info));
+    const answer = (msg.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
+    return { text: answer || 'The model returned no answer.', model: conn.model };
   }
 
   /** Replace the first-words title by a short model-written one. Only when a fast model is chosen; never the main model. */
