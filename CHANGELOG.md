@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.4.3 (2026-11-20)
+- **Side panel first page.** Opening the side panel (toolbar button or Ctrl+J) lands on a first page, as in Antigravity: find a file in the project, Changes, Open file, Terminal, Plan and Inspect with their counts, then the conversation's subagents and the runs working now, each with "See all".
+- **Toolbar follows the layout.** With the side panel docked, the conversation's ⋮ and Overview buttons end where the conversation ends, and the panel switch sits above the panel.
+- **Conversation menu** has icons and a Pin item (Rename, Pin, Find, Your messages, Run inspector, Compact, Copy as Markdown, Export as HTML, Close).
+- **Replies.** The time under a message reads "now", "5m ago", "2h ago" and stays current (the exact time is in the hint); inline code is set in a warm code colour; "Worked for 14s ›" stays one quiet line and shows what was done when you point at it or open it.
+
 ## 3.4.2 (2026-11-20)
 - **Folder picker.** Windows' locked compatibility folders (such as `C:\Users\Default User` and `Application Data` in your profile) are no longer listed; opening one only failed with "access denied".
 

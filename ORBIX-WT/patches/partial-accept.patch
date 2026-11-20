@@ -1,0 +1,1111 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 865fa04..4b49e4b 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,9 @@
+ # Changelog
+ 
++## Unreleased
++- **Apply part of a run.** Apply changes… lists the changed files with a box each, all ticked. In the Changes tab you can also untick single hunks of a file. The chosen parts go to your branch as one commit; the rest stays in the run's worktree, the run stays open, and the Changes tab shows only what is still to apply. A conflict, or an uncommitted edit of yours to a chosen file, changes nothing. The run's log records what was applied, part by part.
++- **Comments on diff lines.** Click a line number in a run's Changes tab to comment on that line, Shift+click for a range. The comment shows `file:line`, the line is marked in the diff, and the agent gets the file, the line numbers and the quoted lines.
++
+ ## 3.4.0 (2026-11-20)
+ - **A desktop shell like the Antigravity App.**
+   - A menu row (ORBIX, Workspace, View, Window) and a toolbar: the mark (a new conversation), the sidebar switch, **Back** and **Forward** (Alt+← / Alt+→) across conversations, Runs and Review, search, and where you are: project / conversation, with its state, running time and branch. In the Windows app the menu row is the title bar.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 62559a6..b7756ae 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -83,7 +83,7 @@ A run takes one task from its description to reviewed changes. It is an agent se
+ | Part | Job |
+ |---|---|
+ | `runs.mjs` (`RunStore`) | Persistence only. `data/runs/<id>/run.json` (state), `events.jsonl` (append-only log, numbered) and `artifacts/<kind>/r<n>.md` (every revision of the plan, tasks, walkthrough, test log and notes). Comments, and `reconcile()`, which marks runs that were working at the last shutdown as interrupted and lists the calls with no result. |
+-| `runctl.mjs` (`RunController`) | Starts the session in its own worktree, listens to its events and writes the log, moves the run between states, and owns the decisions: approve the plan with a scope, send feedback with the pending comments, apply (merge), keep, discard, stop, resume. Its routes are `/api/runs*` and `/api/run/*`. |
++| `runctl.mjs` (`RunController`) | Starts the session in its own worktree, listens to its events and writes the log, moves the run between states, and owns the decisions: approve the plan with a scope, send feedback with the pending comments, apply (merge, or chosen files and hunks as one commit: `gitapi.applyPartial`, with what was applied kept under `refs/orbix/accepted/<slug>`), keep, discard, stop, resume. Its routes are `/api/runs*` and `/api/run/*`. |
+ | `engine/artifact.mjs` | The `artifact` tool and the run section of the system prompt (planning phase, execution phase). |
+ | `engine/policy.mjs` | The execution policy shared by every agent: commands that are destructive or reach outside the machine ask every time. |
+ 
+diff --git a/docs/parity.md b/docs/parity.md
+index 5d0e732..74b3e4a 100644
+--- a/docs/parity.md
++++ b/docs/parity.md
+@@ -24,7 +24,7 @@ what they get, as written in the public documentation. Model wording, internals
+ | **Not started** | No implementation. |
+ | **Unknown** | The benchmark's behavior is not documented, so there is nothing to match yet. |
+ 
+-Evidence: `npm test` = `node --test` (821 tests: 820 pass, 1 skipped). `npm run e2e` runs 15 workflow steps plus Home and conversation checks against the deterministic model fixture. `node e2e/conversation.mjs --desktop` passed those Home and conversation checks in the packaged Windows Electron window. The recorded workflow report is in `docs/evidence/e2e-run-workflow.json`; pass `--shots` directly to either test script to capture local screenshots.
++Evidence: `npm test` = `node --test` (830 tests: 829 pass, 1 skipped). `npm run e2e` runs 15 workflow steps plus Home and conversation checks against the deterministic model fixture. `node e2e/conversation.mjs --desktop` passed those Home and conversation checks in the packaged Windows Electron window. The recorded workflow report is in `docs/evidence/e2e-run-workflow.json`; pass `--shots` directly to either test script to capture local screenshots.
+ 
+ ## 1. The first complete workflow
+ 
+@@ -77,9 +77,9 @@ run tests → inspect diffs and artifacts → give feedback → apply or discard
+ | 3.5 | Background tasks with **Cancel Task** | Not implemented as a separate queue | Not started | |
+ | 3.6 | Task list / task groups | **Unknown** for the App (documented for the IDE only). ORBIX has a `tasks` artifact kind and the existing to-do list. | Unknown | |
+ | 3.7 | Screenshots, browser recordings as artifacts | Not implemented | Not started | Needs 3.9 |
+-| 3.8 | Inline comments on diff lines with line numbers | Comments attach to a whole changed file | Partial | |
++| 3.8 | Inline comments on diff lines with line numbers | In a run's **Changes** tab, click a line number to comment on that line, Shift+click a second one for a range (removed lines count in the original file). The comment is held with the other pending comments, its chip reads `path:12-14`, commented lines are marked in the diff, and the agent gets `path:line` with the quoted lines. Whole-file comments stay. | Done (no UI test yet) | `test/partial-accept.test.mjs` "a comment on lines names path:line and quotes them" |
+ | 3.9 | Built-in browser, browser agent, site/upload/download approval prompts | Not implemented | Not started | Isolated profile and the documented prompts are specified in the research notes |
+-| 3.10 | Partial acceptance of changes | Whole-run apply or discard only | Not started | **Undocumented** in the benchmark beyond stage/unstage/discard in Review |
++| 3.10 | Partial acceptance of changes | **Apply changes…** lists every changed file with a box, all ticked; in the Changes tab you can also untick single hunks of a changed text file (new, deleted and binary files go whole). The chosen parts become one commit on the base branch, built in a scratch index with a three-way apply, then fast-forwarded into your checkout; a conflict or an uncommitted edit of yours to a chosen file refuses it with nothing changed. The rest stays in the run's worktree, the run stays open, and the Changes tab shows only what is still to apply. `run.accepted` and the `apply.partial` log event record each part's files, hunks and commit. Everything ticked with nothing applied before is the old whole merge. | Done (no UI test yet) | `test/partial-accept.test.mjs`. **Undocumented** in the benchmark beyond stage/unstage/discard in Review |
+ | 3.11 | Review: stage, unstage, discard, commit, amend, push | Changes panel of a conversation: stage, unstage, discard, commit | Existing (no amend/push) | `test/gitwrite.test.mjs` |
+ | 3.12 | Checkpoints and **Confirm Undo** with the list of files | Every edit records the previous content; `/undo` and Undo buttons | Existing | `test/engine.test.mjs`; benchmark behavior is changelog-only |
+ | 3.13 | Rules (`AGENTS.md`, `.agents/rules/*.md` with `trigger` frontmatter) | `AGENTS.md` / `CLAUDE.md` up the folder tree | Partial (no rule triggers) | |
+diff --git a/src/gitapi.mjs b/src/gitapi.mjs
+index 19ec3c5..1c238c3 100644
+--- a/src/gitapi.mjs
++++ b/src/gitapi.mjs
+@@ -57,15 +57,17 @@ async function hasWinGit() {
+ export async function git(backend, ws, args, opts = {}) {
+   const onWinDrive = isWinPath(ws) || /^\/mnt\/[a-z](\/|$)/.test(ws);
+   const o = { timeout: opts.timeout || 30000, maxBytes: opts.maxBytes || 4 * 1024 * 1024 };
++  // `env` (e.g. GIT_INDEX_FILE for a scratch index) and `input` (stdin) apply to the call itself, not the guard lookup.
++  const env = opts.env && Object.keys(opts.env).length ? opts.env : null;
+   let run;
+   if (onWinDrive && (await hasWinGit())) {
+     const cwd = isWinPath(ws) ? ws : backend.hostPath(ws);
+-    run = (a) => runProc('git.exe', [...GIT, '-c', `core.hooksPath=${NO_HOOKS_WIN}`, '-c', `safe.directory=*`, ...a], { cwd, ...o });
++    run = (a, x = {}) => runProc('git.exe', [...GIT, '-c', `core.hooksPath=${NO_HOOKS_WIN}`, '-c', `safe.directory=*`, ...a], { cwd, ...o, ...x });
+   } else {
+     if (!backend.isWsl && !isWinPath(ws)) throw new Error('Not a Windows path');
+-    run = (a) => backend.exec(['git', ...GIT, '-c', `core.hooksPath=${NO_HOOKS_LINUX}`, ...a], { cwd: ws, ...o });
++    run = (a, x = {}) => backend.exec([...(x.env ? ['env', ...Object.entries(x.env).map(([k, v]) => `${k}=${v}`)] : []), 'git', ...GIT, '-c', `core.hooksPath=${NO_HOOKS_LINUX}`, ...a], { cwd: ws, ...o, ...(x.input != null ? { input: x.input } : {}) });
+   }
+-  return run([...(await repoGuards(run, `${backend.kind}|${ws}`)), ...args]);
++  return run([...(await repoGuards(run, `${backend.kind}|${ws}`)), ...args], { ...(env ? { env } : {}), ...(opts.input != null ? { input: opts.input } : {}) });
+ }
+ 
+ /** Parser for `git status --porcelain=v1 -z -b`. */
+@@ -166,8 +168,8 @@ export function gitFailure(text, what = 'git') {
+   return new Error(msg || `${what} failed`);
+ }
+ 
+-async function run(backend, ws, args) {
+-  const r = await git(backend, ws, args);
++async function run(backend, ws, args, opts) {
++  const r = await git(backend, ws, args, opts);
+   if (r.code !== 0) throw gitFailure(r.stderr.toString('utf8').trim() || r.stdout.toString('utf8').trim(), `git ${args[0]}`);
+   return r.stdout.toString('utf8');
+ }
+@@ -445,7 +447,202 @@ export async function worktreeRemove(backend, { repo, slug }) {
+     if (!gone) throw new Error(r.stderr.toString('utf8').trim() || 'git worktree remove failed');
+     await git(backend, repo, ['worktree', 'prune']);
+   }
++  await dropAccepted(backend, repo, s);
+   const b = await git(backend, repo, ['branch', '-D', `orbix/${s}`]);
+   if (b.code !== 0 && !/not found/i.test(b.stderr.toString('utf8'))) throw new Error(b.stderr.toString('utf8').trim() || 'git branch -D failed');
+   return { removed: true };
+ }
++
++// ---- Partial apply: some files, or some hunks of a file, go to the base branch; the rest stays in the session's
++// folder. Nothing here touches the session's index, HEAD or files: its current state is read into a scratch index.
++// What has been applied so far is a commit (base + the applied parts) kept under refs/orbix/accepted/<slug>, so the
++// changes still to review are always "that commit → the folder now".
++
++export const ACCEPTED_REF = 'refs/orbix/accepted';
++const PATCH_MAX = 64 * 1024 * 1024;
++const DIFF = ['--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '--no-relative', '--ignore-submodules=dirty', '--src-prefix=a/', '--dst-prefix=b/'];
++
++/** Forget what was applied part by part (when the run is finished). Fine when there is nothing to forget. */
++export async function dropAccepted(backend, repo, slug) {
++  await git(backend, repo, ['update-ref', '-d', `${ACCEPTED_REF}/${checkSlug(slug)}`]);
++}
++
++/** Run `fn(env)` with GIT_INDEX_FILE pointing at a scratch index of `ws`, seeded from `seed` (a tree) or the real index. */
++async function withScratchIndex(backend, ws, fn, { seed = '' } = {}) {
++  const name = `orbix-index-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
++  const [gitForm, realIndex] = (await run(backend, ws, ['rev-parse', '--path-format=absolute', '--git-path', name, '--git-path', 'index'])).split('\n').map((l) => l.trim());
++  const host = (p) => (isWinPath(p) ? p : backend.hostPath(p));
++  const env = { GIT_INDEX_FILE: gitForm };
++  try {
++    if (seed) await run(backend, ws, ['read-tree', seed], { env });
++    else {
++      // A copy of the real index keeps git's file timestamps, so only files that changed are read again.
++      try {
++        await fs.promises.copyFile(host(realIndex), host(gitForm));
++      } catch {}
++    }
++    return await fn(env);
++  } finally {
++    for (const f of [gitForm, `${gitForm}.lock`]) await fs.promises.rm(host(f), { force: true }).catch(() => {});
++  }
++}
++
++/** The tree of everything in the session's folder now: edits not committed yet and new (not ignored) files too. */
++export async function snapshotTree(backend, wt) {
++  return withScratchIndex(backend, wt, async (env) => {
++    await run(backend, wt, ['add', '-A'], { env });
++    return (await run(backend, wt, ['write-tree'], { env })).trim();
++  });
++}
++
++/** The changes from `from` (a commit) to the folder now: { tree, files: [{ path, status, add, del, untracked: false }] }. */
++export async function snapshotDiff(backend, wt, from, { tree = '' } = {}) {
++  if (!SHA_RE.test(String(from || ''))) throw bad('Unknown base commit');
++  const t = tree && SHA_RE.test(tree) ? tree : await snapshotTree(backend, wt);
++  const opts = ['--no-ext-diff', '--no-textconv', '--no-renames', '--ignore-submodules=dirty', '-z'];
++  const [ns, num] = await Promise.all([run(backend, wt, ['diff', ...opts, '--name-status', from, t, '--']), run(backend, wt, ['diff', ...opts, '--numstat', from, t, '--'])]);
++  const counts = parseNumstat(num);
++  const files = parseNameStatus(ns).map((f) => ({ ...f, ...(counts.get(f.path) || { add: 0, del: 0 }), untracked: false }));
++  files.sort((a, b) => a.path.localeCompare(b.path));
++  return { tree: t, files };
++}
++
++/** The diff of one file from `from` to `tree` (a snapshot), for reading. Hunks are numbered as `parsePatch` numbers them. */
++export async function treeFileDiff(backend, wt, from, tree, file) {
++  if (!SHA_RE.test(String(from || '')) || !SHA_RE.test(String(tree || ''))) throw bad('Unknown commit');
++  const [p] = cleanPaths([file]);
++  const r = await git(backend, wt, ['diff', ...DIFF, '-U3', from, tree, '--', p], { maxBytes: 1.5 * 1024 * 1024 });
++  if (r.code !== 0) throw new Error(r.stderr.toString('utf8').trim() || 'git diff failed');
++  return { text: r.stdout.toString('utf8') };
++}
++
++/** `diff --git a/x b/x` → x (no renames, so both sides name the same file; a quoted name is unquoted). */
++function patchPath(line) {
++  const rest = line.slice('diff --git '.length);
++  if (rest.startsWith('"')) {
++    let out = '';
++    for (let i = 1; i < rest.length; i++) {
++      const c = rest[i];
++      if (c === '"') break;
++      if (c !== '\\') {
++        out += c;
++        continue;
++      }
++      const n = rest[++i];
++      if (/[0-7]/.test(n)) {
++        const bytes = [parseInt(rest.slice(i, i + 3), 8)];
++        i += 2;
++        while (rest[i + 1] === '\\' && /[0-7]/.test(rest[i + 2] || '')) bytes.push(parseInt(rest.slice(i + 2, i + 5), 8)), (i += 4);
++        out += Buffer.from(bytes).toString('utf8');
++      } else out += { n: '\n', t: '\t', '"': '"', '\\': '\\', a: '\x07', b: '\b', f: '\f', r: '\r', v: '\v' }[n] ?? n;
++    }
++    return out.replace(/^a\//, '');
++  }
++  return rest.slice(2, 2 + (rest.length - 5) / 2); // "a/" + x + " b/" + x
++}
++
++/**
++ * Split a git patch into files: [{ path, head: [lines], hunks: [[lines]], whole }]. `whole` marks a file whose
++ * hunks cannot be picked one by one (new, deleted, binary, mode change only): it is applied or left as a whole.
++ */
++export function parsePatch(text) {
++  const files = [];
++  let cur = null;
++  let hunk = null;
++  const lines = String(text || '').split('\n');
++  if (lines.at(-1) === '') lines.pop();
++  for (const line of lines) {
++    if (line.startsWith('diff --git ')) {
++      files.push((cur = { path: patchPath(line), head: [line], hunks: [], whole: false }));
++      hunk = null;
++    } else if (!cur) continue;
++    else if (line.startsWith('@@ ')) cur.hunks.push((hunk = [line]));
++    else if (hunk) hunk.push(line);
++    else {
++      cur.head.push(line);
++      if (/^(new file mode|deleted file mode|GIT binary patch|Binary files )/.test(line)) cur.whole = true;
++    }
++  }
++  for (const f of files) if (!f.hunks.length) f.whole = true;
++  return files;
++}
++
++/**
++ * A patch with only the chosen parts. `hunks` maps a path to the hunk numbers (0-based, in file order) to keep; a path
++ * not in it keeps all its hunks. A file left with no hunk is left out.
++ */
++export function pickPatch(files, hunks = {}) {
++  const out = [];
++  for (const f of files) {
++    const want = Object.hasOwn(hunks, f.path) ? hunks[f.path] : null;
++    if (!want || f.whole) {
++      if (want && f.whole && !want.length) continue;
++      out.push(...f.head, ...f.hunks.flat());
++      continue;
++    }
++    const keep = f.hunks.filter((_, i) => want.includes(i));
++    if (keep.length) out.push(...f.head, ...keep.flat());
++  }
++  return out.length ? out.join('\n') + '\n' : '';
++}
++
++/**
++ * Apply some of a session's changes to the branch it started from, in the main checkout.
++ *   from    the commit everything is compared with (the base, or what was applied before: refs/orbix/accepted/<slug>)
++ *   tree    the session folder's snapshot (snapshotTree) the choice was made on
++ *   paths   the files to apply; `hunks` optionally narrows a file to some of its hunks
++ * The new commit is built in a scratch index on top of the base branch with a three-way apply, so a conflict is found
++ * before anything changes: then { applied: false, conflict: true, files } and both checkouts are as they were. On
++ * success the main checkout is fast-forwarded to it (your uncommitted edits to other files stay) and the accepted
++ * commit moves on: { applied: true, hash, accepted, paths }.
++ */
++export async function applyPartial(backend, { repo, wt, slug, baseBranch, from, tree, paths, hunks = {}, message }) {
++  const s = checkSlug(slug);
++  if (!SHA_RE.test(String(from || '')) || !SHA_RE.test(String(tree || ''))) throw bad('Unknown commit');
++  const list = cleanPaths(paths);
++  if (!baseBranch) throw bad('This session started on a detached HEAD, so there is no branch to apply to. Merge it with git yourself.');
++  const main = await repoInfo(backend, repo);
++  if (!main) throw bad('The project folder is no longer a git repository.');
++  if (main.branch !== baseBranch) throw conflictErr(`The project folder is on ${main.branch || 'a detached HEAD'}, not ${baseBranch}. Switch it back to ${baseBranch}, then apply.`);
++  if ((await git(backend, repo, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])).code === 0) throw conflictErr('A merge is already in progress in the project folder. Finish or abort it first.');
++  const clash = (await dirtyFiles(backend, repo)).filter((p) => list.includes(p));
++  if (clash.length) throw conflictErr(`You have uncommitted changes to ${clash.slice(0, 3).join(', ')}${clash.length > 3 ? ` and ${clash.length - 3} more` : ''}, which this would overwrite. Commit or stash them, then apply.`);
++
++  const r = await git(backend, wt, ['diff', ...DIFF, '-U3', '--binary', '--full-index', from, tree, '--', ...list], { maxBytes: PATCH_MAX });
++  if (r.code !== 0) throw gitFailure(r.stderr.toString('utf8'), 'git diff');
++  if (r.stdout.length >= PATCH_MAX) throw bad('These changes are too large to apply part by part. Apply the whole run instead.');
++  const patch = pickPatch(parsePatch(r.stdout.toString('utf8')), hunks);
++  if (!patch) throw bad('Nothing is selected to apply.');
++
++  // What has been applied, as a commit on top of `from`: the patch was made from it, so it always applies.
++  const accepted = await withScratchIndex(backend, wt, async (env) => {
++    await run(backend, wt, ['apply', '--cached', '--whitespace=nowarn', '-'], { env, input: patch });
++    const t = (await run(backend, wt, ['write-tree'], { env })).trim();
++    return (await run(backend, wt, ['commit-tree', t, '-p', from, '-m', `ORBIX: applied from orbix/${s}`], { env })).trim();
++  }, { seed: from });
++
++  // The commit for the base branch, made without touching the main checkout.
++  const tip = (await run(backend, repo, ['rev-parse', '--verify', `refs/heads/${baseBranch}^{commit}`])).trim();
++  const made = await withScratchIndex(backend, repo, async (env) => {
++    const a = await git(backend, repo, ['apply', '--cached', '--3way', '--whitespace=nowarn', '-'], { env, input: patch });
++    if (a.code !== 0) {
++      const unmerged = (await git(backend, repo, ['ls-files', '-u', '-z'], { env })).stdout.toString('utf8').split('\0').filter(Boolean).map((l) => l.slice(l.indexOf('\t') + 1));
++      const why = a.stderr.toString('utf8');
++      const failed = [...why.matchAll(/^error: (?:patch failed: (.+):\d+|(.+): (?:does not exist in index|already exists in index|patch does not apply))$/gm)].map((m) => m[1] || m[2]);
++      const files = [...new Set([...unmerged, ...failed])];
++      if (files.length) return { conflict: true, files };
++      throw gitFailure(why, 'git apply');
++    }
++    const t = (await run(backend, repo, ['write-tree'], { env })).trim();
++    const hash = (await run(backend, repo, ['commit-tree', t, '-p', tip, '-m', String(message || '').trim().slice(0, 2000) || `Apply part of orbix/${s}`], { env })).trim();
++    return { hash };
++  }, { seed: tip });
++  if (made.conflict) return { applied: false, conflict: true, files: made.files };
++
++  // Move the main checkout to it. A fast-forward changes only the files of the commit and refuses (changing nothing)
++  // if one of yours is in the way.
++  const ff = await git(backend, repo, ['merge', '--ff-only', '--no-verify', '-q', made.hash]);
++  if (ff.code !== 0) throw conflictErr(`The project folder could not take the changes, so nothing was changed: ${ff.stderr.toString('utf8').trim() || ff.stdout.toString('utf8').trim() || 'git merge failed'}`);
++  await run(backend, repo, ['update-ref', `${ACCEPTED_REF}/${s}`, accepted]);
++  return { applied: true, hash: made.hash, accepted, paths: list };
++}
+diff --git a/src/runctl.mjs b/src/runctl.mjs
+index 8f08159..9067a00 100644
+--- a/src/runctl.mjs
++++ b/src/runctl.mjs
+@@ -39,8 +39,17 @@ function testLog(d) {
+   return lines.join('\n');
+ }
+ 
+-function commentLines(comments) {
++/** `path:12` or `path:12-14` for a comment on lines of a changed file, else the path. */
++export const commentWhere = (c) => (c.line ? `${c.target}:${c.line}${c.lineEnd && c.lineEnd !== c.line ? `-${c.lineEnd}` : ''}` : c.target);
++
++/** The comments as the agent reads them. A comment on diff lines names `path:line` and quotes the lines. */
++export function commentLines(comments) {
+   return comments.map((c) => {
++    if (c.line && !Object.hasOwn(ARTIFACTS, c.target)) {
++      const old = c.side === 'old' ? ' (removed by your change; numbered as in the original file)' : '';
++      const quoted = c.quote ? String(c.quote).split('\n').map((l) => `    > ${l}`) : [];
++      return [`- On \`${commentWhere(c)}\`${old}: ${c.text}`, ...quoted].join('\n');
++    }
+     const about = Object.hasOwn(ARTIFACTS, c.target) ? `the ${ARTIFACTS[c.target].title.toLowerCase()}${c.rev ? ` (revision ${c.rev})` : ''}` : `\`${c.target}\``;
+     return `- On ${about}${c.quote ? `, about "${c.quote.replace(/\s+/g, ' ')}"` : ''}: ${c.text}`;
+   });
+@@ -280,19 +289,31 @@ export class RunController {
+ 
+   // ---- Review: apply, keep, discard --------------------------------------------------------------------------------
+ 
++  /** What the changes still to review are compared with: the base, or what was applied part by part so far. */
++  from(run) {
++    return run.accepted?.base || run.worktree.base;
++  }
++
++  /**
++   * The changes still to apply. `tree` is a snapshot of the worktree now: pass it back with a file's diff and with an
++   * apply of chosen hunks, so the hunks you picked are the hunks that are applied.
++   */
+   async diff(id) {
+     const run = this.store.get(id);
+     const wt = run.worktree;
+     if (!wt) throw bad('This run has no worktree.', 409);
+     if (run.status === 'discarded') return { files: [], commits: 0, pending: false, ahead: 0, main: null, gone: true };
+-    const [d, main] = await Promise.all([gitapi.branchDiff(this.s.backend, wt.path, wt.base, { baseBranch: wt.baseBranch }), gitapi.mainState(this.s.backend, wt.repo).catch(() => null)]);
+-    return { ...d, main };
++    const b = this.s.backend;
++    const [d, snap, main] = await Promise.all([gitapi.branchDiff(b, wt.path, wt.base, { baseBranch: wt.baseBranch }), gitapi.snapshotDiff(b, wt.path, this.from(run)), gitapi.mainState(b, wt.repo).catch(() => null)]);
++    return { ...d, files: snap.files, tree: snap.tree, applied: run.accepted?.parts || [], main };
+   }
+ 
+-  async fileDiff(id, file, untracked) {
+-    const wt = this.store.get(id).worktree;
++  async fileDiff(id, file, untracked, tree = '') {
++    const run = this.store.get(id);
++    const wt = run.worktree;
+     if (!wt) throw bad('This run has no worktree.', 409);
+-    return gitapi.branchFileDiff(this.s.backend, wt.path, wt.base, file, { untracked });
++    const t = /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(String(tree || '')) ? tree : await gitapi.snapshotTree(this.s.backend, wt.path);
++    return { ...(await gitapi.treeFileDiff(this.s.backend, wt.path, this.from(run), t, file)), tree: t };
+   }
+ 
+   /** Session bookkeeping shared by apply, keep and discard: the conversation file remembers what became of its branch. */
+@@ -305,11 +326,18 @@ export class RunController {
+     }
+   }
+ 
+-  async apply(id) {
++  /**
++   * Apply the run's changes to the branch it started from. With no choice (and nothing applied before) the run's
++   * branch is merged. With `files` (paths) and optionally `hunks` ({ path: [hunk numbers] }), only those parts are
++   * applied as one commit; the rest stays in the worktree, and the run stays open until it is applied, kept or
++   * discarded. `tree` is the snapshot the choice was made on (from diff()); picked hunks are refused if it moved.
++   */
++  async apply(id, { files = null, hunks = null, tree = '' } = {}) {
+     const run = this.store.get(id);
+     if (FINAL.has(run.status)) throw bad('This run is already finished.', 409);
+     if (run.phase === 'plan') throw bad('Nothing was changed yet: the plan has not been approved.', 409);
+     this.idle(run);
++    if (files != null || hunks != null || run.accepted) return this.applySome(run, { files, hunks, tree });
+     const wt = run.worktree;
+     const d = await gitapi.branchDiff(this.s.backend, wt.path, wt.base, { baseBranch: wt.baseBranch });
+     if (!d.files.length && !d.commits) throw bad('This run changed nothing, so there is nothing to apply.', 409);
+@@ -333,10 +361,61 @@ export class RunController {
+     return { applied: true, hash: r.hash, run: this.view(run) };
+   }
+ 
++  async applySome(run, { files, hunks, tree }) {
++    const id = run.id;
++    const wt = run.worktree;
++    const b = this.s.backend;
++    const from = this.from(run);
++    const snap = await gitapi.snapshotDiff(b, wt.path, from);
++    if (!snap.files.length) throw bad(run.accepted ? 'Everything this run changed has been applied already.' : 'This run changed nothing, so there is nothing to apply.', 409);
++    const changed = new Set(snap.files.map((f) => f.path));
++    const paths = files == null ? [...changed] : [...new Set((Array.isArray(files) ? files : []).map((p) => String(p ?? '').replace(/\\/g, '/')))];
++    if (!paths.length) throw bad('Choose at least one file to apply.');
++    const unknown = paths.filter((p) => !changed.has(p));
++    if (unknown.length) throw bad(`${unknown.slice(0, 3).join(', ')} ${unknown.length === 1 ? 'is' : 'are'} not among the changes still to apply. Look at the changes again.`, 409);
++    const pick = {};
++    for (const [p, list] of Object.entries(hunks && typeof hunks === 'object' ? hunks : {})) {
++      if (!paths.includes(p)) continue;
++      if (!Array.isArray(list) || list.some((n) => !Number.isInteger(n) || n < 0 || n > 10000)) throw bad(`The hunks chosen for ${p} are not valid.`);
++      pick[p] = [...new Set(list)].sort((x, y) => x - y);
++    }
++    if (Object.keys(pick).length && tree !== snap.tree) throw bad('The run’s files changed after you chose the hunks. Look at the changes again, then apply.', 409);
++    const part = files == null && !Object.keys(pick).length ? 'all' : 'some';
++    let r;
++    try {
++      r = await gitapi.applyPartial(b, { repo: wt.repo, wt: wt.path, slug: wt.slug, baseBranch: wt.baseBranch, from, tree: snap.tree, paths, hunks: pick, message: `${run.title} (ORBIX run ${id}${part === 'some' ? `, part: ${paths.length} file${paths.length === 1 ? '' : 's'}` : ''})` });
++    } catch (e) {
++      this.store.append(id, 'apply.refused', { reason: clip(e?.message || String(e), 500), files: paths });
++      throw e;
++    }
++    if (!r.applied) {
++      this.store.append(id, 'apply.conflict', { files: r.files, chosen: paths });
++      this.notify(run);
++      return { applied: false, conflict: true, files: r.files, run: this.view(run) };
++    }
++    const left = (await gitapi.snapshotDiff(b, wt.path, r.accepted, { tree: snap.tree })).files.map((f) => f.path);
++    const entry = { hash: r.hash, at: Date.now(), branch: wt.baseBranch, files: paths, ...(Object.keys(pick).length ? { hunks: pick } : {}) };
++    run.accepted = { base: r.accepted, parts: [...(run.accepted?.parts || []), entry] };
++    this.store.save(run);
++    this.store.append(id, 'apply.partial', { hash: r.hash, branch: wt.baseBranch, files: paths, ...(entry.hunks ? { hunks: entry.hunks } : {}), remaining: left });
++    if (!left.length) {
++      // Everything is in the base branch now: the run is applied, as with a whole apply.
++      const all = new Set(run.accepted.parts.flatMap((x) => x.files));
++      this.mark(run, 'merged', r.hash);
++      await gitapi.dropAccepted(b, wt.repo, wt.slug).catch(() => {});
++      this.store.append(id, 'apply.done', { hash: r.hash, branch: wt.baseBranch, files: all.size, parts: run.accepted.parts.length });
++      this.store.setStatus(id, 'applied', { applied: { hash: r.hash, at: Date.now(), branch: wt.baseBranch, files: all.size, parts: run.accepted.parts.length } });
++      this.s.broadcastProcs();
++    }
++    this.notify(run);
++    return { applied: true, partial: left.length > 0, hash: r.hash, files: paths, remaining: left, run: this.view(run) };
++  }
++
+   async keep(id) {
+     const run = this.store.get(id);
+     if (FINAL.has(run.status)) throw bad('This run is already finished.', 409);
+     this.idle(run);
++    if (run.accepted && run.worktree) await gitapi.dropAccepted(this.s.backend, run.worktree.repo, run.worktree.slug).catch(() => {});
+     this.mark(run, 'kept');
+     this.store.setStatus(id, 'kept');
+     this.notify(run);
+@@ -420,12 +499,12 @@ export function runRoutes(s) {
+     'GET /api/run': async ({ q }) => ({ run: R().view(R().store.get(q.id)), events: R().store.events(q.id, { after: Number(q.after) || 0 }) }),
+     'GET /api/run/artifact': async ({ q }) => ({ artifact: R().store.readArtifact(q.id, String(q.kind || ''), q.rev) }),
+     'GET /api/run/diff': async ({ q }) => R().diff(q.id),
+-    'GET /api/run/diff/file': async ({ q }) => ({ diff: await R().fileDiff(q.id, q.file, q.untracked === '1') }),
++    'GET /api/run/diff/file': async ({ q }) => ({ diff: await R().fileDiff(q.id, q.file, q.untracked === '1', q.tree) }),
+     'POST /api/runs/start': async ({ body }) => ({ run: await R().start({ workspace: body.workspace, task: body.task, mode: body.mode === 'direct' ? 'direct' : 'plan', model: body.model }) }),
+     'POST /api/run/approve': async ({ body }) => (need(body.confirm === true, 'Approving the plan'), { run: await R().approvePlan(body.id, { commands: body.commands === true }) }),
+     'POST /api/run/feedback': async ({ body }) => ({ run: await R().feedback(body.id, body.text) }),
+     'POST /api/run/comment': async ({ body }) => {
+-      const comment = R().store.addComment(body.id, { target: body.target, rev: body.rev, quote: body.quote, text: body.text });
++      const comment = R().store.addComment(body.id, { target: body.target, rev: body.rev, quote: body.quote, text: body.text, line: body.line, lineEnd: body.lineEnd, side: body.side });
+       const run = R().store.get(body.id);
+       R().notify(run);
+       return { comment, run: R().view(run) };
+@@ -436,7 +515,7 @@ export function runRoutes(s) {
+       R().notify(run);
+       return { run: R().view(run) };
+     },
+-    'POST /api/run/apply': async ({ body }) => (need(body.confirm === true, 'Applying the changes'), R().apply(body.id)),
++    'POST /api/run/apply': async ({ body }) => (need(body.confirm === true, 'Applying the changes'), R().apply(body.id, { files: Array.isArray(body.files) ? body.files : null, hunks: body.hunks && typeof body.hunks === 'object' ? body.hunks : null, tree: String(body.tree || '') })),
+     'POST /api/run/keep': async ({ body }) => ({ run: await R().keep(body.id) }),
+     'POST /api/run/discard': async ({ body }) => (need(body.confirm === true, 'Discarding the run'), { run: await R().discard(body.id) }),
+     'POST /api/run/stop': async ({ body }) => ({ run: await R().stop(body.id) }),
+diff --git a/src/runs.mjs b/src/runs.mjs
+index beaba3b..69b87ac 100644
+--- a/src/runs.mjs
++++ b/src/runs.mjs
+@@ -235,18 +235,25 @@ export class RunStore {
+ 
+   // ---- Comments ----------------------------------------------------------------------------------------------------
+ 
+-  /** A comment on an artifact revision (optionally on a quoted passage) or on a changed file. */
+-  addComment(id, { target, rev = 0, quote = '', text }) {
++  /**
++   * A comment on an artifact revision (optionally on a quoted passage) or on a changed file, optionally on lines of
++   * its diff: `line` to `lineEnd` (inclusive), numbered in the new file, or in the original when `side` is 'old'
++   * (removed lines). `quote` then holds the lines themselves.
++   */
++  addComment(id, { target, rev = 0, quote = '', text, line = 0, lineEnd = 0, side = 'new' }) {
+     const body = String(text || '').trim();
+     if (!body) throw bad('Write the comment first.');
+     if (body.length > MAX_COMMENT) throw bad('That comment is too long.');
+     const t = String(target || '');
+     if (!t || t.length > 400) throw bad('A comment needs something to be about.');
++    const from = line == null || line === '' ? 0 : Number(line);
++    const to = lineEnd == null || lineEnd === '' ? from : Number(lineEnd) || from;
++    if (from && (Object.hasOwn(ARTIFACTS, t) || !Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from || to - from > 500)) throw bad('Those lines cannot be commented on.');
+     const run = this.get(id);
+-    const c = { id: `c${crypto.randomBytes(5).toString('hex')}`, target: t, rev: Number(rev) || 0, quote: clip(String(quote || ''), 600), text: body, at: Date.now(), sent: false };
++    const c = { id: `c${crypto.randomBytes(5).toString('hex')}`, target: t, rev: Number(rev) || 0, quote: clip(String(quote || ''), from ? 2000 : 600), text: body, at: Date.now(), sent: false, ...(from ? { line: from, lineEnd: to, side: side === 'old' ? 'old' : 'new' } : {}) };
+     run.comments.push(c);
+     this.save(run);
+-    this.append(id, 'comment.added', { comment: c.id, target: t, rev: c.rev, text: clip(body, 400) });
++    this.append(id, 'comment.added', { comment: c.id, target: t, rev: c.rev, text: clip(body, 400), ...(from ? { line: c.line, lineEnd: c.lineEnd, side: c.side } : {}) });
+     return c;
+   }
+ 
+diff --git a/test/partial-accept.test.mjs b/test/partial-accept.test.mjs
+new file mode 100644
+index 0000000..b88ea46
+--- /dev/null
++++ b/test/partial-accept.test.mjs
+@@ -0,0 +1,261 @@
++// Partial acceptance of a run's changes (some files, or some hunks of a file) and comments on lines of a diff.
++// Real git, a scratch repository, and the run controller without a model: the "agent" edits the worktree directly.
++import { test, describe, before, after } from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { execFileSync } from 'node:child_process';
++
++const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-partial-'));
++process.env.ORBIX_DATA = path.join(TMP, 'data');
++process.env.GIT_CEILING_DIRECTORIES = TMP;
++process.env.GIT_AUTHOR_NAME = process.env.GIT_COMMITTER_NAME = 'tester';
++process.env.GIT_AUTHOR_EMAIL = process.env.GIT_COMMITTER_EMAIL = 't@example.com';
++
++const { RunStore } = await import('../src/runs.mjs');
++const { RunController, commentLines, commentWhere } = await import('../src/runctl.mjs');
++const { Backend } = await import('../src/backend.mjs');
++const gitapi = await import('../src/gitapi.mjs');
++
++after(() => fs.rmSync(TMP, { recursive: true, force: true }));
++
++const g = (cwd, ...a) => execFileSync('git', ['-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false', ...a], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
++const put = (dir, rel, text) => {
++  fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
++  fs.writeFileSync(path.join(dir, rel), text);
++};
++const read = (dir, rel) => fs.readFileSync(path.join(dir, rel), 'utf8').replace(/\r\n/g, '\n');
++const LONG = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
++
++// =====================================================================================================================
++describe('patches: split into files and hunks, keep only what was chosen', () => {
++  const patch = [
++    'diff --git a/a.txt b/a.txt',
++    'index 1111111..2222222 100644',
++    '--- a/a.txt',
++    '+++ b/a.txt',
++    '@@ -1,3 +1,3 @@',
++    '-one',
++    '+ONE',
++    ' two',
++    ' three',
++    '@@ -20,2 +20,2 @@',
++    ' x',
++    '-y',
++    '+Y',
++    '\\ No newline at end of file',
++    'diff --git a/new file.txt b/new file.txt',
++    'new file mode 100644',
++    'index 0000000..3333333',
++    '--- /dev/null',
++    '+++ b/new file.txt',
++    '@@ -0,0 +1 @@',
++    '+hello',
++    'diff --git "a/sp\\303\\261\\"q.txt" "b/sp\\303\\261\\"q.txt"',
++    'index 4444444..5555555 100644',
++    'Binary files a/sp\u00f1"q.txt and b/sp\u00f1"q.txt differ',
++    '',
++  ].join('\n');
++
++  test('files, their paths (quoted ones too) and their hunks', () => {
++    const files = gitapi.parsePatch(patch);
++    assert.deepEqual(files.map((f) => [f.path, f.hunks.length, f.whole]), [['a.txt', 2, false], ['new file.txt', 1, true], ['sp\u00f1"q.txt', 0, true]]);
++    assert.equal(files[0].hunks[1].at(-1), '\\ No newline at end of file', 'the no-newline marker stays with its hunk');
++  });
++
++  test('only the chosen hunks are kept; a file with none chosen is left out; a new file is whole', () => {
++    const files = gitapi.parsePatch(patch);
++    const second = gitapi.pickPatch(files, { 'a.txt': [1] });
++    assert.ok(second.includes('@@ -20,2 +20,2 @@') && !second.includes('@@ -1,3 +1,3 @@'));
++    assert.ok(second.includes('+hello'), 'files without a choice keep everything');
++    const none = gitapi.pickPatch(files, { 'a.txt': [], 'new file.txt': [], 'sp\u00f1"q.txt': [] });
++    assert.equal(none, '');
++    assert.ok(gitapi.pickPatch(files, { 'new file.txt': [0] }).includes('new file mode 100644'));
++  });
++});
++
++// =====================================================================================================================
++describe('comments on diff lines', () => {
++  const store = new RunStore(path.join(TMP, 'cstore'));
++  const id = store.create({ project: 'C:\\x', task: 'Comment on lines' }).id;
++
++  test('a comment on lines names path:line and quotes them for the agent', () => {
++    const one = store.addComment(id, { target: 'src/a.js', line: 12, quote: 'const a = 1;', text: 'Use let' });
++    const range = store.addComment(id, { target: 'src/a.js', line: '3', lineEnd: '4', quote: 'if (x) {\n  y();', text: 'Invert this' });
++    const removed = store.addComment(id, { target: 'src/b.js', line: 7, side: 'old', quote: 'keep()', text: 'Why was this removed?' });
++    const whole = store.addComment(id, { target: 'src/c.js', text: 'Rename this file' });
++    const plan = store.addComment(id, { target: 'plan', rev: 2, quote: 'Step 1', text: 'Shorter' });
++    assert.deepEqual([one.line, one.lineEnd, one.side], [12, 12, 'new']);
++    assert.deepEqual([range.line, range.lineEnd], [3, 4]);
++    assert.equal(whole.line, undefined);
++    assert.deepEqual([one, range, removed, whole].map(commentWhere), ['src/a.js:12', 'src/a.js:3-4', 'src/b.js:7', 'src/c.js']);
++    const text = commentLines([one, range, removed, whole, plan]).join('\n');
++    assert.match(text, /- On `src\/a\.js:12`: Use let\n {4}> const a = 1;/);
++    assert.match(text, /- On `src\/a\.js:3-4`: Invert this\n {4}> if \(x\) \{\n {4}>   y\(\);/);
++    assert.match(text, /- On `src\/b\.js:7` \(removed by your change; numbered as in the original file\): Why was this removed\?/);
++    assert.match(text, /- On `src\/c\.js`: Rename this file/);
++    assert.match(text, /- On the implementation plan \(revision 2\), about "Step 1": Shorter/);
++    const logged = store.events(id).filter((e) => e.type === 'comment.added');
++    assert.deepEqual(logged.map((e) => e.line ?? null), [12, 3, 7, null, null], 'the log records the lines');
++  });
++
++  test('lines that make no sense are refused', () => {
++    assert.throws(() => store.addComment(id, { target: 'a.js', line: 5, lineEnd: 2, text: 'x' }), /cannot be commented/);
++    assert.throws(() => store.addComment(id, { target: 'a.js', line: -1, text: 'x' }), /cannot be commented/);
++    assert.throws(() => store.addComment(id, { target: 'a.js', line: 1.5, text: 'x' }), /cannot be commented/);
++    assert.throws(() => store.addComment(id, { target: 'plan', line: 3, text: 'x' }), /cannot be commented/);
++  });
++});
++
++// =====================================================================================================================
++describe('partial apply (real git)', () => {
++  const backend = new Backend({ kind: 'native' });
++  let repo;
++  let ctl;
++  const server = { backend, procs: new Map(), broadcast: () => {}, broadcastProcs: () => {} };
++
++  /** A run whose agent is done: its worktree has the edits `edit` makes, and it waits for review. */
++  async function runWith(task, edit) {
++    const run = ctl.store.create({ project: repo, task, mode: 'direct' });
++    const wt = await gitapi.worktreeAdd(backend, repo);
++    ctl.store.update(run.id, { workspace: wt.workspace, worktree: { repo: wt.repo, slug: wt.slug, path: wt.path, branch: wt.branch, base: wt.base, baseBranch: wt.baseBranch } });
++    edit(wt.path);
++    ctl.store.setStatus(run.id, 'review');
++    return ctl.store.get(run.id);
++  }
++  const types = (id) => ctl.store.events(id).map((e) => e.type);
++  const clean = () => g(repo, 'status', '--porcelain', '--untracked-files=no').trim();
++
++  before(() => {
++    repo = path.join(TMP, 'shop ñ');
++    fs.mkdirSync(repo, { recursive: true });
++    g(repo, 'init', '-q');
++    g(repo, 'symbolic-ref', 'HEAD', 'refs/heads/main');
++    put(repo, 'a.txt', 'a\n');
++    put(repo, 'b.txt', 'b\n');
++    put(repo, 'c.txt', 'c\n');
++    put(repo, 'long.txt', LONG);
++    put(repo, 'notes.txt', 'mine\n');
++    g(repo, 'add', '-A');
++    g(repo, 'commit', '-qm', 'start');
++    ctl = new RunController(server, path.join(TMP, 'data', 'runs'));
++  });
++
++  test('a subset of files is applied; the rest stays in the worktree and the log says exactly what went where', async () => {
++    const run = await runWith('Three edits', (w) => {
++      put(w, 'a.txt', 'a (run)\n');
++      put(w, 'b.txt', 'b (run)\n');
++      put(w, 'new dir/new.txt', 'new\n'); // a new file, not committed by the agent
++    });
++    const d = await ctl.diff(run.id);
++    assert.deepEqual(d.files.map((f) => f.path), ['a.txt', 'b.txt', 'new dir/new.txt']);
++    assert.match(d.tree, /^[0-9a-f]{40}$/);
++    put(repo, 'notes.txt', 'mine, edited\n'); // your own uncommitted work in another file
++    const head = g(repo, 'rev-parse', 'HEAD').trim();
++    const r = await ctl.apply(run.id, { files: ['a.txt', 'new dir/new.txt'] });
++    assert.deepEqual([r.applied, r.partial, r.remaining], [true, true, ['b.txt']]);
++    // The target got exactly the chosen files, as one commit on top of where it was.
++    assert.equal(read(repo, 'a.txt'), 'a (run)\n');
++    assert.equal(read(repo, 'new dir/new.txt'), 'new\n');
++    assert.equal(read(repo, 'b.txt'), 'b\n', 'the file you did not choose is untouched in your checkout');
++    assert.equal(read(repo, 'notes.txt'), 'mine, edited\n', 'your uncommitted work is kept');
++    assert.equal(g(repo, 'rev-parse', 'HEAD~1').trim(), head);
++    assert.deepEqual(g(repo, 'diff', '--name-only', 'HEAD~1', 'HEAD').trim().split('\n'), ['a.txt', 'new dir/new.txt']);
++    // The worktree still has everything, and the run is still open with only b.txt left to review.
++    const wt = ctl.store.get(run.id).worktree.path;
++    assert.equal(read(wt, 'b.txt'), 'b (run)\n');
++    assert.equal(read(wt, 'a.txt'), 'a (run)\n');
++    assert.equal(ctl.store.get(run.id).status, 'review');
++    assert.deepEqual((await ctl.diff(run.id)).files.map((f) => f.path), ['b.txt']);
++    // Recorded: in the run's state and in its log.
++    const acc = ctl.store.get(run.id).accepted;
++    assert.deepEqual(acc.parts.map((p) => [p.files, p.hash]), [[['a.txt', 'new dir/new.txt'], r.hash]]);
++    const ev = ctl.store.events(run.id).find((e) => e.type === 'apply.partial');
++    assert.deepEqual([ev.files, ev.remaining, ev.hash, ev.branch], [['a.txt', 'new dir/new.txt'], ['b.txt'], r.hash, 'main']);
++    assert.equal(g(repo, 'rev-parse', `${gitapi.ACCEPTED_REF}/${ctl.store.get(run.id).worktree.slug}`).trim(), acc.base);
++    // Applying the rest finishes the run.
++    const r2 = await ctl.apply(run.id);
++    assert.deepEqual([r2.applied, r2.partial], [true, false]);
++    assert.equal(read(repo, 'b.txt'), 'b (run)\n');
++    const done = ctl.store.get(run.id);
++    assert.equal(done.status, 'applied');
++    assert.deepEqual([done.applied.files, done.applied.parts], [3, 2]);
++    assert.ok(types(run.id).includes('apply.done'));
++    assert.equal(g(repo, 'for-each-ref', gitapi.ACCEPTED_REF).trim(), '', 'a finished run leaves no record ref behind');
++    g(repo, 'checkout', '--', 'notes.txt');
++  });
++
++  test('one hunk of a file is applied, the other stays to review; a choice made on an older state is refused', async () => {
++    const run = await runWith('Two hunks', (w) => put(w, 'long.txt', LONG.replace('line 2\n', 'line 2 (run)\n').replace('line 25\n', 'line 25 (run)\n')));
++    const d = await ctl.diff(run.id);
++    const fd = await ctl.fileDiff(run.id, 'long.txt', false, d.tree);
++    assert.equal(gitapi.parsePatch(fd.text)[0].hunks.length, 2, 'the diff you read has two hunks');
++    await assert.rejects(ctl.apply(run.id, { files: ['long.txt'], hunks: { 'long.txt': [1] }, tree: '0'.repeat(40) }), /changed after you chose/);
++    await assert.rejects(ctl.apply(run.id, { files: ['nope.txt'] }), /not among the changes/);
++    await assert.rejects(ctl.apply(run.id, { files: [] }), /at least one file/);
++    const r = await ctl.apply(run.id, { files: ['long.txt'], hunks: { 'long.txt': [1] }, tree: d.tree });
++    assert.equal(r.partial, true);
++    const now = read(repo, 'long.txt');
++    assert.ok(now.includes('line 25 (run)') && !now.includes('line 2 (run)'), 'only the second hunk was applied');
++    const left = await ctl.diff(run.id);
++    assert.deepEqual(left.files.map((f) => [f.path, f.add, f.del]), [['long.txt', 1, 1]]);
++    assert.match((await ctl.fileDiff(run.id, 'long.txt', false, left.tree)).text, /\+line 2 \(run\)/);
++    assert.deepEqual(ctl.store.events(run.id).find((e) => e.type === 'apply.partial').hunks, { 'long.txt': [1] });
++    await ctl.discard(run.id);
++    assert.equal(g(repo, 'for-each-ref', gitapi.ACCEPTED_REF).trim(), '', 'discard drops the record of what was applied');
++    assert.ok(read(repo, 'long.txt').includes('line 25 (run)'), 'what was applied stays applied');
++  });
++
++  test('your committed edit elsewhere in the same file is merged three-way', async () => {
++    const run = await runWith('Edit the top', (w) => put(w, 'long.txt', read(w, 'long.txt').replace('line 1\n', 'line 1 (run)\n')));
++    put(repo, 'long.txt', read(repo, 'long.txt').replace('line 30\n', 'line 30 (mine)\n'));
++    g(repo, 'commit', '-qam', 'mine at the bottom');
++    const r = await ctl.apply(run.id, { files: ['long.txt'] });
++    assert.equal(r.applied, true);
++    const now = read(repo, 'long.txt');
++    assert.ok(now.includes('line 1 (run)') && now.includes('line 30 (mine)'));
++    assert.equal(ctl.store.get(run.id).status, 'applied');
++  });
++
++  test('a conflict is refused and leaves your checkout exactly as it was', async () => {
++    const run = await runWith('Edit c and a', (w) => {
++      put(w, 'c.txt', 'c (run)\n');
++      put(w, 'a.txt', 'a (run 2)\n');
++    });
++    put(repo, 'c.txt', 'c (mine)\n');
++    g(repo, 'commit', '-qam', 'my c');
++    const head = g(repo, 'rev-parse', 'HEAD').trim();
++    const r = await ctl.apply(run.id, { files: ['c.txt'] });
++    assert.deepEqual([r.applied, r.conflict, r.files], [false, true, ['c.txt']]);
++    assert.equal(g(repo, 'rev-parse', 'HEAD').trim(), head, 'no commit was made');
++    assert.equal(clean(), '', 'nothing is half-applied: no edited or staged file');
++    assert.equal(read(repo, 'c.txt'), 'c (mine)\n');
++    assert.equal(fs.existsSync(path.join(repo, '.git', 'MERGE_HEAD')), false);
++    const st = ctl.store.get(run.id);
++    assert.equal(st.status, 'review');
++    assert.equal(st.accepted, undefined, 'nothing is recorded as applied');
++    assert.equal(read(st.worktree.path, 'c.txt'), 'c (run)\n', 'the run keeps its change');
++    assert.deepEqual(ctl.store.events(run.id).find((e) => e.type === 'apply.conflict').files, ['c.txt']);
++    // Your uncommitted edit to a chosen file is refused too, with nothing changed.
++    put(repo, 'a.txt', 'a (mine, not committed)\n');
++    await assert.rejects(ctl.apply(run.id, { files: ['a.txt'] }), /uncommitted changes to a\.txt/);
++    assert.equal(read(repo, 'a.txt'), 'a (mine, not committed)\n');
++    assert.ok(types(run.id).includes('apply.refused'));
++    g(repo, 'checkout', '--', 'a.txt');
++    // The other file still applies on its own.
++    const ok = await ctl.apply(run.id, { files: ['a.txt'] });
++    assert.deepEqual([ok.applied, ok.remaining], [true, ['c.txt']]);
++    assert.equal(read(repo, 'a.txt'), 'a (run 2)\n');
++    assert.equal(read(repo, 'c.txt'), 'c (mine)\n');
++    await ctl.discard(run.id);
++  });
++
++  test('a whole apply with no choice still merges the run branch', async () => {
++    const run = await runWith('Whole', (w) => put(w, 'b.txt', 'b (whole)\n'));
++    const r = await ctl.apply(run.id);
++    assert.equal(r.applied, true);
++    assert.match(g(repo, 'log', '--oneline', '-1'), /Merge orbix\//);
++    assert.equal(ctl.store.get(run.id).accepted, undefined);
++  });
++});
+diff --git a/web/css/runs.css b/web/css/runs.css
+index ca20f78..4ed8bf2 100644
+--- a/web/css/runs.css
++++ b/web/css/runs.css
+@@ -148,3 +148,24 @@ button.rstep-btn:hover { background: var(--bg-hover); }
+   .hub { padding: 20px 16px 40px; }
+ }
+ @media (prefers-reduced-motion: reduce) { .runs:not([hidden]) { animation: none; } }
++
++/* Partial apply: choose files and hunks; comments on diff lines */
++.chg-li { display: flex; align-items: center; gap: 4px; }
++.chg-li .chg-file { flex: 1; min-width: 0; }
++.chg-pick, .hunk-pick { flex: none; margin: 0; accent-color: var(--accent); cursor: pointer; }
++.chg-help { margin: 0 0 10px; }
++.run-page .chg-diff .dl.hunk .ln:first-child { display: flex; align-items: center; justify-content: flex-end; }
++.run-page .chg-diff .dl.pick-off:not(.hunk) { opacity: .42; }
++.run-page .chg-diff .dl.hunk.pick-off .tx { text-decoration: line-through; }
++.run-page .chg-diff .dl:is(.add, .del, .eq) .ln { cursor: pointer; }
++.run-page .chg-diff .dl:is(.add, .del, .eq) .ln:hover { color: var(--accent); text-decoration: underline; }
++.run-page .chg-diff .dl.cmt-line { box-shadow: inset 3px 0 0 var(--accent); }
++.cmt-quote.code { font-family: var(--mono); font-size: 12.5px; white-space: pre; overflow-x: auto; }
++.apply-pick { display: flex; flex-direction: column; gap: 8px; }
++.apply-pick > p { margin: 0; }
++.apply-all { display: flex; align-items: center; gap: 8px; font-weight: 600; padding: 0 8px; }
++.apply-files { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
++.apply-file { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; font-family: var(--mono); font-size: 12.5px; cursor: pointer; }
++.apply-file:hover { background: var(--bg-hover); }
++.apply-file.off { color: var(--fg-3); }
++.apply-hunks { flex: none; font-family: var(--font, inherit); font-size: 11.5px; color: var(--fg-3); }
+diff --git a/web/js/runs.js b/web/js/runs.js
+index 3a940e5..2e71c01 100644
+--- a/web/js/runs.js
++++ b/web/js/runs.js
+@@ -33,6 +33,8 @@ const STATUS = {
+   discarded: { label: 'Discarded', cls: 'done', hint: 'The worktree and its branch were removed.' },
+ };
+ const ART = { plan: 'Plan', tasks: 'Tasks', walkthrough: 'Walkthrough', tests: 'Test log', note: 'Note' };
++/** A changed file, with the lines a comment is about: `src/a.js:12` or `src/a.js:12-14`. */
++const where = (c) => (c.line ? `${c.target}:${c.line}${c.lineEnd && c.lineEnd !== c.line ? `-${c.lineEnd}` : ''}` : c.target);
+ 
+ export const hubView = () => hub;
+ export const isHub = () => !!hub;
+@@ -132,6 +134,28 @@ function approveDialog(run) {
+   });
+ }
+ 
++// What you chose to apply, per run: files left out, and hunks left out of a file (numbered as in its diff). `tree` is
++// the snapshot of the worktree the hunks were counted on; the server refuses picked hunks when it has moved since.
++const picks = new Map(); // run id -> { off: Set<path>, hunksOff: Map<path, Set<n>>, hunkCount: Map<path, n>, tree }
++function pickOf(id) {
++  if (!picks.has(id)) picks.set(id, { off: new Set(), hunksOff: new Map(), hunkCount: new Map(), tree: '' });
++  return picks.get(id);
++}
++/** The files and hunks chosen out of `files`; `whole` when that is everything. */
++function choiceOf(id, files) {
++  const p = pickOf(id);
++  const chosen = files.filter((f) => !p.off.has(f.path)).map((f) => f.path);
++  const hunks = {};
++  for (const f of chosen) {
++    const off = p.hunksOff.get(f);
++    const n = p.hunkCount.get(f);
++    if (off?.size && n) hunks[f] = Array.from({ length: n }, (_, i) => i).filter((i) => !off.has(i));
++  }
++  return { chosen, hunks, whole: chosen.length === files.length && !Object.keys(hunks).length };
++}
++const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
++
++/** Apply: every changed file has a box (all ticked); what you leave out stays in the run's worktree. */
+ async function applyRun(run) {
+   let d;
+   try {
+@@ -140,15 +164,68 @@ async function applyRun(run) {
+     return toast(e.message, 'error', 8000);
+   }
+   const wt = run.worktree || {};
+-  const n = d.files.length;
+-  if (!(await confirmDialog('Apply these changes?', `${n} changed file${n === 1 ? '' : 's'} will be merged into ${wt.baseBranch || 'your branch'} in\n${wt.repo || run.project}\n\nYour uncommitted work in other files stays as it is. If a file you changed would be overwritten, or the merge conflicts, nothing is changed.`, { ok: 'Apply changes' }))) return;
+-  try {
+-    const r = await api.post('/api/run/apply', { id: run.id, confirm: true });
+-    if (r.applied) toast(`Applied to ${wt.baseBranch || 'your branch'}`, 'ok');
+-    else if (r.conflict) conflictDialog(run, r.files);
+-  } catch (e) {
+-    toast(e.message, 'error', 12000);
++  const into = wt.baseBranch || 'your branch';
++  if (!d.files.length) return toast(run.accepted ? 'Everything this run changed has been applied already.' : 'This run changed nothing, so there is nothing to apply.', 'error', 8000);
++  const p = pickOf(run.id);
++  const live = new Set(d.files.map((f) => f.path));
++  for (const x of [...p.off]) if (!live.has(x)) p.off.delete(x);
++  const list = h('div', { class: 'apply-files', role: 'group', 'aria-label': 'Files to apply' });
++  const summary = h('p', { class: 'muted small' });
++  const all = h('input', { type: 'checkbox', 'aria-label': 'All files', onchange: (e) => (d.files.forEach((f) => (e.target.checked ? p.off.delete(f.path) : p.off.add(f.path))), sync()) });
++  let go;
++  function sync() {
++    const c = choiceOf(run.id, d.files);
++    all.checked = c.chosen.length === d.files.length;
++    all.indeterminate = c.chosen.length > 0 && c.chosen.length < d.files.length;
++    replace(list, d.files.map((f) => {
++      const off = p.hunksOff.get(f.path);
++      const n = p.hunkCount.get(f.path);
++      return h('label', { class: 'apply-file' + (p.off.has(f.path) ? ' off' : '') },
++        h('input', { type: 'checkbox', checked: p.off.has(f.path) ? null : true, onchange: (e) => (e.target.checked ? p.off.delete(f.path) : p.off.add(f.path), sync()) }),
++        h('span', { class: `chg-st ${f.status}` }, f.status),
++        h('span', { class: 'ell grow', title: f.path }, f.path),
++        off?.size && n && !p.off.has(f.path) ? h('span', { class: 'apply-hunks', title: 'Chosen in the Changes tab' }, `${n - off.size} of ${n} hunks`) : null,
++        statChips(f));
++    }));
++    summary.textContent = c.whole
++      ? `Everything is merged into ${into}. Your uncommitted work in other files stays as it is. If a file you changed would be overwritten, or the merge conflicts, nothing is changed.`
++      : c.chosen.length
++        ? `${plural(c.chosen.length, 'file')} ${Object.keys(c.hunks).length ? '(some only in part) ' : ''}go${c.chosen.length === 1 ? 'es' : ''} to ${into} as one commit. The rest stays in the run’s worktree: apply it later, ask for changes, or discard it. On a conflict nothing is changed.`
++        : 'Choose at least one file.';
++    if (go) {
++      go.disabled = !c.chosen.length;
++      go.textContent = c.whole ? 'Apply changes' : `Apply ${plural(c.chosen.length, 'file')}`;
++    }
+   }
++  const send = async () => {
++    const c = choiceOf(run.id, d.files);
++    if (!c.chosen.length) return;
++    m.close();
++    try {
++      const body = { id: run.id, confirm: true, ...(c.whole ? {} : { files: c.chosen, hunks: c.hunks, tree: p.tree || d.tree }) };
++      const r = await api.post('/api/run/apply', body);
++      if (r.applied) {
++        picks.delete(run.id);
++        toast(r.partial ? `Applied ${plural(r.files.length, 'file')} to ${into}. ${plural(r.remaining.length, 'file')} still to review.` : `Applied to ${into}`, 'ok');
++      } else if (r.conflict) conflictDialog(run, r.files);
++    } catch (e) {
++      toast(e.message, 'error', 12000);
++    }
++  };
++  go = btn('Apply changes', send, 'primary');
++  const m = modal({
++    title: run.accepted ? 'Apply the rest of the changes?' : 'Apply these changes?',
++    size: 'md',
++    body: h('div', { class: 'apply-pick' },
++      h('p', null, 'Into ', h('code', null, into), ' in ', h('code', null, wt.repo || run.project)),
++      run.accepted?.parts?.length ? h('p', { class: 'muted small' }, `Applied before: ${plural(new Set(run.accepted.parts.flatMap((x) => x.files)).size, 'file')} in ${plural(run.accepted.parts.length, 'part')}.`) : null,
++      h('label', { class: 'apply-all' }, all, h('span', null, `${plural(d.files.length, 'changed file')}`)),
++      list,
++      summary),
++    actions: [btn('Cancel', () => m.close()), go],
++    initialFocus: go,
++  });
++  sync();
+ }
+ 
+ function conflictDialog(run, files) {
+@@ -401,7 +478,7 @@ function timelineRows(events) {
+         rows.push({ at: ev.at, kind: 'you', icon: 'check', text: 'Started without a plan', sub: 'Allowed: file edits in the worktree; commands ask' });
+         break;
+       case 'comment.added':
+-        rows.push({ at: ev.at, kind: 'you', icon: 'message', text: `You commented on ${ART[ev.target] ? `the ${ART[ev.target].toLowerCase()}` : ev.target}`, sub: ev.text, open: ART[ev.target] ? { tab: ev.target, rev: ev.rev } : { tab: 'changes', file: ev.target } });
++        rows.push({ at: ev.at, kind: 'you', icon: 'message', text: `You commented on ${ART[ev.target] ? `the ${ART[ev.target].toLowerCase()}` : where(ev)}`, sub: ev.text, open: ART[ev.target] ? { tab: ev.target, rev: ev.rev } : { tab: 'changes', file: ev.target } });
+         break;
+       case 'feedback.sent':
+         if (ev.text || ev.comments?.length) rows.push({ at: ev.at, kind: 'you', icon: 'send', text: 'You sent feedback', sub: [ev.text, ev.comments?.length ? `${ev.comments.length} comment${ev.comments.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ') });
+@@ -426,6 +503,11 @@ function timelineRows(events) {
+       case 'apply.done':
+         rows.push({ at: ev.at, kind: 'you', icon: 'check', text: `You applied the changes to ${ev.branch}`, sub: `${ev.files} file${ev.files === 1 ? '' : 's'} · ${String(ev.hash || '').slice(0, 8)}` });
+         break;
++      case 'apply.partial': {
++        const parts = Object.keys(ev.hunks || {}).length ? ` (${Object.entries(ev.hunks).map(([f, l]) => `${f}: ${plural(l.length, 'hunk')}`).join(', ')})` : '';
++        rows.push({ at: ev.at, kind: 'you', icon: 'check', text: `You applied ${plural(ev.files?.length || 0, 'file')} to ${ev.branch}`, sub: `${(ev.files || []).join(', ')}${parts} · ${String(ev.hash || '').slice(0, 8)}${ev.remaining?.length ? ` · ${plural(ev.remaining.length, 'file')} still to review` : ''}` });
++        break;
++      }
+       case 'apply.conflict':
+         rows.push({ at: ev.at, kind: 'err', icon: 'alert', ok: false, text: 'Apply stopped: conflict, nothing was changed', sub: (ev.files || []).join(', ') });
+         break;
+@@ -502,8 +584,13 @@ class RunDetail {
+     const revOf = (r, k) => r?.artifacts?.[k]?.rev;
+     // A new revision replaces an older one you were reading: the newest is what needs your eyes.
+     for (const k of Object.keys(run.artifacts || {})) if (revOf(before, k) !== revOf(run, k)) delete this.rev[k];
+-    if (this.tab === 'changes' ? moved : revOf(before, this.tab) !== revOf(run, this.tab) || moved || before?.comments?.length !== run.comments?.length) this.drawBody();
+-    else this.drawTabs();
++    const parts = (r) => r?.accepted?.parts?.length || 0;
++    const notes = before?.comments?.length !== run.comments?.length || before?.comments?.filter((c) => c.sent).length !== run.comments?.filter((c) => c.sent).length;
++    if (this.tab === 'changes' ? moved || parts(before) !== parts(run) : revOf(before, this.tab) !== revOf(run, this.tab) || moved || notes) this.drawBody();
++    else {
++      this.drawTabs();
++      if (this.tab === 'changes' && notes) this.drawChangeNotes();
++    }
+   }
+ 
+   draw() {
+@@ -547,7 +634,8 @@ class RunDetail {
+     const st = STATUS[r.status] || {};
+     const asks = (r.asks || []).map((a) => askCard(r, a));
+     const acts = decisionButtons(r).filter(Boolean);
+-    const why = r.status === 'failed' && r.error ? r.error : r.status === 'interrupted' && r.interrupted?.pending?.some((p) => p.sideEffect) ? `In flight when it stopped, outcome unknown: ${r.interrupted.pending.filter((p) => p.sideEffect).map((p) => `${p.name} ${p.detail}`).join('; ')}` : st.hint || '';
++    const part = !FINAL.has(r.status) && r.accepted?.parts?.length ? ` Part of the changes is in ${r.worktree?.baseBranch || 'your branch'} already (${plural(new Set(r.accepted.parts.flatMap((x) => x.files)).size, 'file')}); the rest is still here.` : '';
++    const why = part && r.status === 'review' ? (st.hint || '') + part : r.status === 'failed' && r.error ? r.error : r.status === 'interrupted' && r.interrupted?.pending?.some((p) => p.sideEffect) ? `In flight when it stopped, outcome unknown: ${r.interrupted.pending.filter((p) => p.sideEffect).map((p) => `${p.name} ${p.detail}`).join('; ')}` : st.hint || '';
+     this.decEl.className = `run-decision ${asks.length ? 'you' : st.cls || ''}`;
+     replace(this.decEl,
+       asks,
+@@ -637,52 +725,142 @@ class RunDetail {
+     if (r.phase === 'plan' && !FINAL.has(r.status)) return replace(this.bodyEl, h('div', { class: 'empty' }, icon('branch', 22), h('span', null, 'Nothing has been changed yet. The agent starts after you approve the plan.')));
+     if (!this.diff) replace(this.bodyEl, skeleton(5));
+     try {
++      const seq = (this.drawSeq = (this.drawSeq || 0) + 1); // a later draw (another file clicked) wins over a slower one
+       const d = await api.get(`/api/run/diff?id=${r.id}`);
+-      if (this.tab !== 'changes' || detail !== this) return;
++      if (this.tab !== 'changes' || detail !== this || seq !== this.drawSeq) return;
+       this.diff = d;
+       if (d.gone) return replace(this.bodyEl, h('div', { class: 'empty' }, icon('trash', 22), h('span', null, 'This run was discarded, so its changes are gone.')));
+-      if (!d.files.length) return replace(this.bodyEl, h('div', { class: 'empty' }, icon('branch', 22), h('span', null, WORKING.has(r.status) ? 'No file has been changed yet.' : r.status === 'applied' ? 'The changes were applied to your project.' : 'This run changed no files.')));
++      const appliedParts = !FINAL.has(r.status) && r.accepted?.parts?.length;
++      if (!d.files.length) return replace(this.bodyEl, h('div', { class: 'empty' }, icon('branch', 22), h('span', null, WORKING.has(r.status) ? 'No file has been changed yet.' : r.status === 'applied' || appliedParts ? 'The changes were applied to your project.' : 'This run changed no files.')));
+       if (!d.files.some((f) => f.path === this.file)) this.file = d.files[0].path;
++      const open = !FINAL.has(r.status);
++      const p = pickOf(r.id);
++      if (p.tree !== d.tree) (p.hunksOff.clear(), p.hunkCount.clear(), (p.tree = d.tree)); // the files moved: hunk numbers may have too
+       const add = d.files.reduce((n, f) => n + (f.add || 0), 0);
+       const del = d.files.reduce((n, f) => n + (f.del || 0), 0);
+-      const list = h('ul', { class: 'chg-files', role: 'listbox', 'aria-label': 'Changed files' }, d.files.map((f) => h('li', null, h('button', { class: 'chg-file' + (f.path === this.file ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(f.path === this.file), title: f.path, onclick: () => ((this.file = f.path), this.drawChanges()) },
+-        h('span', { class: `chg-st ${f.status}` }, f.untracked ? 'A' : f.status), h('span', { class: 'ell grow' }, f.path), statChips(f)))));
++      const list = h('ul', { class: 'chg-files', role: 'listbox', 'aria-label': 'Changed files' }, d.files.map((f) => h('li', { class: 'chg-li' },
++        open ? h('input', { type: 'checkbox', class: 'chg-pick', title: 'Include this file when you apply', 'aria-label': `Apply ${f.path}`, checked: p.off.has(f.path) ? null : true, onchange: (e) => (e.target.checked ? p.off.delete(f.path) : p.off.add(f.path)) }) : null,
++        h('button', { class: 'chg-file' + (f.path === this.file ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(f.path === this.file), title: f.path, onclick: () => ((this.file = f.path), this.drawChanges()) },
++          h('span', { class: `chg-st ${f.status}` }, f.untracked ? 'A' : f.status), h('span', { class: 'ell grow' }, f.path), statChips(f)))));
+       const view = h('div', { class: 'chg-diff' }, skeleton(4));
+       const f = d.files.find((x) => x.path === this.file);
++      this.notesEl = h('div');
+       replace(this.bodyEl,
+-        h('div', { class: 'art-bar' }, h('span', { class: 'art-title' }, `${d.files.length} changed file${d.files.length === 1 ? '' : 's'}`), statChips({ add, del }), d.main?.dirty ? h('span', { class: 'muted small' }, 'Your project folder has uncommitted work; it is kept when you apply.') : null, h('span', { class: 'grow' }), FINAL.has(r.status) ? null : btn('Comment on this file', () => this.commentOn(this.file, 0, ''), 'sm')),
++        h('div', { class: 'art-bar' }, h('span', { class: 'art-title' }, `${d.files.length} changed file${d.files.length === 1 ? '' : 's'}${appliedParts ? ' still to apply' : ''}`), statChips({ add, del }), appliedParts ? h('span', { class: 'muted small' }, `${plural(new Set(r.accepted.parts.flatMap((x) => x.files)).size, 'file')} applied already`) : null, d.main?.dirty ? h('span', { class: 'muted small' }, 'Your project folder has uncommitted work; it is kept when you apply.') : null, h('span', { class: 'grow' }), open ? btn('Comment on this file', () => this.commentOn(this.file, 0, ''), 'sm') : null),
++        open ? h('p', { class: 'muted small chg-help' }, 'Untick a file or a hunk to leave it out when you apply. Click a line number to comment on that line; Shift+click a second one for a range.') : null,
+         h('div', { class: 'chg' }, list, view),
+-        this.commentList((c) => !ART[c.target]));
+-      const fd = await api.get(`/api/run/diff/file?id=${r.id}&file=${encodeURIComponent(f.path)}${f.untracked ? '&untracked=1' : ''}`);
+-      if (this.tab !== 'changes' || this.file !== f.path) return;
+-      replace(view, fd.diff.text ? renderUnifiedDiff(fd.diff.text, f.path) : h('div', { class: 'empty' }, 'This file cannot be shown as text.'));
++        this.notesEl);
++      this.drawChangeNotes();
++      const fd = await api.get(`/api/run/diff/file?id=${r.id}&file=${encodeURIComponent(f.path)}&tree=${encodeURIComponent(d.tree || '')}`);
++      if (this.tab !== 'changes' || this.file !== f.path || seq !== this.drawSeq) return;
++      if (!fd.diff.text) return replace(view, h('div', { class: 'empty' }, 'This file cannot be shown as text.'));
++      this.diffEl = renderUnifiedDiff(fd.diff.text, f.path);
++      replace(view, this.diffEl);
++      if (open) this.wireDiff(this.diffEl, f.path, fd.diff.text);
++      this.markLines();
+     } catch (e) {
+       if (this.tab === 'changes') replace(this.bodyEl, errorState(e.message, { retry: () => this.drawChanges() }));
+     }
+   }
+ 
++  /** The comments under the changes, redrawn alone so the diff keeps its scroll position. */
++  drawChangeNotes() {
++    if (this.notesEl) replace(this.notesEl, this.commentList((c) => !ART[c.target]));
++    this.markLines();
++  }
++
++  /** Hunk boxes (which parts of the file to apply) and line numbers that start a comment on their line. */
++  wireDiff(view, path, text) {
++    const p = pickOf(this.run.id);
++    const hunks = [...view.querySelectorAll('.dl.hunk')];
++    const whole = /^(new file mode|deleted file mode|Binary files |GIT binary patch)/m.test(text);
++    if (hunks.length > 1 && !whole) {
++      p.hunkCount.set(path, hunks.length);
++      const off = p.hunksOff.get(path) || new Set();
++      const shade = () => {
++        let i = -1;
++        for (const row of view.children) {
++          if (row.classList.contains('hunk')) i++;
++          if (i >= 0) row.classList.toggle('pick-off', off.has(i));
++        }
++      };
++      hunks.forEach((row, i) => {
++        const cb = h('input', { type: 'checkbox', class: 'hunk-pick', title: 'Include this hunk when you apply', 'aria-label': `Apply hunk ${i + 1} of ${hunks.length}`, checked: off.has(i) ? null : true, onchange: (e) => {
++          e.target.checked ? off.delete(i) : off.add(i);
++          if (off.size) p.hunksOff.set(path, off);
++          else p.hunksOff.delete(path);
++          // No hunk left: the file is left out; one ticked again: it is back in.
++          if (off.size === hunks.length) p.off.add(path);
++          else p.off.delete(path);
++          const box = this.bodyEl.querySelector(`.chg-li .chg-pick[aria-label="${CSS.escape(`Apply ${path}`)}"]`);
++          if (box) box.checked = !p.off.has(path);
++          shade();
++        } });
++        row.firstChild.append(cb);
++      });
++      shade();
++    }
++    const lines = [...view.querySelectorAll('.dl.add, .dl.del, .dl.eq')];
++    let anchor = -1;
++    view.addEventListener('click', (e) => {
++      const ln = e.target.closest('.ln');
++      const row = ln?.closest('.dl');
++      const at = row ? lines.indexOf(row) : -1;
++      if (at < 0) return;
++      const from = e.shiftKey && anchor >= 0 ? Math.min(anchor, at) : at;
++      const to = e.shiftKey && anchor >= 0 ? Math.max(anchor, at) : at;
++      anchor = at;
++      const rows = lines.slice(from, to + 1).map((x) => {
++        const [a, b] = x.querySelectorAll('.ln');
++        return { a: +a.textContent || 0, b: +b.textContent || 0, cls: x.classList.contains('add') ? 'add' : x.classList.contains('del') ? 'del' : 'eq', text: x.querySelector('.tx')?.textContent || '' };
++      });
++      const news = rows.filter((x) => x.b).map((x) => x.b);
++      const side = news.length ? 'new' : 'old';
++      const nums = news.length ? news : rows.map((x) => x.a);
++      const mixed = new Set(rows.map((x) => x.cls)).size > 1;
++      const quote = rows.map((x) => (mixed ? (x.cls === 'add' ? '+' : x.cls === 'del' ? '-' : ' ') : '') + x.text).join('\n');
++      this.commentOn(path, 0, quote, { line: Math.min(...nums), lineEnd: Math.max(...nums), side });
++    });
++  }
++
++  /** Lines that have a comment are marked in the diff. */
++  markLines() {
++    const view = this.diffEl;
++    if (!view?.isConnected) return;
++    const notes = (this.run.comments || []).filter((c) => c.target === this.file && c.line);
++    for (const row of view.querySelectorAll('.dl.add, .dl.del, .dl.eq')) {
++      const [a, b] = row.querySelectorAll('.ln');
++      const na = +a.textContent || 0;
++      const nb = +b.textContent || 0;
++      row.classList.toggle('cmt-line', notes.some((c) => {
++        const n = c.side === 'old' ? (nb ? 0 : na) : nb; // a comment on removed lines counts in the original file
++        return n && n >= c.line && n <= c.lineEnd;
++      }));
++    }
++  }
++
+   commentList(filter) {
+     const list = (this.run.comments || []).filter(filter);
+     if (!list.length) return null;
+     return h('section', { class: 'cmts', 'aria-label': 'Comments' }, h('h3', null, 'Comments'), list.map((c) => h('div', { class: 'cmt' + (c.sent ? ' sent' : '') },
+-      h('div', { class: 'cmt-top' }, h('span', { class: 'cmt-on ell' }, ART[c.target] ? `${ART[c.target]}${c.rev ? `, revision ${c.rev}` : ''}` : c.target), h('span', { class: 'muted small' }, c.sent ? 'sent to the agent' : 'not sent yet'), h('span', { class: 'grow' }),
++      h('div', { class: 'cmt-top' }, h('span', { class: 'cmt-on ell' }, ART[c.target] ? `${ART[c.target]}${c.rev ? `, revision ${c.rev}` : ''}` : where(c)), h('span', { class: 'muted small' }, c.sent ? 'sent to the agent' : 'not sent yet'), h('span', { class: 'grow' }),
+         c.sent ? null : iconBtn('trash', 'Delete this comment', () => post('/api/run/comment/remove', { id: this.run.id, comment: c.id }).catch(() => {}), 'sm')),
+-      c.quote ? h('blockquote', { class: 'cmt-quote' }, c.quote) : null,
++      c.quote ? h('blockquote', { class: 'cmt-quote' + (c.line ? ' code' : '') }, c.quote) : null,
+       h('p', { class: 'prewrap' }, c.text))));
+   }
+ 
+-  commentOn(target, rev, quote) {
++  commentOn(target, rev, quote, lines = null) {
+     const text = h('textarea', { rows: '4', placeholder: 'What should change here?', 'aria-label': 'Comment' });
+     const save = async () => {
+       if (!text.value.trim()) return text.focus();
+       m.close();
+-      await post('/api/run/comment', { id: this.run.id, target, rev, quote, text: text.value }).catch(() => {});
++      await post('/api/run/comment', { id: this.run.id, target, rev, quote, text: text.value, ...(lines || {}) }).catch(() => {});
+     };
+     text.addEventListener('keydown', (e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && (e.preventDefault(), save()));
+     const m = modal({
+-      title: ART[target] ? `Comment on the ${ART[target].toLowerCase()}` : `Comment on ${target}`,
++      title: ART[target] ? `Comment on the ${ART[target].toLowerCase()}` : `Comment on ${lines ? where({ target, ...lines }) : target}`,
+       size: 'md',
+-      body: h('div', { class: 'cmt-new' }, quote ? h('blockquote', { class: 'cmt-quote' }, quote) : ART[target] ? h('p', { class: 'muted small' }, 'Tip: select some text in the document first to comment on that passage.') : null, text, h('p', { class: 'muted small' }, 'Comments are held until you send feedback or approve the plan, then go to the agent together.')),
++      body: h('div', { class: 'cmt-new' }, lines?.side === 'old' ? h('p', { class: 'muted small' }, 'Removed lines, numbered as in the original file.') : null, quote ? h('blockquote', { class: 'cmt-quote' + (lines ? ' code' : '') }, quote) : ART[target] ? h('p', { class: 'muted small' }, 'Tip: select some text in the document first to comment on that passage.') : null, text, h('p', { class: 'muted small' }, 'Comments are held until you send feedback or approve the plan, then go to the agent together.')),
+       actions: [btn('Cancel', () => m.close()), btn('Add comment', save, 'primary')],
+       initialFocus: text,
+     });

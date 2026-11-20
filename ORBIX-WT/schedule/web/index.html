@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="ORBIX - a local-first AI coding workspace for Windows. Your agent asks before it changes files or runs commands.">
+  <title>ORBIX</title>
+  <link rel="icon" type="image/png" href="/assets/icon.png">
+  <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/geist-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/js/theme-boot.js"></script>
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/workspace.css">
+  <link rel="stylesheet" href="/css/home.css">
+  <link rel="stylesheet" href="/css/parallel.css">
+  <link rel="stylesheet" href="/css/desktop.css">
+  <link rel="stylesheet" href="/css/finish.css">
+  <link rel="stylesheet" href="/css/sidebar.css">
+  <link rel="stylesheet" href="/css/scenes.css">
+  <link rel="stylesheet" href="/css/runs.css">
+  <link rel="stylesheet" href="/css/schedules.css">
+  <link rel="stylesheet" href="/css/shell.css">
+</head>
+<body>
+  <header id="chrome" class="chrome">
+    <div id="menubar" class="menubar"></div>
+    <div id="topbar" class="toolbar"></div>
+  </header>
+  <div id="app" class="app">
+    <aside id="sidebar" class="sidebar" aria-label="Conversations"></aside>
+    <div id="rs-side" class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div>
+    <main class="main">
+      <section id="welcome" class="welcome" aria-label="Home"></section>
+      <section id="session" class="session" hidden></section>
+      <section id="runs" class="runs" aria-label="Runs and review" hidden></section>
+    </main>
+    <div id="rs-panel" class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize side panel"></div>
+    <aside id="panel" class="panel" aria-label="Side panel"></aside>
+  </div>
+  <div id="banner" class="banner" role="status" hidden></div>
+  <div id="modal-root"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

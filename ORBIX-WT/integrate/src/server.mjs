@@ -1,0 +1,882 @@
+// ORBIX local server: static UI, JSON API and one SSE event stream. Binds to 127.0.0.1 only; everything except
+// /api/ping and the OpenRouter sign-in callback needs the per-launch token cookie.
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import os from 'node:os';
+import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
+import { Backend, runProc } from './backend.mjs';
+import { AgentProc } from './engine/proc.mjs';
+import { mcpRoutes } from './engine/mcp.mjs';
+import { DATA_DIR, projectFolders } from './store.mjs';
+import { EngineConfig, listAgentSessions, deleteAgentSessions, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
+import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
+import * as oauth from './engine/oauth.mjs';
+import * as pkce from './engine/oauth-pkce.mjs';
+import { webSearch } from './engine/websearch.mjs';
+import { detectCheck } from './engine/verify.mjs';
+import { userInstructionsPath } from './engine/context.mjs';
+import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
+import { collect as collectDiagnostics } from './diagnostics.mjs';
+import * as fsapi from './fsapi.mjs';
+import * as gitapi from './gitapi.mjs';
+import { RunController, runRoutes } from './runctl.mjs';
+import { Scheduler, ScheduleStore, scheduleRoutes } from './schedule.mjs';
+import { openExternal } from './launcher.mjs';
+
+export { VERSION };
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
+  '.woff2': 'font/woff2',
+};
+
+/** extension_ui_request methods that wait for an answer (the rest are notifications). */
+const ASK_METHODS = new Set(['select']);
+
+/** Keep `open` (id -> request) in step with a session's events: questions it asks, cancels, and a finished turn. */
+export function trackOpenUi(open, ev) {
+  if (ev.type === 'extension_ui_request') {
+    if (ASK_METHODS.has(ev.method) && ev.id != null) open.set(ev.id, ev);
+    else if (ev.method === 'cancel') open.delete(ev.targetId);
+  } else if (ev.type === 'agent_end' && ev.isTerminal !== false) open.clear();
+}
+
+const CSP = [
+  "default-src 'self'",
+  "img-src 'self' data: blob:",
+  "style-src 'self'",
+  "script-src 'self'",
+  "connect-src 'self'",
+  "frame-src 'none'",
+  "worker-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+/** On every response: no sniffing, no framing, no referrer, and no use of our responses by other origins. */
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'no-referrer',
+  'cross-origin-resource-policy': 'same-origin',
+};
+
+/** Strip bulky, UI-irrelevant fields from a model descriptor. */
+export function slimModel(m) {
+  if (!m) return m;
+  return {
+    id: m.id,
+    provider: m.provider,
+    name: m.name,
+    reasoning: !!m.reasoning,
+    input: m.input,
+    contextWindow: m.contextWindow,
+    maxTokens: m.maxTokens,
+    cost: m.cost,
+    // canOff: false for a model that always thinks (no Off in the menu); default: the level it starts at.
+    thinking: m.thinking ? { efforts: m.thinking.efforts, mode: m.thinking.mode, canOff: m.thinking.canOff !== false, default: m.thinking.default } : undefined,
+  };
+}
+
+function shapeResponse(type, res) {
+  if (!res.data) return res;
+  if (type === 'get_state') return { ...res, data: { ...res.data, model: slimModel(res.data.model) } };
+  if (type === 'get_available_models') return { ...res, data: { ...res.data, models: (res.data.models || []).map(slimModel) } };
+  return res;
+}
+
+const BOOT = Date.now().toString(36); // part of every static file's ETag
+
+/**
+ * "Windows 11 Pro (build 26100)" for Settings → About; empty when the system will not say. Windows 11 still calls
+ * itself Windows 10 in the registry name os.version() reads, so the build number decides (22000 and up is 11).
+ */
+export function osName(version = os.version(), release = os.release()) {
+  try {
+    const [major, , build] = String(release).split('.').map(Number);
+    let name = String(version || '').trim();
+    if (major === 10 && build) name = name.replace(/^Windows 1[01]\b/, build >= 22000 ? 'Windows 11' : 'Windows 10');
+    return build ? `${name} (build ${build})`.trim() : name;
+  } catch {
+    return '';
+  }
+}
+
+export class AppServer {
+  constructor({ store, token, webRoot = path.join(ROOT, 'web'), assetsRoot = path.join(ROOT, 'assets') }) {
+    this.store = store;
+    this.token = token;
+    this.webRoot = webRoot;
+    this.assetsRoot = assetsRoot;
+    this.backend = new Backend(store.data.backend);
+    this.engineCfg = new EngineConfig();
+    this.procs = new Map();
+    this.clients = new Set();
+    this.envInfo = {};
+    this.envReady = Promise.resolve();
+    this.pendingUpdates = new Map();
+    this.onQuit = null;
+    this.server = http.createServer((req, res) => this.handle(req, res).catch((e) => this.fail(res, e)));
+    this.server.keepAliveTimeout = 5000;
+    this.runs = new RunController(this);
+    this.schedules = this.makeScheduler();
+    this.routes = this.buildRoutes();
+    setInterval(() => this.heartbeat(), 15000).unref();
+  }
+
+  /** Schedules start unattended runs; the timer starts with startSchedules(), once the backend is known. */
+  makeScheduler(file = path.join(DATA_DIR, 'schedules.json')) {
+    return new Scheduler({
+      store: new ScheduleStore(file),
+      startRun: (sc, { missed }) => this.runs.start({ workspace: sc.project, task: sc.task, mode: sc.mode, model: sc.model || undefined, unattended: { scheduleId: sc.id, commands: !!sc.scope?.commands, missed } }),
+      runStatus: (id) => (this.runs.store.has(id) ? this.runs.store.get(id).status : null),
+      checkProject: async (dir) => {
+        const info = await gitapi.repoInfo(this.backend, dir);
+        if (!info) throw Object.assign(new Error('A scheduled run works in its own git worktree, so the project must be a Git repository.'), { status: 400 });
+        if (!info.head) throw Object.assign(new Error('This repository has no commit yet. Make a first commit, then schedule the run.'), { status: 400 });
+      },
+      onChange: (v) => this.broadcast(v.removed ? { g: 'schedule_removed', id: v.id } : { g: 'schedule', schedule: v }),
+    });
+  }
+
+  startSchedules() {
+    return this.schedules.start();
+  }
+
+  listen(port) {
+    return new Promise((resolve, reject) => {
+      const onErr = (e) => reject(e);
+      this.server.once('error', onErr);
+      this.server.listen(port, '127.0.0.1', () => {
+        this.server.off('error', onErr);
+        this.port = this.server.address().port;
+        this.hosts = new Set([`127.0.0.1:${this.port}`, `localhost:${this.port}`]);
+        resolve(this.port);
+      });
+    });
+  }
+
+  /** First-run backend choice, then a check that it is reachable. Runs after listen(); /api/state waits for it. */
+  startEnv() {
+    this.envReady = this.store
+      .autodetect(this.backend)
+      .catch((e) => log('autodetect failed', e))
+      .then(() => this.refreshEnv());
+    return this.envReady;
+  }
+
+  async refreshEnv() {
+    try {
+      this.backend.update(this.store.data.backend);
+      const p = await this.backend.probe();
+      const unreachable = this.backend.isWsl && !p.home;
+      this.envInfo = unreachable ? { error: `Can’t reach the WSL distribution "${this.backend.distro}". Make sure it’s installed and can start.` } : {};
+    } catch (e) {
+      this.envInfo = { error: e.message };
+    }
+  }
+
+  async shutdown() {
+    log('shutdown');
+    this.schedules.stop();
+    await Promise.all([...this.procs.values()].map((p) => p.stop(2500).catch(() => {})));
+    for (const c of this.clients) {
+      try {
+        c.end();
+      } catch {}
+    }
+    pkce.closeAll(); // sign-in callback servers
+    this.server.close();
+  }
+
+  broadcast(msg) {
+    if (!this.clients.size) return;
+    const data = `data: ${JSON.stringify(msg)}\n\n`;
+    for (const c of this.clients) {
+      if (c.writableLength > 16 * 1024 * 1024) {
+        this.clients.delete(c);
+        c.destroy();
+        continue;
+      }
+      c.write(data);
+    }
+  }
+  heartbeat() {
+    for (const c of this.clients) c.write(': ping\n\n');
+  }
+  procList() {
+    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, title: p.title || '', streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null, run: p.runId || '' }));
+  }
+  broadcastProcs() {
+    this.broadcast({ g: 'procs', procs: this.procList() });
+  }
+
+  flushUpdates(id) {
+    const m = this.pendingUpdates.get(id);
+    if (!m) return;
+    clearTimeout(m.timer);
+    this.pendingUpdates.delete(id);
+    for (const ev of m.events.values()) this.broadcast({ p: id, e: ev });
+  }
+
+  forward(id, ev) {
+    // Coalesce high-frequency snapshot events: each carries the full state, so only the latest matters.
+    if (ev.type === 'message_update' || ev.type === 'tool_execution_update') {
+      let m = this.pendingUpdates.get(id);
+      if (!m) {
+        m = { events: new Map(), timer: setTimeout(() => this.flushUpdates(id), 40) };
+        this.pendingUpdates.set(id, m);
+      }
+      const key = ev.type + ':' + (ev.toolCallId || ev.assistantMessageEvent?.contentIndex || '');
+      const slim = ev.type === 'message_update' && ev.assistantMessageEvent?.partial ? { ...ev, assistantMessageEvent: stripPartial(ev.assistantMessageEvent) } : ev;
+      // A *_start/_end event must never be dropped by a later delta: deliver them immediately.
+      const t = ev.assistantMessageEvent?.type || '';
+      if (ev.type === 'message_update' && !/_delta$/.test(t)) {
+        this.flushUpdates(id);
+        this.broadcast({ p: id, e: slim });
+        return;
+      }
+      m.events.set(key, slim);
+      return;
+    }
+    this.flushUpdates(id);
+    let out = ev;
+    if (ev.type === 'agent_end') {
+      const { messages, ...rest } = ev;
+      out = { ...rest, messageCount: Array.isArray(messages) ? messages.length : 0 };
+    }
+    this.broadcast({ p: id, e: out });
+  }
+
+  async startProc({ workspace, resume, model, noSession, branch, worktree: given }) {
+    if (!workspace) throw new Error('A workspace folder is required');
+    // Two agents appending to one saved conversation would interleave it.
+    if (resume && [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume)) {
+      throw Object.assign(new Error('That conversation is already open in another tab.'), { status: 409 });
+    }
+    this.backend.update(this.store.data.backend);
+    // "Separate branch": the session works in its own git worktree, on a new branch cut from the current commit.
+    // `given`: a run continuing in the worktree it already has (no saved conversation to resume from).
+    let worktree = given && !resume ? given : null;
+    if (branch && !resume && !worktree) {
+      const wt = await gitapi.worktreeAdd(this.backend, workspace);
+      worktree = { repo: wt.repo, slug: wt.slug, path: wt.path, branch: wt.branch, base: wt.base, baseBranch: wt.baseBranch, source: workspace };
+      workspace = wt.workspace;
+      log('worktree added', wt.branch, wt.path);
+    }
+    const id = uid('p');
+    // The project's extra folders, read at each check so adding or removing one applies to open conversations too.
+    // A worktree session (a run, a branch session) belongs to the project it was cut from (see projectOf).
+    const project = worktree?.source || workspace;
+    const folders = () => projectFolders(this.store.projectFor(project, (p) => this.backend.keyPath(p)));
+    const proc = new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg, worktree, folders });
+    proc.cache = { commands: [] };
+    proc.schedules = this.schedules; // for /schedule
+    // Questions waiting for the user (approvals, inputs): a window that reloads or reconnects gets them again.
+    proc.openUi = new Map();
+    proc.on('event', (ev) => {
+      if (ev.type === 'available_commands_update') proc.cache.commands = ev.commands || [];
+      trackOpenUi(proc.openUi, ev);
+      this.forward(id, ev);
+      if (ev.type === 'agent_start' || ev.type === 'agent_end' || ev.type === 'prompt_result') this.broadcastProcs();
+    });
+    proc.on('stderr', (line) => this.broadcast({ p: id, e: { type: 'stderr', line } }));
+    proc.on('exit', (code, msg) => {
+      this.flushUpdates(id);
+      this.dropUnusedWorktree(proc);
+      this.broadcast({ p: id, e: { type: 'proc_exit', code, message: msg || '', stderr: proc.stderrTail.slice(-15) } });
+      this.procs.delete(id);
+      this.broadcastProcs();
+    });
+    try {
+      await proc.start();
+    } catch (e) {
+      try {
+        await proc.stop(500);
+      } catch {}
+      if (worktree && !given) await gitapi.worktreeRemove(this.backend, worktree).catch((er) => log('worktree cleanup failed', er));
+      throw e;
+    }
+    this.procs.set(id, proc);
+    this.runs.adopt(proc); // a saved conversation that belongs to a run keeps recording into it
+    this.broadcastProcs();
+    return proc;
+  }
+
+  /**
+   * A branch session closed before anything was saved or changed (no conversation file, no edit, no commit): its
+   * worktree and branch are removed, so starting and closing sessions leaves no empty branches behind. Anything with
+   * work in it stays until you merge or discard it.
+   */
+  async dropUnusedWorktree(proc) {
+    const wt = proc.worktree;
+    if (!wt || proc.session || proc.worktreeState || proc.runId) return; // a run keeps its worktree until you apply or discard it
+    try {
+      const d = await gitapi.branchDiff(this.backend, wt.path, wt.base);
+      if (d.files.length || d.commits || d.pending) return;
+      await gitapi.worktreeRemove(this.backend, wt);
+      log('unused worktree removed', wt.branch);
+    } catch (e) {
+      log('unused worktree check failed', e);
+    }
+  }
+
+  /** The running branch session `id` (410 when it stopped, 400 when it has no branch of its own). */
+  branchProc(id) {
+    const p = this.proc(id);
+    if (!p.worktree) throw Object.assign(new Error('This session works in the project folder, not on its own branch.'), { status: 400 });
+    return p;
+  }
+
+  proc(id) {
+    const p = this.procs.get(id);
+    if (!p) throw Object.assign(new Error('This session is no longer running'), { status: 410 });
+    return p;
+  }
+
+  tokenOk(t) {
+    const a = Buffer.from(String(t || ''));
+    const b = Buffer.from(this.token);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  }
+
+  authed(req) {
+    const m = /(?:^|;\s*)orbix=([^;]+)/.exec(req.headers.cookie || '');
+    return !!m && this.tokenOk(m[1]);
+  }
+
+  json(res, status, obj) {
+    const body = JSON.stringify(obj);
+    res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'content-length': Buffer.byteLength(body), ...SECURITY_HEADERS });
+    res.end(body);
+  }
+
+  fail(res, e) {
+    log('handler error', e);
+    if (res.headersSent) return res.end();
+    this.json(res, e.status || 500, { ok: false, error: e.message || String(e) });
+  }
+
+  readBody(req, limit = 48 * 1024 * 1024) {
+    return new Promise((resolve, reject) => {
+      const chunks = [];
+      let n = 0;
+      req.on('data', (d) => {
+        n += d.length;
+        if (n > limit) {
+          reject(Object.assign(new Error('Request too large'), { status: 413 }));
+          req.destroy();
+        } else chunks.push(d);
+      });
+      req.on('end', () => {
+        if (!n) return resolve({});
+        let parsed;
+        try {
+          // "__proto__" keys are dropped: Object.assign() of such a body (prefs) would swap an object's prototype.
+          parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'), (k, v) => (k === '__proto__' ? undefined : v));
+        } catch {
+          return reject(Object.assign(new Error('Invalid JSON body'), { status: 400 }));
+        }
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return reject(Object.assign(new Error('Expected a JSON object'), { status: 400 }));
+        resolve(parsed);
+      });
+      req.on('error', reject);
+    });
+  }
+
+  async handle(req, res) {
+    const url = new URL(req.url, 'http://x');
+    // DNS-rebinding guard.
+    if (!this.hosts.has((req.headers.host || '').toLowerCase())) return this.json(res, 403, { ok: false, error: 'Bad host' });
+    if (url.pathname === '/api/ping') return this.json(res, 200, { app: 'orbix', version: VERSION });
+
+    if (url.pathname === '/' && url.searchParams.get('t')) {
+      if (!this.tokenOk(url.searchParams.get('t'))) return this.json(res, 403, { ok: false, error: 'Bad token' });
+      res.writeHead(302, { location: '/', 'set-cookie': `orbix=${this.token}; Path=/; HttpOnly; SameSite=Strict`, 'cache-control': 'no-store', ...SECURITY_HEADERS });
+      return res.end();
+    }
+    // OpenRouter sign-in comes back from the user's browser, which has no token cookie; it is checked by a one-time state instead.
+    if (req.method === 'GET' && url.pathname.startsWith(oauth.CALLBACK_PATH + '/')) return oauth.handleCallback(url, res, this.engineCfg);
+    // A page on another port of this host is "same-site" and gets our cookie on plain GETs (<img>, <script>, links)
+    // that carry no Origin. Browsers say where a request comes from: only our own pages (or a typed URL) get through.
+    const site = req.headers['sec-fetch-site'];
+    if (site && site !== 'same-origin' && site !== 'none') return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
+    if (!this.authed(req)) {
+      res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...SECURITY_HEADERS });
+      return res.end('ORBIX: this address only opens inside the ORBIX app.');
+    }
+    if (url.pathname.startsWith('/api/')) {
+      // SameSite does not separate ports: a page on another local port would send our cookie. Browsers add Origin to
+      // its cross-origin reads, and to every write.
+      const origin = req.headers.origin;
+      if ((origin && origin !== `http://${req.headers.host}`) || (req.method !== 'GET' && req.headers['x-orbix'] !== '1')) return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
+      const route = this.routes[`${req.method} ${url.pathname}`];
+      if (!route) return this.json(res, 404, { ok: false, error: 'No such endpoint' });
+      if (url.pathname !== '/api/events') await this.envReady; // the backend is settled before anything uses it
+      const body = req.method === 'GET' ? {} : await this.readBody(req);
+      const out = await route({ req, res, url, body, q: Object.fromEntries(url.searchParams) });
+      if (out === undefined) return; // handler took over the response (SSE)
+      return this.json(res, 200, { ok: true, ...out });
+    }
+    return this.serveStatic(url.pathname, res, req);
+  }
+
+  serveStatic(pathname, res, req) {
+    let rel;
+    try {
+      rel = decodeURIComponent(pathname);
+    } catch {
+      return this.json(res, 400, { ok: false, error: 'Bad path' });
+    }
+    if (rel.includes('\0')) return this.json(res, 400, { ok: false, error: 'Bad path' });
+    if (rel === '/') rel = '/index.html';
+    const base = path.resolve(rel.startsWith('/assets/') ? this.assetsRoot : this.webRoot);
+    const sub = rel.startsWith('/assets/') ? rel.slice('/assets/'.length) : rel.slice(1);
+    const file = path.resolve(base, sub);
+    if (!file.startsWith(base + path.sep) && file !== base) return this.json(res, 403, { ok: false, error: 'Forbidden' });
+    fs.stat(file, (e1, st) => {
+      if (e1 || !st.isFile()) return this.json(res, 404, { ok: false, error: 'Not found' });
+      // Revalidate with an ETag: instant 304s while the app runs, and edits show up immediately. The tag also carries
+      // this start of the server, because files inside the installed app's archive do not have their own dates: an
+      // update with a same-sized file would otherwise keep the old copy.
+      const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}-${BOOT}"`;
+      const headers = {
+        'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
+        'cache-control': 'no-cache',
+        etag,
+        ...SECURITY_HEADERS,
+        'content-security-policy': CSP,
+      };
+      if (req?.headers['if-none-match'] === etag) {
+        res.writeHead(304, headers);
+        return res.end();
+      }
+      fs.readFile(file, (err, buf) => {
+        if (err) return this.json(res, 404, { ok: false, error: 'Not found' });
+        res.writeHead(200, { ...headers, 'content-length': buf.length });
+        res.end(buf);
+      });
+    });
+  }
+
+  stateSnapshot() {
+    const d = this.store.data;
+    return {
+      app: { version: VERSION, pid: process.pid, data: DATA_DIR, os: osName() },
+      backend: { kind: d.backend.kind, distro: d.backend.distro, error: this.envInfo.error || null },
+      workspaces: d.workspaces,
+      ui: d.ui,
+      procs: this.procList(),
+    };
+  }
+
+  buildRoutes() {
+    const wsPath = (q) => {
+      const p = q.ws || q.root;
+      if (!p) throw Object.assign(new Error('Missing workspace'), { status: 400 });
+      return p;
+    };
+    return {
+      ...mcpRoutes(this),
+      ...runRoutes(this),
+      ...scheduleRoutes(this),
+      'GET /api/state': async () => this.stateSnapshot(),
+
+      'GET /api/env': async () => ({ ...(await Backend.wslInfo()), ...this.stateSnapshot().backend }),
+
+      'POST /api/backend': async ({ body }) => {
+        const kind = body.kind === 'native' ? 'native' : 'wsl';
+        this.store.data.backend = { kind, distro: String(body.distro || '') };
+        this.store.data.backendChosen = true;
+        this.store.save();
+        this.backend.forget(); // "Check again" (a distro just installed or started) must not reuse the old answer
+        await this.refreshEnv();
+        return this.stateSnapshot();
+      },
+
+      'POST /api/prefs': async ({ body }) => {
+        if (body.ui && typeof body.ui === 'object') Object.assign(this.store.data.ui, body.ui);
+        this.store.saveSoon();
+        return { ui: this.store.data.ui };
+      },
+
+      'POST /api/workspaces': async ({ body }) => {
+        const p = String(body.path || '').trim();
+        if (!p) throw Object.assign(new Error('Path required'), { status: 400 });
+        const st = await fs.promises.stat(this.backend.hostPath(fsapi.normalizeForUi(p, this.backend))).catch(() => null);
+        if (!st?.isDirectory()) throw Object.assign(new Error(`Not a folder: ${p}`), { status: 400 });
+        const w = this.store.addWorkspace(fsapi.normalizeForUi(p, this.backend), body.name);
+        return { workspace: w, workspaces: this.store.data.workspaces };
+      },
+      // Extra folders of a project: { id, path } adds one, { id, path, remove: true } removes it.
+      'POST /api/workspaces/folders': async ({ body }) => {
+        const keyOf = (p) => this.backend.keyPath(p);
+        if (!this.store.data.workspaces.some((w) => w.id === body.id)) throw Object.assign(new Error('No such project'), { status: 404 });
+        const p = String(body.path || '').trim();
+        if (!p) throw Object.assign(new Error('Path required'), { status: 400 });
+        try {
+          if (body.remove) this.store.removeFolder(body.id, p, keyOf);
+          else {
+            const st = await fs.promises.stat(this.backend.hostPath(fsapi.normalizeForUi(p, this.backend))).catch(() => null);
+            if (!st?.isDirectory()) throw Object.assign(new Error(`Not a folder: ${p}`), { status: 400 });
+            this.store.addFolder(body.id, fsapi.normalizeForUi(p, this.backend), keyOf);
+          }
+        } catch (e) {
+          throw Object.assign(e, { status: e.status || 400 });
+        }
+        return { workspaces: this.store.data.workspaces };
+      },
+      'POST /api/workspaces/remove': async ({ body }) => {
+        this.store.removeWorkspace(body.id);
+        return { workspaces: this.store.data.workspaces };
+      },
+
+      'GET /api/sessions': async () => {
+        const own = await listAgentSessions(this.backend).catch(() => []);
+        return { sessions: own.sort((a, b) => b.mtime - a.mtime) };
+      },
+      'GET /api/engine': async () => ({ engine: this.engineCfg.publicView() }),
+      'POST /api/engine/provider': async ({ body }) => {
+        const id = String(body.id || '');
+        const p = this.engineCfg.provider(id);
+        if (!p) throw Object.assign(new Error('Unknown provider'), { status: 400 });
+        if (p.signInOnly && body.key) throw Object.assign(new Error(`${p.name} has no API key. Use Sign in with ${p.name}.`), { status: 400 });
+        const typedKey = body.key ? String(body.key).trim() : '';
+        const key = typedKey || (await this.engineCfg.getKey(id));
+        const baseUrl = p.editableUrl ? String(body.baseUrl || '').trim() : this.engineCfg.baseUrl(id);
+        if (!baseUrl) throw Object.assign(new Error('Enter the server address first'), { status: 400 });
+        if (!key && !p.keyOptional) throw Object.assign(new Error('Paste an API key first'), { status: 400 });
+        // Check with the provider BEFORE saving, so a typo or a wrong address is never stored.
+        const models = await clientFor(p.type).listModels({ apiKey: key, baseUrl, providerId: id, signal: AbortSignal.timeout(LIST_TIMEOUT) });
+        await this.engineCfg.setProvider(id, { key: typedKey || undefined, baseUrl, models: models.length });
+        return { models: models.length, engine: this.engineCfg.publicView() };
+      },
+      'POST /api/engine/oauth/start': async ({ body }) => {
+        const provider = String(body.provider || 'openrouter');
+        if (pkce.SPECS[provider]?.device) {
+          const { url, state, userCode } = await pkce.startDevice(provider, { config: this.engineCfg });
+          if (pkce.isAuthUrl(provider, url)) openExternal(url); // the provider's code page, in the user's default browser
+          return { url, state, provider, userCode };
+        }
+        if (pkce.SPECS[provider]) {
+          const { url, state } = await pkce.startPkce(provider, { config: this.engineCfg });
+          if (pkce.isAuthUrl(provider, url)) openExternal(url); // the user's default browser
+          return { url, state, provider };
+        }
+        if (provider !== 'openrouter') throw Object.assign(new Error('This provider has no sign-in.'), { status: 400 });
+        const { url, state } = oauth.startOpenRouter({ port: this.port });
+        if (oauth.isOpenRouterAuthUrl(url)) openExternal(url);
+        return { url, state, provider };
+      },
+      'GET /api/engine/oauth/status': async ({ q }) => {
+        const or = oauth.oauthStatus(q.state);
+        return { ...(or.status !== 'unknown' ? or : pkce.pkceStatus(q.state)), engine: this.engineCfg.publicView() };
+      },
+      // The browser could not reach ORBIX's local sign-in port: finish from the address it ended on.
+      'POST /api/engine/oauth/paste': async ({ body }) => {
+        const r = await pkce.finishFromUrl(String(body.state || ''), String(body.url || ''));
+        return { ...r, engine: this.engineCfg.publicView() };
+      },
+      'POST /api/engine/oauth/cancel': async ({ body }) => {
+        oauth.cancelOAuth(body.state);
+        pkce.cancelPkce(body.state);
+        return {};
+      },
+      'POST /api/engine/provider/clear': async ({ body }) => {
+        this.engineCfg.clearProvider(String(body.id || ''));
+        return { engine: this.engineCfg.publicView() };
+      },
+      'POST /api/engine/settings': async ({ body }) => {
+        if (body.approvals !== undefined) this.engineCfg.setApprovals(body.approvals);
+        if (body.trusted !== undefined) this.engineCfg.setTrusted(body.trusted);
+        if (body.verify !== undefined || body.review !== undefined) this.engineCfg.setChecks({ verify: body.verify, review: body.review });
+        return { engine: this.engineCfg.publicView() };
+      },
+      // The check command of one project: the one you chose (or 'off'), and the one ORBIX finds in its files.
+      'GET /api/engine/check': async ({ q }) => {
+        if (!q.ws) throw Object.assign(new Error('Open a project first.'), { status: 400 });
+        return { command: this.engineCfg.checkCommand(this.backend.keyPath(q.ws)), detected: detectCheck(this.backend.hostPath(q.ws), { wsl: !!this.backend.isWsl }) };
+      },
+      'POST /api/engine/check': async ({ body }) => {
+        if (!body.ws) throw Object.assign(new Error('Open a project first.'), { status: 400 });
+        this.engineCfg.setCheckCommand(this.backend.keyPath(String(body.ws)), body.command);
+        return { command: this.engineCfg.checkCommand(this.backend.keyPath(String(body.ws))), detected: detectCheck(this.backend.hostPath(String(body.ws)), { wsl: !!this.backend.isWsl }) };
+      },
+      // Your instructions for every project (data/AGENTS.md).
+      'GET /api/instructions': async () => {
+        const file = userInstructionsPath();
+        const text = await fs.promises.readFile(file, 'utf8').catch(() => '');
+        return { text, file };
+      },
+      'POST /api/instructions': async ({ body }) => {
+        const text = String(body.text ?? '');
+        if (text.length > 24000) throw Object.assign(new Error('Keep your instructions under 24,000 characters.'), { status: 400 });
+        const file = userInstructionsPath();
+        if (text.trim()) await fs.promises.writeFile(file, text.replace(/\r\n/g, '\n'), 'utf8');
+        else await fs.promises.rm(file, { force: true });
+        return { text: text.trim() ? text : '', file };
+      },
+      // Models of every connected provider, for the "Models" section of Settings.
+      'GET /api/engine/models': async () => {
+        const ids = this.engineCfg.configuredIds();
+        const errors = [];
+        const lists = await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const list = await this.engineCfg.listModels(id);
+              return list.map((m) => ({ provider: id, providerName: this.engineCfg.provider(id).name, id: m.id, name: m.name || m.id }));
+            } catch (e) {
+              errors.push(`${this.engineCfg.provider(id).name}: ${e.message}`);
+              return [];
+            }
+          }),
+        );
+        return { models: lists.flat(), errors };
+      },
+      // Default models for the roles: fast (titles, summaries, helper agents) and plan. '' = use the session's model.
+      'POST /api/engine/models': async ({ body }) => {
+        const bad = (m) => Object.assign(new Error(m), { status: 400 });
+        const next = {};
+        for (const role of ['fast', 'plan', 'default']) {
+          if (body[role] === undefined) continue;
+          const spec = String(body[role] || '').trim();
+          if (spec) {
+            const i = spec.indexOf('/');
+            const pid = i > 0 ? spec.slice(0, i) : '';
+            const p = this.engineCfg.provider(pid);
+            if (!p) throw bad(`Write the ${role} model as provider/model-id, for example anthropic/claude-haiku-4-5 (pick one from the list).`);
+            if (!this.engineCfg.configured(pid)) throw bad(`${p.name} is not set up. Add it in Settings → Providers first.`);
+            let list;
+            try {
+              list = await this.engineCfg.listModels(pid);
+            } catch (e) {
+              throw bad(`Could not load the models of ${p.name} to check "${spec}": ${e.message}`);
+            }
+            if (!list.some((m) => m.id === spec.slice(i + 1))) throw bad(`${p.name} has no model "${spec.slice(i + 1)}". Pick one from the list.`);
+          }
+          next[role] = spec;
+        }
+        this.engineCfg.setRoles(next);
+        if (next.default !== undefined) {
+          this.engineCfg.data.defaultModel = next.default;
+          this.engineCfg.save();
+        }
+        return { engine: this.engineCfg.publicView() };
+      },
+      // Web search service for the web_search tool. The service is tried once before anything is saved.
+      'POST /api/engine/search': async ({ body }) => {
+        const provider = String(body.provider || '');
+        const typed = body.key ? String(body.key).trim() : '';
+        const baseUrl = provider === 'searxng' ? String(body.baseUrl || '').trim() : '';
+        const old = this.engineCfg.data.search?.provider === provider ? await this.engineCfg.searchConfig().catch(() => null) : null;
+        const apiKey = typed || old?.apiKey || null;
+        if (provider !== 'searxng' && !apiKey) throw Object.assign(new Error('Paste an API key first'), { status: 400 });
+        if (provider === 'searxng' && !/^https?:\/\//i.test(baseUrl || old?.baseUrl || '')) throw Object.assign(new Error('The SearXNG address must start with http:// or https://'), { status: 400 });
+        const r = await webSearch({ query: 'ORBIX test', count: 1 }, { provider, apiKey, baseUrl: provider === 'searxng' ? baseUrl || old?.baseUrl : '' });
+        if (r.isError) throw Object.assign(new Error(r.text), { status: 400 });
+        try {
+          await this.engineCfg.setSearch({ provider, key: typed || undefined, baseUrl });
+        } catch (e) {
+          throw Object.assign(e, { status: 400 });
+        }
+        return { engine: this.engineCfg.publicView() };
+      },
+      'POST /api/engine/search/clear': async () => {
+        this.engineCfg.clearSearch();
+        return { engine: this.engineCfg.publicView() };
+      },
+      // Hooks (read-only here): your hooks.json and the project's .orbix/hooks.json.
+      'GET /api/hooks': async ({ q }) => {
+        const view = (r) => ({ file: r.file, exists: r.exists, errors: r.errors, hooks: listHooks(r) });
+        const user = readHooksFile(userHooksPath());
+        let project = null;
+        if (q.ws) {
+          const root = this.backend.hostPath(q.ws);
+          const r = readHooksFile(projectHooksPath(root));
+          project = { ...view(r), trusted: r.count ? hooksTrusted(this.backend.keyPath(q.ws), r.hooks) : null };
+        }
+        return { user: view(user), project };
+      },
+      'POST /api/hooks/reveal': async ({ body }) => {
+        let target;
+        if (body.scope === 'project') {
+          if (!body.ws) throw Object.assign(new Error('Open a session first'), { status: 400 });
+          const root = this.backend.hostPath(String(body.ws));
+          const f = projectHooksPath(root);
+          target = fs.existsSync(f) ? f : fs.existsSync(path.dirname(f)) ? path.dirname(f) : root;
+        } else {
+          const f = userHooksPath();
+          if (!fs.existsSync(f)) fs.writeFileSync(f, JSON.stringify({ hooks: {} }, null, 2) + '\n');
+          target = f;
+        }
+        await fsapi.reveal(this.backend, target);
+        return { path: target };
+      },
+      'GET /api/diagnostics': async () => ({ report: await collectDiagnostics(this) }),
+      'POST /api/sessions/rename': async ({ body }) => {
+        const file = typeof body.path === 'string' ? body.path : '';
+        // An open session keeps its title in memory and writes it itself; renaming it here would be overwritten.
+        const open = [...this.procs.values()].some((p) => p.opts.resume === file || p.session?.file === file);
+        if (open) throw Object.assign(new Error('That conversation is open. Rename it from its tab.'), { status: 409 });
+        return { title: renameAgentSession(file, body.title) };
+      },
+      'POST /api/sessions/delete': async ({ body }) => {
+        const paths = Array.isArray(body.paths) ? body.paths : [];
+        if (!paths.length || paths.length > 500) throw Object.assign(new Error('Nothing to delete'), { status: 400 });
+        const busy = [...this.procs.values()].find((p) => (p.opts.resume && paths.includes(p.opts.resume)) || (p.session?.file && paths.includes(p.session.file)));
+        if (busy) throw Object.assign(new Error('That conversation is open. Close it first.'), { status: 409 });
+        // Only ORBIX's own conversation files can be deleted; any other path is refused before anything is removed.
+        if (!paths.every(isAgentSessionPath)) throw Object.assign(new Error('Only ORBIX conversations can be deleted'), { status: 400 });
+        return { removed: await deleteAgentSessions(paths) };
+      },
+
+      'POST /api/proc/start': async ({ body }) => {
+        const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession, branch: body.branch === true });
+        return { id: proc.id, workspace: proc.workspace, commands: proc.cache.commands, worktree: proc.worktreeView() };
+      },
+
+      // Review of a session on its own branch: what it changed, then merge, keep or discard. Merge and discard need
+      // `confirm: true`, which the UI sends only after you said yes in its dialog.
+      'GET /api/branch': async ({ q }) => {
+        const p = this.branchProc(q.proc);
+        const wt = p.worktree;
+        const [d, main] = await Promise.all([gitapi.branchDiff(this.backend, wt.path, wt.base, { baseBranch: wt.baseBranch }), gitapi.mainState(this.backend, wt.repo).catch(() => null)]);
+        return { worktree: p.worktreeView(), ...d, main };
+      },
+      'GET /api/branch/diff': async ({ q }) => {
+        const wt = this.branchProc(q.proc).worktree;
+        return { diff: await gitapi.branchFileDiff(this.backend, wt.path, wt.base, q.file, { untracked: q.untracked === '1' }) };
+      },
+      'POST /api/branch/merge': async ({ body }) => {
+        const p = this.branchProc(body.proc);
+        if (body.confirm !== true) throw Object.assign(new Error('Merging needs your confirmation.'), { status: 400 });
+        if (p.runId) {
+          // The conversation of a run: the run applies its own changes, so its state and log stay right.
+          const r = await this.runs.apply(p.runId);
+          return { result: r.applied ? { merged: true, hash: r.hash } : { merged: false, conflict: true, files: r.files }, worktree: p.worktreeView() };
+        }
+        if (p.streaming) throw Object.assign(new Error('The agent is still working. Stop it or wait until it is done, then merge.'), { status: 409 });
+        const wt = p.worktree;
+        const r = await gitapi.merge(this.backend, { repo: wt.repo, wt: wt.path, slug: wt.slug, baseBranch: wt.baseBranch, message: `${p.title || 'ORBIX session'} (ORBIX session ${wt.slug})` });
+        if (r.merged) p.setWorktreeState('merged', { hash: r.hash });
+        this.broadcastProcs();
+        return { result: r, worktree: p.worktreeView() };
+      },
+      'POST /api/branch/keep': async ({ body }) => {
+        const p = this.branchProc(body.proc);
+        if (p.runId) return (await this.runs.keep(p.runId), { worktree: p.worktreeView() });
+        p.setWorktreeState('kept');
+        this.broadcastProcs();
+        return { worktree: p.worktreeView() };
+      },
+      'POST /api/branch/discard': async ({ body }) => {
+        const p = this.branchProc(body.proc);
+        if (body.confirm !== true) throw Object.assign(new Error('Discarding needs your confirmation.'), { status: 400 });
+        if (p.runId && !p.streaming) return (await this.runs.discard(p.runId), { removed: true });
+        if (p.streaming) throw Object.assign(new Error('The agent is still working. Stop it first, then discard.'), { status: 409 });
+        const wt = p.worktree;
+        const file = p.session?.file;
+        p.worktreeState = { state: 'discarded', hash: '', at: Date.now() }; // the exit handler must not look at the folder
+        await p.stop(3000); // nothing may run in the folder while it is removed
+        await gitapi.worktreeRemove(this.backend, wt);
+        if (file) {
+          appendEntry(file, { type: 'worktree', ...p.worktreeState });
+          closeSession(file);
+        }
+        log('worktree discarded', wt.branch);
+        return { removed: true };
+      },
+      'POST /api/proc/stop': async ({ body }) => {
+        const p = this.procs.get(body.proc);
+        if (p) await p.stop(3000);
+        return {};
+      },
+      'GET /api/procs': async () => ({ procs: this.procList() }),
+      'GET /api/proc/ui': async ({ q }) => ({ requests: [...this.proc(q.proc).openUi.values()] }),
+
+      'POST /api/rpc': async ({ body }) => {
+        const proc = this.proc(body.proc);
+        if (!body.cmd || typeof body.cmd.type !== 'string') throw Object.assign(new Error('cmd.type required'), { status: 400 });
+        try {
+          const res = await proc.request(body.cmd, Number.isFinite(body.timeout) ? body.timeout : 600000);
+          return { response: shapeResponse(body.cmd.type, res) };
+        } catch (e) {
+          return { ok: false, error: e.message, code: e.code };
+        }
+      },
+
+      'POST /api/reply': async ({ body }) => {
+        const proc = this.proc(body.proc);
+        const t = body.msg?.type;
+        if (t !== 'extension_ui_response') throw Object.assign(new Error('Unsupported reply type'), { status: 400 });
+        proc.send(body.msg);
+        this.runs.onReply(proc, body.msg);
+        // Other windows and views showing this question drop it now that it is answered.
+        if (body.msg?.id != null) this.broadcast({ p: proc.id, e: { type: 'extension_ui_request', id: `answered-${body.msg.id}`, method: 'cancel', targetId: body.msg.id } });
+        if (t === 'extension_ui_response') proc.openUi?.delete(body.msg.id);
+        return {};
+      },
+
+      'GET /api/events': ({ req, res }) => {
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', connection: 'keep-alive', 'x-accel-buffering': 'no', ...SECURITY_HEADERS });
+        res.write(`retry: 1500\n\n`);
+        res.write(`data: ${JSON.stringify({ g: 'hello', procs: this.procList(), t: Date.now() })}\n\n`);
+        this.clients.add(res);
+        req.on('close', () => this.clients.delete(res));
+        return undefined;
+      },
+
+      'GET /api/fs/list': async ({ q }) => ({ listing: await fsapi.listDir(this.backend, q.path || '', { dirsOnly: q.dirs === '1' }) }),
+      'GET /api/fs/read': async ({ q }) => ({ file: await fsapi.readFile(this.backend, q.path) }),
+      'GET /api/fs/find': async ({ q }) => ({ files: await fsapi.findFiles(this.backend, wsPath(q), q.q || '') }),
+      'POST /api/fs/reveal': async ({ body }) => {
+        await fsapi.reveal(this.backend, String(body.path || ''));
+        return {};
+      },
+
+      'GET /api/git/status': async ({ q }) => ({ git: await gitapi.status(this.backend, wsPath(q)) }),
+      'GET /api/git/diff': async ({ q }) => ({ diff: await gitapi.diff(this.backend, wsPath(q), q.file, { untracked: q.untracked === '1' }) }),
+      'POST /api/git/stage': async ({ body }) => (await gitapi.stage(this.backend, wsPath(body), body.paths), {}),
+      'POST /api/git/unstage': async ({ body }) => (await gitapi.unstage(this.backend, wsPath(body), body.paths), {}),
+      'POST /api/git/discard': async ({ body }) => (await gitapi.discard(this.backend, wsPath(body), { tracked: body.tracked, untracked: body.untracked }), {}),
+      'POST /api/git/commit': async ({ body }) => ({ commit: await gitapi.commit(this.backend, wsPath(body), body.message) }),
+
+      'POST /api/open-url': async ({ body }) => {
+        try {
+          openExternal(safeLink(body.url));
+        } catch (e) {
+          throw Object.assign(e, { status: 400 });
+        }
+        return {};
+      },
+
+      // Settings → About: the data folder in Explorer. Takes no path, so it can open nothing else.
+      'POST /api/reveal-data': async () => {
+        await runProc('explorer.exe', [DATA_DIR], { timeout: 5000 }).catch(() => {}); // explorer.exe exits 1 even when it opened the folder
+        return {};
+      },
+
+      'POST /api/quit': async () => {
+        setTimeout(() => this.onQuit?.(), 100);
+        return {};
+      },
+    };
+  }
+}
+
+function stripPartial(a) {
+  const { partial, ...rest } = a;
+  return rest;
+}

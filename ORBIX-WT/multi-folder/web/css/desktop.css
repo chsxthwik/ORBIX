@@ -1,0 +1,17 @@
+/* The Windows app (html.desktop). The window has no title bar of its own: the menu row is the title bar. Windows
+   draws the minimize, maximize and close buttons over its right end (in the theme's colours, see desktop.js), and
+   the empty parts of the menu row and the toolbar drag the window. A browser never gets this class. */
+
+.desktop {
+  /* The width the window buttons take on the right, from the window controls overlay. */
+  --wco: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+.desktop .menubar { height: env(titlebar-area-height, var(--mb-h)); padding-right: calc(var(--wco) + 6px); }
+
+/* Drag the window by the empty parts of the top rows. */
+.desktop :is(.menubar, .toolbar) { -webkit-app-region: drag; app-region: drag; }
+.desktop :is(.menubar, .toolbar) :is(button, a, input, select, textarea, [tabindex]) { -webkit-app-region: no-drag; app-region: no-drag; }
+.desktop :is(.modal, .menu, .popup, .scrim, .overview, .hcard) { -webkit-app-region: no-drag; app-region: no-drag; }
+
+/* Settings → Appearance → Interface size. */
+.desktop .scale-sel { width: auto; min-width: 130px; }

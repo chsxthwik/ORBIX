@@ -1,0 +1,1285 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 865fa04..651148d 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,9 @@
+ # Changelog
+ 
++## Unreleased
++- **Rules with triggers.** Markdown files in `.agents/rules/` (this project, up to the repository root) or in ORBIX's `rules` folder (every project) start with frontmatter naming a `trigger`: `always_on` (in every request), `model_decision` (the agent sees its description and reads it when it fits), `glob` with `globs:` (added the first time the agent reads or changes a matching file, or you @-mention one) and `manual` (only when you @-mention it by name). `AGENTS.md` and `CLAUDE.md` work as before. `/memory` lists the rules and any file that was skipped.
++- **More hook events and decisions.** New events: `SessionStart`, `PreInvocation` and `PostInvocation` (before and after each model call). Besides exit code 2, a hook can print JSON: `{"decision":"block","reason":"…"}` blocks, `"allow"` passes, `"continue"` keeps a Stop going, and `{"additionalContext":"…"}` adds a note for the agent. Existing hook files keep working.
++
+ ## 3.4.0 (2026-11-20)
+ - **A desktop shell like the Antigravity App.**
+   - A menu row (ORBIX, Workspace, View, Window) and a toolbar: the mark (a new conversation), the sidebar switch, **Back** and **Forward** (Alt+← / Alt+→) across conversations, Runs and Review, search, and where you are: project / conversation, with its state, running time and branch. In the Windows app the menu row is the title bar.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 62559a6..67ad6d9 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -52,7 +52,7 @@ The interface talks to an `AgentProc` in two ways:
+ - **Requests** (`POST /api/rpc` → `proc.request(cmd)`): prompt, abort, state and message retrieval, model selection, compaction, undo, regeneration, branching, shell commands, exports and session settings.
+ - **Events** (on the SSE stream): agent and turn lifecycle, message updates, tool execution, approvals and questions, compaction, retries, subagents and session information.
+ 
+-One turn combines the user's message, project rules (`context.mjs`: `AGENTS.md` / `CLAUDE.md`) and skills, then streams a model reply and runs approved tool calls until the model stops (at most 100 turns).
++One turn combines the user's message, project instructions (`context.mjs`: `AGENTS.md` / `CLAUDE.md`), rules (`rules.mjs`: `.agents/rules/*.md` by trigger) and skills, then streams a model reply and runs approved tool calls until the model stops (at most 100 turns).
+ 
+ - **Approvals:** `write`, `edit` and `bash` ask first unless approvals are off. Reading and searching never ask.
+ - **Undo:** every edit records the previous file contents, so `/undo` and the Undo buttons can restore them.
+@@ -74,7 +74,11 @@ Servers come from `data/mcp.json` (yours) and a project's `.mcp.json`, in the co
+ 
+ ### Hooks (`src/engine/hooks.mjs`)
+ 
+-Hooks run at `PreToolUse`, `PostToolUse`, `UserPromptSubmit` and `Stop`. Files: `data/hooks.json` (yours) and `<project>/.orbix/hooks.json` (needs a one-time OK). Exit code 2 blocks the action.
++Hooks run at `SessionStart` (once per open session, when its first message is accepted), `UserPromptSubmit`, `PreInvocation` / `PostInvocation` (around each model request of the agent loop; PostInvocation runs before the reply's tool calls), `PreToolUse`, `PostToolUse` and `Stop`. Files: `data/hooks.json` (yours) and `<project>/.orbix/hooks.json` (needs a one-time OK). Exit code 2 blocks the action; so does `{"decision":"block","reason":"…"}` on stdout, and `{"additionalContext":"…"}` adds a note for the model (see the top of `hooks.mjs`).
++
++### Rules (`src/engine/rules.mjs`)
++
++`.agents/rules/*.md` from the project folder up to the repository root, and `data/rules/*.md`. The frontmatter `trigger` decides how a rule is used: `always_on` in the system prompt, `model_decision` listed for the model to read, `glob` added to a tool result (or the message) the first time a matching file is read, written, edited or @-mentioned, `manual` when @-mentioned by name.
+ 
+ ## Runs (`src/runs.mjs`, `src/runctl.mjs`)
+ 
+@@ -109,6 +113,7 @@ server sends `{g: 'run', run}` on every change.
+ | `engine.json` | AI providers, approvals, model roles, web search. API keys are encrypted with Windows DPAPI (`secrets.mjs`) |
+ | `sessions/<project>/*.jsonl` | saved conversations, append-only |
+ | `mcp.json`, `hooks.json` | your MCP servers and hooks |
++| `AGENTS.md`, `rules/` | your instructions and rules for every project |
+ | `cache/` | the model catalog from models.dev (refreshed at most once a day), and the thinking levels learned from providers |
+ | `logs/server.log` | capped server log; keys, commands and MCP arguments are never written to it |
+ | `instance.json` | the running server's local port and token |
+diff --git a/docs/parity.md b/docs/parity.md
+index 5d0e732..9c2af5a 100644
+--- a/docs/parity.md
++++ b/docs/parity.md
+@@ -82,10 +82,10 @@ run tests → inspect diffs and artifacts → give feedback → apply or discard
+ | 3.10 | Partial acceptance of changes | Whole-run apply or discard only | Not started | **Undocumented** in the benchmark beyond stage/unstage/discard in Review |
+ | 3.11 | Review: stage, unstage, discard, commit, amend, push | Changes panel of a conversation: stage, unstage, discard, commit | Existing (no amend/push) | `test/gitwrite.test.mjs` |
+ | 3.12 | Checkpoints and **Confirm Undo** with the list of files | Every edit records the previous content; `/undo` and Undo buttons | Existing | `test/engine.test.mjs`; benchmark behavior is changelog-only |
+-| 3.13 | Rules (`AGENTS.md`, `.agents/rules/*.md` with `trigger` frontmatter) | `AGENTS.md` / `CLAUDE.md` up the folder tree | Partial (no rule triggers) | |
++| 3.13 | Rules (`AGENTS.md`, `.agents/rules/*.md` with `trigger` frontmatter) | `AGENTS.md` / `CLAUDE.md` up the folder tree, unchanged. `src/engine/rules.mjs`: `.agents/rules/*.md` (and `.agent/rules/`) from the project folder up to the repository root, plus `<data>/rules/*.md` for every project. `trigger: always_on` goes into the system prompt (about 20k tokens shared; the largest over that become pointers), `model_decision` is listed by name, description and path and read on demand (no outside-the-project question for those files), `glob` (`globs:`) is added to the result of the first read/write/edit of a matching file or to an @-mentioned file, `manual` only when @-mentioned by name. Files without frontmatter or with an unknown trigger are skipped and shown by `/memory`. | Done (no `@[label](path)` includes, no `.agents/AGENTS.md`, no editor in Customizations) | `test/rules-hooks.test.mjs` "rule files" and "rules in a session" |
+ | 3.14 | Skills (`SKILL.md`, progressive disclosure, `/<skill>`) | Skills and Markdown command files | Existing | `test/slashprompts.test.mjs` |
+ | 3.15 | MCP (stdio and HTTP, per-server controls, OAuth, lazy tools) | stdio and HTTP servers, project servers need a one-time OK | Existing (no OAuth, no lazy loading) | `test/engine.test.mjs` |
+-| 3.16 | Hooks (`SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`; decisions) | `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`; exit code 2 blocks | Partial | `test/features.test.mjs` |
++| 3.16 | Hooks (`SessionStart`, `PreToolUse`, `PostToolUse`, `PreInvocation`, `PostInvocation`, `Stop`; decisions) | All six benchmark events plus `UserPromptSubmit`. An invocation is one model request of the agent loop (a retried request counts again); PostInvocation runs when the reply is complete, before its tool calls. Exit code 2 still blocks; JSON on stdout: `decision` `block`/`deny`/`allow`/`continue` (Stop), `terminationBehavior: terminate`, `reason`, and `additionalContext` or `injectSteps` for SessionStart, UserPromptSubmit, Pre/PostInvocation and PostToolUse. Entries may use the benchmark's `{matcher, hooks: [{type: "command", …}]}` form. | Done (files stay `<data>/hooks.json` and `.orbix/hooks.json`; no `ask`/`auto_approve` permission decisions, no `force_continue` on PostInvocation) | `test/rules-hooks.test.mjs` "hook events and JSON decisions"; `test/features.test.mjs` "hooks" |
+ | 3.17 | Automations and `/schedule` | Not implemented | Not started | Unattended runs must deny anything that would ask (documented) |
+ | 3.18 | Permission presets (Request Review, Default, Auto, Turbo) and the `action(target)` rule engine | Three approval modes plus trusted commands and the run scope | Partial | |
+ | 3.19 | Terminal sandbox | Not implemented | Not started | The benchmark's Windows mechanism is **undocumented**; it needs Windows 11 24H2 |
+diff --git a/src/engine/commands.mjs b/src/engine/commands.mjs
+index ec096d7..5d109b0 100644
+--- a/src/engine/commands.mjs
++++ b/src/engine/commands.mjs
+@@ -15,7 +15,7 @@ export const BUILTIN_COMMANDS = [
+   { name: 'model', description: 'Show or switch the model (fast and plan are extra roles)', input: { hint: '[fast|plan] [provider/model]' } },
+   { name: 'branch', description: 'Continue this conversation in a new tab (files are not reverted)' },
+   { name: 'goal', description: 'Keep working on a goal by itself (up to 6 rounds) until it is done', input: { hint: '<what to achieve>' } },
+-  { name: 'memory', description: 'Show the project memory file (AGENTS.md)' },
++  { name: 'memory', description: 'Show the project memory file (AGENTS.md) and rules' },
+   { name: 'hooks', description: 'Show the hooks that run around the agent\'s work' },
+   { name: 'mcp', description: 'Show MCP servers and their tools' },
+   { name: 'skills', description: 'List the skills the agent can use' },
+diff --git a/src/engine/hooks.mjs b/src/engine/hooks.mjs
+index 51c9e25..d074ea6 100644
+--- a/src/engine/hooks.mjs
++++ b/src/engine/hooks.mjs
+@@ -1,14 +1,26 @@
+ // Hooks: your own commands that run at fixed points of the agent's work.
++//   SessionStart      once per open session, when its first message is accepted, before the first model call
++//                     (can add context; cannot block). `source` is "new" or "resume" (a saved conversation)
++//   UserPromptSubmit  when you send a message (can block it, or add context)
++//   PreInvocation     before each model call of the agent loop (can stop the run, or add context)
++//   PostInvocation    after each model reply is complete, before its tool calls run (can stop the run: the calls
++//                     are not run; or add context, which the model sees at its next call)
+ //   PreToolUse        before a tool runs (can block it)
+ //   PostToolUse       after a tool ran (can add feedback for the model)
+-//   UserPromptSubmit  when you send a message (can block it)
+-//   Stop              when the agent is about to finish (can make it continue)
++//   Stop              when the agent is about to finish (can make it continue, once per run)
++// One "invocation" is one request to the model inside the agent loop, including the single retry of a reply that broke
++// off or came back empty; title, compaction and review requests are not invocations.
+ // Files: DATA_DIR/hooks.json (yours) and <project>/.orbix/hooks.json (needs a one-time OK, like MCP project servers):
+ //   { "hooks": { "PreToolUse": [ { "matcher": "bash|edit", "command": "node check.js", "timeout": 10 } ] } }
+-// A hook gets JSON on stdin { event, tool, input, cwd, sessionId } (+ prompt / result fields). Exit code 2 blocks, and
+-// its stderr goes to the model; or print {"decision":"block","reason":"..."} on stdout. Any other non-zero exit is only
+-// a warning. Hooks run in the session's shell (cmd.exe, or bash in WSL), 10 s at most, output capped.
+-// Nothing here logs the command's environment, input or output.
++// An entry can also hold its commands in a list: { "matcher": "bash", "hooks": [ { "type": "command", "command": … } ] }.
++// A hook gets JSON on stdin { event, tool, input, cwd, sessionId } (+ prompt / result / invocation fields).
++// Decisions: exit code 2 blocks, and its stderr goes to the model. Or print one JSON object on stdout (parseHookOutput):
++//   {"decision": "block" | "deny" | "allow" | "continue", "reason": "...", "additionalContext": "..."}
++// "block"/"deny" blocks; "allow" is an explicit no-objection (approvals still apply); "continue" on Stop is the same as
++// "block" (keep working). {"terminationBehavior": "terminate"} counts as block, and {"injectSteps": [{"systemMessage":
++// …}]} as context. Context is used by SessionStart, UserPromptSubmit, Pre/PostInvocation and PostToolUse. Any other
++// non-zero exit is only a warning. Hooks run in the session's shell (cmd.exe, or bash in WSL), 10 s at most, output
++// capped. Nothing here logs the command's environment, input or output.
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import crypto from 'node:crypto';
+@@ -16,7 +28,7 @@ import { DATA_DIR } from '../store.mjs';
+ import { readJson, writeJson } from '../util.mjs';
+ import { killTree } from '../backend.mjs';
+ 
+-const HOOK_EVENTS = ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'];
++export const HOOK_EVENTS = ['SessionStart', 'UserPromptSubmit', 'PreInvocation', 'PostInvocation', 'PreToolUse', 'PostToolUse', 'Stop'];
+ const HOOK_TIMEOUT_MS = 10000;
+ const MAX_OUTPUT = 16 * 1024;
+ const MAX_INPUT = 64 * 1024;
+@@ -57,11 +69,17 @@ export function readHooksFile(file) {
+       out.errors.push(`${event} must be a list`);
+       continue;
+     }
+-    for (const h of list) {
++    // { matcher, hooks: [{ type: "command", command, timeout }] } entries are the same as one entry per command.
++    const flat = list.flatMap((h) => (h && Array.isArray(h.hooks) ? h.hooks.map((x) => (x && typeof x === 'object' ? { matcher: h.matcher, ...x } : x)) : [h]));
++    for (const h of flat) {
+       if (out.count >= MAX_HOOKS) {
+         out.errors.push(`Only the first ${MAX_HOOKS} hooks are used`);
+         break;
+       }
++      if (h && h.type != null && h.type !== 'command') {
++        out.errors.push(`A ${event} hook has type "${h.type}"; only "command" is supported`);
++        continue;
++      }
+       if (!h || typeof h.command !== 'string' || !h.command.trim()) {
+         out.errors.push(`A ${event} hook has no "command"`);
+         continue;
+@@ -105,6 +123,36 @@ export function describeHooks(hooks) {
+ 
+ const clip = (s, n) => (s.length > n ? `${s.slice(0, n)}… [cut]` : s);
+ 
++/**
++ * A hook's stdout as a decision: { decision: 'block' | 'allow' | 'continue' | null, reason, context }, or null when
++ * it is not one JSON object (plain output is ignored, as before).
++ */
++export function parseHookOutput(stdout) {
++  const out = String(stdout ?? '').trim();
++  if (!out.startsWith('{')) return null;
++  let j;
++  try {
++    j = JSON.parse(out);
++  } catch {
++    return null;
++  }
++  if (!j || typeof j !== 'object' || Array.isArray(j)) return null;
++  const d = typeof j.decision === 'string' ? j.decision.trim().toLowerCase() : '';
++  const tb = typeof j.terminationBehavior === 'string' ? j.terminationBehavior.trim().toLowerCase() : '';
++  let decision = null;
++  if (d === 'block' || d === 'deny' || tb === 'terminate') decision = 'block';
++  else if (d === 'continue' || tb === 'force_continue') decision = 'continue';
++  else if (d === 'allow' || d === 'approve' || d === 'auto_approve') decision = 'allow';
++  const context = [];
++  for (const v of [j.additionalContext, j.hookSpecificOutput?.additionalContext]) if (typeof v === 'string' && v.trim()) context.push(v.trim());
++  if (Array.isArray(j.injectSteps)) for (const st of j.injectSteps) for (const k of ['systemMessage', 'userMessage', 'ephemeralMessage']) if (typeof st?.[k] === 'string' && st[k].trim()) context.push(st[k].trim());
++  return { decision, reason: typeof j.reason === 'string' ? j.reason.trim() : '', context: context.join('\n') };
++}
++
++// Events whose hooks can add text for the model; and the one where "continue" means "do not stop yet".
++const CONTEXT_EVENTS = new Set(['SessionStart', 'UserPromptSubmit', 'PreInvocation', 'PostInvocation', 'PostToolUse']);
++const CAN_BLOCK = new Set(['UserPromptSubmit', 'PreInvocation', 'PostInvocation', 'PreToolUse', 'PostToolUse', 'Stop']);
++
+ /** Run one command with `payload` on stdin. Resolves { code, stdout, stderr, timedOut } and never rejects. */
+ function runCommand({ backend, command, cwd, payload, timeoutMs, signal, shell }) {
+   return new Promise((resolve) => {
+@@ -201,20 +249,23 @@ export class HookRunner {
+   }
+ 
+   /**
+-   * Run the hooks of `event`. `info`: { tool, input, ...extra }. Returns { blocked, reason, feedback } where reason is the
+-   * text for the model when a hook blocked (exit 2 with stderr, or {"decision":"block","reason"}).
++   * Run the hooks of `event`. `info`: { tool, input, extra }. Returns { blocked, reason, allowed, context }: `reason` is
++   * the text for the model when a hook blocked (exit 2 with stderr, or a JSON block decision), `context` the text the
++   * hooks added (events in CONTEXT_EVENTS), `allowed` whether a hook said "allow" and none blocked. SessionStart cannot
++   * block; a block there is reported as a note and ignored.
+    */
+   async run(event, info = {}, signal) {
+     const sets = await this.active();
+     const list = sets.flatMap((s) => s[event] || []).filter((h) => !h.matcher || (info.tool && new RegExp(`^(?:${h.matcher})$`, 'i').test(info.tool)));
+-    if (!list.length) return { blocked: false };
++    if (!list.length) return { blocked: false, allowed: false, context: '' };
+     let payload = JSON.stringify({ event, tool: info.tool, input: info.input, cwd: this.workspace, sessionId: this.getSessionId() || null, ...(info.extra || {}) });
+     if (payload.length > MAX_INPUT) payload = JSON.stringify({ event, tool: info.tool, input: '[too large]', cwd: this.workspace, sessionId: this.getSessionId() || null, truncated: true });
+-    const feedback = [];
++    const context = [];
++    let allowed = false;
++    const label = `${event}${info.tool ? ` ${info.tool}` : ''}`;
+     for (const h of list) {
+       if (signal?.aborted) break;
+       const r = await runCommand({ backend: this.backend, command: h.command, cwd: this.workspace, payload, timeoutMs: h.timeout * 1000, signal, shell: undefined });
+-      const label = `${event}${info.tool ? ` ${info.tool}` : ''}`;
+       if (r.timedOut) {
+         this.notice('warn', `A ${label} hook took longer than ${h.timeout} s and was stopped.`);
+         continue;
+@@ -225,23 +276,20 @@ export class HookRunner {
+         block = true;
+         reason = r.stderr.trim() || r.stdout.trim() || 'Blocked by a hook.';
+       } else {
+-        const out = r.stdout.trim();
+-        if (out.startsWith('{')) {
+-          try {
+-            const j = JSON.parse(out);
+-            if (j && j.decision === 'block') {
+-              block = true;
+-              reason = typeof j.reason === 'string' && j.reason.trim() ? j.reason.trim() : 'Blocked by a hook.';
+-            }
+-          } catch {}
+-        }
++        const j = parseHookOutput(r.stdout);
++        if (j?.decision === 'block' || (j?.decision === 'continue' && event === 'Stop')) {
++          block = true;
++          reason = j.reason || (event === 'Stop' ? 'A hook asked to keep going.' : 'Blocked by a hook.');
++        } else if (j?.decision === 'allow') allowed = true;
++        if (j?.context && CONTEXT_EVENTS.has(event)) context.push(clip(j.context, 4000));
+         if (!block && r.code !== 0) this.notice('warn', `A ${label} hook failed (exit code ${r.code})${r.stderr.trim() ? `: ${clip(r.stderr.trim().split('\n')[0], 200)}` : ''}. It was ignored.`);
+       }
+-      if (block) {
+-        feedback.push(clip(reason, 2000));
+-        return { blocked: true, reason: feedback.join('\n') };
++      if (block && !CAN_BLOCK.has(event)) {
++        this.notice('warn', `A ${label} hook cannot block, so its answer was ignored: ${clip(reason, 200)}`);
++        continue;
+       }
++      if (block) return { blocked: true, reason: clip(reason, 2000), allowed: false, context: context.join('\n') };
+     }
+-    return { blocked: false };
++    return { blocked: false, allowed, context: context.join('\n') };
+   }
+ }
+diff --git a/src/engine/proc-tools.mjs b/src/engine/proc-tools.mjs
+index 1ceb329..953af8f 100644
+--- a/src/engine/proc-tools.mjs
++++ b/src/engine/proc-tools.mjs
+@@ -5,9 +5,12 @@ import { clip } from '../util.mjs';
+ import { invalidArgsText } from './tools.mjs';
+ import { isTrustedCommand, trustableCommand } from './store.mjs';
+ import { destructiveReason } from './policy.mjs';
++import { rulesForFile, ruleBlock } from './rules.mjs';
+ 
+ // File tools whose path is checked against the project folder before they run.
+ const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
++// Tools whose path is one file: glob rules that cover it are added to the result.
++const FILE_TOOLS = new Set(['read', 'write', 'edit']);
+ 
+ /** True when a message the user typed names `host` as a whole word ("10.0.0.1" does not match "10.0.0.15"). */
+ export function userMentionsHost(messages, host) {
+@@ -65,15 +68,17 @@ export class ToolRuns {
+     if (!signal?.aborted) {
+       // PostToolUse hooks can add feedback for the model (a failed check, a lint warning).
+       const post = await this.hooks.run('PostToolUse', { tool: name, input, extra: { result: { text: clip(String(r.text ?? ''), 8000), isError: !!r.isError } } }, signal);
+-      if (post.blocked) r = { ...r, text: `${r.text}
+-[Hook feedback] ${post.reason}` };
++      const note = [post.context, post.blocked ? post.reason : ''].filter(Boolean).join('\n');
++      if (note) r = { ...r, text: `${r.text}
++[Hook feedback] ${note}` };
+     }
+     return r;
+   }
+ 
+-  /** True when a file tool points outside the project folder. */
++  /** True when a file tool points outside the project folder (reading a rule the agent was told to read is not). */
+   _outside(call, args) {
+-    return PATH_TOOLS.has(call.name) && args?.path != null && String(args.path).trim() !== '' && !this.tools.inProject(args.path);
++    if (!(PATH_TOOLS.has(call.name) && args?.path != null && String(args.path).trim() !== '' && !this.tools.inProject(args.path))) return false;
++    return !(call.name === 'read' && this.ruleFiles?.has(String(this.tools.hostOf(args.path) || '').toLowerCase()));
+   }
+ 
+   _askTitle(call) {
+@@ -197,6 +202,21 @@ export class ToolRuns {
+         },
+       });
+     }
++    if (FILE_TOOLS.has(call.name) && !result.isError && args.path) result = await this._globRules(args.path, result);
+     return this._record(call, result, true, t0);
+   }
++
++  /** Glob rules that cover a file the agent just read or changed and that it has not seen yet, added to the result. */
++  async _globRules(file, result) {
++    const host = this.tools.hostOf(file);
++    if (!host) return result;
++    const rel = path.win32.relative(path.win32.resolve(this.backend.hostPath(this.workspace)), host);
++    if (!rel || rel.startsWith('..') || path.win32.isAbsolute(rel)) return result;
++    const { rules } = await this._rules();
++    const fresh = rulesForFile(rules, rel).filter((r) => !this.rulesShown.has(r.name.toLowerCase()));
++    if (!fresh.length) return result;
++    for (const r of fresh) this.rulesShown.add(r.name.toLowerCase());
++    this._emit({ type: 'notice', level: 'info', message: `Rule${fresh.length > 1 ? 's' : ''} applied for ${rel.replace(/\\/g, '/')}: ${fresh.map((r) => r.name).join(', ')}` });
++    return { ...result, text: `${result.text}\n\n[Rules for this file; follow them]\n${fresh.map((r) => ruleBlock(r, r.globs.join(', '))).join('\n\n')}` };
++  }
+ }
+diff --git a/src/engine/proc.mjs b/src/engine/proc.mjs
+index af6df99..55a3d33 100644
+--- a/src/engine/proc.mjs
++++ b/src/engine/proc.mjs
+@@ -20,6 +20,7 @@ import { stripSgr } from './files.mjs';
+ import { buildSystemPrompt, environmentFacts, subagentPrompt } from './prompt.mjs';
+ import { McpManager } from './mcp.mjs';
+ import { discoverSkills, skillsPrompt } from './skills.mjs';
++import { loadRules, rulesPrompt, readableRuleFiles, rulesForFile, mentionedRules } from './rules.mjs';
+ import { BUILTIN_COMMANDS, discoverCommands } from './commands.mjs';
+ import { runSlash } from './slash.mjs';
+ import { UsageAccounting, zeroUsage } from './proc-usage.mjs';
+@@ -115,6 +116,10 @@ export class AgentProc extends EventEmitter {
+     // Set by the run controller when this conversation works on a run: { id, phase(), writeArtifact(args) }.
+     this.runInfo = null;
+     this.envFacts = null; // environment block of the system prompt, captured once (stable prefix for caching)
++    this.rulesCache = null; // { at, value: { rules, errors } } for a couple of seconds, so a burst of reads lists rules once
++    this.rulesShown = new Set(); // glob and @-mentioned rules already in the conversation (cleared by a compaction)
++    this.ruleFiles = new Set(); // rule files the agent was told to read: reading them never asks (outside the project)
++    this.sessionStarted = false; // SessionStart hooks ran
+     this.defs = toolDefsFor(backend);
+     this.tools = createTools({ backend, cwd: workspace, getSignal: () => this.abortCtl?.signal });
+     this.consoleTools = createTools({ backend, cwd: workspace, getSignal: () => this.bashCtl?.signal });
+@@ -380,10 +385,39 @@ export class AgentProc extends EventEmitter {
+     return this._add(user);
+   }
+ 
+-  /** Mentioned files: images go in as images, everything else as attachments. */
++  /**
++   * Mentioned files: images go in as images, everything else as attachments. A rule mentioned by name (@name) is
++   * attached too, and so are glob rules that cover a mentioned file.
++   */
+   async _mentions(text) {
+-    const found = await readMentions(this.backend, this.workspace, text).catch(() => []);
+-    return { images: found.filter((a) => a.image).map((a) => a.image), attachments: found.filter((a) => !a.image) };
++    const [found, { rules }] = await Promise.all([readMentions(this.backend, this.workspace, text).catch(() => []), this._rules()]);
++    const attachments = found.filter((a) => !a.image);
++    const add = (r) => {
++      if (this.rulesShown.has(r.name.toLowerCase())) return;
++      this.rulesShown.add(r.name.toLowerCase());
++      attachments.push({ path: r.path, text: r.text, ...(r.truncated ? { truncated: true } : {}) });
++    };
++    for (const { rule, mention } of mentionedRules(rules, text)) if (!found.some((a) => a.path === mention)) add(rule);
++    const root = path.resolve(this.backend.hostPath(this.workspace));
++    for (const a of found) {
++      if (a.image || /^\(folder listing/.test(a.text)) continue;
++      const rel = isWinPath(a.path) || a.path.startsWith('/') ? path.relative(root, path.resolve(this.backend.hostPath(a.path))) : path.normalize(a.path);
++      if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) for (const r of rulesForFile(rules, rel)) add(r);
++    }
++    return { images: found.filter((a) => a.image).map((a) => a.image), attachments };
++  }
++
++  /** The project's rules and yours ({ rules, errors }), listed again at most every two seconds. */
++  _rules() {
++    const now = Date.now();
++    if (!this.rulesCache || now - this.rulesCache.at > 2000) this.rulesCache = { at: now, value: loadRules(this.backend, this.workspace).catch(() => ({ rules: [], errors: [] })) };
++    return this.rulesCache.value;
++  }
++
++  /** Text that hooks added for the model, kept as a note in the conversation. */
++  _hookContext(event, text) {
++    if (!text) return;
++    this._add({ role: 'custom', customType: 'hook', forModel: true, display: true, content: [{ type: 'text', text: `[${event} hook] ${text}` }], timestamp: Date.now() });
+   }
+ 
+   async _drainSteer() {
+@@ -461,6 +495,7 @@ export class AgentProc extends EventEmitter {
+   _run(text, images, attribution = 'user', attachments = []) {
+     return this._exclusive(async () => {
+       // Hooks may stop a message you typed before the agent sees it.
++      let promptContext = '';
+       if (attribution === 'user') {
+         if (this.goal) this._endGoal('Goal mode ended because you sent a message.');
+         const hk = await this.hooks.run('UserPromptSubmit', { input: { prompt: text } }, this.abortCtl.signal);
+@@ -468,12 +503,21 @@ export class AgentProc extends EventEmitter {
+           this._emit({ type: 'notice', level: 'warn', message: `A hook blocked this message: ${hk.reason}` });
+           return;
+         }
++        promptContext = hk.context;
+       } else if (attribution === 'goal') this.run.goalRound = this.goal?.round || 1;
+       // Model connection, MCP servers and the system prompt's parts are prepared while the message is recorded.
+       const prep = Promise.all([this._connect(), this.mcp.ensureStarted().catch((e) => this._emit({ type: 'notice', level: 'warn', message: `MCP: ${e.message}` })), this._envFacts()]);
+       prep.catch(() => {});
+       const men = await this._mentions(text);
++      const resumed = this.messages.length > 0;
+       this._pushUser(text, [...images, ...men.images], attribution, [...attachments, ...men.attachments]);
++      // SessionStart hooks run once per open session: when its first message is accepted, before the first model call.
++      if (!this.sessionStarted) {
++        this.sessionStarted = true;
++        const ss = await this.hooks.run('SessionStart', { extra: { source: resumed ? 'resume' : 'new' } }, this.abortCtl.signal);
++        this._hookContext('SessionStart', ss.context);
++      }
++      this._hookContext('UserPromptSubmit', promptContext);
+       if (!this.title) {
+         this.title = makeTitle(attribution === 'goal' && this.goal ? this.goal.text : text) || (attachments[0]?.path ? makeTitle(attachments[0].path) : '') || 'New session';
+         this._persistRaw({ type: 'title', title: this.title });
+@@ -499,6 +543,15 @@ export class AgentProc extends EventEmitter {
+         await this._compact({ conn, reason: 'threshold' });
+         if (this.abortCtl.signal.aborted) break;
+       }
++      // PreInvocation hooks: before every model call of this loop (a retried call too). They can stop the run here.
++      const pre = await this.hooks.run('PreInvocation', { extra: { invocationNum: run.turns + 1, messageCount: this.messages.length } }, this.abortCtl.signal);
++      this._hookContext('PreInvocation', pre.context);
++      if (pre.blocked) {
++        run.stopReason = 'hook';
++        this._emit({ type: 'notice', level: 'warn', message: `A PreInvocation hook stopped the agent: ${pre.reason}` });
++        break;
++      }
++      if (this.abortCtl.signal.aborted) break;
+       this._emit({ type: 'turn_start' });
+       run.turns++;
+       const asst = await this._streamAssistant({ conn, system, retryEmpty: !once.empty, retryError: !once.midStream });
+@@ -537,6 +590,18 @@ export class AgentProc extends EventEmitter {
+         this._emit({ type: 'notice', level: 'warn', message: 'The model declined to answer this request.' });
+         break;
+       }
++      // PostInvocation hooks: the reply is complete and its tool calls have not run yet. A block ends the run (the calls
++      // get a "not run" result); context is added after the tool results, where the model sees it at its next call.
++      const post = await this.hooks.run('PostInvocation', { extra: { invocationNum: run.turns, stopReason: asst.stopReason, toolCalls: calls.map((c) => ({ name: c.name, args: c.arguments })), text: clip(textOf(asst.content), 8000) } }, this.abortCtl.signal);
++      if (post.blocked) {
++        const results = calls.map((c) => this._record(c, { text: `Not run: a PostInvocation hook stopped the agent: ${post.reason}`, isError: true }, false));
++        end(results);
++        this._hookContext('PostInvocation', post.context);
++        run.stopReason = 'hook';
++        this._emit({ type: 'notice', level: 'warn', message: `A PostInvocation hook stopped the agent: ${post.reason}` });
++        break;
++      }
++      if (!calls.length) this._hookContext('PostInvocation', post.context);
+       if (!calls.length) {
+         end();
+         if (asst.stopReason === 'length' && !once.continued) {
+@@ -570,6 +635,7 @@ export class AgentProc extends EventEmitter {
+       run.toolCalls += calls.length;
+       const results = await this._runTools(calls, conn);
+       end(results);
++      this._hookContext('PostInvocation', post.context);
+       if (this.abortCtl.signal.aborted) break;
+       if (turn === MAX_TURNS - 1) {
+         run.stopReason = 'max_turns';
+@@ -593,11 +659,13 @@ export class AgentProc extends EventEmitter {
+   }
+ 
+   async _system({ subagent = false, tools } = {}) {
+-    const [env, rules, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null)]).then(([own, mine]) => (mine ? [...own, mine] : own)), subagent ? [] : this._skills()]);
++    const [env, rules, skills, ruleSet] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null)]).then(([own, mine]) => (mine ? [...own, mine] : own)), subagent ? [] : this._skills(), this._rules()]);
+     const model = this.model ? `${this.provider ? this.provider + '/' : ''}${this.model}` : '';
+-    if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules }), tools);
++    const rulesText = rulesPrompt(ruleSet.rules);
++    for (const f of readableRuleFiles(ruleSet.rules)) this.ruleFiles.add(path.win32.resolve(f).toLowerCase());
++    if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules, rulesText }), tools);
+     // A run has its own phase instructions; the generic plan-mode text would contradict them.
+-    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo });
++    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, rulesText, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo });
+     return this.runInfo ? `${base}\n\n${runPrompt({ phase: this.runInfo.phase(), branch: this.worktree?.branch, baseBranch: this.worktree?.baseBranch })}` : base;
+   }
+ 
+@@ -795,6 +863,7 @@ export class AgentProc extends EventEmitter {
+       this.messages.splice(cut, 0, marker);
+       this._persistRaw({ type: 'compaction', summary, keptCount, tokensBefore, timestamp: marker.timestamp, usage, ...(cost !== undefined ? { cost } : {}) });
+       this._addUsage(usage, cost);
++      this.rulesShown.clear(); // the rules added to older messages may now be summarized away; add them again when needed
+       result = { summary, tokensBefore, tokensAfter: contextTokens(this.messages), firstKeptIndex: cut + 1 };
+       return true;
+     } catch (e) {
+@@ -836,6 +905,7 @@ export class AgentProc extends EventEmitter {
+     const g = this.goal;
+     if (!run.goalRound || !g) return;
+     if (aborted) return this._endGoal('Goal stopped.');
++    if (run.stopReason === 'hook') return this._endGoal('Goal stopped by a hook.');
+     if (run.status === 'error' || run.stopReason === 'error' || run.stopReason === 'refusal') return this._endGoal('Goal stopped because of an error. Fix it and run /goal again.');
+     const last = [...this.messages].reverse().find((m) => m.role === 'assistant' && !m.discard);
+     const lines = (last?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').split('\n').map((l) => l.trim()).filter(Boolean);
+diff --git a/src/engine/prompt.mjs b/src/engine/prompt.mjs
+index d016e28..7582da7 100644
+--- a/src/engine/prompt.mjs
++++ b/src/engine/prompt.mjs
+@@ -1,6 +1,6 @@
+ // The ORBIX agent's system prompt. Built from stable parts in a fixed order, so the provider's prompt cache keeps
+ // hitting: the instructions never change, the environment block is captured once per session, and only project
+-// rules, skills, MCP servers or plan mode (rare) change it.
++// instructions, rules, skills, MCP servers or plan mode (rare) change it.
+ import os from 'node:os';
+ import { git, parseStatus } from '../gitapi.mjs';
+ 
+@@ -72,9 +72,10 @@ export async function environmentFacts(backend, workspace, { git: withGit = true
+ 
+ /**
+  * The full system prompt. `rules`: [{ path, text, truncated }] nearest first (as loadInstructions returns them);
+- * `skills`: the skills section text; `mcp`: the MCP section text.
++ * `rulesText`: the .agents/rules section (rules.mjs rulesPrompt); `skills`: the skills section text; `mcp`: the MCP
++ * section text.
+  */
+-export function buildSystemPrompt({ env, model, approvals, rules = [], skills = '', mcp = '', planMode = false }) {
++export function buildSystemPrompt({ env, model, approvals, rules = [], rulesText = '', skills = '', mcp = '', planMode = false }) {
+   const parts = [CORE];
+   parts.push(
+     [
+@@ -96,6 +97,7 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], skills =
+     const ordered = [...rules].reverse(); // repository root first, the folder closest to the project last (it wins)
+     parts.push(`# Project instructions\nFollow these instructions from the project. When they conflict, the later (more specific) file wins.\n\n${ordered.map((r) => `<instructions path="${r.path}"${r.truncated ? ' truncated="true"' : ''}>\n${r.text}\n</instructions>`).join('\n\n')}`);
+   }
++  if (rulesText) parts.push(rulesText.trim());
+   if (skills) parts.push(skills.trim());
+   if (mcp) parts.push(mcp.trim());
+   if (planMode) parts.push(PLAN);
+diff --git a/src/engine/rules.mjs b/src/engine/rules.mjs
+new file mode 100644
+index 0000000..767bc83
+--- /dev/null
++++ b/src/engine/rules.mjs
+@@ -0,0 +1,168 @@
++// Rules: Markdown files with a `trigger` in their frontmatter, in `.agents/rules/` (or the older `.agent/rules/`) of
++// the project folder and each parent folder up to the repository root, and in DATA_DIR/rules/ for every project.
++//
++//   ---
++//   trigger: always_on | model_decision | glob | manual     ("always-on", "Model decision" … are accepted too)
++//   description: When this rule applies                     (needed for model_decision)
++//   globs: "*.py, src/**/*.ts"                              (needed for glob; `glob:`, [a, b] and `- a` lists work)
++//   ---
++//
++//   always_on       the whole rule is in the system prompt
++//   model_decision  only its name, description and path are; the agent reads the file when the description fits
++//   glob            added to the conversation the first time the agent reads, writes or edits a matching file (or you
++//                   @-mention one); a pattern without "/" matches the file name at any depth, otherwise the path
++//                   relative to the project folder
++//   manual          only when you @-mention it in a message: @<file name without .md>
++//
++// A file without frontmatter or with an unknown trigger is skipped and reported (in /memory), not loaded. A project rule
++// wins over one of yours with the same name, a nearer folder over a farther one. AGENTS.md / CLAUDE.md are context.mjs.
++import fs from 'node:fs';
++import path from 'node:path';
++import { isWinPath } from '../backend.mjs';
++import { DATA_DIR } from '../store.mjs';
++import { cachedText } from './files.mjs';
++import { parseFrontmatter } from './skills.mjs';
++import { globMatcher } from './search.mjs';
++
++export const TRIGGERS = ['always_on', 'model_decision', 'glob', 'manual'];
++const RULE_DIRS = [path.join('.agents', 'rules'), path.join('.agent', 'rules')];
++const FILE_CAP = 24000; // characters of one rule
++const ALWAYS_BUDGET = 80000; // about 20k tokens shared by the always-on rules; the largest beyond it become pointers
++const MAX_RULES = 100;
++
++/** Where your rules for every project live. */
++export const userRulesDir = (dir = DATA_DIR) => path.join(dir, 'rules');
++
++/** "Always On", "always-on", "always_on" → "always_on"; null when it is not a trigger. */
++export function normalizeTrigger(v) {
++  const t = String(v ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
++  return TRIGGERS.includes(t) ? t : null;
++}
++
++/** `"*.py, *_test.py"`, `[*.py, "*.ts"]` or a block list (joined by the frontmatter parser) → ['*.py', …]. */
++export function splitGlobs(v) {
++  return String(v ?? '')
++    .trim()
++    .replace(/^\[([\s\S]*)\]$/, '$1')
++    .split(',')
++    .map((s) => s.trim().replace(/^(["'])(.*)\1$/, '$2').trim())
++    .filter(Boolean);
++}
++
++/**
++ * One rule file → { rule } or { error }. `info`: { name, path (as the agent's tools address it), hostPath, scope }.
++ */
++export function parseRule(text, info) {
++  const { meta, body } = parseFrontmatter(String(text ?? ''));
++  if (meta.trigger == null || meta.trigger === '') return { error: `${info.name}: no frontmatter with a trigger, so it is not loaded` };
++  const trigger = normalizeTrigger(meta.trigger);
++  if (!trigger) return { error: `${info.name}: unknown trigger "${meta.trigger}" (use ${TRIGGERS.join(', ')})` };
++  const description = String(meta.description || '').trim().slice(0, 500);
++  const globs = splitGlobs(meta.globs ?? meta.glob);
++  if (trigger === 'model_decision' && !description) return { error: `${info.name}: a model_decision rule needs a description` };
++  if (trigger === 'glob' && !globs.length) return { error: `${info.name}: a glob rule needs globs` };
++  const full = body.trim();
++  const clipped = full.slice(0, FILE_CAP);
++  return { rule: { ...info, trigger, description, globs, text: clipped, truncated: clipped.length < full.length } };
++}
++
++async function readRuleDir(hostDir, shown, scope, out) {
++  let ents;
++  try {
++    ents = await fs.promises.readdir(hostDir, { withFileTypes: true });
++  } catch {
++    return;
++  }
++  const files = ents.filter((e) => e.isFile() && /\.md$/i.test(e.name)).map((e) => e.name).sort();
++  for (const f of files) {
++    if (out.rules.length + out.errors.length >= MAX_RULES) return;
++    const hostPath = path.join(hostDir, f);
++    const text = await cachedText(hostPath, FILE_CAP * 4).catch(() => null);
++    if (text == null) continue;
++    const r = parseRule(text, { name: f.replace(/\.md$/i, ''), path: shown(f), hostPath, scope });
++    if (r.error) out.errors.push(r.error);
++    else if (!out.rules.some((x) => x.name.toLowerCase() === r.rule.name.toLowerCase())) out.rules.push(r.rule);
++  }
++}
++
++/**
++ * Rules for a project: { rules, errors }. Project folders nearest first, then yours. `workspace` is the project folder
++ * as the tools address it; rule paths are given the same way, so the agent can read them.
++ */
++export async function loadRules(backend, workspace, { userDir = userRulesDir() } = {}) {
++  const out = { rules: [], errors: [] };
++  const hostRoot = path.resolve(backend.hostPath(workspace));
++  const join = isWinPath(workspace) ? path.win32.join : path.posix.join;
++  let dir = hostRoot;
++  for (let i = 0; i < 8; i++) {
++    for (const sub of RULE_DIRS) {
++      const hostDir = path.join(dir, sub);
++      const rel = path.relative(hostRoot, hostDir).split(path.sep).join('/');
++      await readRuleDir(hostDir, (f) => join(workspace, rel, f), 'project', out);
++    }
++    let isRepoRoot = false;
++    try {
++      isRepoRoot = fs.existsSync(path.join(dir, '.git'));
++    } catch {}
++    const parent = path.dirname(dir);
++    if (isRepoRoot || parent === dir) break;
++    dir = parent;
++  }
++  await readRuleDir(userDir, (f) => path.join(userDir, f), 'user', out);
++  return out;
++}
++
++/**
++ * The system prompt's rules section: always-on rules in full, then the rules the agent reads when they apply
++ * (model_decision, and always-on rules over the budget, largest first). '' when there is nothing to say.
++ */
++export function rulesPrompt(rules, { budget = ALWAYS_BUDGET } = {}) {
++  const always = rules.filter((r) => r.trigger === 'always_on');
++  const demoted = new Set();
++  let total = always.reduce((n, r) => n + r.text.length, 0);
++  for (const r of [...always].sort((a, b) => b.text.length - a.text.length)) {
++    if (total <= budget) break;
++    demoted.add(r);
++    total -= r.text.length;
++  }
++  const full = always.filter((r) => !demoted.has(r));
++  const listed = [...rules.filter((r) => r.trigger === 'model_decision'), ...always.filter((r) => demoted.has(r))];
++  if (!full.length && !listed.length) return '';
++  const parts = ['# Rules\nRules for this project. A rule from the project wins over one of the user\'s own rules.'];
++  if (full.length) parts.push(full.map((r) => `<rule name="${r.name}" path="${r.path}"${r.truncated ? ' truncated="true"' : ''}>\n${r.text}\n</rule>`).join('\n\n'));
++  if (listed.length) {
++    parts.push(
++      [
++        'Read these rules with the read tool when the task matches their description, then follow them. Do not read rules that do not apply.',
++        ...listed.map((r) => `- ${r.name}: ${r.description || '(no description; read it when it may apply)'} [${r.path}]`),
++      ].join('\n'),
++    );
++  }
++  return parts.join('\n\n');
++}
++
++/** Files the agent may read without the outside-the-project question: the rules it is told to read. */
++export const readableRuleFiles = (rules) => rules.filter((r) => r.trigger === 'model_decision' || r.trigger === 'always_on').map((r) => r.hostPath);
++
++/** Glob rules that cover `rel` (a path relative to the project folder, either slash). */
++export function rulesForFile(rules, rel) {
++  const p = String(rel || '').replace(/\\/g, '/').replace(/^\.\//, '');
++  if (!p) return [];
++  return rules.filter((r) => r.trigger === 'glob' && r.globs.some((g) => globMatcher(g)(p)));
++}
++
++/** Rules @-mentioned by name in a message (`@name` or `@name.md`); always-on rules are already in the prompt. */
++export function mentionedRules(rules, text) {
++  const out = [];
++  const re = /(?:^|[\s(])@("[^"]+"|[^\s"'`()<>]+)/g;
++  let m;
++  while ((m = re.exec(String(text || '')))) {
++    const raw = m[1].replace(/^"|"$/g, '').replace(/[.,;:!?)\]]+$/, '').toLowerCase();
++    const hit = rules.find((r) => r.trigger !== 'always_on' && (raw === r.name.toLowerCase() || raw === `${r.name.toLowerCase()}.md`));
++    if (hit && !out.some((x) => x.rule === hit)) out.push({ rule: hit, mention: m[1].replace(/^"|"$/g, '').replace(/[.,;:!?)\]]+$/, '') });
++  }
++  return out;
++}
++
++/** How a rule travels as an attachment or as a note in a tool result. */
++export const ruleBlock = (r, why) => `<rule name="${r.name}" path="${r.path}" trigger="${r.trigger}"${why ? ` applies="${why}"` : ''}${r.truncated ? ' truncated="true"' : ''}>\n${r.text}\n</rule>`;
+diff --git a/src/engine/search.mjs b/src/engine/search.mjs
+index b172704..1858406 100644
+--- a/src/engine/search.mjs
++++ b/src/engine/search.mjs
+@@ -91,7 +91,7 @@ function globToRegExp(glob) {
+ }
+ 
+ /** Matcher for a glob: a pattern without `/` also matches a file's base name at any depth. */
+-function globMatcher(pattern) {
++export function globMatcher(pattern) {
+   const p = String(pattern ?? '').replace(/\\/g, '/').replace(/^\.\//, '');
+   const re = globToRegExp(p);
+   const nameOnly = !p.includes('/');
+diff --git a/src/engine/skills.mjs b/src/engine/skills.mjs
+index 7de752c..3058448 100644
+--- a/src/engine/skills.mjs
++++ b/src/engine/skills.mjs
+@@ -7,19 +7,27 @@ import { cachedText } from './files.mjs';
+ 
+ const PROJECT_SKILL_DIRS = ['.agents/skills', '.claude/skills', '.omp/skills'];
+ 
+-/** Minimal frontmatter parser: `key: value` lines between --- fences (quotes stripped, folded `>`/`|` values joined). */
++/**
++ * Minimal frontmatter parser: `key: value` lines between --- fences (quotes stripped, folded `>`/`|` values joined).
++ * A key with nothing after the colon followed by `- item` lines (a YAML block list) becomes "item1, item2".
++ */
+ export function parseFrontmatter(text) {
+   const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+   if (!m) return { meta: {}, body: text };
+   const meta = {};
+   let key = null;
++  let list = false; // the current key had no value on its own line, so `- item` lines are list items
+   for (const line of m[1].split(/\r?\n/)) {
+     const kv = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
+     if (kv) {
+       key = kv[1].toLowerCase();
+       let v = kv[2].trim();
++      list = v === '';
+       if (v === '>' || v === '|' || v === '>-' || v === '|-') v = '';
+       meta[key] = v.replace(/^(["'])([\s\S]*)\1$/, '$2');
++    } else if (key && list && /^\s*-\s+\S/.test(line)) {
++      const item = line.replace(/^\s*-\s+/, '').trim().replace(/^(["'])([\s\S]*)\1$/, '$2');
++      meta[key] = meta[key] ? `${meta[key]}, ${item}` : item;
+     } else if (key && /^\s+\S/.test(line)) meta[key] = (meta[key] ? meta[key] + ' ' : '') + line.trim();
+   }
+   return { meta, body: text.slice(m[0].length) };
+diff --git a/src/engine/slash.mjs b/src/engine/slash.mjs
+index fd08266..0e5571c 100644
+--- a/src/engine/slash.mjs
++++ b/src/engine/slash.mjs
+@@ -6,6 +6,7 @@ import path from 'node:path';
+ import fs from 'node:fs';
+ import { readSkill } from './skills.mjs';
+ import { loadInstructions } from './context.mjs';
++import { loadRules, userRulesDir } from './rules.mjs';
+ import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './hooks.mjs';
+ import { isWinPath } from '../backend.mjs';
+ 
+@@ -26,7 +27,7 @@ export const HELP = [
+   '• `/model fast|plan <provider/model>` sets the fast model (titles, summaries, helper agents) or the plan model for this session; defaults are in Settings → Models.',
+   '• `/branch` continues the conversation in a new tab (files stay as they are); every message of yours also has a Branch button.',
+   '• `/goal <text>` keeps the agent working on its own (up to 6 rounds) until it ends with GOAL_DONE or asks you something. Esc stops it.',
+-  '• `/memory` shows the project memory file (AGENTS.md); `/hooks` lists the commands that run before and after tool calls (Settings → Tools & MCP).',
++  '• `/memory` shows the project memory file (AGENTS.md) and the rules in .agents/rules; `/hooks` lists the commands that run at set moments: session start, each message, each model call, each tool call, and the finish (Settings → Tools & MCP).',
+   '• `/compact [focus]` summarizes older messages to free context (it also happens by itself near the limit).',
+   '• `/undo` reverts the file changes from the last reply. Each edit card also has its own Undo button.',
+   '• `/model`, `/mcp`, `/skills`, `/cost` show or change the model, MCP servers, skills and session cost.',
+@@ -137,6 +138,10 @@ export async function runSlash(agent, text) {
+       const lines = [size == null ? `Project memory file: \`${file}\` does not exist yet. Type /init and the agent writes it.` : `Project memory file: \`${file}\` (${size} bytes). It is loaded into every session. Edit it by hand, or type /init to have the agent refresh it.`];
+       const others = loaded.filter((r) => path.resolve(r.path) !== path.resolve(path.join(host, 'AGENTS.md')));
+       if (others.length) lines.push('Other instruction files in use:', ...others.map((r) => `- \`${r.path}\``));
++      const { rules, errors } = await loadRules(agent.backend, agent.workspace).catch(() => ({ rules: [], errors: [] }));
++      const when = { always_on: 'always', model_decision: 'when the agent decides it applies', glob: 'for files', manual: 'when you @-mention it' };
++      lines.push(rules.length || errors.length ? `Rules (.agents/rules and \`${userRulesDir()}\`):` : `No rules. Add Markdown files with a \`trigger:\` in their frontmatter to .agents/rules (this project) or \`${userRulesDir()}\` (every project).`);
++      lines.push(...rules.map((r) => `- **${r.name}**: ${when[r.trigger]}${r.trigger === 'glob' ? ` ${r.globs.join(', ')}` : ''} (\`${r.path}\`)`), ...errors.map((e) => `  problem: ${e}`));
+       agent._out(lines.join('\n'));
+       return true;
+     }
+@@ -147,7 +152,7 @@ export async function runSlash(agent, text) {
+       const fmt = (r) => listHooks(r).map((x) => `- **${x.event}**${x.matcher ? ` [${x.matcher}]` : ''}: \`${x.command}\``);
+       const out = [`Your hooks (\`${user.file}\`): ${user.exists ? (user.count ? '' : 'none') : 'file not created'}`, ...fmt(user), ...user.errors.map((e) => `  problem: ${e}`)];
+       out.push(`This project's hooks (\`${proj.file}\`): ${proj.exists ? (proj.count ? (hooksTrusted(agent.backend.keyPath(agent.workspace), proj.hooks) ? 'allowed' : 'ask before the first run') : 'none') : 'file not found'}`, ...fmt(proj), ...proj.errors.map((e) => `  problem: ${e}`));
+-      out.push('A hook runs a command with JSON on stdin. Exit code 2 blocks the action and tells the agent why.');
++      out.push('A hook runs a command with JSON on stdin. Exit code 2, or `{"decision":"block","reason":"…"}` on stdout, blocks the action and tells the agent why; `{"additionalContext":"…"}` adds a note for the agent.');
+       agent._out(out.join('\n'));
+       return true;
+     }
+diff --git a/src/engine/tools.mjs b/src/engine/tools.mjs
+index 81ae324..81967a2 100644
+--- a/src/engine/tools.mjs
++++ b/src/engine/tools.mjs
+@@ -752,6 +752,15 @@ export function createTools({ backend, cwd, getSignal }) {
+       return { ok: true, text: `Restored ${u.path}` };
+     },
+ 
++    /** The file a path the model gave points at, as this process opens it; null when it is not a usable path. */
++    hostOf(p) {
++      try {
++        return path.win32.resolve(host(p));
++      } catch {
++        return null;
++      }
++    },
++
+     /** Whether a path the model gave is inside the project folder (compared as Windows paths, ignoring case). */
+     inProject(p) {
+       let file;
+diff --git a/test/rules-hooks.test.mjs b/test/rules-hooks.test.mjs
+new file mode 100644
+index 0000000..20ffa24
+--- /dev/null
++++ b/test/rules-hooks.test.mjs
+@@ -0,0 +1,475 @@
++// Rules with triggers (.agents/rules/*.md) and the hook events and JSON decisions added for parity item 3.13 / 3.16.
++// Mock provider only; nothing leaves this machine.
++import { test, describe, after } from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++
++const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-rules-test-'));
++const DATA = path.join(TMP, 'data');
++process.env.ORBIX_DATA = DATA;
++process.env.ORBIX_NO_RG = '1';
++fs.mkdirSync(path.join(DATA, 'cache'), { recursive: true });
++const rec = (o) => ({ contextWindow: 200000, maxOutput: 8192, cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 }, reasoning: false, vision: true, tools: true, efforts: null, budget: false, toggle: false, interleaved: null, canonical: null, ...o });
++fs.writeFileSync(path.join(DATA, 'cache', 'models-dev.json'), JSON.stringify({ fetchedAt: Date.now(), providers: { anthropic: { 'claude-test': rec({}) } } }));
++
++const realFetch = globalThis.fetch;
++const requests = [];
++let script = [];
++globalThis.fetch = async (url, init) => {
++  const u = String(url);
++  if (/mock\.anthropic.*\/models/.test(u)) return new Response(JSON.stringify({ data: [{ id: 'claude-test', display_name: 'Test' }], has_more: false }), { status: 200, headers: { 'content-type': 'application/json' } });
++  if (/mock\.anthropic/.test(u)) {
++    requests.push({ url: u, body: JSON.parse(init.body) });
++    const next = script.shift();
++    if (!next) throw new Error('no scripted response left');
++    return next(JSON.parse(init.body), init);
++  }
++  return realFetch(url, init);
++};
++
++const { AgentProc } = await import('../src/engine/proc.mjs');
++const { PRESETS } = await import('../src/engine/providers.mjs');
++const { Backend } = await import('../src/backend.mjs');
++const hooks = await import('../src/engine/hooks.mjs');
++const rulesMod = await import('../src/engine/rules.mjs');
++const { parseFrontmatter } = await import('../src/engine/skills.mjs');
++const { runSlash } = await import('../src/engine/slash.mjs');
++
++after(() => {
++  globalThis.fetch = realFetch;
++  fs.rmSync(TMP, { recursive: true, force: true });
++});
++
++const put = (file, content) => {
++  fs.mkdirSync(path.dirname(file), { recursive: true });
++  fs.writeFileSync(file, content);
++  return file;
++};
++
++const enc = new TextEncoder();
++const ev = (event, data) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
++function turn({ text = '', tools = [], stop = 'end_turn' }) {
++  const out = [ev('message_start', { message: { usage: { input_tokens: 100, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } })];
++  let i = 0;
++  if (text) {
++    out.push(ev('content_block_start', { index: i, content_block: { type: 'text', text: '' } }));
++    out.push(ev('content_block_delta', { index: i, delta: { type: 'text_delta', text } }));
++    out.push(ev('content_block_stop', { index: i }));
++    i++;
++  }
++  for (const t of tools) {
++    out.push(ev('content_block_start', { index: i, content_block: { type: 'tool_use', id: t.id, name: t.name } }));
++    out.push(ev('content_block_delta', { index: i, delta: { type: 'input_json_delta', partial_json: JSON.stringify(t.args) } }));
++    out.push(ev('content_block_stop', { index: i }));
++    i++;
++  }
++  out.push(ev('message_delta', { delta: { stop_reason: stop }, usage: { output_tokens: 20 } }));
++  out.push(ev('message_stop', {}));
++  return out.join('');
++}
++const sse = (body) => () => new Response(enc.encode(body), { status: 200, headers: { 'content-type': 'text/event-stream' } });
++const reply = (text) => sse(turn({ text }));
++const calls = (...tools) => sse(turn({ tools, stop: 'tool_use' }));
++
++const makeConfig = (extra = {}) => ({
++  data: { approvals: 'auto', providers: {}, defaultModel: 'anthropic/claude-test' },
++  provider: (id) => PRESETS.find((p) => p.id === id),
++  type: (id) => PRESETS.find((p) => p.id === id)?.type,
++  baseUrl: () => 'http://mock.anthropic',
++  configured: (id) => id === 'anthropic',
++  configuredIds: () => ['anthropic'],
++  getKey: async () => 'test-key',
++  ...extra,
++});
++const procs = [];
++let wsSeq = 0;
++/** A fresh project folder that is its own repository root (so rule lookup never walks above it). */
++function newWs(name = `ws${wsSeq++}`) {
++  const ws = path.join(TMP, name);
++  fs.mkdirSync(path.join(ws, '.git'), { recursive: true });
++  return ws;
++}
++async function make(ws, config = makeConfig()) {
++  const p = new AgentProc({ id: 'p' + procs.length, backend: new Backend({ kind: 'native' }), workspace: ws, config });
++  p.events = [];
++  p.on('event', (e) => p.events.push(e));
++  procs.push(p);
++  await p.start();
++  return p;
++}
++async function waitFor(fn, what = 'condition') {
++  for (let i = 0; i < 600; i++) {
++    const v = fn();
++    if (v) return v;
++    await new Promise((r) => setTimeout(r, 10));
++  }
++  throw new Error(`timed out waiting for ${what}`);
++}
++async function send(p, message) {
++  const from = p.events.length;
++  const res = await p.request({ type: 'prompt', message });
++  assert.equal(res.success, true);
++  return waitFor(() => p.events.slice(from).find((e) => e.type === 'agent_end'), 'agent_end');
++}
++after(async () => {
++  for (const p of procs) await p.stop();
++});
++const bodies = (from = 0) => requests.slice(from).map((r) => r.body);
++const systemOf = (body) => body.system.map((b) => b.text).join('\n');
++const toolResults = (p) => p.messages.filter((m) => m.role === 'toolResult').map((m) => m.content[0].text);
++
++// =====================================================================================================
++describe('rule files: frontmatter and triggers', () => {
++  const info = { name: 'r', path: 'r.md', hostPath: 'r.md', scope: 'project' };
++
++  test('no frontmatter, or frontmatter without a trigger, is not a rule', () => {
++    assert.match(rulesMod.parseRule('Just text, no frontmatter.', info).error, /no frontmatter with a trigger/);
++    assert.match(rulesMod.parseRule('---\ndescription: x\n---\nbody', info).error, /no frontmatter with a trigger/);
++    assert.deepEqual(parseFrontmatter('plain').meta, {});
++  });
++
++  test('CRLF line endings, a BOM, and quoted values', () => {
++    const r = rulesMod.parseRule('\ufeff---\r\ntrigger: "always_on"\r\ndescription: \'Use tabs: always\'\r\n---\r\nLine one\r\nLine two\r\n', info).rule;
++    assert.equal(r.trigger, 'always_on');
++    assert.equal(r.description, 'Use tabs: always');
++    assert.equal(r.text, 'Line one\r\nLine two');
++    const g = rulesMod.parseRule('---\r\ntrigger: glob\r\nglobs: "*.py, *_test.py"\r\n---\r\nPEP 8', info).rule;
++    assert.deepEqual(g.globs, ['*.py', '*_test.py']);
++  });
++
++  test('trigger spellings: always_on, "Always On", always-on and model decision are accepted; alwaysOn is not', () => {
++    for (const t of ['always_on', 'Always On', 'always-on', 'ALWAYS_ON']) assert.equal(rulesMod.normalizeTrigger(t), 'always_on', t);
++    assert.equal(rulesMod.normalizeTrigger('model decision'), 'model_decision');
++    assert.equal(rulesMod.normalizeTrigger('alwaysOn'), null);
++    assert.match(rulesMod.parseRule('---\ntrigger: alwaysOn\n---\nx', info).error, /unknown trigger "alwaysOn"/);
++  });
++
++  test('globs: comma list, [a, b] list, YAML block list and the singular "glob" key', () => {
++    assert.deepEqual(rulesMod.parseRule('---\ntrigger: glob\nglobs: ["*.ts", \'src/**/*.tsx\']\n---\nx', info).rule.globs, ['*.ts', 'src/**/*.tsx']);
++    assert.deepEqual(rulesMod.parseRule('---\ntrigger: glob\nglobs:\n  - "*.py"\n  - docs/*.md\n---\nx', info).rule.globs, ['*.py', 'docs/*.md']);
++    assert.deepEqual(rulesMod.parseRule('---\ntrigger: glob\nglob: "*.go"\n---\nx', info).rule.globs, ['*.go']);
++    assert.match(rulesMod.parseRule('---\ntrigger: glob\n---\nx', info).error, /needs globs/);
++    assert.match(rulesMod.parseRule('---\ntrigger: model_decision\n---\nx', info).error, /needs a description/);
++    // a folded description keeps working as before (skills use the same parser)
++    assert.equal(parseFrontmatter('---\ndescription: >\n  one\n  two\n---\n').meta.description, 'one two');
++  });
++
++  test('rulesForFile: a name pattern matches at any depth, a path pattern from the project folder, braces work', () => {
++    const rules = [
++      { name: 'py', trigger: 'glob', globs: ['*.py'] },
++      { name: 'web', trigger: 'glob', globs: ['web/**/*.{js,css}'] },
++      { name: 'm', trigger: 'manual', globs: ['*.py'] },
++    ];
++    const names = (rel) => rulesMod.rulesForFile(rules, rel).map((r) => r.name);
++    assert.deepEqual(names('src\\deep\\app.py'), ['py']);
++    assert.deepEqual(names('web/js/a.js'), ['web']);
++    assert.deepEqual(names('web/a.css'), ['web']);
++    assert.deepEqual(names('lib/web/a.js'), []);
++    assert.deepEqual(names('README.md'), []);
++  });
++
++  test('mentionedRules: @name and @name.md find rules that are not always on', () => {
++    const rules = [{ name: 'Style', trigger: 'manual' }, { name: 'base', trigger: 'always_on' }, { name: 'db', trigger: 'model_decision' }];
++    assert.deepEqual(rulesMod.mentionedRules(rules, 'follow @style, and @db.md please; @base @nothing a@style').map((x) => x.rule.name), ['Style', 'db']);
++  });
++
++  test('loadRules: .agents/rules and .agent/rules up to the repository root, then yours; nearer wins; problems are listed', async () => {
++    const repo = newWs('repo-load');
++    const ws = path.join(repo, 'pkg');
++    put(path.join(ws, '.agents', 'rules', 'style.md'), '---\ntrigger: always_on\n---\nNear style');
++    put(path.join(ws, '.agents', 'rules', 'notes.txt'), 'not markdown');
++    put(path.join(ws, '.agent', 'rules', 'legacy.md'), '---\ntrigger: manual\n---\nLegacy');
++    put(path.join(repo, '.agents', 'rules', 'style.md'), '---\ntrigger: always_on\n---\nFar style');
++    put(path.join(repo, '.agents', 'rules', 'db.md'), '---\ntrigger: model_decision\ndescription: Database work\n---\nUse migrations');
++    put(path.join(repo, '.agents', 'rules', 'broken.md'), 'no frontmatter');
++    const userDir = path.join(TMP, 'user-rules-load');
++    put(path.join(userDir, 'db.md'), '---\ntrigger: always_on\n---\nMine');
++    put(path.join(userDir, 'mine.md'), '---\ntrigger: always_on\n---\nOnly mine');
++    const { rules, errors } = await rulesMod.loadRules(new Backend({ kind: 'native' }), ws, { userDir });
++    assert.deepEqual(rules.map((r) => [r.name, r.scope]).sort(), [['db', 'project'], ['legacy', 'project'], ['mine', 'user'], ['style', 'project']]);
++    assert.equal(rules.find((r) => r.name === 'style').text, 'Near style');
++    assert.equal(rules.find((r) => r.name === 'db').path, path.join(repo, '.agents', 'rules', 'db.md'));
++    assert.deepEqual(errors, ['broken: no frontmatter with a trigger, so it is not loaded']);
++  });
++
++  test('rulesPrompt: always-on rules in full, model-decision rules as name, description and path; over the budget the largest becomes a pointer', () => {
++    const rules = [
++      { name: 'small', trigger: 'always_on', text: 'S'.repeat(10), path: 'a/small.md', description: '' },
++      { name: 'big', trigger: 'always_on', text: 'B'.repeat(100), path: 'a/big.md', description: 'Big one' },
++      { name: 'db', trigger: 'model_decision', text: 'secret body', path: 'a/db.md', description: 'Database work' },
++      { name: 'g', trigger: 'glob', text: 'glob body', path: 'a/g.md', globs: ['*'] },
++      { name: 'm', trigger: 'manual', text: 'manual body', path: 'a/m.md' },
++    ];
++    const full = rulesMod.rulesPrompt(rules);
++    assert.match(full, /<rule name="small" path="a\/small\.md">\nSSSSSSSSSS\n<\/rule>/);
++    assert.match(full, /- db: Database work \[a\/db\.md\]/);
++    assert.ok(!/secret body|glob body|manual body/.test(full));
++    const tight = rulesMod.rulesPrompt(rules, { budget: 50 });
++    assert.ok(!tight.includes('BBBB'));
++    assert.match(tight, /- big: Big one \[a\/big\.md\]/);
++    assert.match(tight, /SSSSSSSSSS/);
++    assert.equal(rulesMod.rulesPrompt([rules[3], rules[4]]), '');
++  });
++});
++
++describe('rules in a session', () => {
++  test('always-on rules are in the system prompt, model-decision rules are listed, glob and manual ones are not; AGENTS.md is unchanged', async () => {
++    const ws = newWs();
++    put(path.join(ws, 'AGENTS.md'), 'Agents file text');
++    put(path.join(ws, '.agents', 'rules', 'tabs.md'), '---\ntrigger: always_on\n---\nIndent with tabs.');
++    put(path.join(ws, '.agents', 'rules', 'db.md'), '---\ntrigger: model_decision\ndescription: Changing the database schema\n---\nWrite a migration.');
++    put(path.join(ws, '.agents', 'rules', 'py.md'), '---\ntrigger: glob\nglobs: "*.py"\n---\nPython rule body.');
++    put(path.join(ws, '.agents', 'rules', 'release.md'), '---\ntrigger: manual\n---\nRelease rule body.');
++    const p = await make(ws);
++    const n = requests.length;
++    script = [reply('ok')];
++    await send(p, 'hi');
++    const sys = systemOf(bodies(n)[0]);
++    assert.match(sys, /<instructions path="[^"]*AGENTS\.md">\nAgents file text\n<\/instructions>/);
++    assert.match(sys, /# Rules[\s\S]*<rule name="tabs" path="[^"]*tabs\.md">\nIndent with tabs\.\n<\/rule>/);
++    assert.match(sys, /- db: Changing the database schema \[[^\]]*db\.md\]/);
++    assert.ok(!/Write a migration|Python rule body|Release rule body/.test(sys));
++  });
++
++  test('glob rule: added to the result of the first read of a matching file, once; other files get nothing', async () => {
++    const ws = newWs();
++    put(path.join(ws, '.agents', 'rules', 'py.md'), '---\ntrigger: glob\nglobs: "*.py"\n---\nPython rule body.');
++    put(path.join(ws, 'src', 'app.py'), 'print(1)');
++    put(path.join(ws, 'src', 'b.py'), 'print(2)');
++    put(path.join(ws, 'notes.txt'), 'notes');
++    const p = await make(ws);
++    script = [calls({ id: 'r1', name: 'read', args: { path: 'notes.txt' } }), calls({ id: 'r2', name: 'read', args: { path: 'src/app.py' } }), calls({ id: 'r3', name: 'read', args: { path: 'src/b.py' } }), reply('done')];
++    await send(p, 'look around');
++    const [notes, app, b] = toolResults(p);
++    assert.ok(!/Python rule body/.test(notes));
++    assert.match(app, /\[Rules for this file; follow them\]\n<rule name="py" [^>]*trigger="glob" applies="\*\.py">\nPython rule body\.\n<\/rule>/);
++    assert.ok(!/Python rule body/.test(b), 'shown once per session');
++    assert.ok(p.events.some((e) => e.type === 'notice' && /Rule applied for src\/app\.py: py/.test(e.message)));
++  });
++
++  test('glob rule: a written file and an @-mentioned file trigger it too', async () => {
++    const ws = newWs();
++    put(path.join(ws, '.agents', 'rules', 'ts.md'), '---\ntrigger: glob\nglobs: ["*.ts"]\n---\nTS rule body.');
++    put(path.join(ws, '.agents', 'rules', 'css.md'), '---\ntrigger: glob\nglobs: "*.css"\n---\nCSS rule body.');
++    put(path.join(ws, 'a.css'), 'body{}');
++    const p = await make(ws);
++    script = [calls({ id: 'w1', name: 'write', args: { path: 'x.ts', content: 'let a = 1;' } }), reply('done')];
++    await send(p, 'write it');
++    assert.match(toolResults(p)[0], /TS rule body\./);
++    const n = requests.length;
++    script = [reply('ok')];
++    await send(p, 'check @a.css');
++    assert.match(JSON.stringify(bodies(n)[0].messages.at(-1)), /CSS rule body\./);
++  });
++
++  test('manual rule: only when you @-mention it by name', async () => {
++    const ws = newWs();
++    put(path.join(ws, '.agents', 'rules', 'release.md'), '---\ntrigger: manual\ndescription: Releases\n---\nRelease rule body.');
++    const p = await make(ws);
++    const n = requests.length;
++    script = [reply('a'), reply('b')];
++    await send(p, 'how do we release?');
++    assert.ok(!JSON.stringify(bodies(n)[0]).includes('Release rule body'));
++    await send(p, 'follow @release now');
++    assert.match(JSON.stringify(bodies(n)[1].messages.at(-1)), /Release rule body\./);
++    assert.ok(p.messages.findLast((m) => m.role === 'user').attachments.some((a) => /release\.md$/.test(a.path)));
++  });
++
++  test('model-decision rule: the agent reads it with read, without the outside-the-project question, even from your own rules folder', async () => {
++    const ws = newWs();
++    const mine = put(path.join(rulesMod.userRulesDir(), 'commits.md'), '---\ntrigger: model_decision\ndescription: Writing commit messages\n---\nUse the imperative mood.');
++    try {
++      const p = await make(ws, makeConfig({ data: { approvals: 'ask', providers: {}, defaultModel: 'anthropic/claude-test' } }));
++      p._askUser = async () => assert.fail('must not ask to read a listed rule');
++      const n = requests.length;
++      script = [calls({ id: 'r1', name: 'read', args: { path: mine } }), reply('done')];
++      await send(p, 'commit this');
++      assert.match(systemOf(bodies(n)[0]), new RegExp(`- commits: Writing commit messages \\[${mine.replace(/[\\.]/g, '\\$&')}\\]`));
++      assert.match(toolResults(p)[0], /Use the imperative mood\./);
++      // any other file outside the project still asks
++      assert.equal(p._outside({ name: 'read' }, { path: path.join(TMP, 'elsewhere.txt') }), true);
++      assert.equal(p._outside({ name: 'read' }, { path: mine }), false);
++    } finally {
++      fs.rmSync(mine, { force: true });
++    }
++  });
++
++  test('/memory lists the rules and the files that are not loaded', async () => {
++    const ws = newWs();
++    put(path.join(ws, '.agents', 'rules', 'py.md'), '---\ntrigger: glob\nglobs: "*.py"\n---\nx');
++    put(path.join(ws, '.agents', 'rules', 'bad.md'), '---\ntrigger: sometimes\n---\nx');
++    const out = [];
++    await runSlash({ workspace: ws, backend: { hostPath: (p) => p, keyPath: (p) => p }, _out: (t) => out.push(t) }, '/memory');
++    assert.match(out[0], /- \*\*py\*\*: for files \*\.py/);
++    assert.match(out[0], /problem: bad: unknown trigger "sometimes"/);
++  });
++});
++
++// =====================================================================================================
++describe('hook events and JSON decisions', () => {
++  const nodeCmd = (file) => `"${process.execPath}" "${file}"`;
++  const hooksFile = hooks.userHooksPath();
++  const writeHooks = (obj) => put(hooksFile, JSON.stringify({ hooks: obj }));
++  after(() => fs.rmSync(hooksFile, { force: true }));
++  let seq = 0;
++  /** A hook script: appends its stdin JSON to `log` (one line each), then runs `body` (with `j` the parsed input). */
++  const hookJs = (body, log = path.join(TMP, `log${seq}.jsonl`)) => ({ file: put(path.join(TMP, `hook${seq++}.js`), `let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{require('fs').appendFileSync(${JSON.stringify(log)},d.replace(/\\n/g,' ')+'\\n');const j=JSON.parse(d);${body}})`), log });
++  const lines = (log) => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
++
++  test('parseHookOutput: decisions, reasons and context in both shapes; plain text is not a decision', () => {
++    const P = hooks.parseHookOutput;
++    assert.deepEqual(P('{"decision":"block","reason":"no"}'), { decision: 'block', reason: 'no', context: '' });
++    assert.equal(P('{"decision":"deny"}').decision, 'block');
++    assert.equal(P('{"decision":"allow"}').decision, 'allow');
++    assert.equal(P('{"decision":"Continue"}').decision, 'continue');
++    assert.equal(P('{"terminationBehavior":"terminate"}').decision, 'block');
++    assert.equal(P('{"terminationBehavior":"force_continue"}').decision, 'continue');
++    assert.equal(P('{"additionalContext":"ctx"}').context, 'ctx');
++    assert.equal(P('{"hookSpecificOutput":{"additionalContext":"cc"}}').context, 'cc');
++    assert.equal(P('{"injectSteps":[{"systemMessage":"s"},{"userMessage":"u"},{"errorMessage":"e"}]}').context, 's\nu');
++    assert.equal(P('{}').decision, null);
++    assert.equal(P('all good'), null);
++    assert.equal(P('{broken'), null);
++    assert.equal(P('[1]'), null);
++  });
++
++  test('hooks files: the new events are accepted, entries may hold a "hooks" list, other types are reported', () => {
++    const f = put(path.join(TMP, 'events.json'), JSON.stringify({ hooks: {
++      SessionStart: [{ command: 's' }],
++      PreInvocation: [{ command: 'a' }],
++      PostInvocation: [{ hooks: [{ type: 'command', command: 'b', timeout: 3 }, { type: 'prompt', command: 'x' }] }],
++      PreToolUse: [{ matcher: 'bash', hooks: [{ command: 'c' }] }],
++    } }));
++    const r = hooks.readHooksFile(f);
++    assert.deepEqual(hooks.listHooks(r).map((x) => [x.event, x.matcher, x.command, x.timeout]), [['SessionStart', '', 's', 10], ['PreInvocation', '', 'a', 10], ['PostInvocation', '', 'b', 3], ['PreToolUse', 'bash', 'c', 10]]);
++    assert.deepEqual(r.errors, ['A PostInvocation hook has type "prompt"; only "command" is supported']);
++    assert.ok(hooks.HOOK_EVENTS.includes('SessionStart') && hooks.HOOK_EVENTS.includes('PreInvocation') && hooks.HOOK_EVENTS.includes('PostInvocation'));
++  });
++
++  test('SessionStart: once per session, when its first message is accepted; its context reaches the model; it cannot block', async () => {
++    const ctx = hookJs(`console.log(JSON.stringify({additionalContext:'Today is release day.'}))`);
++    const blocker = hookJs(`console.log(JSON.stringify({decision:'block',reason:'nope'}))`);
++    writeHooks({ SessionStart: [{ command: nodeCmd(ctx.file) }, { command: nodeCmd(blocker.file) }] });
++    const p = await make(newWs());
++    const n = requests.length;
++    script = [reply('a'), reply('b')];
++    await send(p, 'first');
++    await send(p, 'second');
++    const runs = lines(ctx.log);
++    assert.equal(runs.length, 1);
++    assert.equal(runs[0].event, 'SessionStart');
++    assert.equal(runs[0].source, 'new');
++    assert.equal(runs[0].sessionId, p.sessionId);
++    assert.match(JSON.stringify(bodies(n)[0].messages), /\[SessionStart hook\] Today is release day\./);
++    assert.equal(bodies(n).length, 2, 'the block was ignored: both messages reached the model');
++    assert.ok(p.events.some((e) => e.type === 'notice' && /SessionStart hook cannot block/.test(e.message)));
++  });
++
++  test('UserPromptSubmit: JSON block stops the message, exit 2 still does, additionalContext follows the message', async () => {
++    const gate = hookJs(`if(j.input.prompt.includes('json'))console.log(JSON.stringify({decision:'block',reason:'json says no'}));else if(j.input.prompt.includes('exit'))(console.error('exit says no'),process.exit(2));else console.log(JSON.stringify({decision:'allow',additionalContext:'Branch is main.'}))`);
++    writeHooks({ UserPromptSubmit: [{ command: nodeCmd(gate.file) }] });
++    const p = await make(newWs());
++    const n = requests.length;
++    await send(p, 'json please');
++    await send(p, 'exit please');
++    assert.equal(requests.length, n);
++    assert.ok(p.events.some((e) => e.type === 'notice' && /A hook blocked this message: json says no/.test(e.message)));
++    assert.ok(p.events.some((e) => e.type === 'notice' && /A hook blocked this message: exit says no/.test(e.message)));
++    script = [reply('ok')];
++    await send(p, 'hello');
++    const msgs = bodies(n)[0].messages;
++    assert.match(JSON.stringify(msgs.at(-1)), /\[UserPromptSubmit hook\] Branch is main\./);
++    assert.match(JSON.stringify(msgs.at(-2)), /hello/);
++  });
++
++  test('PreInvocation and PostInvocation: once per model call, in order, with the invocation number and the reply', async () => {
++    const order = path.join(TMP, 'order.jsonl');
++    const pre = hookJs('', order);
++    const post = hookJs('', order);
++    writeHooks({ PreInvocation: [{ command: nodeCmd(pre.file) }], PostInvocation: [{ command: nodeCmd(post.file) }] });
++    const ws = newWs();
++    const p = await make(ws);
++    script = [calls({ id: 'g1', name: 'glob', args: { pattern: '*.none' } }), reply('done')];
++    await send(p, 'go');
++    const seen = lines(order).map((j) => [j.event, j.invocationNum]);
++    assert.deepEqual(seen, [['PreInvocation', 1], ['PostInvocation', 1], ['PreInvocation', 2], ['PostInvocation', 2]]);
++    const posts = lines(order).filter((j) => j.event === 'PostInvocation');
++    assert.deepEqual(posts[0].toolCalls, [{ name: 'glob', args: { pattern: '*.none' } }]);
++    assert.equal(posts[1].text, 'done');
++    assert.equal(posts[1].stopReason, 'stop');
++  });
++
++  test('PreInvocation: a block stops the run before the model is called; context is added before the call', async () => {
++    const pre = hookJs(`if(j.invocationNum===1)console.log(JSON.stringify({injectSteps:[{systemMessage:'Remember the style guide.'}]}));else(console.error('budget used up'),process.exit(2))`);
++    writeHooks({ PreInvocation: [{ command: nodeCmd(pre.file) }] });
++    const p = await make(newWs());
++    const n = requests.length;
++    script = [calls({ id: 'g1', name: 'glob', args: { pattern: '*.none' } }), reply('never')];
++    const end = await send(p, 'go');
++    assert.equal(requests.length - n, 1, 'the second model call never happened');
++    assert.match(JSON.stringify(bodies(n)[0].messages.at(-1)), /\[PreInvocation hook\] Remember the style guide\./);
++    assert.equal(end.stopReason, 'hook');
++    assert.ok(p.events.some((e) => e.type === 'notice' && /A PreInvocation hook stopped the agent: budget used up/.test(e.message)));
++    script.length = 0;
++  });
++
++  test('PostInvocation: a block ends the run and the reply\'s tool calls do not run; the next request is still valid', async () => {
++    const post = hookJs(`if(j.toolCalls.some(c=>c.name==='write'))console.log(JSON.stringify({decision:'block',reason:'no writes today'}))`);
++    writeHooks({ PostInvocation: [{ command: nodeCmd(post.file) }] });
++    const ws = newWs();
++    const p = await make(ws);
++    const n = requests.length;
++    script = [calls({ id: 'w1', name: 'write', args: { path: 'x.txt', content: 'x' } })];
++    const end = await send(p, 'write');
++    assert.equal(end.stopReason, 'hook');
++    assert.ok(!fs.existsSync(path.join(ws, 'x.txt')));
++    assert.match(toolResults(p)[0], /Not run: a PostInvocation hook stopped the agent: no writes today/);
++    script = [reply('ok')];
++    await send(p, 'and now?');
++    const msgs = bodies(n)[1].messages;
++    assert.ok(msgs.some((m) => m.role === 'user' && Array.isArray(m.content) && m.content.some((c) => c.type === 'tool_result' && c.tool_use_id === 'w1')));
++  });
++
++  test('PostInvocation context reaches the model at its next call, after the tool results', async () => {
++    const post = hookJs(`if(j.invocationNum===1)console.log(JSON.stringify({additionalContext:'Tests are slow; run one file.'}))`);
++    writeHooks({ PostInvocation: [{ command: nodeCmd(post.file) }] });
++    const p = await make(newWs());
++    const n = requests.length;
++    script = [calls({ id: 'g1', name: 'glob', args: { pattern: '*.none' } }), reply('done')];
++    await send(p, 'go');
++    const msgs = bodies(n)[1].messages;
++    assert.match(JSON.stringify(msgs.at(-1)), /\[PostInvocation hook\] Tests are slow; run one file\./);
++    assert.ok(JSON.stringify(msgs.at(-2)).includes('tool_result'));
++  });
++
++  test('PreToolUse: "allow" lets the call run, "deny" blocks it, exit 2 still blocks (existing configs keep working)', async () => {
++    const pre = hookJs(`const p=j.input.path||'';if(p.includes('deny'))console.log(JSON.stringify({decision:'deny',reason:'denied by policy'}));else if(p.includes('exit'))(console.error('exit two'),process.exit(2));else console.log(JSON.stringify({decision:'allow'}))`);
++    writeHooks({ PreToolUse: [{ matcher: 'write', command: nodeCmd(pre.file) }] });
++    const ws = newWs();
++    const p = await make(ws);
++    script = [calls({ id: 'a', name: 'write', args: { path: 'ok.txt', content: '1' } }, { id: 'b', name: 'write', args: { path: 'deny.txt', content: '2' } }, { id: 'c', name: 'write', args: { path: 'exit.txt', content: '3' } }), reply('done')];
++    await send(p, 'write three');
++    const [a, b, c] = toolResults(p);
++    assert.ok(fs.existsSync(path.join(ws, 'ok.txt')));
++    assert.doesNotMatch(a, /Blocked/);
++    assert.match(b, /Blocked by a hook: denied by policy/);
++    assert.match(c, /Blocked by a hook: exit two/);
++    assert.ok(!fs.existsSync(path.join(ws, 'deny.txt')) && !fs.existsSync(path.join(ws, 'exit.txt')));
++  });
++
++  test('PostToolUse additionalContext becomes feedback; Stop {"decision":"continue"} asks for one more step', async () => {
++    const post = hookJs(`console.log(JSON.stringify({additionalContext:'lint clean'}))`);
++    const stop = hookJs(`console.log(JSON.stringify({decision:'continue',reason:'summarize first'}))`);
++    writeHooks({ PostToolUse: [{ matcher: 'glob', command: nodeCmd(post.file) }], Stop: [{ command: nodeCmd(stop.file) }] });
++    const p = await make(newWs());
++    const n = requests.length;
++    script = [calls({ id: 'g1', name: 'glob', args: { pattern: '*.none' } }), reply('first'), reply('second')];
++    await send(p, 'go');
++    assert.match(toolResults(p)[0], /\[Hook feedback\] lint clean/);
++    assert.equal(requests.length - n, 3);
++    assert.match(JSON.stringify(bodies(n)[2].messages.at(-1)), /A Stop hook asks you to continue: summarize first/);
++    assert.equal(lines(stop.log).length, 1, 'once per run');
++  });
++});
+diff --git a/web/js/toolset.js b/web/js/toolset.js
+index d0ad19f..68c41ef 100644
+--- a/web/js/toolset.js
++++ b/web/js/toolset.js
+@@ -84,7 +84,7 @@ export async function renderHooksSettings(root, ws) {
+   const proj = data.project;
+   replace(root,
+     h('h4', { class: 'set-sub' }, 'Hooks'),
+-    h('p', { class: 'set-note' }, 'A hook is your own command that runs at a set moment: before a tool runs (PreToolUse), after it runs (PostToolUse), when you send a message (UserPromptSubmit), or when the agent is about to finish (Stop). It receives the details as JSON on standard input. Exit code 2 blocks the action and tells the agent why; any other error only shows a warning. Each hook has 10 seconds to finish. Hooks live in files, so this list is read-only.'),
++    h('p', { class: 'set-note' }, 'A hook is your own command that runs at a set moment: when a session starts (SessionStart), when you send a message (UserPromptSubmit), before and after each model call (PreInvocation, PostInvocation), before and after a tool runs (PreToolUse, PostToolUse), or when the agent is about to finish (Stop). It receives the details as JSON on standard input. Exit code 2, or {"decision":"block","reason":"…"} on standard output, blocks the action and tells the agent why; {"additionalContext":"…"} adds a note for the agent. Any other error only shows a warning. Each hook has 10 seconds to finish. Hooks live in files, so this list is read-only.'),
+     h('code', { class: 'mcp-cmd' }, '{ "hooks": { "PreToolUse": [ { "matcher": "bash|edit", "command": "node check.js" } ] } }'),
+     block('Your hooks', data.user, 'user'),
+     proj

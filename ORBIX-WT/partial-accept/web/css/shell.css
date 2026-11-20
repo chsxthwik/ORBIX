@@ -1,0 +1,197 @@
+/* The desktop shell, loaded last. A menu row and a toolbar across the top; the sidebar on the same dark frame; the
+   workspace as one sheet with a rounded top-left corner; a floating Overview card; a quiet, narrow conversation
+   with a navigator of dots on its left edge; a rounded message box with "+", the model and its thinking level on the
+   left and the permission chip and a round send button on the right. Dark is a neutral near-black. Only layout,
+   size and the Dark palette are set here; every other theme keeps its own colours. */
+
+/* ---- Dark: neutral near-black, the frame darker than the sheet ---- */
+:root:not([data-mode=light]):not([data-theme=midnight]):not([data-scene]) {
+  --chrome: #0B0B0B; --bg-side: #0B0B0B; --bg: #111111; --bg-raise: #1A1A1A; --bg-raise-2: #212121; --bg-modal: #171717; --bg-inset: #0D0D0D; --bg-field: #161616;
+  --bg-hover: rgba(255,255,255,.05); --bg-active: rgba(255,255,255,.085); --bubble: #1F1F1F; --bubble-line: transparent;
+  --line: rgba(255,255,255,.075); --line-2: rgba(255,255,255,.11); --line-3: rgba(255,255,255,.2);
+  --fg: #E9E9E7; --fg-2: #A5A5A2; --fg-3: #777774;
+  --menubar: #151515;
+}
+:root {
+  --menubar: color-mix(in srgb, var(--chrome) 90%, var(--fg));
+  --mb-h: 30px; --tb-h: 42px;
+  --col: clamp(600px, 46vw, 720px);
+  --fs: 14px;
+}
+
+/* ================= frame ================= */
+body { display: flex; flex-direction: column; height: 100vh; background: var(--chrome); }
+.chrome { flex: none; background: var(--chrome); }
+.app, .app.no-side, .app.overlay-side { flex: 1 1 auto; min-height: 0; height: auto; padding: 0; background: var(--chrome); }
+.app .sidebar { margin-top: 0; background: var(--chrome); }
+.main { position: relative; border: 1px solid var(--line); border-right: 0; border-bottom: 0; border-radius: 12px 0 0 0; background: var(--bg); box-shadow: none; container: main / inline-size; }
+.app.no-side .main { border-left: 0; border-radius: 0; }
+.app:not(.no-panel):not(.overlay-panel) .panel { border: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 0; background: var(--bg); box-shadow: none; }
+.app.overlay-panel .panel { top: 0; right: 0; bottom: 0; border-radius: 12px 0 0 12px; }
+#rs-panel { width: 0; }
+#rs-panel::before { left: -4px; width: 9px; }
+#rs-panel::after { left: -1px; }
+
+/* ================= menu row ================= */
+.menubar { display: flex; align-items: center; height: var(--mb-h); padding: 0 6px; background: var(--menubar); }
+.mb-row { display: flex; align-items: center; gap: 1px; }
+.mb-it { height: 22px; padding: 0 9px; border-radius: 5px; color: var(--fg-2); font: 400 12.5px/22px var(--font); }
+.mb-it:hover, .mb-it.open { background: var(--bg-active); color: var(--fg); }
+.mb-it:focus-visible { outline-offset: -1px; }
+
+/* ================= toolbar ================= */
+.toolbar { display: flex; align-items: center; gap: 4px; height: var(--tb-h); padding: 0 8px; }
+.tb-lead { display: flex; align-items: center; gap: 2px; flex: none; }
+.side-open .tb-lead { width: calc(var(--side-w) - 8px); }
+.tb-mark { display: grid; place-items: center; width: 32px; height: 32px; margin-right: 2px; border-radius: 8px; color: var(--fg); }
+.tb-mark:hover { background: var(--bg-hover); }
+.tb-mark .logo { width: 20px; height: 20px; }
+.toolbar .ibtn { width: 30px; height: 30px; min-height: 30px; border-radius: 8px; color: var(--fg-2); }
+.toolbar .ibtn svg { width: 16px; height: 16px; }
+.toolbar .ibtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.toolbar .ibtn.on { background: var(--bg-active); color: var(--fg); }
+.toolbar .ibtn:disabled { opacity: .32; cursor: default; }
+.crumbs { display: flex; align-items: center; gap: 2px; flex: 0 1 auto; min-width: 0; padding-left: 6px; font-size: 13px; }
+.crumb { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; max-width: 34ch; height: 26px; padding: 0 6px; border-radius: 6px; color: var(--fg-2); white-space: nowrap; }
+.crumb > bdi { overflow: hidden; text-overflow: ellipsis; }
+.crumb.cur { color: var(--fg); font-weight: 500; max-width: 52ch; }
+.crumb:not(.static):hover { background: var(--bg-hover); color: var(--fg); }
+.crumb.static { cursor: default; }
+.crumb-sep { flex: none; color: var(--fg-3); }
+.crumb-st { display: inline-flex; align-items: center; gap: 6px; flex: none; margin-left: 6px; color: var(--fg-3); font-size: 12px; white-space: nowrap; }
+.crumb-st.run { color: var(--fg-2); }
+.crumb-st.wait { color: var(--warn); }
+.crumb-br { display: inline-flex; align-items: center; gap: 5px; flex: 0 1 auto; min-width: 0; max-width: 26ch; height: 22px; margin-left: 8px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--fg-3); font-size: 12px; white-space: nowrap; }
+.crumb-br:hover { border-color: var(--line-2); color: var(--fg); }
+.crumb-br b { color: var(--fg-2); font-weight: 500; }
+.tb-end { display: flex; align-items: center; gap: 2px; flex: none; }
+@media (max-width: 900px) { .crumb-br, .crumb-st > :not(.dot) { display: none; } .crumbs > .crumb:first-child, .crumbs > .crumb-sep { display: none; } }
+
+/* ================= sidebar ================= */
+.sidebar { --sb-pad: 8px; --sb-ic: 28px; }
+.app .sidebar .side-new { height: 32px; margin: 4px var(--sb-pad) 8px; padding: 0 10px; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-raise); color: var(--fg); font-size: 13px; font-weight: 500; box-shadow: none; }
+.sidebar .side-new:hover { border-color: var(--line-2); background: var(--bg-raise-2); }
+.sidebar .side-new.cur { border-color: var(--line-2); }
+.sidebar .side-new svg { color: var(--fg-2); }
+.app .sidebar .side-nav { gap: 1px; padding: 0 var(--sb-pad) 4px; }
+.sidebar .side-link { height: 30px; gap: 9px; padding: 0 10px; border-radius: 7px; color: var(--fg-2); font-size: 13px; font-weight: 400; }
+.sidebar .side-link svg { width: 15px; height: 15px; color: var(--fg-3); }
+.sidebar .side-link.cur { background: var(--bg-active); color: var(--fg); font-weight: 500; box-shadow: none; }
+.app .sidebar .side-scroll { padding: 4px var(--sb-pad) 12px; }
+.sidebar .side-h { height: 28px; margin-top: 14px; padding: 0 2px 0 10px; font: 400 12px/1 var(--font); color: var(--fg-3); }
+.sidebar .proj-btn { height: 30px; font-size: 13px; font-weight: 400; color: var(--fg-3); }
+.sidebar .proj-btn:hover { color: var(--fg); }
+.sidebar .proj-n { display: none; }
+.sidebar .s-btn { height: 30px; padding-right: 8px; border-radius: 7px; font-size: 13px; color: var(--fg-2); }
+.sidebar .s-row.cur .s-btn { background: var(--bg-active); color: var(--fg); box-shadow: none; font-weight: 500; }
+.sidebar .s-when { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.sidebar .s-row:hover .s-when, .sidebar .s-row:focus-within .s-when { visibility: hidden; }
+.sidebar .row-acts .ibtn.on { color: var(--fg); background: transparent; }
+.app .sidebar .side-foot { padding: 6px var(--sb-pad) 8px; border-top: 0; }
+.sidebar .foot-set { height: 30px; }
+.sidebar .run-row { min-height: 40px; border-radius: 7px; }
+.sidebar .run-row.cur { box-shadow: none; }
+
+/* The card that previews a conversation when the pointer rests on it. */
+.hcard { position: fixed; z-index: 90; width: 248px; padding: 10px 12px 11px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-raise); box-shadow: var(--shadow-pop); color: var(--fg-3); font-size: 12px; pointer-events: none; animation: hc-in var(--t2) var(--ease-out); }
+@keyframes hc-in { from { opacity: 0; transform: translateX(-4px); } }
+.hc-t { margin-bottom: 6px; color: var(--fg); font-size: 13px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.hc-l { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 3px; }
+.hc-l svg { flex: none; opacity: .8; }
+.hc-st.warn { color: var(--warn); } .hc-st.run { color: var(--fg-2); }
+.hc-p { display: -webkit-box; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--fg-2); line-height: 1.45; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+
+/* ================= Overview card ================= */
+.overview { position: absolute; top: 12px; right: 14px; z-index: 7; width: 236px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-raise); box-shadow: var(--shadow-2); font-size: 13px; }
+.overview.in { animation: pop var(--t3) var(--ease-out); }
+.ov-h { display: flex; align-items: center; height: 26px; padding: 0 8px; color: var(--fg-3); font-size: 12px; }
+.overview .ov-it { display: flex; align-items: center; gap: 10px; width: 100%; height: 30px; padding: 0 8px; border-radius: 7px; color: var(--fg-2); text-align: left; }
+.overview .ov-it svg { flex: none; color: var(--fg-3); }
+.overview .ov-it:hover { background: var(--bg-hover); color: var(--fg); }
+.overview .ov-it:hover svg { color: var(--fg-2); }
+.overview .ov-it:focus-visible { outline-offset: -2px; }
+.overview .ov-n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 5px; background: var(--bg-active); color: var(--fg-2); font-size: 11px; line-height: 18px; text-align: center; }
+.overview .ov-sep { height: 1px; margin: 4px 4px; background: var(--line); }
+.overview .ov-sub { gap: 8px; height: 28px; color: var(--fg-3); font-size: 12.5px; }
+/* The card lives in the margin beside the reading column. Where that margin is too narrow, the column moves over to
+   make room; in a small window the card steps aside (the button and Ctrl+Alt+O open the side panel instead). */
+@container main (min-width: 901px) and (max-width: 1300px) { .main:has(> .overview) .session-inner { padding-right: 250px; } }
+@container main (max-width: 900px) { .overview { display: none; } }
+
+/* ================= conversation ================= */
+.tin { gap: 22px; padding-top: 28px; }
+.bubble { padding: 8px 14px; border: 0; border-radius: 18px; background: var(--bubble); font-size: calc(var(--fs) - .5px); box-shadow: none; }
+.msg-acts { gap: 0; }
+.msg-act { height: 26px; padding: 0 7px; font-size: 0; gap: 0; border-radius: 7px; }
+.msg-act svg { width: 14px; height: 14px; }
+.msg-time { padding: 0 6px; color: var(--fg-3); font-size: 11.5px; }
+.msg.asst:last-child .msg-acts, .msg.asst:hover .msg-acts, .msg.asst:focus-within .msg-acts { opacity: 1; }
+
+/* The folded steps of a turn read like a quiet link: "Worked for 14s ›" with what was done beside it. */
+.work-h { min-height: 26px; padding: 3px 8px 3px 6px; font-size: 12.5px; }
+.work-h .chev { order: 2; margin-left: -6px; }
+.work-l { order: 1; color: var(--fg-3); font-weight: 400; }
+.work-facts { order: 3; opacity: .85; font-size: 12px; }
+details.work[open] > .work-h .work-l, .work-h:hover .work-l { color: var(--fg-2); }
+.turn-sum { box-shadow: none; border-color: var(--line); border-radius: 12px; }
+
+/* Find in conversation: a slim row above the transcript, only while open. */
+.sbar-wrap { border-bottom: 0; background: transparent; backdrop-filter: none; }
+.sbar-wrap:has(.sfind[hidden]) { display: none; }
+.sfind { height: 38px; border-top: 0; border-bottom: 1px solid var(--line); }
+
+/* The navigator: dots on the left edge of the conversation, one per turn. */
+.tl { top: 24px; right: auto; left: 10px; width: 18px; opacity: 1; animation: fade-in var(--t3) var(--ease); }
+.tl-track::before { width: 0; border-left: 1px dotted var(--line-3); background: none; }
+.tl .tl-mark, .tl .tl-mark.you { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-3); opacity: .55; box-shadow: 0 0 0 3px var(--bg); filter: none; }
+.tl .tl-mark.cur { width: 8px; height: 8px; background: var(--fg); opacity: 1; }
+.tl .tl-mark.err { width: 6px; height: 6px; border-radius: 1px; background: var(--err); opacity: .9; }
+.tl .tl-mark:hover, .tl .tl-mark:focus-visible { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
+.tl .tl-tip { right: auto; left: 26px; }
+.tl .tl-tip-k.you { color: var(--fg-3); font-weight: 500; }
+
+/* ================= message box ================= */
+.composer { padding: 10px 8px 8px 14px; border: 1px solid var(--line-2); border-radius: 16px; background: var(--bg-raise); box-shadow: none; }
+.composer:focus-within, .dock-col .composer:focus-within { border-color: var(--line-3); box-shadow: none; }
+.dock-col .composer:focus-within::after { opacity: 0; }
+.composer.busy { border-color: var(--line-2); }
+.c-row { gap: 2px; }
+.c-row .cbtn { height: 28px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--fg-2); font-size: 12.5px; }
+.c-row .cbtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
+.c-row .cbtn.on { background: var(--bg-active); color: var(--fg); }
+.c-row > .c-add { width: 28px; height: 28px; min-height: 28px; margin-left: -4px; border-radius: 8px; color: var(--fg-2); }
+.c-model { display: inline-flex; align-items: center; min-width: 0; }
+.c-model .cbtn { padding-right: 4px; }
+.c-model .cbtn + .c-effort { padding-left: 2px; color: var(--fg-3); }
+.c-model .cbtn + .c-effort:hover { color: var(--fg); }
+.c-row .cbtn.c-perm { color: var(--fg-2); }
+.c-row .cbtn.c-perm > svg:first-child { color: var(--fg-3); }
+.c-row .cbtn.c-perm.risky, .c-row .cbtn.c-perm.risky > svg:first-child { color: var(--warn); }
+.send { width: 30px; height: 30px; border-radius: 50%; background: var(--fg); color: var(--bg); box-shadow: none; }
+.send > svg { width: 16px; height: 16px; }
+.send:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 85%, var(--bg)); box-shadow: none; }
+.send:disabled { background: var(--bg-active); color: var(--fg-3); }
+.send.stop { background: var(--fg); color: var(--bg); box-shadow: none; }
+.send.stop:hover { background: var(--err); color: #fff; }
+.dock { padding-bottom: 12px; }
+.ctx-meter { padding: 0 6px; }
+
+/* Home's message box: the chips keep their words; only the model name gives way. */
+#welcome .c-row .cbtn { flex: none; }
+#welcome .c-row .cbtn:has(.pv-mark) { flex: 0 1 auto; }
+
+/* Menus with check marks: items without one line up with those that have it. */
+.menu:has(.menu-check) .menu-it:not(:has(.menu-check)) { padding-left: 32px; }
+
+/* ================= buttons: one height scale, the same quiet press ================= */
+.btn { height: 32px; border-radius: 8px; font-weight: 500; box-shadow: none; }
+.btn.sm { height: 28px; border-radius: 7px; }
+.btn:hover:not(:disabled) { box-shadow: none; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ================= focus mode: only the conversation ================= */
+html.zen .toolbar, html.zen .overview { display: none; }
+html.zen .main { border-left: 0; border-radius: 0; }
+
+@media (prefers-reduced-motion: reduce) { .hcard, .overview.in { animation: none; } }
+@media (forced-colors: active) { .overview, .hcard, .crumb-br { border-color: CanvasText; } }

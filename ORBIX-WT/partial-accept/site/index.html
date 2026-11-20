@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ORBIX - The coding agent that asks first</title>
+  <meta name="description" content="ORBIX is a local AI coding workspace for Windows. The agent reads your project freely, asks before it edits a file or runs a command, and every edit can be undone. 18 providers and local models.">
+  <meta name="theme-color" content="#09090A">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://orbix-agent.vercel.app/">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/svg+xml" href="/assets/img/logo.svg?v=7">
+  <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://orbix-agent.vercel.app/">
+  <meta property="og:site_name" content="ORBIX">
+  <meta property="og:title" content="ORBIX - The coding agent that asks first">
+  <meta property="og:description" content="An AI agent for your code that asks before it changes anything, and every file change can be undone.">
+  <meta property="og:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=5">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://orbix-agent.vercel.app/assets/img/og.png?v=5">
+  <link rel="preload" href="assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/geist-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/site.css?v=23">
+  <script src="assets/js/site.js?v=2"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top" id="top">
+    <a class="brand" href="/" aria-label="ORBIX, home">
+      <img src="assets/img/logo.svg?v=7" alt="" width="24" height="24">
+      <span>ORBIX</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#models">Providers</a>
+      <a href="#safety">Privacy</a>
+      <a href="#releases">Releases</a>
+    </nav>
+    <div class="top-act">
+      <a class="gh" href="https://github.com/chsxthwik/ORBIX" aria-label="ORBIX on GitHub">
+        <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+      <a class="btn sm" href="https://github.com/chsxthwik/ORBIX/releases/latest">Download</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-t">
+      <canvas class="orbit" aria-hidden="true"></canvas>
+      <div class="hero-in">
+        <a class="pill" href="#releases" data-reveal>
+          <span class="pill-v">3.4.0</span>
+          <span>A desktop shell like Antigravity</span>
+          <span class="pill-go" aria-hidden="true">&rarr;</span>
+        </a>
+        <h1 id="hero-t" class="hero-t" data-split>The coding agent that <em>asks first.</em></h1>
+        <p class="lead hero-lead" data-reveal>ORBIX is an AI coding workspace for Windows that runs on your own machine. The agent reads your project freely. Every edit and every command waits for your OK, and every edit can be undone.</p>
+        <div class="actions" data-reveal>
+          <a class="btn lg" href="https://github.com/chsxthwik/ORBIX/releases/latest">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.4 4.5v7H3zM11.4 4.35 21 3v8.5h-9.6zM3 12.5h7.4v7L3 18.5zM11.4 12.5H21V21l-9.6-1.35z"/></svg>
+            Download for Windows
+          </a>
+          <a class="btn lg ghost" href="https://github.com/chsxthwik/ORBIX">Source on GitHub</a>
+        </div>
+        <p class="hero-file" data-reveal><code>ORBIX-Setup-3.4.0.exe</code><span>116 MB</span><span>Windows 10 and 11, x64</span><span>No admin rights</span></p>
+      </div>
+
+      <div class="term" data-reveal aria-label="An example ORBIX session" role="img">
+        <div class="term-bar"><i></i><i></i><i></i><span>shop-api</span><em>Ask me first</em></div>
+        <ol class="term-body">
+          <li class="t-you"><b>you</b> Customers can&rsquo;t sign in when their email has capitals.</li>
+          <li class="t-step"><b>read</b> src/users.js <s>12 ms</s></li>
+          <li class="t-step"><b>grep</b> findByEmail <s>3 matches</s></li>
+          <li class="t-step t-wait"><b>edit</b> src/auth.js <s>waiting for your OK</s></li>
+          <li class="t-del"><span>4</span>&minus;  const user = findByEmail(email.trim());</li>
+          <li class="t-add"><span>4</span>+  const user = findByEmail(email.trim().toLowerCase());</li>
+          <li class="t-ask"><kbd>1</kbd> Allow once <kbd>2</kbd> Allow for this session <kbd>Esc</kbd> Deny</li>
+          <li class="t-ok"><b>run</b> npm test <s>3 passed &middot; 170 ms</s></li>
+          <li class="t-done">1 file changed <ins>+1</ins> <del>&minus;1</del> &middot; Undo all</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- What you download: the facts, not slogans. -->
+    <section class="spec" aria-label="Release facts">
+      <dl>
+        <div><dt>Version</dt><dd>3.4.0</dd></div>
+        <div><dt>Released</dt><dd>Nov 20, 2026</dd></div>
+        <div><dt>Installer</dt><dd>116 MB, per user</dd></div>
+        <div><dt>Providers</dt><dd>18, plus local</dd></div>
+        <div><dt>License</dt><dd>FSL-1.1-MIT</dd></div>
+      </dl>
+    </section>
+
+    <section id="how" class="sec" aria-labelledby="how-t">
+      <h2 id="how-t" data-reveal>How a task runs</h2>
+      <p class="lead" data-reveal>Every run works in its own git worktree, so your checkout is untouched until you apply. Several runs can work at once.</p>
+      <ol class="flow">
+        <li data-reveal><span class="flow-n">1</span><h3>Describe the task</h3><p>Open a Git project in Runs (<kbd>Ctrl+2</kbd>) and write what should change. Small tasks can go straight to work; the rest are planned first.</p></li>
+        <li data-reveal><span class="flow-n">2</span><h3>Read the plan</h3><p>The agent reads the code and writes a plan, changing nothing. Comment on any passage and it writes a new revision.</p></li>
+        <li data-reveal><span class="flow-n">3</span><h3>Approve a scope</h3><p>You choose file edits, or edits and commands, inside the run&rsquo;s own worktree. Deleting, pushing or publishing still asks every time.</p></li>
+        <li data-reveal><span class="flow-n">4</span><h3>Review, then apply</h3><p>Read the diff, the test log and the walkthrough. Apply merges into your branch and keeps your own uncommitted work; Discard removes it all.</p></li>
+      </ol>
+      <figure class="stage" data-tilt>
+        <img src="assets/img/shots/run.webp" alt="A run waiting for review: a timeline of every step on the left, the walkthrough on the right, and Apply changes and Discard at the top." width="1600" height="1012" fetchpriority="high">
+        <figcaption>A finished run. Each step in the timeline opens what it produced; the decision stays yours.</figcaption>
+      </figure>
+    </section>
+
+    <section id="features" class="sec" aria-labelledby="features-t">
+      <h2 id="features-t" data-reveal>An agent, a diff viewer, a terminal and git in one window</h2>
+      <p class="lead" data-reveal>You bring a model: an API key, a sign-in, or a model on your own PC. Everything else is in the app.</p>
+      <dl class="feats">
+        <div data-reveal><dt>Runs</dt><dd>A task planned, approved and done in its own worktree, with a timeline, a test log and a walkthrough to review.</dd></div>
+        <div data-reveal><dt>Review queue</dt><dd>One list across projects of everything that waits for you: approvals, plans, finished changes. <kbd>Ctrl+3</kbd>.</dd></div>
+        <div data-reveal><dt>Recovery</dt><dd>If ORBIX closes mid-run, the run says what was in flight and continues only when you say so.</dd></div>
+        <div data-reveal><dt>Overview</dt><dd>A card beside the conversation opens changes, files, terminal and plan, with helper agents and background runs. <kbd>Ctrl+Alt+O</kbd>.</dd></div>
+        <div data-reveal><dt>Permissions</dt><dd>One chip in the message box: Ask first, Auto edits or Turbo. Destructive commands always ask.</dd></div>
+        <div data-reveal><dt>Undo</dt><dd>Each file change has its own undo, and <kbd>/undo</kbd> reverts a whole reply.</dd></div>
+        <div data-reveal><dt>Changes panel</dt><dd>Every edit as a diff next to the chat. Stage, discard and commit without leaving.</dd></div>
+        <div data-reveal><dt>Self-checks</dt><dd>Runs the project&rsquo;s test or build after edits, then reviews its own diff once.</dd></div>
+        <div data-reveal><dt>Commands</dt><dd>Run on Windows or in WSL. Output streams live, and <kbd>Esc</kbd> stops it.</dd></div>
+        <div data-reveal><dt>Project rules</dt><dd>Reads <code>AGENTS.md</code> or <code>CLAUDE.md</code> from the project, plus your own instructions for every project.</dd></div>
+        <div data-reveal><dt>MCP and skills</dt><dd>Tools from <code>.mcp.json</code> servers, and workflows from <code>SKILL.md</code> folders.</dd></div>
+        <div data-reveal><dt>Themes</dt><dd>System, Dark, Light, Midnight and Frost, five animated scene themes, and Windows high-contrast support.</dd></div>
+      </dl>
+    </section>
+
+    <section class="sec" aria-labelledby="shots-t">
+      <h2 id="shots-t" data-reveal>Screens from 3.4.0</h2>
+      <div class="gallery" data-reveal>
+        <div class="g-tabs" role="tablist" aria-label="Screens">
+          <button type="button" role="tab" id="g-t1" aria-controls="g-p1" aria-selected="true">Review</button>
+          <button type="button" role="tab" id="g-t2" aria-controls="g-p2" aria-selected="false" tabindex="-1">Changes</button>
+          <button type="button" role="tab" id="g-t3" aria-controls="g-p3" aria-selected="false" tabindex="-1">Conversation</button>
+          <button type="button" role="tab" id="g-t4" aria-controls="g-p4" aria-selected="false" tabindex="-1">Home</button>
+          <button type="button" role="tab" id="g-t5" aria-controls="g-p5" aria-selected="false" tabindex="-1">Providers</button>
+          <button type="button" role="tab" id="g-t6" aria-controls="g-p6" aria-selected="false" tabindex="-1">Light theme</button>
+        </div>
+        <div class="g-view">
+          <figure id="g-p1" role="tabpanel" aria-labelledby="g-t1" class="on"><img src="assets/img/shots/review-queue.webp" alt="The Review queue with an approval from a conversation and a finished run, each with its buttons in place." width="1600" height="1012" loading="lazy"><figcaption>Review (<kbd>Ctrl+3</kbd>): every decision that waits for you, with the buttons in place.</figcaption></figure>
+          <figure id="g-p2" role="tabpanel" aria-labelledby="g-t2"><img src="assets/img/shots/run-changes.webp" alt="A run’s Changes tab: the changed files with their line counts and the diff of one file." width="1600" height="1012" loading="lazy"><figcaption>A run&rsquo;s changes against the commit it started from, file by file.</figcaption></figure>
+          <figure id="g-p3" role="tabpanel" aria-labelledby="g-t3"><img src="assets/img/shots/done.webp" alt="A finished reply: one “Worked for” line with what was read, run and changed, the answer, and the changed file with Review and Undo all." width="1600" height="1012" loading="lazy"><figcaption>A finished reply. The steps fold into one line; open it to see each one.</figcaption></figure>
+          <figure id="g-p4" role="tabpanel" aria-labelledby="g-t4"><img src="assets/img/shots/home.webp" alt="The Home screen with the task box, project and model pickers, recent sessions and projects." width="1600" height="1012" loading="lazy"><figcaption>Home: the task box, recent conversations and projects.</figcaption></figure>
+          <figure id="g-p5" role="tabpanel" aria-labelledby="g-t5"><img src="assets/img/shots/settings.webp" alt="The Settings sheet on the Providers page, with a list of AI providers." width="1600" height="1012" loading="lazy"><figcaption>Settings &rarr; Providers. Keys are checked before they are saved.</figcaption></figure>
+          <figure id="g-p6" role="tabpanel" aria-labelledby="g-t6"><img src="assets/img/shots/theme-light.webp" alt="ORBIX in its Light theme." width="1200" height="759" loading="lazy"><figcaption>The Light theme. Midnight, Frost and the scene themes are in Settings.</figcaption></figure>
+        </div>
+      </div>
+      <p class="note" data-reveal>Taken from the real app on a sample project with a scripted local model. The tools in them really ran.</p>
+    </section>
+
+    <section id="models" class="sec" aria-labelledby="models-t">
+      <h2 id="models-t" data-reveal>Bring your own model</h2>
+      <p class="lead" data-reveal>Model lists come live from each provider. Prices and context sizes come from the models.dev catalog. Keys are checked before they are saved.</p>
+      <ul class="prov" data-reveal>
+        <li><span>Anthropic</span><i>API key</i></li>
+        <li><span>OpenAI</span><i>API key or ChatGPT sign-in</i></li>
+        <li><span>Google Gemini</span><i>API key</i></li>
+        <li><span>xAI</span><i>API key or sign-in</i></li>
+        <li><span>OpenRouter</span><i>API key or sign-in</i></li>
+        <li><span>OpenCode</span><i>Zen, sign-in or Go plan</i></li>
+        <li><span>Groq</span><i>API key</i></li>
+        <li><span>Mistral</span><i>API key</i></li>
+        <li><span>DeepSeek</span><i>API key</i></li>
+        <li><span>Together AI</span><i>API key</i></li>
+        <li><span>Fireworks AI</span><i>API key</i></li>
+        <li><span>Cerebras</span><i>API key</i></li>
+        <li><span>Moonshot</span><i>API key</i></li>
+        <li><span>Z.ai</span><i>API key</i></li>
+        <li><span>Qwen</span><i>API key</i></li>
+        <li class="loc"><span>Ollama</span><i>On this PC</i></li>
+        <li class="loc"><span>LM Studio</span><i>On this PC</i></li>
+        <li class="loc"><span>Custom server</span><i>Any OpenAI-compatible URL</i></li>
+      </ul>
+      <p class="note" data-reveal>Custom server covers vLLM, llama.cpp or a company gateway. With Ollama or LM Studio, nothing leaves your PC.</p>
+    </section>
+
+    <section id="safety" class="sec" aria-labelledby="safety-t">
+      <h2 id="safety-t" data-reveal>What stays on your PC, and what doesn&rsquo;t</h2>
+      <p class="lead" data-reveal>Approvals are a checkpoint, not a sandbox. The agent runs with your own user permissions, so read what you approve.</p>
+      <div class="split">
+        <div data-reveal>
+          <h3>Stays here</h3>
+          <ul class="ticks">
+            <li>API keys, encrypted for your Windows account and never logged.</li>
+            <li>Conversations and settings, in <code>%LOCALAPPDATA%\ORBIX</code> as plain files.</li>
+            <li>The local server, on <code>127.0.0.1</code> only, with a new token each launch.</li>
+            <li>Everything, when you use Ollama or LM Studio.</li>
+          </ul>
+        </div>
+        <div data-reveal>
+          <h3>Leaves your PC</h3>
+          <ul class="ticks out">
+            <li>Your messages, project rules and the files the agent reads, to the model provider you chose.</li>
+            <li>Each key, only to the provider it belongs to.</li>
+            <li>Update checks, to this project&rsquo;s GitHub releases. Downloads are verified with SHA-512.</li>
+            <li>Nothing else. There is no account and no telemetry.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="releases" class="sec" aria-labelledby="rel-t">
+      <h2 id="rel-t" data-reveal>Releases</h2>
+      <ol class="rel">
+        <li data-reveal><time datetime="2026-11-20">Nov 20, 2026</time><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.4.0"><b>3.4.0</b><span>A desktop shell like the Antigravity App: menu row, toolbar with back and forward, an Overview card, a permission chip, a navigator of dots, and a neutral dark theme.</span></a></li>
+        <li data-reveal><time datetime="2026-11-20">Nov 20, 2026</time><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.3.0"><b>3.3.0</b><span>Runs: a task planned, approved and done in its own git worktree, then reviewed and applied. One Review queue, recovery after a restart, folded steps.</span></a></li>
+        <li data-reveal><time datetime="2026-11-15">Nov 15, 2026</time><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.2.2"><b>3.2.2</b><span>A calmer interface, a new sidebar, scene themes, accurate model facts and thinking levels.</span></a></li>
+        <li data-reveal><time datetime="2026-11-13">Nov 13, 2026</time><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.2.1"><b>3.2.1</b><span>UI fixes and clearer settings text. Dates on older messages, clearer sign-in errors.</span></a></li>
+        <li data-reveal><time datetime="2026-11-13">Nov 13, 2026</time><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.2.0"><b>3.2.0</b><span>Windows installer, automatic updates, a new Home and sidebar, parallel sessions on git branches.</span></a></li>
+        <li data-reveal><time datetime="2026-11-09">Nov 9, 2026</time><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.1.0"><b>3.1.0</b><span>Midnight and Frost themes, high-contrast support, clearer controls.</span></a></li>
+        <li data-reveal><time datetime="2026-11-04">Nov 4, 2026</time><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.0.0"><b>3.0.0</b><span>First release of ORBIX as a Windows app with its own agent.</span></a></li>
+      </ol>
+      <p class="note" data-reveal>Every change is listed in <a class="u" href="https://github.com/chsxthwik/ORBIX/blob/main/CHANGELOG.md">CHANGELOG.md</a>.</p>
+    </section>
+
+    <section id="faq" class="sec" aria-labelledby="faq-t">
+      <h2 id="faq-t" data-reveal>Questions</h2>
+      <div class="faq">
+        <details data-reveal><summary>Do I need an account?</summary><p>ORBIX has no account of its own. You bring a model: an API key from a provider, a sign-in such as OpenRouter, or a model running on your own PC.</p></details>
+        <details data-reveal><summary>Can I undo what the agent changed?</summary><p>Yes. Every file change has its own undo, and <code>/undo</code> reverts a whole reply. Commands cannot be undone, which is why they ask first.</p></details>
+        <details data-reveal><summary>Will it change files or run commands without asking?</summary><p>No. Reading and searching run without asking. Edits and commands ask first, unless you turn on Allow everything in Settings, which asks you to confirm.</p></details>
+        <details data-reveal><summary>Why does Windows warn about the installer?</summary><p>The installer is not code-signed yet, so SmartScreen asks the first time. Choose More info, then Run anyway. Later updates install without the warning.</p></details>
+        <details data-reveal><summary>How does it update?</summary><p>It checks GitHub when it opens and every 4 hours, downloads in the background and installs when you close ORBIX. Restart at the bottom of the sidebar installs at once. You can turn this off in Settings &rarr; About.</p></details>
+        <details data-reveal><summary>Is it free?</summary><p>ORBIX is free to use. The source is available under the Functional Source License, and each release becomes MIT two years after it ships. Your model provider charges for its own usage.</p></details>
+      </div>
+    </section>
+
+    <section class="cta" aria-labelledby="start-t">
+      <canvas class="orbit small" aria-hidden="true"></canvas>
+      <div class="cta-in">
+        <h2 id="start-t" data-reveal>Install ORBIX</h2>
+        <ol class="steps" data-reveal>
+          <li><kbd>1</kbd><span>Run <code>ORBIX-Setup-3.4.0.exe</code>. It installs for your account only.</span></li>
+          <li><kbd>2</kbd><span>Open Settings &rarr; Providers and connect a model.</span></li>
+          <li><kbd>3</kbd><span>Open a project folder, describe a task and press Enter.</span></li>
+        </ol>
+        <div class="actions" data-reveal>
+          <a class="btn lg" href="https://github.com/chsxthwik/ORBIX/releases/latest">Download for Windows</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="foot-row">
+      <a class="brand" href="#top"><img src="assets/img/logo.svg?v=7" alt="" width="20" height="20"><span>ORBIX</span></a>
+      <nav aria-label="Footer">
+        <a href="https://github.com/chsxthwik/ORBIX">GitHub</a>
+        <a href="https://github.com/chsxthwik/ORBIX/releases">Releases</a>
+        <a href="https://github.com/chsxthwik/ORBIX/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/chsxthwik/ORBIX/issues">Report a problem</a>
+        <a href="https://github.com/chsxthwik/ORBIX/blob/main/LICENSE">License</a>
+      </nav>
+    </div>
+    <p class="foot-word" aria-hidden="true">ORBIX</p>
+    <div class="foot-row small">
+      <p>&copy; 2026 chsxthwik. FSL-1.1-MIT.</p>
+      <p>Geist and Geist Mono are used under the SIL Open Font License.</p>
+    </div>
+  </footer>
+</body>
+</html>
