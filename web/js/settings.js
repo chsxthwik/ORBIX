@@ -182,7 +182,7 @@ function tabStart(el, show, m) {
       line('folder', 'Projects', String(projects), null),
       line('check', 'Pinned in the sidebar', pins ? String(pins) : 'None yet. Select a conversation and press P, or right-click it.', null)),
     h('div', { class: 'set-actions' },
-      btn('New session', () => {
+      btn('New conversation', () => {
         m.close();
         emit('home');
       }, ready ? 'primary' : ''),
@@ -239,7 +239,7 @@ function tabLook(el) {
     group('Layout', null,
       window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales everything in the window. Auto picks a size for your screen and goes larger on wide, high-resolution screens.') : null,
       row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on the screen.'),
-      row('Reading column', seg('Reading column', [['normal', 'Normal'], ['wide', 'Wide']], document.documentElement.classList.contains('wide') ? 'wide' : 'normal', (v) => (v === 'wide') !== document.documentElement.classList.contains('wide') && toggleWide()), 'Wide suits long diffs and tables. The session bar has the same switch.')));
+      row('Reading column', seg('Reading column', [['normal', 'Normal'], ['wide', 'Wide']], document.documentElement.classList.contains('wide') ? 'wide' : 'normal', (v) => (v === 'wide') !== document.documentElement.classList.contains('wide') && toggleWide()), 'Wide suits long diffs and tables. The View menu has the same switch.')));
 }
 
 /** Interface size in the Windows app: Auto, or a fixed scale. */
@@ -473,7 +473,7 @@ function whereRow() {
       loadSessions();
       emit('env');
       emit('prefs', {});
-      toast('Saved. New sessions run commands there.', 'ok', 3500);
+      toast('Saved. New conversations run commands there.', 'ok', 3500);
     } catch (e) {
       toast(e.message, 'error');
       sel.value = cur;

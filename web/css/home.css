@@ -1,6 +1,4 @@
-/* Home. Everything on this page is styled here and nowhere else.
-   One centred column: the planet, one question, the task box and four suggestions; below, recent sessions and the
-   projects. Surfaces are the theme's own tokens, so every theme follows without overrides. */
+/* Home: the next task, working-tree status, recent sessions and projects. */
 
 .home {
   container: ws / inline-size;
@@ -11,19 +9,15 @@
   width: 100%;
   min-height: 100%;
   margin: 0 auto;
-  padding: clamp(28px, 8vh, 96px) 24px 18px;
+  padding: clamp(24px, 6vh, 64px) 24px 18px;
   overflow-x: clip;
 }
 /* The column grows with a wide window, up to a comfortable reading width. */
 .home > * { width: 100%; max-width: clamp(760px, 46cqw, 960px); min-width: 0; }
-.main:has(#welcome:not([hidden])) .topbar { border-bottom-color: transparent; }
 
 /* ---- the question ---- */
 .home-hero { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.home-art { display: none; justify-content: center; margin-bottom: 2px; }
-.home.has-project .home-art { display: flex; }
-.home-art canvas { max-width: 100%; }
-.home-head { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 26px; }
+.home-head { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px; }
 .home-title {
   max-width: 26ch;
   margin: 0;
@@ -70,17 +64,16 @@
   gap: 0;
   padding: 0;
   border: 1px solid var(--line-2);
-  border-radius: 20px;
+  border-radius: 14px;
   background: var(--bg-raise);
-  box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2);
-  transition: border-color var(--t2) var(--ease), box-shadow var(--t2) var(--ease);
+  box-shadow: none;
+  transition: border-color var(--t2) var(--ease);
 }
 .home .home-composer:focus-within {
-  border-color: var(--line-3);
-  box-shadow: inset 0 1px 0 var(--hi), var(--shadow-2), 0 0 0 4px color-mix(in srgb, var(--accent-solid) 9%, transparent);
+  border-color: var(--accent-line);
+  box-shadow: none;
 }
-.home .home-composer.busy { border-color: var(--live-line); }
-.home .home-composer.busy .send { pointer-events: none; }
+.home .home-composer.busy, .home .home-composer.busy:focus-within { border-color: var(--live-line); }
 .home .home-composer .c-ta {
   min-height: clamp(92px, 6.5cqw, 128px);
   max-height: min(340px, 42vh);
@@ -145,6 +138,13 @@
 }
 
 /* ---- suggestions ---- */
+.home-status-slot { width: 100%; }
+.home-status-slot:empty { display: none; }
+.home-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 2px 10px; margin-top: 6px; text-align: left; }
+.home-status-details { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--fg-2); font-size: 13px; }
+.home-status-details > svg { flex: none; color: var(--fg-3); }
+.home-status-summary { flex: none; border-inline-start: 1px solid var(--line-2); padding-inline-start: 8px; color: var(--fg-3); }
+.home-status .ibtn[aria-disabled=true] { opacity: .55; cursor: wait; }
 .home-under { width: 100%; margin-top: 16px; }
 .home-under:empty { display: none; }
 .home .ws-recipes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
@@ -255,7 +255,6 @@
 button.home-proj:hover { border-color: var(--line-3); background: var(--bg-raise-2); }
 button.home-proj:active { transform: scale(.985); transition-duration: 60ms; }
 .home-proj:focus-visible { outline-offset: 2px; }
-.home-proj.static { cursor: default; }
 .home-proj-ic { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-inset); color: var(--fg-2); }
 .home-proj-m { display: flex; flex: 1; flex-direction: column; gap: 3px; min-width: 0; }
 .home-proj-t { color: var(--fg); font-size: 14px; font-weight: 550; }
@@ -293,7 +292,6 @@ button.home-proj:active { transform: scale(.985); transition-duration: 60ms; }
 /* ---- sizes ---- */
 :root[data-density=compact] .library-open { padding-block: 7px; }
 :root[data-density=compact] .home-proj { min-height: 54px; padding-block: 8px; }
-@media (max-height: 760px) { .home.has-project .home-art { display: none; } }
 @container ws (max-width: 600px) {
   .home-steps { grid-template-columns: minmax(0, 1fr); }
   .home .home-composer .c-row { flex-wrap: wrap; row-gap: 6px; }

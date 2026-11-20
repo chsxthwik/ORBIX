@@ -48,7 +48,9 @@ ORBIX runs on Windows 10 and 11, using WSL or native Windows to run commands. Th
 
 **Review** (<kbd>Ctrl</kbd>+<kbd>3</kbd>) lists everything that waits for you across projects: approvals, plans, finished changes, interrupted runs. If ORBIX closes mid-run, the run says what was in flight and continues only when you say so.
 
-For a quick question or a small change, a conversation works as before: reading runs freely, edits and commands ask first (<kbd>1</kbd> allow once, <kbd>2</kbd> for the session, <kbd>Esc</kbd> deny), and every edit can be undone. When a reply ends, its steps fold into one line ("Worked for 14s · Read 2 files · Ran 1 command") above the answer.
+For a quick question or a small change, start a conversation: reading runs freely, and edits and commands follow the permission chip in the message box (**Ask first**, **Auto edits** or **Turbo**; <kbd>1</kbd> allow once, <kbd>2</kbd> for the session, <kbd>Esc</kbd> deny). Every edit can be undone. When a reply ends, its steps fold into one line ("Worked for 14s · Read 2 files · Ran 1 command") above the answer.
+
+The window works like a desktop app: a menu row (ORBIX, Workspace, View, Window), a toolbar with back and forward and where you are (project / conversation, its state and branch), the sidebar of projects and conversations (rest the pointer on one for a preview card), and an **Overview** card beside the conversation that opens Changes, Files, Terminal, Plan and the run inspector, with counts for helper agents and background runs. Dots on the conversation's left edge mark each of your messages; click one to jump there.
 
 <table>
 <tr>
@@ -75,7 +77,7 @@ For a quick question or a small change, a conversation works as before: reading 
 | --- | --- |
 | **Agent** | Tools for `read`, `write`, `edit`, `glob`, `grep`, `bash`, `todo`, `web_fetch` and `web_search`, plus `task`, which runs read-only helper agents side by side. Plan mode only reads. `/goal` keeps working for up to 6 rounds. Older messages are summarized when the context fills up. |
 | **Models** | 17 providers and any OpenAI-compatible server, including your ChatGPT plan without an API key. Live model lists, the thinking levels each model really accepts, and separate fast and plan models. Tokens and context show in the interface, and cost when the model's pricing is known. |
-| **Workspace** | Session tabs, and a side panel with Run, Files, Changes (stage, unstage, discard, commit), Plan, Agents and Console, plus Review for a session on its own branch. Branch from any of your messages, attach images and files, mention files with `@`, export a conversation to HTML. |
+| **Workspace** | Menu row, toolbar with back and forward, the Overview card, and a side panel with Run, Files, Changes (stage, unstage, discard, commit), Plan, Agents and Console, plus Review for a conversation on its own branch. Branch from any of your messages, attach images and files, mention files with `@`, export a conversation to HTML. |
 | **Windows or WSL** | Commands, tools, MCP servers, git and hooks all run in one place: a WSL distribution, or Windows with `cmd.exe` or PowerShell. Paths are translated between the two. |
 | **Project context** | Follows `AGENTS.md` or `CLAUDE.md`, and supports MCP, skills, custom slash commands and hooks. |
 
@@ -141,11 +143,12 @@ ORBIX is a local Node.js server and an interface written in plain ES modules, sh
 | Keys | Action |
 | --- | --- |
 | <kbd>Ctrl</kbd>+<kbd>K</kbd> | Search conversations, files, projects and commands |
-| <kbd>Ctrl</kbd>+<kbd>N</kbd> | New session |
+| <kbd>Ctrl</kbd>+<kbd>N</kbd> | New conversation |
+| <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd> | Back / forward |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | Settings |
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> | Show or hide the sidebar / side panel |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd> | Show or hide the sidebar / side panel / Overview card |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | Focus the message box |
-| <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>9</kbd> | Switch to a tab |
+| <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>9</kbd> | Switch to an open conversation (also in the Window menu) |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>Alt</kbd>+<kbd>↓</kbd> | Jump to your previous / next message |
 | <kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> | Send / queue a message while the agent works |
 | <kbd>/</kbd> and <kbd>@</kbd> | Slash commands / mention a file |

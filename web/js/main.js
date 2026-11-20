@@ -1,6 +1,7 @@
-// ORBIX front-end bootstrap: layout, sidebar, tabs, keyboard, and routing of events to views.
+// ORBIX front-end bootstrap: layout, sidebar, keyboard, and routing of events to views. The window chrome (menu row,
+// toolbar, Overview card, history) is drawn by shell.js with the actions defined here.
 import './desktop.js';
-import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, logo, lsGet, lsSet, kbd, copyText, fmtElapsed } from './dom.js';
+import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, lsGet, lsSet, copyText, fmtElapsed } from './dom.js';
 import { api, rpc, connectEvents } from './api.js';
 import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, engineReady, renameSession, keyPath } from './store.js';
 import { TabView, sessionMenu, copyConversation } from './session.js';
@@ -8,13 +9,13 @@ import { drawHome, setHomeProject } from './home.js';
 import { openCleanup, confirmDeleteConversation } from './cleanup.js';
 import { openDiagnostics } from './diagnostics.js';
 import { initNotify } from './notify.js';
-import { initStatusBar } from './chrome.js';
 import { openHelp } from './help.js';
 import { mountPanel, showTab, viewFile } from './panels.js';
+import { H as shell, drawMenubar, drawToolbar, tickToolbar, syncOverview, navRecord, navGo, bindHoverCards, updatedLabel } from './shell.js';
 import { folderPicker, shortcutsDialog, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { onBoard, boardState } from './review.js';
 import { openSettings as settingsDialog } from './settings.js';
-import { barHandlers, toggleZen, toggleWide, zenOn } from './workbench.js';
+import { toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
 import { sideUpdate } from './updates.js';
 import { initBackdrop, SCENES } from './backdrop.js';
@@ -23,6 +24,8 @@ import { initRuns, openHub, closeHub, isHub, hubView, draw as drawHub, onRunEven
 const views = new Map();
 const sideEl = $('#sidebar');
 const topEl = $('#topbar');
+const menuEl = $('#menubar');
+const mainEl = $('.main');
 const sessEl = $('#session');
 const homeEl = $('#welcome');
 const runsEl = $('#runs');
@@ -68,11 +71,11 @@ function applyPrefs() {
   const side = narrowSide.matches ? overlay.side : u.sidebar !== false;
   const panel = !!activeTab() && !isHub() && (narrowPanel.matches ? overlay.panel : u.rightPanel !== false);
   appEl.classList.toggle('no-side', !side);
-  // Rail: the sidebar folded to its icons. Never in overlay mode, where the sidebar is a drawer.
-  appEl.classList.toggle('rail', side && !narrowSide.matches && u.rail === true);
   appEl.classList.toggle('no-panel', !panel);
   appEl.classList.toggle('overlay-side', side && narrowSide.matches);
   appEl.classList.toggle('overlay-panel', panel && narrowPanel.matches);
+  // The toolbar's lead (mark, sidebar, back, forward, search) spans the sidebar's width while the sidebar shows.
+  document.documentElement.classList.toggle('side-open', side && !narrowSide.matches);
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyPrefs);
 for (const mq of [narrowSide, narrowPanel]) mq.addEventListener('change', () => ((overlay.side = overlay.panel = false), applyPrefs(), drawTop()));
@@ -158,9 +161,10 @@ function rowMenu(s, anchor) {
   popMenu(anchor, [
     { header: s.title },
     { label: tab ? 'Show' : 'Open', run: () => openSession(s) },
+    tab ? { label: 'Close', run: () => closeWithCheck(tab) } : null,
     { label: isPinned ? 'Unpin' : 'Pin to the top', hint: 'P', run: () => togglePin(s) },
     { label: 'Rename…', hint: 'F2', run: () => renameConversation(s) },
-    { label: 'New session in this project', run: () => newSession(s.cwdDisplay || s.cwd) },
+    { label: 'New conversation in this project', run: () => newSession(s.cwdDisplay || s.cwd) },
     { label: 'Show folder in Explorer', run: () => api.post('/api/fs/reveal', { path: s.cwdDisplay || s.cwd }).catch((e) => toast(e.message, 'error')) },
     '-',
     { label: 'Delete conversation…', danger: true, hint: 'Del', run: () => confirmDeleteConversation(s) },
@@ -180,15 +184,16 @@ function rowKeys(s, e) {
 function sessionRow(s, where) {
   const tab = tabForSession(s);
   const cur = !!tab && tab.id === S.active;
+  const isPinned = pinned().includes(s.path);
+  const pin = iconBtn('bookmark', isPinned ? 'Unpin' : 'Pin to the top', () => togglePin(s), 'sm' + (isPinned ? ' on' : ''));
   const more = iconBtn('more', 'More', (e) => rowMenu(s, e.currentTarget), 'sm');
-  const tip = [s.title, where, s.branch ? `Branch ${s.branch}` : '', !where && s.preview && s.preview !== s.title ? s.preview : ''].filter(Boolean).join('\n');
   return h('div', { class: 's-row' + (cur ? ' cur' : '') + (tab?.streaming ? ' live' : '') + (tab?.unread && !cur ? ' unread' : '') },
-    h('button', { class: 's-btn', type: 'button', title: tip, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), ondblclick: (e) => (e.preventDefault(), renameConversation(s)), onkeydown: (e) => rowKeys(s, e), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
+    h('button', { class: 's-btn', type: 'button', dataset: { path: s.path }, 'aria-label': s.title, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), ondblclick: (e) => (e.preventDefault(), renameConversation(s)), onkeydown: (e) => rowKeys(s, e), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
       tab ? h('span', { class: dotCls(tab) }) : null,
       s.branch ? icon('branch', 12, 's-br') : null,
       h('span', { class: 'ell grow' }, s.title),
       where ? h('span', { class: 's-where ell' }, where) : h('span', { class: 's-when' }, timeAgo(s.mtime))),
-    h('span', { class: 'row-acts' }, more));
+    h('span', { class: 'row-acts' }, pin, more));
 }
 
 /** A project's menu (its ⋯ button or a right-click on its name). */
@@ -196,7 +201,7 @@ function projectMenu(g, anchor) {
   const all = groupSessions();
   popMenu(anchor, [
     { header: g.name },
-    { label: 'New session here', run: () => newSession(g.path) },
+    { label: 'New conversation here', run: () => newSession(g.path) },
     { label: 'Show folder in Explorer', run: () => api.post('/api/fs/reveal', { path: g.path }).catch((e) => toast(e.message, 'error')) },
     { label: 'Copy folder path', run: () => copyText(g.path) },
     '-',
@@ -249,7 +254,7 @@ function listKeys(e) {
 let sideSig = '';
 function sidebarSig() {
   return JSON.stringify([
-    searchTerm, filterOpen, [...collapsed], [...expanded], pinned(), S.active, S.ui.rail === true, Math.floor(Date.now() / 60000),
+    searchTerm, filterOpen, [...collapsed], [...expanded], pinned(), S.active, Math.floor(Date.now() / 60000),
     hubView()?.view || '', reviewCount(), workingCount(),
     S.sessions.map((s) => [s.path, s.mtime, s.title]),
     [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '', t.worktree?.branch || '', t.worktree?.state || '']),
@@ -283,8 +288,6 @@ function drawSidebar() {
     const shown = open ? sess.slice(0, term ? 50 : all ? 300 : SHOWN) : [];
     const live = [...S.tabs.values()].filter((t) => !t.dead && t.streaming && keyPath(t.worktree?.source || t.workspace || '') === g.key).length;
     const toggle = () => {
-      // In the rail a project is one icon: a click starts a session there instead of folding a hidden list.
-      if (appEl.classList.contains('rail')) return newSession(g.path);
       collapsed.has(g.key) ? collapsed.delete(g.key) : collapsed.add(g.key);
       lsSet('collapsed', [...collapsed]);
       drawSidebar();
@@ -296,7 +299,7 @@ function drawSidebar() {
           live ? h('span', { class: 'proj-live', title: `${live} working`, 'aria-label': `${live} working` }, h('span', { class: 'dot run' })) : null,
           g.sessions.length ? h('span', { class: 'proj-n num' }, g.sessions.length) : null),
         h('span', { class: 'row-acts' },
-          iconBtn('plus', `New session in ${g.name}`, () => newSession(g.path), 'sm'),
+          iconBtn('plus', `New conversation in ${g.name}`, () => newSession(g.path), 'sm'),
           iconBtn('more', `${g.name}: more`, (e) => projectMenu(g, e.currentTarget), 'sm'))),
       open ? fresh.map((t) => h('div', { class: 's-row' + (t.id === S.active ? ' cur' : '') },
         h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, h('span', { class: dotCls(t) }), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
@@ -309,11 +312,7 @@ function drawSidebar() {
         drawSidebar();
       } }, icon(all ? 'chevron-up' : 'chevron-down', 12), all ? 'Show fewer' : `Show ${sess.length - SHOWN} more`) : null);
   }).filter(Boolean);
-  // The brand row stays in the document across redraws (re-inserting it would restart the logo's orbit); only the
-  // rows after it are rebuilt.
-  const top = brandTop();
-  if (sideEl.firstElementChild !== top) replace(sideEl, top);
-  while (top.nextSibling) top.nextSibling.remove();
+  sideEl.replaceChildren();
   const showFilter = filterOpen || !!searchTerm;
   const toggleFilter = () => {
     filterOpen = !showFilter;
@@ -322,12 +321,11 @@ function drawSidebar() {
     if (filterOpen) sideEl.querySelector('.side-search input')?.focus();
   };
   sideEl.append(
-    h('button', { class: 'side-new', type: 'button', title: 'New session (Ctrl+N)', onclick: () => newSession() }, icon('plus', 15), h('span', null, 'New session'), kbd('Ctrl+N')),
+    h('button', { class: 'side-new' + (S.active || isHub() ? '' : ' cur'), type: 'button', title: 'New conversation (Ctrl+N)', 'aria-current': S.active || isHub() ? null : 'page', onclick: () => newSession() }, icon('plus', 14), h('span', null, 'New conversation')),
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
-      h('button', { class: 'side-link' + (S.active || isHub() ? '' : ' cur'), type: 'button', title: 'Home (Ctrl+1)', 'aria-current': S.active || isHub() ? null : 'page', onclick: () => newSession() }, icon('layers', 15), h('span', null, 'Home')),
-      ((v) => h('button', { class: 'side-link' + (v === 'runs' || v === 'run' ? ' cur' : ''), type: 'button', title: 'Runs (Ctrl+2)', 'aria-current': v === 'runs' || v === 'run' ? 'page' : null, onclick: () => goHub('runs') }, icon('activity', 15), h('span', null, 'Runs'), workingCount() ? h('span', { class: 'side-count quiet num', title: `${workingCount()} working` }, workingCount()) : null))(hubView()?.view),
-      h('button', { class: 'side-link' + (hubView()?.view === 'review' ? ' cur' : ''), type: 'button', title: 'Review (Ctrl+3)', 'aria-current': hubView()?.view === 'review' ? 'page' : null, onclick: () => goHub('review') }, icon('shield', 15), h('span', null, 'Review'), reviewCount() ? h('span', { class: 'side-count num', title: `${reviewCount()} waiting for you`, 'aria-label': `${reviewCount()} waiting for you` }, reviewCount()) : null),
-      h('button', { class: 'side-link', type: 'button', title: 'Search everything (Ctrl+K)', onclick: () => openSearch() }, icon('search', 15), h('span', null, 'Search'), kbd('Ctrl+K'))),
+      ((v) => h('button', { class: 'side-link' + (v === 'runs' || v === 'run' ? ' cur' : ''), type: 'button', title: 'Every run across projects (Ctrl+2)', 'aria-current': v === 'runs' || v === 'run' ? 'page' : null, onclick: () => goHub('runs') }, icon('activity', 15), h('span', null, 'Runs'), workingCount() ? h('span', { class: 'side-count quiet num', title: `${workingCount()} working` }, workingCount()) : null))(hubView()?.view),
+      h('button', { class: 'side-link' + (hubView()?.view === 'review' ? ' cur' : ''), type: 'button', title: 'What waits for you (Ctrl+3)', 'aria-current': hubView()?.view === 'review' ? 'page' : null, onclick: () => goHub('review') }, icon('shield', 15), h('span', null, 'Review'), reviewCount() ? h('span', { class: 'side-count num', title: `${reviewCount()} waiting for you`, 'aria-label': `${reviewCount()} waiting for you` }, reviewCount()) : null),
+      h('button', { class: 'side-link', type: 'button', title: 'Instructions, skills, tools and MCP servers', onclick: () => settingsDialog('tools') }, icon('puzzle', 15), h('span', null, 'Customizations'))),
     h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
       pinnedList(term),
@@ -347,30 +345,6 @@ function drawSidebar() {
     search.focus({ preventScroll: true });
     search.setSelectionRange(typing, typing);
   }
-}
-
-/**
- * The sidebar brand, built once and moved into each redraw: the sidebar is rebuilt on many events, and a new logo
- * would restart its orbit every time (the node snaps back to the start and looks stuck).
- */
-let BRAND_TOP = null;
-function brandTop() {
-  // Built once: a new logo would restart its orbit. The button itself is Home.
-  BRAND_TOP ||= h('div', { class: 'side-top' },
-    h('button', { class: 'brand', type: 'button', onclick: () => newSession() },
-      h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, logo(24, { alive: true })),
-      h('span', { class: 'wordmark' }, 'ORBIX')),
-    iconBtn('chevron-left', 'Collapse to icons', () => savePrefs({ rail: S.ui.rail !== true }), 'sm rail-btn'));
-  const b = BRAND_TOP.firstChild;
-  const rb = BRAND_TOP.lastChild;
-  rb.title = S.ui.rail ? 'Expand the sidebar' : 'Collapse to icons';
-  rb.setAttribute('aria-label', rb.title);
-  rb.setAttribute('aria-pressed', String(S.ui.rail === true));
-  const ver = S.env?.app?.version;
-  b.title = ver ? `Home · ORBIX ${ver}` : 'Home';
-  b.setAttribute('aria-label', 'Home');
-  b.setAttribute('aria-current', S.active ? 'false' : 'page');
-  return BRAND_TOP;
 }
 
 /**
@@ -420,6 +394,7 @@ setInterval(() => {
     if (now) now.textContent = runNow(t, state);
   }
   syncTitle();
+  tickToolbar(topEl);
 }, 1000);
 function syncTitle() {
   const live = [...S.tabs.values()].filter((t) => !t.dead);
@@ -452,8 +427,9 @@ let homeRequested = false;
 function goHub(view, id) {
   homeRequested = true;
   if (narrowSide.matches) overlay.side = false;
-  if (S.active) setActive(null);
+  // Open the hub first, so leaving the conversation lands on it directly (back and forward see one step).
   openHub(view, id);
+  if (S.active) setActive(null);
 }
 
 function newSession(project, opts) {
@@ -499,64 +475,68 @@ async function openSession(s) {
 }
 
 async function closeWithCheck(t) {
-  if (t.streaming && !(await confirmDialog('Close session', 'The agent is still working. Stop it and close this session?', { ok: 'Stop and close', danger: true }))) return;
+  if (t.streaming && !(await confirmDialog('Close conversation', 'The agent is still working. Stop it and close this conversation?', { ok: 'Stop and close', danger: true }))) return;
   closeTab(t.id);
 }
 
 async function renameTab(t) {
-  const n = await promptDialog('Rename session', 'Name', t.name);
+  const n = await promptDialog('Rename conversation', 'Name', t.name);
   if (n) renameSession(t, n).catch((e) => toast(e.message, 'error'));
 }
 
-/** The project of the active session, in the top bar: new session here, show the folder, copy its path. */
-function workspaceChip(t) {
-  const chip = h('button', { class: 'tb-ws', type: 'button', title: t.workspace, 'aria-haspopup': 'menu' }, icon('folder', 13), h('span', { class: 'ell' }, baseName(t.workspace)), icon('chevron-down', 11, 'cbtn-chev'));
-  chip.addEventListener('click', () => popMenu(chip, [
+/** The project crumb in the toolbar: a new conversation there, show the folder, copy its path. */
+function projectCrumbMenu(t, anchor) {
+  popMenu(anchor, [
     { header: t.workspace },
-    { label: 'New session in this project', hint: 'Ctrl+N', run: () => newSession(t.workspace) },
+    { label: 'New conversation in this project', hint: 'Ctrl+N', run: () => newSession(t.workspace) },
     { label: 'Show in Explorer', run: () => api.post('/api/fs/reveal', { path: t.workspace }).catch((e) => toast(e.message, 'error')) },
     { label: 'Copy path', run: () => copyText(t.workspace) },
-  ], { minWidth: 240 }));
-  return chip;
+  ], { minWidth: 240 });
 }
 
-let topSig = '';
+/** The toolbar and the Overview card follow the view; both redraw only when what they show changed. */
 function drawTop() {
-  const t = activeTab();
-  const tabs = [...S.tabs.values()];
-  topEl.classList.toggle('busy', !!t?.streaming && !t.dead);
-  // Rebuilt only when what it shows changed, so a tab under the pointer or the keyboard is not replaced mid-gesture.
-  const sig = JSON.stringify([S.active, sideShown(), panelShown(), t?.workspace, tabs.map((x) => [x.id, x.name, x.workspace, !!x.streaming, !!x.dead, !!x.unread])]);
-  if (sig === topSig && topEl.querySelector('.tabs')) return;
-  topSig = sig;
-  const focusedTab = document.activeElement?.closest?.('.tab') ? document.activeElement.dataset.id : null;
-  replace(
-    topEl,
-    iconBtn('panel-left', 'Sidebar (Ctrl+B)', toggleSidebar, 'tb-side' + (sideShown() ? ' on' : '')),
-    h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Open sessions' },
-      tabs.map((x, i) => h('div', { class: 'tab' + (S.active === x.id ? ' cur' : ''), role: 'tab', dataset: { id: x.id }, 'aria-selected': String(S.active === x.id), tabindex: S.active === x.id || (!t && i === 0) ? '0' : '-1', title: `${x.name}\n${x.workspace}`, onclick: () => setActive(x.id), ondblclick: () => renameTab(x), onauxclick: (e) => e.button === 1 && closeWithCheck(x), onkeydown: (e) => {
-        if (e.target !== e.currentTarget) return;
-        if (e.key === 'Enter' || e.key === ' ') (e.preventDefault(), setActive(x.id));
-        else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-          e.preventDefault();
-          const all = [...topEl.querySelectorAll('.tab')];
-          all[(all.indexOf(e.currentTarget) + (e.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length]?.focus();
-        } else if (e.key === 'Delete') closeWithCheck(x);
-      } },
-      h('span', { class: dotCls(x) }),
-      h('span', { class: 'ell' }, x.name),
-      h('button', { class: 'tab-x', type: 'button', tabindex: '-1', title: 'Close', 'aria-label': `Close ${x.name}`, onclick: (e) => (e.stopPropagation(), closeWithCheck(x)) }, icon('x', 12))))),
-    iconBtn('plus', 'New session (Ctrl+N)', () => newSession(), S.active ? '' : 'on'),
-    h('span', { class: 'grow' }),
-    h('button', { class: 'workspace-command', type: 'button', 'aria-label': 'Search workspace', onclick: () => openSearch() }, icon('search', 13), h('span', null, 'Search'), kbd('Ctrl+K')),
-    t ? workspaceChip(t) : null,
-    t ? iconBtn('more', 'Session actions', (e) => sessionMenu(t, e.currentTarget, { rename: () => renameTab(t), close: () => closeWithCheck(t) })) : null,
-    t ? iconBtn('panel-right', 'Side panel (Ctrl+J)', togglePanel, 'tb-panel' + (panelShown() ? ' on' : '')) : null,
-  );
-  topEl.classList.toggle('busy', !!t?.streaming && !t.dead);
-  topEl.querySelector('.tab.cur')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  if (focusedTab) topEl.querySelector(`.tab[data-id="${CSS.escape(focusedTab)}"]`)?.focus({ preventScroll: true });
+  drawToolbar(topEl);
+  syncOverview(mainEl);
 }
+
+/** Text size of the conversation (Appearance → Message text size): +1, -1, or 0 to reset. */
+function textSize(d) {
+  const cur = S.ui.fontSize || 14;
+  const next = d === 0 ? 14 : Math.max(12, Math.min(18, cur + d));
+  if (next !== cur) savePrefs({ fontSize: next });
+  toast(next === cur && d !== 0 ? `Text size is at its ${next === 18 ? 'largest' : 'smallest'} (${next}px)` : `Text size ${next}px`, 'info', 1400);
+}
+/** The next or previous open conversation (Ctrl+Tab, Ctrl+Shift+Tab). */
+function cycle(dir) {
+  const list = [...S.tabs.values()];
+  if (!list.length) return;
+  const i = list.findIndex((t) => t.id === S.active);
+  setActive(list[i < 0 ? (dir < 0 ? list.length - 1 : 0) : (i + dir + list.length) % list.length].id);
+}
+/** Where back and forward go: a conversation, Runs or Review, or Home. */
+function goTo(loc) {
+  if (loc.kind === 'tab') return setActive(loc.id);
+  if (loc.kind === 'hub') return goHub(loc.view, loc.id);
+  homeRequested = true;
+  closeHub(true);
+  if (S.active) setActive(null);
+  else showActive();
+}
+
+Object.assign(shell, {
+  newSession, openFolder, goHub, goTo, settings: (tab) => settingsDialog(tab), help: openHelp, shortcuts: shortcutsDialog, diagnostics: openDiagnostics,
+  manage: openCleanup, search: () => openSearch(), toggleSidebar, togglePanel, sideShown, panelShown, toggleTheme, textSize, cycle,
+  zen: () => toggleZen(), wide: toggleWide, hubView, workingCount, open: (id) => setActive(id), close: (t) => closeWithCheck(t), rename: (t) => renameTab(t),
+  projectMenu: projectCrumbMenu,
+  sessionMenu: (t, anchor) => sessionMenu(t, anchor, { rename: () => renameTab(t), close: () => closeWithCheck(t), find: () => viewOf(t)?.bar.openFind(), outline: () => viewOf(t)?.bar.openOutline(), inspect: () => showTab('run') }),
+});
+on('chrome', () => {
+  drawTop();
+  drawMenubar(menuEl);
+});
+on('git', () => drawTop());
+on('panel:badges', () => syncOverview(mainEl));
 
 const homeHandlers = {
   search: openSearch,
@@ -578,6 +558,8 @@ function viewFor(tab) {
 
 function showActive() {
   const t = activeTab();
+  const hub = !t && isHub() && hubView();
+  navRecord(t ? { kind: 'tab', id: t.id } : hub ? { kind: 'hub', view: hub.view, id: hub.id } : { kind: 'home' });
   applyPrefs();
   drawTop();
   drawSidebar();
@@ -632,6 +614,7 @@ on('hub', showActive);
 on('runs', () => drawSidebar());
 on('update', () => drawSidebar());
 on('engine', () => {
+  for (const v of views.values()) v.permBtn?.update(v.tab.dead);
   drawSidebar();
   if (!activeTab()) drawWelcome();
 });
@@ -647,7 +630,7 @@ on('prefs', (patch = {}) => {
   if (t && 'showThinking' in patch) views.get(t.id)?.renderAll();
 });
 const viewOf = (tab) => views.get(tab.id);
-barHandlers.rename = (t) => renameTab(t);
+on('zen', () => syncOverview(mainEl));
 // Focus mode only makes sense on a conversation: going Home leaves it.
 on('active', () => !activeTab() && zenOn() && toggleZen(false));
 on('tab:messages', (tab, d) => {
@@ -657,11 +640,10 @@ on('tab:messages', (tab, d) => {
   else if (d.type === 'remove') v.removeMsg(d.msg);
   else v.appendMsg(d.msg);
   if (d.msg?.role === 'user') drawTop();
-  v.bar.update();
 });
 on('tab:live', (tab) => viewOf(tab)?.renderLive());
 on('tab:tool', (tab, id) => viewOf(tab)?.updateTool(id));
-// The sidebar logo breathes while any session is working.
+// The mark in the toolbar speeds up its orbit while any session is working.
 const syncBusy = () => {
   document.documentElement.classList.toggle('agent-busy', [...S.tabs.values()].some((t) => t.streaming && !t.dead));
 };
@@ -709,10 +691,10 @@ function paletteItems() {
   const t = activeTab();
   const dark = document.documentElement.dataset.mode === 'dark';
   const items = [
-    { group: 'General', icon: 'plus', label: 'New session', key: 'Ctrl+N', run: () => newSession() },
+    { group: 'General', icon: 'plus', label: 'New conversation', key: 'Ctrl+N', run: () => newSession() },
     { group: 'General', icon: 'activity', label: 'Runs', key: 'Ctrl+2', run: () => goHub('runs') },
     { group: 'General', icon: 'shield', label: 'Review: what waits for you', key: 'Ctrl+3', run: () => goHub('review') },
-    { group: 'General', icon: 'plus', label: 'New session without saving it', run: () => newSession(undefined, { ephemeral: true }) },
+    { group: 'General', icon: 'plus', label: 'New conversation without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
     { group: 'General', icon: 'cog', label: 'Settings', key: 'Ctrl+,', run: () => settingsDialog() },
     { group: 'General', icon: 'key', label: 'Providers', run: () => settingsDialog('engine') },
@@ -725,9 +707,9 @@ function paletteItems() {
   ];
   if (t) {
     items.push({ group: 'View', icon: 'panel-right', label: 'Toggle side panel', key: 'Ctrl+J', run: togglePanel });
-    items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: 'Ctrl+Shift+F', run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Session', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Session', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
+    items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: 'Ctrl+Shift+F', run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Conversation', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Conversation', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
     for (const [k, l, ic] of [['run', 'Run inspector', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
-    items.push({ group: 'Session', icon: 'pencil', label: 'Rename session…', run: () => renameTab(t) }, { group: 'Session', icon: 'copy', label: 'Copy conversation as Markdown', run: () => copyConversation(t) }, { group: 'Session', icon: 'x', label: 'Close session', run: () => closeWithCheck(t) });
+    items.push({ group: 'Conversation', icon: 'pencil', label: 'Rename conversation…', run: () => renameTab(t) }, { group: 'Conversation', icon: 'copy', label: 'Copy conversation as Markdown', run: () => copyConversation(t) }, { group: 'Conversation', icon: 'x', label: 'Close conversation', run: () => closeWithCheck(t) });
     for (const c of t.commands) items.push({ group: 'Slash commands', icon: 'command', label: `/${c.name}`, hint: c.description, run: () => emit('insert', `/${c.name} `) });
   }
   // Every saved conversation, searchable by its title and by its first message.
@@ -769,22 +751,13 @@ addEventListener('keydown', (e) => {
     if (k === 'l') return e.preventDefault(), (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus());
   }
   // Ctrl+= / Ctrl+- / Ctrl+0: conversation text size (the same setting as Appearance → Message text size).
-  if (mod && !e.altKey && ['=', '+', '-', '0'].includes(e.key)) {
-    e.preventDefault();
-    const cur = S.ui.fontSize || 14;
-    const next = e.key === '0' ? 14 : Math.max(12, Math.min(18, cur + (e.key === '-' ? -1 : 1)));
-    if (next !== cur) savePrefs({ fontSize: next });
-    return toast(next === cur && e.key !== '0' ? `Text size is at its ${next === 18 ? 'largest' : 'smallest'} (${next}px)` : `Text size ${next}px`, 'info', 1400);
-  }
-  // Ctrl+Tab / Ctrl+Shift+Tab: the next / previous open session.
-  if (e.ctrlKey && !e.altKey && e.key === 'Tab') {
-    const list = [...S.tabs.values()];
-    if (!list.length) return;
-    e.preventDefault();
-    const i = list.findIndex((t) => t.id === S.active);
-    const n = i < 0 ? (e.shiftKey ? list.length - 1 : 0) : (i + (e.shiftKey ? -1 : 1) + list.length) % list.length;
-    return setActive(list[n].id);
-  }
+  if (mod && !e.altKey && ['=', '+', '-', '0'].includes(e.key)) return e.preventDefault(), textSize(e.key === '0' ? 0 : e.key === '-' ? -1 : 1);
+  // Ctrl+Tab / Ctrl+Shift+Tab: the next / previous open conversation.
+  if (e.ctrlKey && !e.altKey && e.key === 'Tab') return e.preventDefault(), cycle(e.shiftKey ? -1 : 1);
+  // Ctrl+Alt+O: the Overview card.
+  if (e.ctrlKey && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o' && activeTab()) return e.preventDefault(), topEl.querySelector('.tb-ov')?.click();
+  // Alt+← / Alt+→: back and forward, outside text fields.
+  if (e.altKey && !mod && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.target.closest?.('input, textarea, select, [contenteditable]')) return e.preventDefault(), navGo(e.key === 'ArrowLeft' ? -1 : 1);
   if (mod && e.shiftKey && !e.altKey && activeTab() && !document.querySelector('.scrim')) {
     const k = e.key.toLowerCase();
     if (k === 'r') return e.preventDefault(), showTab('run');
@@ -851,13 +824,20 @@ async function boot() {
     return;
   }
   applyPrefs();
+  drawMenubar(menuEl);
   drawSidebar();
   drawTop();
   drawWelcome();
   mountPanel($('#panel'));
+  bindHoverCards(sideEl, (path) => {
+    const s = S.sessions.find((x) => x.path === path);
+    if (!s) return null;
+    const t = tabForSession(s);
+    const st = t && (t.dead ? null : t.dialogs.some(isApproval) ? ['warn', 'Action required'] : t.streaming ? ['run', 'Working'] : t.unread ? ['unread', 'Unread'] : null);
+    return { title: s.title, project: baseName(s.cwdDisplay || s.cwd) || s.cwdDisplay || s.cwd, branch: s.branch, updated: updatedLabel(s.mtime), state: st, preview: s.preview && s.preview !== s.title ? s.preview.slice(0, 160) : '' };
+  });
   initNotify();
   initBackdrop();
-  initStatusBar();
   initRuns({ openProc: async (p) => (await adoptRunning([p]), setActive(p.id)) });
   loadSessions();
   connectEvents({

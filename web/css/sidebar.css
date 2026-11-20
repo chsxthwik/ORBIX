@@ -8,28 +8,15 @@
 
 .sidebar { --sb-pad: 10px; --sb-ic: 30px; }
 
-/* ---- brand: the mark on its own (no tile) and the wordmark, one line with the top bar ---- */
-.app:not(.rail) .sidebar .side-top { height: var(--top-h); padding: 0 6px 0 14px; }
-.sidebar .brand { gap: 7px; height: 32px; margin-left: -6px; padding: 0 10px 0 6px; border-radius: 8px; }
-.sidebar .brand-mark { width: 26px; height: 26px; border: 0; border-radius: 0; background: none; box-shadow: none; }
-.sidebar .brand .logo { width: 26px; height: 26px; color: var(--fg); }
-.sidebar .brand .logo .lg-orbit { opacity: 1; }
-.sidebar .brand .logo .lg-back { opacity: .42; }
-.sidebar .wordmark { font: 650 14px/1 var(--font); letter-spacing: .1em; color: var(--fg); }
-.sidebar .brand:hover { background: var(--bg-hover); }
-.sidebar .brand:hover .brand-mark { border: 0; }
-.side-top .rail-btn { color: var(--fg-3); }
-.side-top .rail-btn:hover { color: var(--fg); }
-
 /* ---- New session: the one outlined control ---- */
-.app:not(.rail) .sidebar .side-new { height: 36px; margin: 2px var(--sb-pad) 10px; padding: 0 8px 0 10px; gap: 9px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-raise); font-weight: 550; font-size: 13.5px; }
+.app .sidebar .side-new { height: 36px; margin: 2px var(--sb-pad) 10px; padding: 0 8px 0 10px; gap: 9px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-raise); font-weight: 550; font-size: 13.5px; }
 .sidebar .side-new:hover { border-color: var(--line-3); background: var(--bg-raise-2); }
 .sidebar .side-new svg { color: var(--fg-2); }
 .sidebar .side-new kbd { margin-left: auto; opacity: 0; transition: opacity var(--t2) var(--ease); }
 .sidebar .side-new:hover kbd, .sidebar .side-new:focus-visible kbd { opacity: .8; }
 
 /* ---- links (Home, Search, Settings) ---- */
-.app:not(.rail) .sidebar .side-nav { gap: 2px; padding: 0 var(--sb-pad) 6px; }
+.app .sidebar .side-nav { gap: 2px; padding: 0 var(--sb-pad) 6px; }
 .sidebar .side-link { height: 34px; gap: 10px; margin: 0; padding: 0 10px; border-radius: 8px; color: var(--fg-2); font-size: 13.5px; font-weight: 450; }
 .sidebar .side-link svg { color: var(--fg-3); }
 .sidebar .side-link:hover { background: var(--bg-hover); color: var(--fg); }
@@ -40,7 +27,7 @@
 .sidebar .side-link:hover kbd { opacity: .8; }
 
 /* ---- section headers: Running, Pinned, Projects ---- */
-.app:not(.rail) .sidebar .side-scroll { padding: 4px var(--sb-pad) 12px; }
+.app .sidebar .side-scroll { padding: 4px var(--sb-pad) 12px; }
 .sidebar .side-h { height: 30px; margin-top: 10px; padding: 0 2px 0 10px; color: var(--fg-3); font: 500 12px/1 var(--font); letter-spacing: 0; text-transform: none; }
 .sidebar .side-scroll > .side-h:first-child, .sidebar .side-scroll > :first-child .side-h { margin-top: 0; }
 .side-h-acts { display: flex; gap: 0; }
@@ -49,7 +36,7 @@
 .side-h-acts .ibtn.on { background: var(--bg-active); color: var(--fg); }
 
 /* the filter, opened from the funnel beside Projects */
-.app:not(.rail) .sidebar .side-search { margin: 2px 0 6px; }
+.app .sidebar .side-search { margin: 2px 0 6px; }
 .sidebar .side-search input { height: 32px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-field); font-size: 13px; }
 .sidebar .side-search input:hover { border-color: var(--line-3); background: var(--bg-field); }
 .sidebar .side-search input:focus { border-color: var(--accent-line); background: var(--bg-field); }
@@ -65,10 +52,10 @@
 .sidebar .proj-n { color: var(--fg-3); font-size: 12px; font-weight: 400; }
 
 /* ---- sessions: titles start under the project name; status lives in the icon column ---- */
-.app:not(.rail) .sidebar .proj > .s-row,
-.app:not(.rail) .sidebar .proj > .s-more,
-.app:not(.rail) .sidebar .proj > .s-none { margin: 0; padding: 0; border: 0; }
-.app:not(.rail) .sidebar .s-row { margin-bottom: 1px; }
+.app .sidebar .proj > .s-row,
+.app .sidebar .proj > .s-more,
+.app .sidebar .proj > .s-none { margin: 0; padding: 0; border: 0; }
+.app .sidebar .s-row { margin-bottom: 1px; }
 .sidebar .s-btn { position: relative; height: 32px; gap: 8px; padding: 0 10px 0 var(--sb-ic); border-radius: 8px; color: var(--fg-2); font-size: 13.5px; font-weight: 400; }
 .sidebar .s-btn:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .s-row.cur .s-btn { background: var(--bg-active); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
@@ -92,7 +79,7 @@
 .sidebar .run-row.cur { background: var(--bg-active); box-shadow: inset 0 0 0 1px var(--line); }
 
 /* ---- footer: Settings on the left, the model connection on the right ---- */
-.app:not(.rail) .sidebar .side-foot { display: flex; align-items: center; gap: 4px; margin: 0; padding: 8px var(--sb-pad) 10px; border-top: 1px solid var(--line); }
+.app .sidebar .side-foot { display: flex; align-items: center; gap: 4px; margin: 0; padding: 8px var(--sb-pad) 10px; border-top: 1px solid var(--line); }
 .sidebar .foot-set { flex: 1 1 auto; width: auto; min-width: 0; }
 .sidebar .foot-status { flex: 0 1 auto; max-width: 55%; height: 30px; gap: 7px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--fg-3); font-size: 12px; }
 .sidebar .foot-status:hover { background: var(--bg-hover); color: var(--fg); }
@@ -101,18 +88,3 @@
 /* ---- compact density ---- */
 .compact .sidebar .side-link, .compact .sidebar .proj-btn, .compact .sidebar .s-btn { height: 28px; font-size: 13px; }
 .compact .sidebar .side-new { height: 32px; }
-
-/* ---- collapsed to icons (the rail) ---- */
-.app.rail .sidebar .brand-mark { width: 24px; height: 24px; }
-.app.rail .sidebar .side-nav { padding-inline: 0; align-items: center; }
-.app.rail .sidebar .side-link { width: 40px; justify-content: center; padding: 0; }
-.app.rail .sidebar .side-foot { flex-direction: column; align-items: center; gap: 4px; margin: 0; padding: 10px 0 12px; border-top: 1px solid var(--line); }
-.app.rail .sidebar .foot-set { flex: none; width: 40px; justify-content: center; padding: 0; }
-.app.rail .sidebar .foot-set span { display: none; }
-.app.rail .sidebar .foot-status { justify-content: center; width: 40px; max-width: none; padding: 0; }
-.app.rail .sidebar .proj-btn { width: 40px; justify-content: center; padding: 0; }
-.app.rail .sidebar .proj-btn .proj-ic { width: auto; }
-
-/* The session bar's "you are reading this question" link: quiet text, not a pill. */
-.sbar-ctx { max-width: min(44ch, 32vw); border-color: transparent; background: transparent; color: var(--fg-3); }
-.sbar-ctx:hover { border-color: transparent; background: var(--bg-hover); color: var(--fg); }

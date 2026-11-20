@@ -1,12 +1,12 @@
 // Home: start the next task, or get back to one. One message box, then what needs you, recent conversations and projects.
-// Before a model is connected the same place offers the providers, with a self-playing session below.
+// Before a project or model is connected, Home offers provider setup.
+import { addContext, permissionChip } from './controls.js';
 import { h, icon, iconBtn, replace, baseName, timeAgo, toast, kbd } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api, rpc } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, engineReady, savePrefs, groupSessions, on, setActive } from './store.js';
 import { popMenu, modelPicker, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
-import { asciiOrbit } from './ascii.js';
 import { recipes } from './workspace.js';
 import { sessionLibrary } from './session-library.js';
 import { branchToggle } from './review.js';
@@ -34,7 +34,6 @@ let C = null; // the mounted task box: { comp, el, row, go, start }
 let starting = false;
 on('engine', () => (models = null));
 
-/** Choose the project the next session starts in (used by "New session in this project"). */
 /** The project chosen on Home, for pages that need one while no session is open. */
 export const homeProject = () => draft.project || '';
 
@@ -77,13 +76,12 @@ function shell(root) {
   const alertSlot = h('div', { class: 'home-alerts' });
   const deckSlot = h('div', { class: 'home-deck' });
   const under = h('div', { class: 'home-under' });
-  const orbit = asciiOrbit({ cols: 64, rows: 15 });
-  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' }, h('div', { class: 'home-art', 'aria-hidden': 'true' }, orbit.el), h('header', { class: 'home-head' }, title, sub), alertSlot, deckSlot, under);
+  const statusSlot = h('div', { class: 'home-status-slot' });
+  const hero = h('section', { class: 'home-hero', 'aria-label': 'New task' }, h('header', { class: 'home-head' }, title, sub), alertSlot, deckSlot, statusSlot, under);
   const boardSlot = h('div', { class: 'home-board-slot' });
-  const firstSlot = h('div', { class: 'home-first-slot' });
   const keysSlot = h('div', { class: 'home-keys-slot' });
-  const wrap = h('div', { class: 'home workspace-home' }, hero, boardSlot, firstSlot, keysSlot);
-  W = { wrap, orbit, title, sub, alertSlot, deckSlot, under, boardSlot, firstSlot, keysSlot };
+  const wrap = h('div', { class: 'home' }, hero, boardSlot, keysSlot);
+  W = { wrap, title, sub, alertSlot, deckSlot, under, statusSlot, boardSlot, keysSlot };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -97,14 +95,13 @@ function shell(root) {
 function deck() {
   if (C) return C;
   const comp = new Composer({
-    placeholder: 'Describe a task. Type @ to mention a file, / for commands.',
+    placeholder: 'Ask anything, @ to mention, / for actions',
     label: 'Task for the new session',
     cls: 'home-composer',
     state: draft,
     workspace: () => draft.project,
     onSubmit: () => C?.start(),
     onChange: () => {
-      if (C?.go) C.go.disabled = starting;
       clearTimeout(saveDraftTimer); saveDraftTimer = setTimeout(persistDraft, 250);
     },
   });
@@ -112,6 +109,15 @@ function deck() {
   comp.el.append(row);
   C = { comp, row, el: comp.el };
   return C;
+}
+
+function updateStart(box) {
+  const label = starting ? 'Starting…' : !draft.project ? 'Open folder' : !engineReady() ? 'Connect a model' : 'Start';
+  box.go.disabled = starting;
+  box.go.textContent = label;
+  box.go.setAttribute('aria-label', label === 'Start' ? 'Start session' : label);
+  box.go.title = label === 'Start' ? 'Start session (Enter)' : label;
+  box.el.classList.toggle('busy', starting);
 }
 
 export function drawHome(root, H) {
@@ -129,6 +135,7 @@ export function drawHome(root, H) {
   const setupOnly = !agentOk && !history && !projects.length;
   w.wrap.classList.toggle('first', setupOnly);
   drawHead(w, agentOk, g);
+  drawProjectStatus(w, g, () => { if (!root.hidden) drawHome(root, H); });
   w.keysSlot.replaceChildren(footKeys());
   w.alertSlot.replaceChildren(...attention(H));
 
@@ -142,20 +149,17 @@ export function drawHome(root, H) {
       w.deckSlot.replaceChildren(deckEl);
     }
     w.under.replaceChildren();
-    if (boardChanged(w, 'first', projects)) {
-      w.boardSlot.replaceChildren(history ? board(H, projects, false) : '');
-    }
-    w.firstSlot.replaceChildren();
+    w.boardSig = null;
+    w.boardSlot.replaceChildren();
     return;
   }
-  w.firstSlot.replaceChildren();
   w.deckSig = null;
 
   const box = deck();
   const { comp, row } = box;
   if (box.el.parentNode !== w.deckSlot) w.deckSlot.replaceChildren(box.el);
 
-  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, !!draft.branch, agentOk, S.engine?.approvals, homeModel(), projects.map(p => [p.path, p.name])]);
+  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, !!draft.branch, w.statusRepo, agentOk, S.engine?.approvals, homeModel(), projects.map(p => [p.path, p.name])]);
   if (box.controlsSig !== controlsSig) {
     box.controlsSig = controlsSig;
     const projBtn = h('button', { class: 'cbtn proj-pick' + (g ? '' : ' need'), type: 'button', title: g ? g.path : 'Choose a project folder', 'aria-haspopup': 'menu' }, icon('folder', 14), h('span', { class: 'ell' }, g ? g.name : 'Choose a folder'), icon('chevron-down', 12, 'cbtn-chev'));
@@ -187,10 +191,10 @@ export function drawHome(root, H) {
         draft.plan = plan;
         redraw();
       } }, label)));
-    const auto = S.engine?.approvals === 'auto', editsOnly = S.engine?.approvals === 'edits';
-    const apprBtn = h('button', { class: 'cbtn appr' + (auto ? ' risky' : ''), type: 'button', title: auto ? 'Approvals are off: it edits and runs commands without asking. Click to change.' : editsOnly ? 'File edits run without asking; commands wait for your OK. Click to change.' : 'Edits and commands wait for your OK. Click to change.', onclick: () => H.settings('behavior') }, icon('shield', 14), auto ? 'Approvals off' : editsOnly ? 'Edits allowed' : 'Asks first');
-    const go = h('button', { class: 'send start', type: 'button', title: agentOk ? 'Start (Enter)' : 'Connect a model to run this task', 'aria-label': agentOk ? 'Start session' : 'Connect a model to start this task', disabled: starting }, agentOk ? 'Start' : 'Connect a model');
+    const apprBtn = permissionChip().el;
+    const go = h('button', { class: 'send start', type: 'button' });
     box.go = go;
+    updateStart(box);
     box.start = async () => {
       if (starting) return; // Enter twice, or Enter and a click: one session
       if (!draft.project) return H.openFolder();
@@ -199,48 +203,42 @@ export function drawHome(root, H) {
         return H.settings('engine');
       }
       const p = comp.payload();
+      const workspace = draft.project;
+      const { plan, ephemeral, branch } = draft;
+      const mm = homeModel();
       starting = true;
-      go.disabled = true;
-      comp.el.classList.add('busy');
+      updateStart(box);
       try {
-        const mm = homeModel();
-        await api.post('/api/workspaces', { path: draft.project }).then((r) => (S.workspaces = r.workspaces)).catch(() => {});
-        const tab = await openTab({ workspace: draft.project, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: draft.ephemeral || undefined, branch: !!draft.branch });
-        draft.ephemeral = false;
+        await api.post('/api/workspaces', { path: workspace }).then((r) => (S.workspaces = r.workspaces)).catch(() => {});
+        const tab = await openTab({ workspace, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: ephemeral || undefined, branch: !!branch });
+        if (draft.project === workspace) draft.ephemeral = false;
         comp.reset(p?.raw);
         persistDraft();
-        if (draft.plan) await sendPrompt(tab, '/plan');
+        if (plan) await sendPrompt(tab, '/plan');
         if (p) await sendPrompt(tab, p.text || '(see the attached image)', { images: p.images });
       } catch (e) {
         if (p && !comp.hasContent()) { comp.restore(p); persistDraft(); }
         toast(e.message, 'error', 8000);
       } finally {
         starting = false;
-        if (C) {
-          C.go.disabled = false;
-          C.comp.el.classList.remove('busy');
-        }
+        updateStart(box);
       }
     };
     go.addEventListener('click', () => box.start());
 
-    const branchBtn = branchToggle(draft, draft.project, () => ((box.controlsSig = null), drawHome(root, H)));
-    row.replaceChildren(iconBtn('paperclip', 'Attach images or text files', () => comp.openFilePicker()), projBtn, modelBtn, apprBtn, branchBtn || '', unsaved, h('span', { class: 'grow' }), modes, go);
+    const branchBtn = branchToggle(draft, w.statusRepo, () => drawHome(root, H));
+    row.replaceChildren(addContext(comp), projBtn, modelBtn, branchBtn || '', unsaved, h('span', { class: 'grow' }), modes, apprBtn, go);
   }
   const rec = recipes(comp);
   if (rec.parentNode !== w.under) w.under.replaceChildren(rec);
 
-  if (boardChanged(w, 'ready', projects)) {
+  if (boardChanged(w, projects)) {
     const focused = w.boardSlot.querySelector('.session-library')?.contains(document.activeElement) ? document.activeElement : null;
     const selection = focused?.matches('input') ? [focused.selectionStart,focused.selectionEnd] : null;
     const cl = checklist(H, projects);
-    w.boardSlot.replaceChildren(cl || '', history || projects.length ? board(H, projects, true) : '');
+    w.boardSlot.replaceChildren(cl || '', history || projects.length ? board(H, projects) : '');
     if(focused?.isConnected){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(...selection);}
   }
-  const live = liveTabs();
-  w.wrap.classList.toggle('is-busy', live.working.length > 0);
-  w.wrap.classList.toggle('is-wait', live.waiting.length > 0);
-
   const active = document.activeElement;
   if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
@@ -251,9 +249,8 @@ export function drawHome(root, H) {
  * The lists below the box are rebuilt only when what they show changed. Agents report status many times a minute;
  * rebuilding on each report restarted every animation and dropped the hover state under the pointer.
  */
-function boardChanged(w, mode, projects) {
+function boardChanged(w, projects) {
   const sig = JSON.stringify([
-    mode,
     S.ui.pinned,
     draft.project,
     engineReady(),
@@ -267,11 +264,8 @@ function boardChanged(w, mode, projects) {
   return true;
 }
 
-/** The planet and one question: what to work on in this project. Without a project or a model: what to do first. */
+/** One question for an open project; otherwise the next setup step. */
 function drawHead(w, ready, project) {
-  const live = liveTabs();
-  w.orbit.setMode(live.waiting.length ? 'wait' : live.working.length ? 'busy' : 'idle');
-  w.wrap.classList.toggle('has-project', !!project);
   const text = project ? `What should we work on in ${project.name}?` : ready ? 'Open a project folder' : 'Connect a model';
   // The project's name carries the accent: it is the one word in the question that changes.
   if (w.title.textContent !== text) w.title.replaceChildren(...(project ? ['What should we work on in ', h('span', { class: 'home-title-p' }, project.name), '?'] : [text]));
@@ -279,6 +273,57 @@ function drawHead(w, ready, project) {
   const sub = project ? '' : ready ? 'The agent works only inside a folder you choose.' : 'Add an API key, sign in, or use a model that runs on this PC. You can change it at any time.';
   if (w.sub.textContent !== sub) w.sub.textContent = sub;
   w.sub.hidden = !sub;
+}
+
+/** A local snapshot, available even without a model. Nothing is sent or changed. */
+function drawProjectStatus(w, project, redrawControls) {
+  if (w.statusPath === project?.path) return;
+  w.statusPath = project?.path;
+  w.statusRepo = null;
+  draft.branch = false;
+  if (!project) {
+    w.statusSlot.replaceChildren();
+    return;
+  }
+  const details = h('div', { class: 'home-status-details', role: 'status' });
+  let loading = false;
+  const refresh = iconBtn('refresh', 'Refresh working tree', () => load());
+  const row = h('div', { class: 'home-status', role: 'group', 'aria-label': 'Working tree' }, details, refresh);
+  w.statusSlot.replaceChildren(row);
+
+  async function load() {
+    if (loading) return;
+    loading = true;
+    refresh.setAttribute('aria-disabled', 'true');
+    details.textContent = 'Checking working tree…';
+    try {
+      const { git } = await api.get(`/api/git/status?ws=${encodeURIComponent(project.path)}`);
+      if (!row.isConnected) return;
+      w.statusRepo = !!git?.repo;
+      if (!git?.repo) {
+        draft.branch = false;
+        details.textContent = git?.gitMissing ? 'Git isn’t available' : 'Not a Git repository';
+      } else {
+        const branch = git.branch?.startsWith('HEAD (') ? 'Detached HEAD' : git.branch || 'No branch';
+        const count = git.files.length;
+        details.replaceChildren(
+          icon('branch', 14),
+          h('span', { class: 'ell', title: branch }, branch),
+          h('span', { class: 'home-status-summary' }, count ? `${count} changed ${count === 1 ? 'file' : 'files'}` : 'Working tree clean'),
+        );
+      }
+    } catch (e) {
+      if (!row.isConnected) return;
+      w.statusRepo = false;
+      draft.branch = false;
+      details.replaceChildren(h('span', { class: 'ell', title: e.message }, 'Couldn’t read the working tree'));
+    } finally {
+      loading = false;
+      refresh.removeAttribute('aria-disabled');
+      if (row.isConnected) redrawControls();
+    }
+  }
+  load();
 }
 
 /** Sessions working or waiting on you, above everything else: this is what you came back for. */
@@ -297,8 +342,8 @@ function attention(H) {
 }
 
 /** Recent conversations beside the projects and this week's activity. */
-function board(H, projects, canPick) {
-  return h('div', { class: 'home-board' }, sessionLibrary(H), projectsCard(H, projects, canPick));
+function board(H, projects) {
+  return h('div', { class: 'home-board' }, sessionLibrary(H), projectsCard(H, projects));
 }
 
 /** What is still needed before the first task. Optional extras live in Settings, not here. */
@@ -363,7 +408,7 @@ function liveTabs() {
 }
 
 /** Projects by last activity. A click aims the next session there. */
-function projectsCard(H, projects, canPick) {
+function projectsCard(H, projects) {
   const last = (g) => Math.max(0, ...g.sessions.map((s) => s.mtime || 0));
   const list = [...projects].sort((a, b) => last(b) - last(a)).slice(0, 5);
   const pick = (g) => {
@@ -376,12 +421,10 @@ function projectsCard(H, projects, canPick) {
   return h('section', { class: 'home-card', 'aria-label': 'Projects' },
     h('div', { class: 'home-card-h' }, h('h2', null, 'Projects'), h('button', { class: 'link', type: 'button', onclick: () => H.openFolder() }, icon('folder-plus', 14), 'Open folder')),
     list.length ? h('div', { class: 'home-projs' }, ...list.map((g) => {
-      const cur = canPick && g.path === draft.project;
+      const cur = g.path === draft.project;
       const n = g.sessions.length;
       const meta = `${n} conversation${n === 1 ? '' : 's'}${last(g) ? ` · ${timeAgo(last(g))}` : ''}`;
-      // Before a model is connected there is no task box to aim, so the card is a plain readout rather than a dead button.
-      const start = canPick ? { type: 'button', title: `Start the next session in ${g.path}`, 'aria-pressed': String(cur), onclick: () => pick(g) } : { title: g.path };
-      return h(canPick ? 'button' : 'div', { class: 'home-proj' + (cur ? ' cur' : '') + (canPick ? '' : ' static'), ...start },
+      return h('button', { class: 'home-proj' + (cur ? ' cur' : ''), type: 'button', title: `Start the next session in ${g.path}`, 'aria-pressed': String(cur), onclick: () => pick(g) },
         h('span', { class: 'home-proj-ic', 'aria-hidden': 'true' }, icon(cur ? 'folder-open' : 'folder', 16)),
         h('span', { class: 'home-proj-m' }, h('span', { class: 'home-proj-t ell' }, g.name), h('span', { class: 'home-proj-p ell' }, meta)),
         cur ? icon('check', 15, 'home-proj-cur') : null);

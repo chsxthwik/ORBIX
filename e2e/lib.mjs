@@ -224,12 +224,56 @@ export async function startBrowser(dir, { width = 1360, height = 860, scale = 1 
     } catch {}
   }
   if (!port) throw new Error('The browser did not open its DevTools port');
-  const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-  const cdp = await connect(pages.find((p) => p.type === 'page').webSocketDebuggerUrl);
+  const pages = await debugPages(port);
+  return connectPage(exe, proc, pages.find((p) => p.type === 'page'), { width, height, scale });
+}
+
+const debugPages = async (port) => (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2000) })).json();
+
+/** Run the same UI checks in the packaged Electron host, isolated from the installed app. */
+export async function startDesktop(exe, data, profile) {
+  const proc = spawn(exe, ['--remote-debugging-port=0', `--user-data-dir=${profile}`], {
+    cwd: ROOT,
+    env: { ...process.env, ORBIX_DATA: data, ORBIX_NO_UPDATES: '1', ...IDENTITY },
+    stdio: ['ignore', 'ignore', 'pipe'],
+  });
+  let stderr = '';
+  let spawnError;
+  proc.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-8192); });
+  proc.on('error', (e) => { spawnError = e; });
+  let port;
+  try {
+    for (let i = 0; i < 150; i++) {
+      if (spawnError) throw spawnError;
+      if (proc.exitCode != null) throw new Error(`Electron exited (code ${proc.exitCode})`);
+      port ||= Number(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//.exec(stderr)?.[1]);
+      if (!port) {
+        try { port = Number(fs.readFileSync(path.join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]); } catch {}
+      }
+      if (port) {
+        const pages = await debugPages(port).catch(() => []);
+        const target = pages.find((p) => p.type === 'page' && p.url.startsWith('http://127.0.0.1:'));
+        if (target) return await connectPage(exe, proc, target);
+      }
+      await sleep(100);
+    }
+    throw new Error('The ORBIX Electron window did not open');
+  } catch (e) {
+    proc.kill();
+    throw e;
+  }
+}
+
+async function connectPage(exe, proc, target, metrics) {
+  if (!target?.webSocketDebuggerUrl) throw new Error('No debuggable ORBIX window found');
+  const cdp = await connect(target.webSocketDebuggerUrl);
   await cdp.send('Runtime.enable');
   await cdp.send('Log.enable');
   await cdp.send('Page.enable');
-  await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile: false });
+  if (metrics) {
+    const { width, height, scale } = metrics;
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile: false });
+  }
   const errors = [];
   cdp.on((m) => {
     if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails?.exception?.description || m.params.exceptionDetails?.text);
@@ -264,7 +308,7 @@ export async function startBrowser(dir, { width = 1360, height = 860, scale = 1 
         const ok = await P.eval(`
           const want = ${JSON.stringify(text)};
           const root = [...document.querySelectorAll(${JSON.stringify(scope)})].pop();
-          const b = root && [...root.querySelectorAll('button, [role=tab], label')].find((x) => x.offsetParent && !x.disabled && (x.textContent.trim() === want || x.textContent.trim().startsWith(want) || x.title === want));
+          const b = root && [...root.querySelectorAll('button, [role=tab], label')].find((x) => x.offsetParent && !x.disabled && x.getAttribute('aria-disabled') !== 'true' && (x.textContent.trim().startsWith(want) || x.title === want || x.getAttribute('aria-label') === want));
           if (!b) return false;
           b.scrollIntoView({ block: 'center' });
           b.click();

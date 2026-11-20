@@ -1,5 +1,5 @@
-// In the Windows app: the page draws the top of the window. It marks itself as the app (html.desktop), and keeps the
-// colour of the window buttons in step with the theme. In a browser this does nothing.
+// In the Windows app: the page draws the top of the window (the menu row). It marks itself as the app (html.desktop),
+// and keeps the window buttons in the menu row's colour as the theme changes. In a browser this does nothing.
 const bridge = window.orbixDesktop;
 
 if (bridge) {
@@ -10,7 +10,7 @@ if (bridge) {
   const sync = () => {
     queued = false;
     const css = getComputedStyle(root);
-    const bg = css.getPropertyValue('--bg').trim();
+    const bg = getComputedStyle(document.getElementById('menubar') || root).backgroundColor || css.getPropertyValue('--bg').trim();
     const fg = css.getPropertyValue('--fg-2').trim();
     if (!bg || !fg || `${bg}|${fg}` === last) return;
     last = `${bg}|${fg}`;

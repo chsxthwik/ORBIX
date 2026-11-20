@@ -119,7 +119,8 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 
 | Module | Role |
 |---|---|
-| `main.js` | start-up, layout, sidebar, tabs, keyboard shortcuts, routing events to views |
+| `main.js` | start-up, layout, sidebar, keyboard shortcuts, routing events to views |
+| `shell.js`, `controls.js` | the window chrome (menu row, toolbar with back/forward and breadcrumbs, the Overview card, the sidebar's preview card) and the message box's "+" and permission chip |
 | `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
 | `updates.js` | update status in the sidebar and Settings → About |
 | `store.js` | client state and the reducer that turns session events into UI state |
@@ -131,9 +132,9 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings |
 | `brands.js` | provider logo marks, drawn inline |
 | `ascii.js` | orbit, decoding headline, typed examples and empty-panel art |
-| `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js`, `chrome.js` | dialogs, status bar and notifications |
+| `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js` | dialogs and notifications |
 | `dom.js` | DOM helpers, icons and logo |
-| `workbench.js`, `timeline.js`, `quote.js` | the bar above a conversation (find, outline, wide column), the step rail beside it, and asking about selected text |
+| `workbench.js`, `timeline.js`, `quote.js` | find in a conversation, the outline of your messages, the wide column and focus mode; the navigator of dots on the conversation's left edge; and asking about selected text |
 | `review.js` | sessions on their own branch: the sidebar board and the Review view (merge, keep or discard) |
 | `run-inspector.js`, `run-summary.mjs` | the Run view of the side panel: the session's tool activity |
 | `session-library.js`, `session-library.mjs` | saved conversations on Home: search, filter, sort and pins |

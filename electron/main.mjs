@@ -20,7 +20,7 @@ let win = null;
 let orbix = null;
 let quitting = false;
 
-const DARK = { bg: '#0A0B0D', fg: '#EDEDEA' };
+const DARK = { bg: '#151515', fg: '#E9E9E7' };
 const LIGHT = { bg: '#E9E8E2', fg: '#151514' };
 
 // The window opens where it was last closed: same size, same place, maximized or not (if that screen is still there).
@@ -52,9 +52,10 @@ function createWindow(url) {
     title: 'ORBIX',
     icon: path.join(ROOT, 'assets', 'icon.ico'),
     backgroundColor: c.bg,
-    // The page draws its own top edge; Windows keeps the real minimize, maximize and close buttons on the right.
+    // The page draws its own menu row as the title bar; Windows keeps the real minimize, maximize and close buttons
+    // over its right end, at the same height.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: c.bg, symbolColor: c.fg, height: 40 },
+    titleBarOverlay: { color: c.bg, symbolColor: c.fg, height: 30 },
     webPreferences: {
       preload: path.join(HERE, 'preload.cjs'),
       // The page picks its automatic interface size from the screen width.
