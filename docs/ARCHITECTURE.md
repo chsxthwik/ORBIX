@@ -76,6 +76,27 @@ Servers come from `data/mcp.json` (yours) and a project's `.mcp.json`, in the co
 
 Hooks run at `PreToolUse`, `PostToolUse`, `UserPromptSubmit` and `Stop`. Files: `data/hooks.json` (yours) and `<project>/.orbix/hooks.json` (needs a one-time OK). Exit code 2 blocks the action.
 
+## Runs (`src/runs.mjs`, `src/runctl.mjs`)
+
+A run takes one task from its description to reviewed changes. It is an agent session with a controller around it:
+
+| Part | Job |
+|---|---|
+| `runs.mjs` (`RunStore`) | Persistence only. `data/runs/<id>/run.json` (state), `events.jsonl` (append-only log, numbered) and `artifacts/<kind>/r<n>.md` (every revision of the plan, tasks, walkthrough, test log and notes). Comments, and `reconcile()`, which marks runs that were working at the last shutdown as interrupted and lists the calls with no result. |
+| `runctl.mjs` (`RunController`) | Starts the session in its own worktree, listens to its events and writes the log, moves the run between states, and owns the decisions: approve the plan with a scope, send feedback with the pending comments, apply (merge), keep, discard, stop, resume. Its routes are `/api/runs*` and `/api/run/*`. |
+| `engine/artifact.mjs` | The `artifact` tool and the run section of the system prompt (planning phase, execution phase). |
+| `engine/policy.mjs` | The execution policy shared by every agent: commands that are destructive or reach outside the machine ask every time. |
+
+States: `planning` → `awaiting_plan` (or `question`) → `executing` → `review` → `applied` / `kept` / `discarded`, with
+`stopped`, `failed` and `interrupted` on the side. While planning the session is in plan mode (read-only tools plus
+`artifact`). Approving the plan records the scope (file edits, optionally commands, always inside the worktree) and
+applies it to the session; it is applied again when the session is restarted, so a restart does not widen or lose it.
+A session opened from its saved file is connected to its run again (`adopt`).
+
+The interface (`web/js/runs.js`, `web/css/runs.css`) has three views in the `#runs` section: Runs, Review (one queue
+of everything that waits for you) and the page of one run (timeline, documents, changes, feedback, decision bar). The
+server sends `{g: 'run', run}` on every change.
+
 ## Where commands run (`src/backend.mjs`)
 
 `Backend` runs every command, tool, MCP server, git call and hook either in WSL (`wsl.exe -d <distro> --cd <dir> -e …`) or natively on Windows. It also translates paths between Windows (`C:\…`) and Linux (`/mnt/c/…`).
@@ -106,13 +127,22 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `home.js` | Home: task box, next actions, recent conversations and projects |
 | `session.js`, `tools.js`, `markdown.js`, `highlight.js`, `ansi.js` | conversation view and tool steps |
 | `composer.js` | message box: attachments, history, `/` and `@` pop-ups |
-| `panels.js` | side panel: Files, Changes (git), Todos, Agents, Console |
+| `panels.js` | side panel: Run, Review (a session on its own branch), Files, Changes (git), Plan (todos), Agents, Console |
 | `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings |
 | `brands.js` | provider logo marks, drawn inline |
 | `ascii.js` | orbit, decoding headline, typed examples and empty-panel art |
 | `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js`, `chrome.js` | dialogs, status bar and notifications |
 | `dom.js` | DOM helpers, icons and logo |
+| `workbench.js`, `timeline.js`, `quote.js` | the bar above a conversation (find, outline, wide column), the step rail beside it, and asking about selected text |
+| `review.js` | sessions on their own branch: the sidebar board and the Review view (merge, keep or discard) |
+| `run-inspector.js`, `run-summary.mjs` | the Run view of the side panel: the session's tool activity |
+| `session-library.js`, `session-library.mjs` | saved conversations on Home: search, filter, sort and pins |
+| `workspace.js`, `exporter.js` | task suggestions, and a conversation as Markdown |
+| `theme-boot.js`, `desktop.js`, `interface.js` | the theme before first paint, the Windows title bar colours, tooltips |
+| `word-diff.mjs`, `tool-title.mjs`, `coalesce.mjs` | helpers without DOM (word-level diff, tool step titles, batched redraws), so tests can import them |
 
 ## Tests
 
 `npm test` runs `test/*.mjs` with Node's built-in test runner. Tests need no network or API keys and use a temporary data folder.
+
+`npm run e2e` (`e2e/run.mjs`) drives the real interface in a headless Chromium window over the DevTools protocol, against ORBIX on a temporary data folder, a fixture repository and a deterministic model (`e2e/lib.mjs`: an OpenAI-compatible server that replays scripted steps). It covers a run from task to applied changes, a denied destructive command, a restart in the middle of a run and a merge conflict. `docs/parity.md` lists what each step proves.

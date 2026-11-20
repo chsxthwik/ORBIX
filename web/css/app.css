@@ -12,8 +12,8 @@
 /* ================= tokens ================= */
 :root, :root[data-theme=dark], :root[data-theme=midnight] {
   color-scheme: dark;
-  /* --glow: a faint wash of the accent at the top of the workspace sheet; --pa: the accent as shown in theme previews. */
-  --glow: rgba(212,255,79,.05); --pa: #D4FF4F;
+  /* --pa: the accent as shown in theme previews. */
+  --pa: #D4FF4F;
   /* Graphite console. Two signals only: --accent (orange) is you: actions you take and anything waiting on you.
      --live (teal) is the agent: working, progress. Everything else is neutral. */
   /* Three elevations: the window (--chrome, the rail), the sheet (--bg), raised surfaces (--bg-raise). Each step is
@@ -29,7 +29,6 @@
   --warn: #E5A64A; --warn-soft: rgba(229,166,74,.10); --warn-line: rgba(229,166,74,.45);
   --err: #FF6B6B; --err-soft: rgba(255,92,92,.11); --err-line: rgba(255,92,92,.4);
   --add-bg: rgba(92,217,138,.10); --del-bg: rgba(255,92,92,.10);
-  --grid: rgba(255,255,255,.06);
   --shadow-1: 0 1px 2px rgba(0,0,0,.5);
   --shadow-2: 0 10px 30px -14px rgba(0,0,0,.75), 0 2px 6px rgba(0,0,0,.35);
   --shadow-pop: 0 28px 64px -18px rgba(0,0,0,.85), 0 8px 20px rgba(0,0,0,.45);
@@ -41,7 +40,7 @@
 }
 :root[data-theme=light], :root[data-theme=frost], :root[data-theme=koi] {
   color-scheme: light;
-  --glow: rgba(124,170,0,.07); --pa: #B8E62E;
+  --pa: #B8E62E;
   --chrome: #E9E8E2; --bg: #FBFAF7; --bg-side: #E9E8E2; --bg-raise: #FFFFFF; --bg-raise-2: #F3F2EE; --bg-modal: #FFFFFF; --bg-inset: #F3F2ED; --bg-field: #FFFFFF;
   --bg-hover: rgba(20,20,18,.05); --bg-active: rgba(20,20,18,.085); --bubble: #F1F0EB; --bubble-line: #E1E0DA;
   --line: #DFDED7; --line-2: #CDCCC4; --line-3: #A8A79E; --hi: rgba(255,255,255,.9);
@@ -52,7 +51,6 @@
   --warn: #AD3A0B; --warn-soft: rgba(240,106,31,.1); --warn-line: rgba(194,65,12,.5);
   --err: #B62A26; --err-soft: rgba(200,48,43,.08); --err-line: rgba(200,48,43,.35);
   --add-bg: rgba(21,122,69,.1); --del-bg: rgba(200,48,43,.09);
-  --grid: rgba(20,20,18,.08);
   --shadow-1: 0 1px 2px rgba(20,20,18,.08);
   --shadow-2: 0 8px 24px -12px rgba(20,20,18,.2), 0 2px 6px rgba(20,20,18,.06);
   --shadow-pop: 0 24px 56px -18px rgba(20,20,18,.28), 0 6px 16px rgba(20,20,18,.08);
@@ -64,27 +62,25 @@
 }
 /* Midnight: a cool ink-blue dark with a sky accent. Only surfaces, ink and accent differ from Dark; status colours are shared. */
 :root[data-theme=midnight] {
-  --glow: rgba(124,196,255,.07); --pa: #7CC4FF;
+  --pa: #7CC4FF;
   --chrome: #070910; --bg: #0C0F18; --bg-side: #070910; --bg-raise: #131825; --bg-raise-2: #1B2133; --bg-modal: #111624; --bg-inset: #090C14; --bg-field: #090C14;
   --bg-hover: rgba(150,180,255,.055); --bg-active: rgba(150,180,255,.095); --bubble: #151B2B; --bubble-line: rgba(150,180,255,.11);
   --line: rgba(150,180,255,.11); --line-2: rgba(150,180,255,.16); --line-3: rgba(150,180,255,.27); --hi: rgba(180,200,255,.05);
   --fg: #E7EBF6; --fg-2: #A5ADC4; --fg-3: #8890A8;
   --accent: #7CC4FF; --accent-solid: #7CC4FF; --on-accent: #06101C; --accent-soft: rgba(124,196,255,.12); --accent-line: rgba(124,196,255,.44);
   --live: #5EE0C8; --live-soft: rgba(94,224,200,.11); --live-line: rgba(94,224,200,.42);
-  --grid: rgba(150,180,255,.07);
   --scrim: rgba(2,3,8,.7);
   --shadow-sheet: 0 0 0 1px rgba(0,0,0,.4), 0 12px 40px -24px rgba(0,0,0,.95);
 }
 /* Frost: a cool, crisp light theme with a blue accent. */
 :root[data-theme=frost] {
-  --glow: rgba(43,99,232,.07); --pa: #2B63E8;
+  --pa: #2B63E8;
   --chrome: #E2E7F0; --bg: #F8FAFD; --bg-side: #E2E7F0; --bg-raise: #FFFFFF; --bg-raise-2: #EFF3F9; --bg-modal: #FFFFFF; --bg-inset: #EDF1F7; --bg-field: #FFFFFF;
   --bg-hover: rgba(20,32,70,.05); --bg-active: rgba(20,32,70,.085); --bubble: #EDF1F8; --bubble-line: #DAE1EE;
   --line: #D7DEEA; --line-2: #C2CCDD; --line-3: #97A4BB; --hi: rgba(255,255,255,.9);
   --fg: #111827; --fg-2: #404A62; --fg-3: #566078;
   --accent: #1D56CC; --accent-solid: #2B63E8; --on-accent: #FFFFFF; --accent-soft: rgba(43,99,232,.10); --accent-line: rgba(29,86,204,.45);
   --live: #086A5D; --live-soft: rgba(11,122,107,.10); --live-line: rgba(11,122,107,.4);
-  --grid: rgba(20,32,70,.08);
   --shadow-1: 0 1px 2px rgba(20,32,70,.09);
   --shadow-2: 0 8px 24px -12px rgba(20,32,70,.22), 0 2px 6px rgba(20,32,70,.07);
   --shadow-pop: 0 24px 56px -18px rgba(20,32,70,.3), 0 6px 16px rgba(20,32,70,.09);
@@ -93,8 +89,8 @@
 }
 /* More contrast, when the system asks for it: stronger hairlines and secondary ink. */
 @media (prefers-contrast: more) {
-  :root:not([data-mode=light]) { --line: rgba(255,255,255,.22); --line-2: rgba(255,255,255,.34); --line-3: rgba(255,255,255,.55); --fg-2: #D2D2CC; --fg-3: #BDBDB6; --glow: transparent; }
-  :root[data-mode=light] { --line: #8B8B84; --line-2: #6E6E68; --line-3: #4A4A46; --fg-2: #2B2B28; --fg-3: #3F3F3B; --glow: transparent; }
+  :root:not([data-mode=light]) { --line: rgba(255,255,255,.22); --line-2: rgba(255,255,255,.34); --line-3: rgba(255,255,255,.55); --fg-2: #D2D2CC; --fg-3: #BDBDB6; }
+  :root[data-mode=light] { --line: #8B8B84; --line-2: #6E6E68; --line-3: #4A4A46; --fg-2: #2B2B28; --fg-3: #3F3F3B; }
 }
 :root {
   --font: 'Geist Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
@@ -531,7 +527,8 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px va
 :is(.tree, .p-scroll, .pbody) > .errbox { margin: 10px; }
 .list > .errbox { margin: 4px; }
 .rules-err:not(:empty) { margin-bottom: 10px; }
-.pending { padding: 4px 2px; color: var(--fg-3); font-size: 13px; }
+.pending { display: flex; align-items: center; gap: 12px; padding: 4px 2px; color: var(--fg-3); font-size: 13px; }
+.pending-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; animation: fade-in var(--t2) var(--ease); }
 .msg.live.typing > .md:last-child > :is(p, h1, h2, h3, h4, h5, h6):last-child::after,
 .msg.live.typing > .md:last-child > :is(ul, ol):last-child > li:last-child::after { content: ''; display: inline-block; width: 7px; height: 1.1em; margin-left: 3px; vertical-align: -.2em; border-radius: 1px; background: var(--live); animation: caret 1s var(--ease) infinite; }
 
@@ -1003,7 +1000,6 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(5px); } }
-@keyframes home-in { from { opacity: 0; transform: translateY(10px); } }
 @keyframes msg-in { from { opacity: 0; transform: translateY(8px); } }
 @keyframes bubble-in { from { opacity: 0; transform: translateY(6px) scale(.97); } }
 @keyframes grow-x { from { transform: scaleX(0); } }
@@ -1051,13 +1047,9 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 /* Getting set up: a checklist read from the real state; gone once everything is done. */
 .cl-t { font-size: 14px; font-weight: 600; }
 /* Reply summary: what the agent looked at and did, in one line. */
-.ts-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 12px; border-top: 1px solid var(--line); color: var(--fg-3); font-size: 12px; }
-.turn-sum.lite { border-style: dashed; background: transparent; }
-.turn-sum.lite .ts-line { border-top: 0; padding: 7px 12px; }
 .ts-fact { display: inline-flex; align-items: center; gap: 6px; }
 .ts-fact svg { flex: none; opacity: .8; }
 .ts-fact.bad { color: var(--err); }
-.ts-time { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
 .ts-file > svg { flex: none; color: var(--fg-3); }
 
 /* Two-signal home details. */
@@ -1190,7 +1182,7 @@ code.set-l { font-size: 13px; font-weight: 400; white-space: nowrap; }
 
 /* ================= workspace ================= */
 
-.ws { container: ws / inline-size; display: flex; flex-direction: column; min-height: 100%; --gut: clamp(20px, 3.6cqw, 56px); --lab: 600 11px/1.3 var(--mono); }
+.ws { container: ws / inline-size; display: flex; flex-direction: column; min-height: 100%; }
 .ws > div:empty { display: none; }
 
 /* ---- command deck: glass on the stage, range-finder brackets outside its corners ---- */
@@ -1621,3 +1613,32 @@ button.ov-row:focus-visible { outline-offset: -2px; }
 /* Settings → About: the same rhythm as the other pages between its own blocks. */
 .about-upd:not(:empty) { margin-bottom: 26px; }
 .set-group + .about-maker { margin-top: 26px; }
+
+/* A finished turn's steps, folded into one row: "Worked for 14s · Read 2 files · Ran 1 command". The final reply
+   stays in view below it; opening the fold shows every step as it happened. */
+.tin > .asst-by + details.work { margin-top: -12px; }
+.tin > details.work + .msg.cont { margin-top: -10px; }
+details.work { min-width: 0; }
+.work-h { display: flex; align-items: center; gap: 4px 12px; width: fit-content; max-width: 100%; min-height: 30px; margin-left: -6px; padding: 4px 10px 4px 6px; border-radius: var(--r-sm); color: var(--fg-3); font-size: 13px; cursor: pointer; list-style: none; user-select: none; transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
+.work-h::-webkit-details-marker { display: none; }
+.work-h:hover { background: var(--bg-hover); color: var(--fg-2); }
+.work-h:focus-visible { outline-offset: 0; }
+.work-h .chev { flex: none; transition: transform var(--t2) var(--ease); }
+details.work[open] > .work-h .chev { transform: rotate(90deg); }
+.work-l { flex: none; color: var(--fg-2); font-weight: 550; }
+.work-facts { display: inline-flex; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; min-width: 0; align-items: center; gap: 4px 14px; font-size: 12.5px; }
+.work-facts .ts-fact svg { opacity: .7; }
+.work-b { display: flex; flex-direction: column; gap: 14px; margin: 6px 0 4px 1px; padding: 4px 0 4px 16px; border-left: 1px solid var(--line-2); }
+details.work[open] > .work-b { animation: rise var(--t2) var(--ease-out); }
+.work-b > .msg.asst { gap: 8px; }
+.work-b > .msg.cont { margin-top: 0; }
+.work-b > .msg > .msg-acts { display: none; }
+@media (prefers-reduced-motion: reduce) { details.work[open] > .work-b { animation: none; } .work-h .chev { transition: none; } }
+
+/* A button whose action is still running: it keeps its size, shows a small spinner and cannot be pressed twice. */
+.btn.busy { position: relative; color: transparent !important; pointer-events: none; }
+.btn.busy > * { visibility: hidden; }
+.btn.busy::after { content: ''; position: absolute; inset: 0; margin: auto; width: 14px; height: 14px; border: 2px solid var(--fg-3); border-right-color: transparent; border-radius: 50%; animation: btn-spin .7s linear infinite; }
+.btn.primary.busy::after { border-color: var(--on-accent); border-right-color: transparent; }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .btn.busy::after { animation-duration: 1.6s; } }

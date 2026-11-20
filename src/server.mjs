@@ -21,6 +21,7 @@ import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted
 import { collect as collectDiagnostics } from './diagnostics.mjs';
 import * as fsapi from './fsapi.mjs';
 import * as gitapi from './gitapi.mjs';
+import { RunController, runRoutes } from './runctl.mjs';
 import { openExternal } from './launcher.mjs';
 
 export { VERSION };
@@ -128,6 +129,7 @@ export class AppServer {
     this.onQuit = null;
     this.server = http.createServer((req, res) => this.handle(req, res).catch((e) => this.fail(res, e)));
     this.server.keepAliveTimeout = 5000;
+    this.runs = new RunController(this);
     this.routes = this.buildRoutes();
     setInterval(() => this.heartbeat(), 15000).unref();
   }
@@ -165,15 +167,6 @@ export class AppServer {
     }
   }
 
-  get busy() {
-    return [...this.procs.values()].some((p) => p.streaming);
-  }
-
-  /** An agent is blocked on a question (approval) for the user. */
-  get waitingForUser() {
-    return [...this.procs.values()].some((p) => p.pendingAsk?.size > 0 || p.openUi?.size > 0);
-  }
-
   async shutdown() {
     log('shutdown');
     await Promise.all([...this.procs.values()].map((p) => p.stop(2500).catch(() => {})));
@@ -202,7 +195,7 @@ export class AppServer {
     for (const c of this.clients) c.write(': ping\n\n');
   }
   procList() {
-    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, title: p.title || '', streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, engine: 'builtin', waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null }));
+    return [...this.procs.values()].map((p) => ({ id: p.id, workspace: p.workspace, title: p.title || '', streaming: p.streaming, turnStartedAt: p.streaming ? p.run?.startedAt || null : null, startedAt: p.startedAt, resume: p.opts.resume || null, file: p.session?.file || null, waiting: p.pendingAsk?.size > 0 || p.openUi?.size > 0, worktree: p.worktreeView?.() || null, run: p.runId || '' }));
   }
   broadcastProcs() {
     this.broadcast({ g: 'procs', procs: this.procList() });
@@ -218,7 +211,7 @@ export class AppServer {
 
   forward(id, ev) {
     // Coalesce high-frequency snapshot events: each carries the full state, so only the latest matters.
-    if (ev.type === 'message_update' || ev.type === 'tool_execution_update' || ev.type === 'tool_stream_update') {
+    if (ev.type === 'message_update' || ev.type === 'tool_execution_update') {
       let m = this.pendingUpdates.get(id);
       if (!m) {
         m = { events: new Map(), timer: setTimeout(() => this.flushUpdates(id), 40) };
@@ -245,7 +238,7 @@ export class AppServer {
     this.broadcast({ p: id, e: out });
   }
 
-  async startProc({ workspace, resume, model, noSession, branch }) {
+  async startProc({ workspace, resume, model, noSession, branch, worktree: given }) {
     if (!workspace) throw new Error('A workspace folder is required');
     // Two agents appending to one saved conversation would interleave it.
     if (resume && [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume)) {
@@ -253,8 +246,9 @@ export class AppServer {
     }
     this.backend.update(this.store.data.backend);
     // "Separate branch": the session works in its own git worktree, on a new branch cut from the current commit.
-    let worktree = null;
-    if (branch && !resume) {
+    // `given`: a run continuing in the worktree it already has (no saved conversation to resume from).
+    let worktree = given && !resume ? given : null;
+    if (branch && !resume && !worktree) {
       const wt = await gitapi.worktreeAdd(this.backend, workspace);
       worktree = { repo: wt.repo, slug: wt.slug, path: wt.path, branch: wt.branch, base: wt.base, baseBranch: wt.baseBranch, source: workspace };
       workspace = wt.workspace;
@@ -285,10 +279,11 @@ export class AppServer {
       try {
         await proc.stop(500);
       } catch {}
-      if (worktree) await gitapi.worktreeRemove(this.backend, worktree).catch((er) => log('worktree cleanup failed', er));
+      if (worktree && !given) await gitapi.worktreeRemove(this.backend, worktree).catch((er) => log('worktree cleanup failed', er));
       throw e;
     }
     this.procs.set(id, proc);
+    this.runs.adopt(proc); // a saved conversation that belongs to a run keeps recording into it
     this.broadcastProcs();
     return proc;
   }
@@ -300,7 +295,7 @@ export class AppServer {
    */
   async dropUnusedWorktree(proc) {
     const wt = proc.worktree;
-    if (!wt || proc.session || proc.worktreeState) return;
+    if (!wt || proc.session || proc.worktreeState || proc.runId) return; // a run keeps its worktree until you apply or discard it
     try {
       const d = await gitapi.branchDiff(this.backend, wt.path, wt.base);
       if (d.files.length || d.commits || d.pending) return;
@@ -468,6 +463,7 @@ export class AppServer {
     };
     return {
       ...mcpRoutes(this),
+      ...runRoutes(this),
       'GET /api/state': async () => this.stateSnapshot(),
 
       'GET /api/env': async () => ({ ...(await Backend.wslInfo()), ...this.stateSnapshot().backend }),
@@ -702,7 +698,7 @@ export class AppServer {
 
       'POST /api/proc/start': async ({ body }) => {
         const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession, branch: body.branch === true });
-        return { engine: 'builtin', id: proc.id, workspace: proc.workspace, protocol: proc.protocol, commands: proc.cache.commands, notice: null, worktree: proc.worktreeView() };
+        return { id: proc.id, workspace: proc.workspace, commands: proc.cache.commands, worktree: proc.worktreeView() };
       },
 
       // Review of a session on its own branch: what it changed, then merge, keep or discard. Merge and discard need
@@ -720,6 +716,11 @@ export class AppServer {
       'POST /api/branch/merge': async ({ body }) => {
         const p = this.branchProc(body.proc);
         if (body.confirm !== true) throw Object.assign(new Error('Merging needs your confirmation.'), { status: 400 });
+        if (p.runId) {
+          // The conversation of a run: the run applies its own changes, so its state and log stay right.
+          const r = await this.runs.apply(p.runId);
+          return { result: r.applied ? { merged: true, hash: r.hash } : { merged: false, conflict: true, files: r.files }, worktree: p.worktreeView() };
+        }
         if (p.streaming) throw Object.assign(new Error('The agent is still working. Stop it or wait until it is done, then merge.'), { status: 409 });
         const wt = p.worktree;
         const r = await gitapi.merge(this.backend, { repo: wt.repo, wt: wt.path, slug: wt.slug, baseBranch: wt.baseBranch, message: `${p.title || 'ORBIX session'} (ORBIX session ${wt.slug})` });
@@ -729,6 +730,7 @@ export class AppServer {
       },
       'POST /api/branch/keep': async ({ body }) => {
         const p = this.branchProc(body.proc);
+        if (p.runId) return (await this.runs.keep(p.runId), { worktree: p.worktreeView() });
         p.setWorktreeState('kept');
         this.broadcastProcs();
         return { worktree: p.worktreeView() };
@@ -736,6 +738,7 @@ export class AppServer {
       'POST /api/branch/discard': async ({ body }) => {
         const p = this.branchProc(body.proc);
         if (body.confirm !== true) throw Object.assign(new Error('Discarding needs your confirmation.'), { status: 400 });
+        if (p.runId && !p.streaming) return (await this.runs.discard(p.runId), { removed: true });
         if (p.streaming) throw Object.assign(new Error('The agent is still working. Stop it first, then discard.'), { status: 409 });
         const wt = p.worktree;
         const file = p.session?.file;
@@ -773,6 +776,9 @@ export class AppServer {
         const t = body.msg?.type;
         if (t !== 'extension_ui_response') throw Object.assign(new Error('Unsupported reply type'), { status: 400 });
         proc.send(body.msg);
+        this.runs.onReply(proc, body.msg);
+        // Other windows and views showing this question drop it now that it is answered.
+        if (body.msg?.id != null) this.broadcast({ p: proc.id, e: { type: 'extension_ui_request', id: `answered-${body.msg.id}`, method: 'cancel', targetId: body.msg.id } });
         if (t === 'extension_ui_response') proc.openUi?.delete(body.msg.id);
         return {};
       },

@@ -1,7 +1,7 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner, errorState } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, logo, spinner, errorState, fmtElapsed } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi, openTab, closeTab } from './store.js';
@@ -247,6 +247,7 @@ export class TabView {
     this.approvalDlg = null;
     this.approvalEl = null;
     this.thinkOpen = new Set();
+    this.workOpen = new Set(); // turns whose steps you unfolded (by the key of your message)
     this.els = new WeakMap(); // message -> its element
     this.toolQ = new Set();
     this.tab.afterUndo = () => this.refreshSummary();
@@ -326,6 +327,10 @@ export class TabView {
     this.tin.addEventListener('toggle', (e) => {
       const d = e.target;
       if (d.classList?.contains('think') && d.dataset.key) d.open ? this.thinkOpen.add(d.dataset.key) : this.thinkOpen.delete(d.dataset.key);
+      else if (d.classList?.contains('work') && d.dataset.key) {
+        d.open ? this.workOpen.add(d.dataset.key) : this.workOpen.delete(d.dataset.key);
+        if (d.open) for (const c of d.querySelectorAll('.tool.open')) c._fill?.();
+      }
     }, true);
   }
 
@@ -345,6 +350,7 @@ export class TabView {
 
   /** The tab is closed for good: release observers and callbacks that would keep this view and its DOM alive. */
   destroy() {
+    clearInterval(this.pendingTimer);
     this.dead = true;
     clearInterval(this.statusTimer);
     this.renderLive?.cancel?.();
@@ -610,6 +616,7 @@ export class TabView {
       }
     }
     this.tin.append(frag);
+    this.foldTurns(start);
     if (t.dead) this.showDead(false);
     this._renderLive();
     this.updateEmpty();
@@ -677,8 +684,25 @@ export class TabView {
   updatePending() {
     const t = this.tab;
     const idle = !t.streaming || t.dead || this.approvalDlg || (this.liveEl && this.liveEl.childElementCount);
-    if (idle) return void (this.pendingEl?.remove(), (this.pendingEl = null));
-    if (!this.pendingEl) this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-label': 'Working' }, h('span', { class: 'ascii-bar' }));
+    if (idle) {
+      clearInterval(this.pendingTimer);
+      this.pendingTimer = 0;
+      return void (this.pendingEl?.remove(), (this.pendingEl = null));
+    }
+    if (!this.pendingEl) {
+      // Between steps: what the agent is waiting on, and for how long, beside the moving bar.
+      const label = h('span', { class: 'pending-l' });
+      this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-live': 'off' }, h('span', { class: 'ascii-bar', 'aria-hidden': 'true' }), label);
+      const tick = () => {
+        if (!this.pendingEl) return;
+        const [what, , since] = this.nowDoing();
+        const secs = Math.max(0, Math.floor((Date.now() - since) / 1000));
+        const text = secs >= 3 ? `${what} · ${fmtElapsed(secs)}` : what;
+        if (label.textContent !== text) label.textContent = text;
+      };
+      tick();
+      this.pendingTimer = setInterval(tick, 1000);
+    }
     if (this.pendingEl.parentNode !== this.tin || this.pendingEl.nextSibling) this.tin.append(this.pendingEl);
     this.emptyEl?.remove();
   }
@@ -837,26 +861,22 @@ export class TabView {
     this.refreshSummary();
   }
 
-  /** After a finished reply that changed files: what changed, with a way to review it or undo it all. */
-  refreshSummary() {
+  /**
+   * What one turn did, from the message after yours up to `end` (exclusive): files read and changed, searches,
+   * commands, helpers, failed steps, the run-end check and review, and how long it took.
+   */
+  turnStats(start, end) {
     const t = this.tab;
-    this.summaryEl?.remove();
-    this.summaryEl = null;
-    if (t.streaming || t.dead) return;
-    let start = t.messages.length - 1;
-    while (start >= 0 && t.messages[start].role !== 'user') start--;
-    if (start < 0) return;
-    const undoable = true;
     const files = new Map(); // path -> { add, del, ids }
     const read = new Set();
-    const n = { search: 0, run: 0, help: 0, failed: 0 };
+    const n = { search: 0, run: 0, help: 0, failed: 0, calls: 0 };
     let lastAsst = null;
-    let lastEl = null; // the last thing drawn in this reply: the summary goes under it
+    let lastEl = null; // the last message drawn in this turn: the summary goes under it
     let check = null; // the last run-end check, and how many failed before it
     let checkFails = 0;
     let review = null;
     let edits = 0;
-    for (const m of t.messages.slice(start + 1)) {
+    for (const m of t.messages.slice(start + 1, end)) {
       if (m.role === 'custom' && (m.customType === 'verify' || m.customType === 'review')) {
         lastEl = m;
         if (m.customType === 'review') review = { ...m.details, editsBefore: edits };
@@ -871,6 +891,7 @@ export class TabView {
       lastEl = m;
       for (const b of Array.isArray(m.content) ? m.content : []) {
         if (b.type !== 'toolCall') continue;
+        n.calls++;
         const r = t.results.get(b.id);
         // A failed step counts once, as failed, not also as a file read or a command run.
         if (r?.isError) {
@@ -879,10 +900,10 @@ export class TabView {
         }
         const a = b.arguments || {};
         if (b.name === 'read') a.path && read.add(a.path);
-        else if (/^(glob|grep|find|ast_grep|web_search|web_fetch)$/.test(b.name)) n.search++;
-        else if (b.name === 'bash' || b.name === 'eval') n.run++;
+        else if (/^(glob|grep|find|web_search|web_fetch)$/.test(b.name)) n.search++;
+        else if (b.name === 'bash') n.run++;
         else if (b.name === 'task') n.help++;
-        if (b.name !== 'edit' && b.name !== 'write' && b.name !== 'ast_edit') continue;
+        if (b.name !== 'edit' && b.name !== 'write') continue;
         const d = r?.details;
         if (d?.undone) continue;
         const path = d?.path || a.path;
@@ -891,34 +912,109 @@ export class TabView {
         const c = diffCounts(d);
         if (c) (f.add += c.add), (f.del += c.del);
         edits++;
-        if (undoable && d?.undoable) f.ids.push(b.id);
+        if (d?.undoable) f.ids.push(b.id);
         files.set(path, f);
       }
     }
-    const anchor = lastEl && this.els.get(lastEl);
-    const did = read.size + n.search + n.run + n.help + files.size + n.failed;
-    if (!anchor || !did) return;
-    // What the agent looked at and did in this reply, in one line (the transparency the tool steps give, summed up).
     const u = t.messages[start];
-    const secs = u.timestamp && lastAsst.timestamp ? Math.max(0, Math.round((lastAsst.timestamp - u.timestamp) / 1000)) : null;
+    const secs = u?.timestamp && lastAsst?.timestamp ? Math.max(0, Math.round((lastAsst.timestamp - u.timestamp) / 1000)) : null;
+    return { files, read, n, check, checkFails, review, edits, lastAsst, lastEl, secs };
+  }
+
+  /** The facts of a turn as small labelled items: "Read 2 files", "Ran 1 command", "Tests passed"… */
+  turnFacts(st) {
     const pl = (k, one, many = one + 's') => `${k} ${k === 1 ? one : many}`;
-    const facts = [
+    const { read, n, files, check, checkFails, review, edits } = st;
+    return [
       read.size ? [icon('eye', 12), `Read ${pl(read.size, 'file')}`] : null,
       n.search ? [icon('search', 12), pl(n.search, 'search', 'searches')] : null,
       n.run ? [icon('terminal', 12), `Ran ${pl(n.run, 'command')}`] : null,
       n.help ? [icon('users', 12), pl(n.help, 'helper')] : null,
       files.size ? [icon('pencil', 12), `Changed ${pl(files.size, 'file')}`] : null,
-      check ? (check.status === 'passed' ? [icon('check', 12), `${checkWord(check.command)} passed${checkFails ? ` after ${pl(checkFails, 'fix', 'fixes')}` : ''}`] : [icon('alert', 12), `${checkWord(check.command)} failed`, true]) : null,
+      check ? (check.status === 'passed' ? [icon('check', 12), `${checkWord(check.command)} passed${checkFails ? ` after ${pl(checkFails, 'fix', 'fixes')}` : ''}`] : [icon('alert', 12), `${checkWord(check.command)} ${check.status === 'skipped' ? 'skipped' : 'failed'}`, check.status !== 'skipped']) : null,
       review ? (review.status === 'issues' ? [icon('eye', 12), `Review found ${pl(review.issues?.length || 0, 'issue')}${edits > review.editsBefore ? ', fixed' : ''}`] : [icon('eye', 12), 'Review found no issues']) : null,
       n.failed ? [icon('alert', 12), pl(n.failed, 'failed step'), true] : null,
-    ].filter(Boolean);
-    const line = h('div', { class: 'ts-line' }, facts.map(([ic, txt, bad]) => h('span', { class: 'ts-fact' + (bad ? ' bad' : '') }, ic, txt)), secs ? h('span', { class: 'ts-time num' }, secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`) : null);
-    if (!files.size) {
-      this.summaryEl = h('div', { class: 'turn-sum lite enter' }, line);
-      anchor.after(this.summaryEl);
-      if (this.stick) this.scrollBottom();
-      return;
+    ].filter(Boolean).map(([ic, txt, bad]) => h('span', { class: 'ts-fact' + (bad ? ' bad' : '') }, ic, txt));
+  }
+
+  /** Fold every finished turn from message `from` on (the turn still running stays open). */
+  foldTurns(from = 0) {
+    const t = this.tab;
+    const users = [];
+    for (let i = from; i < t.messages.length; i++) if (t.messages[i].role === 'user') users.push(i);
+    users.forEach((u, k) => {
+      const end = users[k + 1] ?? t.messages.length;
+      if (end === t.messages.length && (t.streaming || t.live?.message)) return;
+      this.foldTurn(u, end);
+    });
+  }
+
+  /**
+   * The steps of a finished turn (the agent's notes between tools and every tool call) go into one fold that reads
+   * "Worked for 14s · Read 2 files · Ran 1 command"; the final reply stays in view below it. Opening the fold shows
+   * every step as it was. Turns without tool calls are left as they are.
+   */
+  foldTurn(start, end, st = this.turnStats(start, end)) {
+    const t = this.tab;
+    if (!st.n.calls) return null;
+    const msgs = t.messages.slice(start + 1, end);
+    // The final reply: the last message from the agent with text (or the one that failed or was stopped).
+    let fi = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.role !== 'assistant') continue;
+      const hasText = (m.content || []).some((b) => b.type === 'text' && b.text?.trim());
+      const calls = (m.content || []).some((b) => b.type === 'toolCall');
+      if ((hasText && !calls) || m.stopReason === 'error' || m.stopReason === 'aborted') fi = i;
+      break;
     }
+    const stop = fi >= 0 ? fi : msgs.length;
+    // The steps, plus the run-end check and review that come after the reply: the fold's header already says how they went.
+    const steps = [...msgs.slice(0, stop), ...msgs.slice(stop + 1).filter((m) => m.role === 'custom' && (m.customType === 'verify' || m.customType === 'review') && !['failed', 'issues'].includes(m.details?.status))]; // a failed check stays in view
+    const key = String(t.messages[start]?.id || t.messages[start]?.timestamp || start);
+    const old = this.tin.querySelector(`details.work[data-key="${CSS.escape(key)}"]`);
+    const els = steps.map((m) => this.els.get(m)).filter((el) => el?.isConnected && el.parentNode === this.tin);
+    if (!els.length) return old; // already folded
+    const first = els[0];
+    // The agent's name stays at the top of the turn, above the fold.
+    const by = first.querySelector(':scope > .asst-by');
+    const head = h('summary', { class: 'work-h' },
+      icon('chevron-right', 12, 'chev'),
+      h('span', { class: 'work-l' }, st.secs != null ? `Worked for ${fmtElapsed(st.secs)}` : 'Worked'),
+      h('span', { class: 'work-facts' }, this.turnFacts(st)));
+    const fold = old || h('details', { class: 'work', dataset: { key } });
+    if (old) old.firstChild.replaceWith(head);
+    else {
+      fold.append(head, h('div', { class: 'work-b' }));
+      fold.open = this.workOpen.has(key);
+    }
+    if (!old) first.before(fold);
+    if (by) fold.before(by);
+    const body = fold.lastChild;
+    for (const el of els) {
+      el.classList.remove('enter');
+      body.append(el);
+    }
+    // The final reply now follows the fold directly: it reads as the continuation of the same turn.
+    const finalEl = fi >= 0 && this.els.get(msgs[fi]);
+    if (finalEl?.isConnected) finalEl.classList.add('cont');
+    return fold;
+  }
+
+  /** After a finished reply that changed files: what changed, with a way to review it or undo it all. */
+  refreshSummary() {
+    const t = this.tab;
+    this.summaryEl?.remove();
+    this.summaryEl = null;
+    if (t.streaming || t.dead) return;
+    let start = t.messages.length - 1;
+    while (start >= 0 && t.messages[start].role !== 'user') start--;
+    if (start < 0) return;
+    const st = this.turnStats(start, t.messages.length);
+    this.foldTurn(start, t.messages.length, st); // a turn that changed files always ran tools, so it is always folded
+    const { files, lastEl } = st;
+    const anchor = lastEl && this.els.get(lastEl);
+    if (!anchor || !files.size) return;
     const all = [...files.values()];
     const ids = all.flatMap((f) => f.ids);
     const total = { add: all.reduce((s, f) => s + f.add, 0), del: all.reduce((s, f) => s + f.del, 0) };
@@ -934,9 +1030,10 @@ export class TabView {
     this.summaryEl = h('div', { class: 'turn-sum enter' },
       h('div', { class: 'ts-head' }, h('b', null, `${files.size} file${files.size === 1 ? '' : 's'} changed`), statChips(total, 'ts-stat num'), h('span', { class: 'grow' }),
         h('button', { class: 'btn sm', type: 'button', onclick: () => reviewChanges(t, null) }, icon('branch', 13), 'Review'), undo),
-      h('div', { class: 'ts-files' }, ...rows),
-      line);
-    anchor.after(this.summaryEl);
+      h('div', { class: 'ts-files' }, ...rows));
+    // Under the turn: after whatever of it is drawn last (the final reply, a failed check, or the fold).
+    const last = [...this.tin.children].filter((x) => x !== this.pendingEl && x !== this.liveEl && x !== this.emptyEl && !x.classList.contains('dead')).pop();
+    (last || anchor.closest('details.work') || anchor).after(this.summaryEl);
     if (this.stick) this.scrollBottom();
   }
 

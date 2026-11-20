@@ -85,7 +85,8 @@ export class Timeline {
     this.el.style.bottom = `${dockH + 14}px`;
     const trackH = this.track.clientHeight || 1;
     const scTop = sc.getBoundingClientRect().top;
-    const pos = (el) => el.getBoundingClientRect().top - scTop + sc.scrollTop; // layout position in the scroll content
+    // A step inside a folded turn sits where the fold is.
+    const pos = (el) => (el.closest('details.work:not([open])')?.firstElementChild || el).getBoundingClientRect().top - scTop + sc.scrollTop; // layout position in the scroll content
     let lastY = -99;
     let lastKind = '';
     const frag = document.createDocumentFragment();
@@ -137,6 +138,8 @@ export class Timeline {
   /** Scroll so `el` sits a third of the way down the screen, and flash it so the eye finds it. */
   jumpTo(el) {
     const sc = this.view.scroller;
+    const fold = el.closest('details.work:not([open])');
+    if (fold) fold.open = true; // the step is inside a folded turn: show it
     this.view.stick = false;
     const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - sc.clientHeight / 3;
     sc.scrollTo({ top: Math.max(0, top), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });

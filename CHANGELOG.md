@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.3.0 (2026-11-20)
+- **Runs.** A run takes one task from its description to changes you have reviewed. Start one from Runs (Ctrl+2): pick the project, describe the task, and choose Plan first or Straight to work.
+  - Every run works in its own git worktree and branch, so your checkout is untouched until you apply, and several runs can work at once.
+  - Plan first: the agent only reads, then saves an implementation plan. You can comment on a passage, send feedback and get a new revision; every revision stays readable.
+  - Approving the plan shows exactly what it allows: the worktree, the branch, and either file edits or file edits and commands. Files outside the worktree and destructive commands (recursive delete, push, publish, history rewrite, system changes) ask every time, whatever you approved.
+  - The run page has a timeline where each step opens what it produced, plus the plan, the changes, the test log and the walkthrough.
+  - Apply merges into the branch the run started from. Your uncommitted work in other files is kept; if a file you edited would be overwritten, or the merge conflicts, nothing is changed on either side. Discard removes the worktree and branch.
+- **Review** (Ctrl+3). One queue across all projects for everything that waits for you: approvals, plans, finished changes, questions, interrupted and failed runs.
+- **Recovery.** Everything a run does is written to an append-only log. A run that was working when ORBIX closed is marked Interrupted and names what was still in flight. It continues only after you say so, and the agent is told to check the state first; ORBIX does not repeat the action.
+- **Calmer conversations.** When a reply is done, its steps fold into one line above the answer: "Worked for 14s", with what was read, searched, run and changed, and whether the tests passed. Click it to see every step. A failed check stays in view. While the agent works, the line at the bottom says what it is waiting on and for how long.
+- **Quieter interface.** A narrower reading column, flatter buttons and message box, icon-only message actions (the words are in the tooltips), and one summary of a turn instead of two. Buttons that start slow actions show a spinner and cannot be pressed twice.
+- **Cleanup.** Removed unused code, styles and settings left from older versions, merged duplicated helpers, and corrected the docs (README, CONTRIBUTING, SECURITY, ARCHITECTURE).
+- **Clearer git errors.** When git has no name and email set, Apply says so and shows the two commands that fix it.
+- **Tests.** `npm run e2e` drives the real interface through a whole run against a scripted model. `docs/parity.md` tracks the feature matrix against the Antigravity App and what is verified.
+
 ## 3.2.2 (2026-11-15)
 - **Accurate model facts and thinking levels.**
   - ChatGPT-plan models show their real context window (272K, not 1.1M), so the context meter is right and long conversations are summarized before they hit the limit. They show no per-token cost, because plan usage is not billed per token.

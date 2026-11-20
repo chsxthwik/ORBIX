@@ -4,13 +4,12 @@ import { ansiFragment, hasAnsi, stripAnsi } from './ansi.js';
 import { codeBlock, renderMarkdown } from './markdown.js';
 import { highlight, langFor } from './highlight.js';
 import { rpc } from './api.js';
-import { toolTitle } from './tool-title.mjs';
+import { toolTitle, resultText } from './tool-title.mjs';
 import { wordDiff } from './word-diff.mjs';
 
 const ICONS = { bash: 'terminal', read: 'eye', write: 'file', edit: 'pencil', grep: 'search', glob: 'search', todo: 'list', task: 'users', web_search: 'globe', web_fetch: 'globe' };
 const OPEN_BY_DEFAULT = new Set(['edit', 'write', 'todo', 'task']);
 
-const resultText = (res) => (res?.content || []).filter((c) => c?.type === 'text').map((c) => c.text).join('\n');
 const resultImages = (res) => (res?.content || []).filter((c) => c?.type === 'image' && c.data);
 
 function pretty(v) {

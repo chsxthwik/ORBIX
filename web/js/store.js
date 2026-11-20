@@ -108,7 +108,6 @@ export async function openTab({ workspace, resume, noSession, model, title, bran
   // A session on its own branch works in its worktree: the server says which folder that is.
   const tab = new Tab(j.id, j.workspace || workspace, { resume, title, worktree: j.worktree });
   tab.commands = j.commands || [];
-  if (j.notice) toast(j.notice, 'info', 10000);
   S.tabs.set(tab.id, tab);
   setActive(tab.id);
   emit('tabs');
@@ -477,8 +476,8 @@ function handleUi(tab, ev) {
       emit('tab:dialog', tab);
       break;
     case 'setStatus': {
-      const key = ev.statusKey ?? ev.key ?? 'status';
-      const text = ev.statusText ?? ev.text;
+      const key = ev.statusKey ?? 'status';
+      const text = ev.statusText;
       if (text) tab.statuses.set(key, text);
       else tab.statuses.delete(key);
       emit('tab:state', tab);

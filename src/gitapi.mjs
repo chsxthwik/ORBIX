@@ -154,9 +154,21 @@ function cleanPaths(paths) {
   });
 }
 
+/**
+ * Git's own message, or a plain one for the failures people actually hit. A commit on a computer where git was never
+ * told a name and email fails with a long hint; say what is missing and the two commands that fix it.
+ */
+export function gitFailure(text, what = 'git') {
+  const msg = String(text || '').trim();
+  if (/Please tell me who you are|unable to auto-detect email address|empty ident name/i.test(msg)) {
+    return Object.assign(new Error('Git does not know your name and email yet, and it needs them to record a commit. Run these two commands once in a terminal, then try again:\n\n  git config --global user.name "Your Name"\n  git config --global user.email "you@example.com"\n\nNothing was changed.'), { status: 409, code: 'git_identity' });
+  }
+  return new Error(msg || `${what} failed`);
+}
+
 async function run(backend, ws, args) {
   const r = await git(backend, ws, args);
-  if (r.code !== 0) throw new Error(r.stderr.toString('utf8').trim() || r.stdout.toString('utf8').trim() || `git ${args[0]} failed`);
+  if (r.code !== 0) throw gitFailure(r.stderr.toString('utf8').trim() || r.stdout.toString('utf8').trim(), `git ${args[0]}`);
   return r.stdout.toString('utf8');
 }
 
@@ -374,11 +386,12 @@ export async function mainState(backend, repo) {
  * Merge a session branch into the branch the session started from, in the main checkout, with a merge commit
  * (--no-ff). Edits the session has not committed are committed on its branch first (`message`).
  * Refuses when the main checkout is on another branch, has uncommitted edits or is in the middle of a merge.
+ * With `changed` (the paths the branch touched), uncommitted edits to other files are left alone and do not stop it.
  * On a conflict the merge is aborted and the commit made here is taken back (its edits stay in the session's
  * folder), so both checkouts are as they were: returns { merged: false, conflict: true, files }.
  * Otherwise { merged: true, hash, committed }.
  */
-export async function merge(backend, { repo, wt, slug, baseBranch, message }) {
+export async function merge(backend, { repo, wt, slug, baseBranch, message, changed = null }) {
   const s = checkSlug(slug);
   const branch = `orbix/${s}`;
   if (!baseBranch) throw bad('This session started on a detached HEAD, so there is no branch to merge into. Merge it with git yourself.');
@@ -387,7 +400,10 @@ export async function merge(backend, { repo, wt, slug, baseBranch, message }) {
   if (main.branch !== baseBranch) throw conflictErr(`The project folder is on ${main.branch || 'a detached HEAD'}, not ${baseBranch}. Switch it back to ${baseBranch}, then merge.`);
   if ((await git(backend, repo, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])).code === 0) throw conflictErr(`A merge is already in progress in the project folder. Finish or abort it first.`);
   const dirty = await dirtyFiles(backend, repo);
-  if (dirty.length) throw conflictErr(`The project folder has uncommitted changes (${dirty.slice(0, 3).join(', ')}${dirty.length > 3 ? ', …' : ''}). Commit or stash them, then merge.`);
+  // `changed` (the paths the branch touched): uncommitted edits to other files stay exactly as they are through the
+  // merge, so only edits to the same files stop it. Without the list, any uncommitted edit does.
+  const clash = changed ? dirty.filter((p) => changed.includes(p)) : dirty;
+  if (clash.length) throw conflictErr(changed ? `You have uncommitted changes to ${clash.slice(0, 3).join(', ')}${clash.length > 3 ? ` and ${clash.length - 3} more` : ''}, which this would overwrite. Commit or stash them, then apply.` : `The project folder has uncommitted changes (${dirty.slice(0, 3).join(', ')}${dirty.length > 3 ? ', …' : ''}). Commit or stash them, then merge.`);
   const onBranch = (await git(backend, wt, ['symbolic-ref', '-q', '--short', 'HEAD'])).stdout.toString('utf8').trim();
   if (onBranch !== branch) throw conflictErr(`The session folder is on ${onBranch || 'a detached HEAD'}, not ${branch}.`);
 
@@ -415,7 +431,7 @@ export async function merge(backend, { repo, wt, slug, baseBranch, message }) {
   if ((await git(backend, repo, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])).code === 0) await run(backend, repo, ['merge', '--abort']);
   await undo();
   if (files.length) return { merged: false, conflict: true, files };
-  throw new Error(why);
+  throw gitFailure(why, 'git merge');
 }
 
 /** Remove a session's worktree and delete its branch. Edits in it are lost: the UI asks before calling this. */
