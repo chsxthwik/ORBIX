@@ -60,7 +60,7 @@ function inline(text, opts) {
         el.tabIndex = 0;
         el.setAttribute('role', 'link');
         el.addEventListener('click', () => opts.onPath(code.trim()));
-        el.addEventListener('keydown', (e) => e.key === 'Enter' && opts.onPath(code.trim()));
+        el.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), opts.onPath(code.trim())));
       }
       frag.append(el);
     } else if (g.b1 != null || g.b2 != null) frag.append(h('strong', null, inline(g.b1 ?? g.b2, opts)));

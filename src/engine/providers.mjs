@@ -191,7 +191,7 @@ async function* effortGuard(args, run) {
     const allowed = e?.status === 400 && tried ? supportedEfforts(e.message, tried) : null;
     if (!allowed || !args.providerId || !args.model) throw e;
     learnEfforts(args.providerId, args.model, allowed);
-    const style = thinkingStyle(args.providerId, args.model); // now built from the accepted levels
+    const style = thinkingStyle(args.providerId, args.model); // built from the levels the provider accepted
     const thinking = args.thinking === 'off' && !allowed.includes('none') ? nearestEffort('low', allowed) : args.thinking;
     const effort = thinking === 'off' ? null : nearestEffort(thinking, allowed);
     yield* run({ ...args, style, effort, thinking });

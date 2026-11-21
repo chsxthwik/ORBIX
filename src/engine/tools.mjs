@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { isWinPath, killTree } from '../backend.mjs';
+import { isWinPath, killTree, linuxToHost, wslUncPath } from '../backend.mjs';
+import { clip } from '../util.mjs';
 import { webFetch, WEB_FETCH_DEF } from './webfetch.mjs';
 import { webSearch, WEB_SEARCH_DEF } from './websearch.mjs';
 import { TASK_DEF } from './subagent.mjs';
@@ -32,6 +33,7 @@ const bashDef = ({ windows = false, distro = '' } = {}) => ({
   input_schema: {
     type: 'object',
     properties: {
+      description: { type: 'string', description: 'What the command does, in a few plain words for the user (for example "check free disk space", "run the tests"). Shown instead of the raw command.' },
       command: { type: 'string', description: 'The command line to run.' },
       timeout: { type: 'integer', description: 'Seconds before the command is stopped (1-600, default 120).' },
       ...(windows ? { shell: { type: 'string', enum: ['cmd', 'powershell'], description: 'cmd (default) or powershell.' } } : {}),
@@ -43,7 +45,7 @@ const bashDef = ({ windows = false, distro = '' } = {}) => ({
 const BASE_DEFS = [
   {
     name: 'read',
-    description: 'Read a file. Text comes back as numbered lines ("N<TAB>text"; the number is not part of the file). Large files: page with offset/limit (default: the first 2000 lines). PNG, JPEG, GIF and WebP images come back as images you can see. A folder path lists its entries (folders end with /). Read a file before you edit it.',
+    description: 'Read a file. Text comes back as numbered lines ("N<TAB>text"; the number is not part of the file). Large files: page with offset/limit (default: the first 2000 lines). PNG, JPEG, GIF and WebP images come back as images you can see. A folder path lists its entries under a first line naming that folder (folders end with /; an entry\'s path is the folder path plus its name). Read a file before you edit it.',
     input_schema: { type: 'object', properties: { path: PATH, offset: { type: 'integer', description: 'First line to read, 1-based (default 1).' }, limit: { type: 'integer', description: 'Number of lines (default 2000).' } }, required: ['path'] },
   },
   {
@@ -81,7 +83,7 @@ const BASE_DEFS = [
   },
   {
     name: 'todo',
-    description: 'Track the steps of multi-step work. Send the FULL list each time (it replaces the previous one). Keep exactly one task in_progress while you work on it; mark it completed as soon as it is done. Skip this for one-step tasks.',
+    description: 'Track the steps of multi-step work (three or more steps, or several files): write the list before you start, then update it as you go. Send the FULL list each time (it replaces the previous one). Keep exactly one task in_progress while you work on it; mark it completed as soon as it is done, including the step that verifies the work. Skip this for one-step tasks.',
     input_schema: { type: 'object', properties: { todos: { type: 'array', items: { type: 'object', properties: { content: { type: 'string', description: 'The step, imperative ("Add tests for X").' }, status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] } }, required: ['content', 'status'] } } }, required: ['todos'] },
   },
   WEB_FETCH_DEF,
@@ -89,12 +91,13 @@ const BASE_DEFS = [
   TASK_DEF,
 ];
 
-/** Tool definitions with the default (bash) shell description; toolDefsFor() gives the backend-specific set. */
-export const TOOL_DEFS = BASE_DEFS;
-
-/** Tool definitions for a backend: the bash tool describes the real shell (WSL bash, or cmd.exe / PowerShell). */
-export function toolDefsFor(backend) {
-  const bash = bashDef({ windows: backend && !backend.isWsl, distro: backend?.isWsl ? backend.distro || 'default distro' : '' });
+/**
+ * Tool definitions for a backend and project folder: the bash tool describes the real shell (WSL bash, or cmd.exe /
+ * PowerShell). A project inside a WSL distribution opened from Windows runs its commands in that distribution's bash.
+ */
+export function toolDefsFor(backend, cwd = '') {
+  const unc = backend && !backend.isWsl ? wslUncPath(cwd) : null;
+  const bash = unc ? bashDef({ distro: unc.distro }) : bashDef({ windows: backend && !backend.isWsl && !backend.isPosix, distro: backend?.isWsl ? backend.distro || 'default distro' : '' });
   return BASE_DEFS.map((d) => (d.name === 'bash' ? bash : d));
 }
 
@@ -306,6 +309,71 @@ function fuzzyLines(text, old) {
   return { matches };
 }
 
+/** Character pairs of a line, with counts (for a rough similarity of two lines). */
+function bigrams(s) {
+  const m = new Map();
+  for (let i = 0; i < s.length - 1; i++) {
+    const g = s.slice(i, i + 2);
+    m.set(g, (m.get(g) || 0) + 1);
+  }
+  return m;
+}
+
+/** Similarity of two lines from 0 to 1 (Dice coefficient of their character pairs). */
+function likeness(a, b, ga, gb) {
+  if (a === b) return 1;
+  if (a.length < 2 || b.length < 2) return 0;
+  let common = 0;
+  let total = 0;
+  for (const [g, n] of ga) {
+    total += n;
+    common += Math.min(n, gb.get(g) || 0);
+  }
+  for (const n of gb.values()) total += n;
+  return (2 * common) / total;
+}
+
+/**
+ * The part of `text` most like `old` when `old` is not in it: { from, to } (1-based lines), or null when nothing is
+ * close. Lines are compared ignoring whitespace; a near line (a typo, a renamed variable) counts in part. Lines from
+ * the start of `old` anchor the candidate places, so a large file costs one pass per anchor line.
+ */
+function nearestBlock(text, old) {
+  const norm = (l) => l.trim().replace(/\s+/g, ' ');
+  let want = old.replace(/\r\n/g, '\n').split('\n').map(norm);
+  while (want.length && !want[0]) want = want.slice(1);
+  while (want.length && !want[want.length - 1]) want = want.slice(0, -1);
+  const lines = text.split('\n');
+  if (!want.length || lines.length > 30000) return null;
+  const have = lines.map(norm);
+  const hg = new Array(have.length);
+  const gramsAt = (i) => (hg[i] ??= bigrams(have[i]));
+  const wg = want.map(bigrams);
+  const k = Math.min(want.length, 60); // lines compared per place
+  // Places where one of the first anchor lines of `old` (nearly) appears, shifted to where `old` would start; the
+  // closest 300 are scored in full (a file of near-identical lines must not crowd out the right place).
+  const found = [];
+  for (let j = 0, anchors = 0; j < want.length && anchors < 3; j++) {
+    if (want[j].length < 4) continue;
+    anchors++;
+    for (let i = 0; i < have.length; i++) {
+      if (!have[i]) continue;
+      const sim = likeness(want[j], have[i], wg[j], gramsAt(i));
+      if (sim >= 0.7) found.push([sim, Math.max(0, i - j)]);
+    }
+  }
+  const starts = new Set(found.sort((a, b) => b[0] - a[0]).map((f) => f[1]).slice(0, 300));
+  const counted = want.slice(0, k).filter(Boolean).length;
+  let best = null;
+  for (const s of starts) {
+    let score = 0;
+    for (let j = 0; j < k && s + j < have.length; j++) if (want[j]) score += likeness(want[j], have[s + j], wg[j], gramsAt(s + j));
+    const avg = score / counted;
+    if (avg >= 0.5 && (!best || avg > best.avg)) best = { avg, from: s + 1, to: Math.min(lines.length, s + want.length) };
+  }
+  return best && { from: best.from, to: best.to };
+}
+
 /** Re-indent `text` written for `from` indentation to `to`, line by line. */
 function reindent(text, from, to) {
   if (from === to) return text;
@@ -324,9 +392,13 @@ function stripLineNumbers(s) {
 }
 
 export function createTools({ backend, cwd, getSignal }) {
+  // A project inside a WSL distribution opened from Windows: its commands run in Linux, so Linux paths
+  // (/root/x, /mnt/c/...) the model takes from them are mapped back to Windows paths.
+  const wslRoot = !backend.isWsl ? wslUncPath(cwd) : null;
   const resolve = (p) => {
     const raw = String(p ?? '').trim();
     if (!raw) throw new Error('A path is required');
+    if (wslRoot && /^\/(?!\/)/.test(raw)) return /^\/mnt\/[a-z](\/|$)/.test(raw) ? linuxToHost(raw) : `${wslRoot.root}${raw.replace(/\/+/g, '\\').replace(/(.)\\$/, '$1')}`;
     if (isWinPath(raw) || raw.startsWith('/')) {
       if (isForeignShare(raw, cwd)) throw new Error(`Network paths are not opened by the agent: ${raw}. Copy the file into the project folder first.`);
       return raw;
@@ -342,7 +414,17 @@ export function createTools({ backend, cwd, getSignal }) {
     } catch {}
   };
 
-  /** Close names in the parent folder (or the nearest existing folder) of a missing path, for the error text. */
+  /** A folder's entries for an error text: "a/, b.txt, … (12 more)", folders marked with /. */
+  async function entriesOf(dir, max = 25) {
+    const ents = (await fs.promises.readdir(dir, { withFileTypes: true })).map((e) => e.name + (e.isDirectory() ? '/' : '')).sort();
+    if (!ents.length) return 'nothing (it is empty)';
+    return `${ents.slice(0, max).join(', ')}${ents.length > max ? `, … (${ents.length - max} more)` : ''}`;
+  }
+
+  /**
+   * Help for a missing path, for the error text: close names in its folder (case, typo, other extension), else what
+   * that folder does contain; for a missing folder, the nearest one that exists and its contents.
+   */
   async function suggest(p) {
     let file;
     try {
@@ -351,6 +433,10 @@ export function createTools({ backend, cwd, getSignal }) {
       return '';
     }
     const dir = path.dirname(file);
+    // The folder as the model wrote it ("src/x" for "src/x/a.js"), or the project folder.
+    const given = String(p).trim().replace(/[\\/]+$/, '');
+    const cut = Math.max(given.lastIndexOf('/'), given.lastIndexOf('\\'));
+    const dirLabel = cut > 0 ? given.slice(0, cut) : cut === 0 ? given.slice(0, 1) : 'The project folder';
     let names;
     try {
       names = await fs.promises.readdir(dir);
@@ -360,7 +446,7 @@ export function createTools({ backend, cwd, getSignal }) {
         const parent = path.dirname(up);
         if (parent === up) break;
         up = parent;
-        if (fs.existsSync(up)) return ` The folder ${path.relative(up, dir) || dir} does not exist under ${up}.`;
+        if (fs.existsSync(up)) return ` The folder ${path.relative(up, dir) || dir} does not exist under ${up}, which contains: ${await entriesOf(up).catch(() => '(unreadable)')}.`;
       }
       return '';
     }
@@ -370,7 +456,8 @@ export function createTools({ backend, cwd, getSignal }) {
       const l = n.toLowerCase();
       return l === want || (stem.length > 2 && l.replace(/\.[^.]+$/, '') === stem) || distance(l, want, 2) <= 2;
     });
-    return close.length ? ` Similar names in that folder: ${close.slice(0, 6).join(', ')}.` : '';
+    if (close.length) return ` Similar names in that folder: ${close.slice(0, 6).join(', ')}.`;
+    return ` ${dirLabel} contains: ${await entriesOf(dir).catch(() => '(unreadable)')}.`;
   }
 
   async function readText(file) {
@@ -393,8 +480,12 @@ export function createTools({ backend, cwd, getSignal }) {
       const st = await fs.promises.stat(file);
       if (st.isDirectory()) {
         const ents = (await fs.promises.readdir(file, { withFileTypes: true })).map((e) => e.name + (e.isDirectory() ? '/' : '')).sort();
+        // The listing names the folder it is of: with several listings in one step, bare names are easy to mix up.
+        const given = String(p).trim().replace(/(.)[\\/]+$/, '$1');
+        const label = given === '.' ? `${shown} (the project folder)` : /[\\/]$/.test(given) ? given : `${given}${given.includes('\\') && !given.includes('/') ? '\\' : '/'}`;
+        if (!ents.length) return { text: `${label} — empty folder`, details: { path: shown, entries: 0 } };
         const more = ents.length > MAX_LIST ? `\n[${ents.length - MAX_LIST} more entries not shown; use glob to search]` : '';
-        return { text: ents.slice(0, MAX_LIST).join('\n') + more || '(empty folder)', details: { path: shown, entries: ents.length } };
+        return { text: `${label} — ${ents.length} entr${ents.length === 1 ? 'y' : 'ies'}:\n${ents.slice(0, MAX_LIST).join('\n')}${more}`, details: { path: shown, entries: ents.length } };
       }
       if (!st.isFile()) return { text: `${shown} is not a regular file (a device or pipe), so it is not read.`, isError: true };
       if (!st.size) {
@@ -530,7 +621,16 @@ export function createTools({ backend, cwd, getSignal }) {
         if (!matches.length) {
           const first = oldS.split('\n').map((l) => l.trim()).find((l) => l.length > 3);
           const hint = first ? occurrences(text, first).map((i) => lineAt(text, i)) : [];
-          return { text: `old_string was not found in ${shown}. ${hint.length ? `Its first line appears at line ${listLines(hint)}, but the lines after it differ. ` : ''}Read the file again and copy the exact current text (whitespace matters).`, isError: true };
+          // The closest place, as it is now: often a misremembered line, so the model can fix old_string without a re-read.
+          const near = nearestBlock(text, stripLineNumbers(oldS) ?? oldS);
+          let shownNear = '';
+          if (near) {
+            const rows = text.split('\n').slice(near.from - 1, Math.min(near.to, near.from + 29)).map((l, i) => `${near.from + i}\t${clip(l.replace(/\r$/, ''), 300)}`);
+            const more = near.to - near.from + 1 > rows.length ? `\n[… lines ${near.from + rows.length}-${near.to} not shown]` : '';
+            shownNear = `The closest text is at ${near.from === near.to ? `line ${near.from}` : `lines ${near.from}-${near.to}`}, currently:\n${rows.join('\n')}${more}\n`;
+          }
+          const lead = `old_string was not found in ${shown}.${hint.length ? ` Its first line appears at line ${listLines(hint)}, but the lines after it differ.` : ''}`;
+          return { text: shownNear ? `${lead}\n${shownNear}Copy old_string exactly from that text (without the line numbers), or read the file again (whitespace matters).` : `${lead} Read the file again and copy the exact current text (whitespace matters).`, isError: true };
         }
         // A whitespace-tolerant match rewrites lines that were not quoted exactly, so it is only applied to text the
         // agent has actually seen: a file it read (or wrote) in this session that has not changed since.
@@ -562,7 +662,8 @@ export function createTools({ backend, cwd, getSignal }) {
     async bash({ command, timeout = 120, shell }, { onUpdate } = {}) {
       if (!command.trim()) return { text: 'command is empty.', isError: true };
       const secs = Math.min(600, Math.max(1, timeout | 0 || 120));
-      const useShell = !backend.isWsl && shell === 'powershell' ? 'powershell' : backend.isWsl ? 'bash' : 'cmd';
+      // As Backend.shellFor: a project inside a WSL distribution runs commands in its bash, never in cmd.exe.
+      const useShell = backend.isPosix ? 'bash' : !backend.isWsl && shell === 'powershell' ? 'powershell' : backend.isWsl || wslUncPath(cwd) ? 'bash' : 'cmd';
       // cmd.exe stops at the first line break and reports success, so the other lines would silently never run.
       if (useShell === 'cmd' && /[\r\n]/.test(command.trim())) {
         return { text: 'cmd runs only the first line of a multi-line command, so nothing was run. Join the steps on one line with && (stop at the first failure) or & (run all), or set shell to "powershell" to run a multi-line script.', isError: true };
@@ -729,7 +830,7 @@ export function createTools({ backend, cwd, getSignal }) {
     },
   };
 
-  const defs = new Map(toolDefsFor(backend).map((d) => [d.name, d]));
+  const defs = new Map(toolDefsFor(backend, cwd).map((d) => [d.name, d]));
 
   return {
     /** Revert one recorded change. Refuses if the file was modified by someone else since. */

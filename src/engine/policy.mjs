@@ -66,8 +66,6 @@ export function destructiveReason(command, depth = 0) {
   return '';
 }
 
-export const isDestructive = (command) => !!destructiveReason(command);
-
 // ---- Network access rules (Settings → General → Network access rules) ----
 // Sites the agent may read with web_fetch. A rule is a site ("example.com", which also covers its subdomains), only
 // the subdomains ("*.example.com"), a site and path ("example.com/docs"), or "*" for every site. Denied sites are

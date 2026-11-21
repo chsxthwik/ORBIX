@@ -10,6 +10,30 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Stop a browser and every helper process it started. On Windows some helpers detach from the main process and keep
+ * writing the profile, so a temporary folder could not be removed: they are found by the profile folder in their
+ * command line.
+ */
+export function killTree(proc, profile = '') {
+  if (process.platform === 'win32') {
+    if (proc?.pid && proc.exitCode == null) {
+      try {
+        execFileSync('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+      } catch {}
+    }
+    if (profile) {
+      const like = profile.replace(/'/g, "''").replace(/[[\]*?]/g, '`$&');
+      const script = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${like}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+      try {
+        execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: 'ignore', windowsHide: true, timeout: 15000 });
+      } catch {}
+    }
+    return;
+  }
+  proc?.kill();
+}
 export const MODEL = 'orbix-fixture';
 
 // ---- Fixture repository ---------------------------------------------------------------------------------------------
@@ -48,6 +72,15 @@ const NEW_TEST = FILES['test/auth.test.js'] + "\ntest('capital letters in the em
 
 /** What the model does, step by step, for each task. The step is chosen by how many replies it has given so far. */
 export const SCENARIOS = [
+  {
+    name: 'tools after initial text',
+    match: /activity after a partial reply/i,
+    steps: [
+      { text: 'Initial text, not the finished answer.', finish: 'length' },
+      { tools: [['bash', { command: 'git status --short', description: 'check the fixture working tree' }]] },
+      { text: 'Final answer after the check.' },
+    ],
+  },
   {
     name: 'bug fix with a plan',
     match: /capital letters/i,
@@ -140,7 +173,7 @@ export function startModel() {
       res.write(chunk({ delta: { role: 'assistant' }, finish_reason: null }));
       if (step.text) res.write(chunk({ delta: { content: step.text }, finish_reason: null }));
       (step.tools || []).forEach(([name, a], i) => res.write(chunk({ delta: { tool_calls: [{ index: i, id: `call_${calls}_${i}`, type: 'function', function: { name, arguments: JSON.stringify(a) } }] }, finish_reason: null })));
-      res.write(chunk({ delta: {}, finish_reason: step.tools?.length ? 'tool_calls' : 'stop' }));
+      res.write(chunk({ delta: {}, finish_reason: step.finish || (step.tools?.length ? 'tool_calls' : 'stop') }));
       res.write(chunk(null, { usage: { prompt_tokens: 1200, completion_tokens: 60 } }));
       res.end('data: [DONE]\n\n');
     });
@@ -225,7 +258,7 @@ export async function startBrowser(dir, { width = 1360, height = 860, scale = 1 
   }
   if (!port) throw new Error('The browser did not open its DevTools port');
   const pages = await debugPages(port);
-  return connectPage(exe, proc, pages.find((p) => p.type === 'page'), { width, height, scale });
+  return connectPage(exe, proc, pages.find((p) => p.type === 'page'), { width, height, scale }, dir);
 }
 
 const debugPages = async (port) => (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2000) })).json();
@@ -253,7 +286,7 @@ export async function startDesktop(exe, data, profile) {
       if (port) {
         const pages = await debugPages(port).catch(() => []);
         const target = pages.find((p) => p.type === 'page' && p.url.startsWith('http://127.0.0.1:'));
-        if (target) return await connectPage(exe, proc, target);
+        if (target) return await connectPage(exe, proc, target, undefined, profile);
       }
       await sleep(100);
     }
@@ -264,7 +297,7 @@ export async function startDesktop(exe, data, profile) {
   }
 }
 
-async function connectPage(exe, proc, target, metrics) {
+async function connectPage(exe, proc, target, metrics, profile = '') {
   if (!target?.webSocketDebuggerUrl) throw new Error('No debuggable ORBIX window found');
   const cdp = await connect(target.webSocketDebuggerUrl);
   await cdp.send('Runtime.enable');
@@ -292,7 +325,8 @@ async function connectPage(exe, proc, target, metrics) {
     async until(cond, what, ms = 25000) {
       const t0 = Date.now();
       for (;;) {
-        if (await P.eval(`try { return !!(${cond}); } catch { return false; }`).catch(() => false)) return;
+        // Awaited: a condition written as an async function would otherwise be a promise, which is always true.
+        if (await P.eval(`try { return !!(await (${cond})); } catch { return false; }`).catch(() => false)) return;
         if (Date.now() - t0 > ms) throw new Error(`Timed out waiting for ${what}`);
         await sleep(100);
       }
@@ -327,6 +361,29 @@ async function connectPage(exe, proc, target, metrics) {
       await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
       await sleep(80);
     },
+    /**
+     * A key as a real keyboard sends it: keyDown with its text, then keyUp. Unlike key(), Enter here also activates
+     * whatever button has the focus after the keyDown handlers ran, as it does for a person.
+     */
+    async press(key, keyCode, { code = key } = {}) {
+      const text = key === 'Enter' ? '\r' : key.length === 1 ? key : undefined;
+      const base = { key, code, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
+      await cdp.send('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', ...base, ...(text ? { text, unmodifiedText: text } : {}) });
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+      await sleep(80);
+    },
+    /** Type text into the focused field, as a keyboard would. */
+    type: (text) => cdp.send('Input.insertText', { text }),
+    /** A real mouse click (count 2: a double-click, with both clicks before it) at the centre of the element. */
+    async mouse(selector, count = 1) {
+      const r = await P.eval(`const el = document.querySelector(${JSON.stringify(selector)}); if (!el) return null; el.scrollIntoView({ block: 'center' }); const b = el.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 };`);
+      if (!r) throw new Error(`Nothing to click at ${selector}`);
+      for (let i = 1; i <= count; i++) {
+        await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: r.x, y: r.y, button: 'left', clickCount: i });
+        await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: r.x, y: r.y, button: 'left', clickCount: i });
+      }
+      await sleep(80);
+    },
     async shot(file) {
       await P.eval('await document.fonts.ready; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));');
       await sleep(250);
@@ -334,7 +391,7 @@ async function connectPage(exe, proc, target, metrics) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, Buffer.from(png.data, 'base64'));
     },
-    close: () => (cdp.close(), proc.kill()),
+    close: () => (cdp.close(), killTree(proc, profile)),
   };
   return P;
 }

@@ -4,7 +4,7 @@ import { ansiFragment, hasAnsi, stripAnsi } from './ansi.js';
 import { codeBlock, renderMarkdown } from './markdown.js';
 import { highlight, langFor } from './highlight.js';
 import { rpc } from './api.js';
-import { toolTitle, resultText } from './tool-title.mjs';
+import { toolTitle, resultText, shellCommand } from './tool-title.mjs';
 import { wordDiff } from './word-diff.mjs';
 
 const ICONS = { bash: 'terminal', read: 'eye', write: 'file', edit: 'pencil', grep: 'search', glob: 'search', todo: 'list', task: 'users', web_search: 'globe', web_fetch: 'globe' };
@@ -26,7 +26,7 @@ export function toolSummary(call, res, ws) {
   const rp = (p) => relPath(p, ws);
   switch (call.name) {
     case 'bash':
-      return (a.command || '').split('\n')[0];
+      return (typeof a.description === 'string' && a.description.trim()) || shellCommand(a.command);
     case 'read':
     case 'write':
       return rp(a.path || '');
@@ -430,7 +430,7 @@ export function renderToolCard(tab, call, run, open) {
     { class: 'tool-head', type: 'button', 'aria-expanded': String(isOpen), title: `${call.name}${summary ? `: ${summary}` : ''}` },
     h('span', { class: 'tool-ico' }, icon(ICONS[call.name] || 'wrench', 14)),
     h('span', { class: 'tool-name' }, title.verb),
-    title.subject ? h('span', { class: 'tool-sum' }, title.subject) : h('span', { class: 'grow' }),
+    title.subject ? h('span', { class: 'tool-sum' + (title.plain ? ' plain' : '') }, title.subject) : h('span', { class: 'grow' }),
     extra,
     dur >= 0 ? h('span', { class: 'tool-dur' }, fmtDuration(dur)) : null,
     statusBadge(status),

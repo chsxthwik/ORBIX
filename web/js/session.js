@@ -1,16 +1,19 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, spinner, errorState, fmtElapsed, lsGet, lsSet } from './dom.js';
+import { h, icon, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet } from './dom.js';
 import { renderMarkdown } from './markdown.js';
+import { MarkdownBoundary, liveExcerpt, LIVE_MARKDOWN_LIMIT } from './markdown-stream.mjs';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi, openTab, closeTab } from './store.js';
 import { rpc, api } from './api.js';
-import { modelPicker, popMenu, isApproval } from './dialogs.js';
+import { modelPicker, popMenu, isApproval, approvalLabel } from './dialogs.js';
 import { brandMark } from './brands.js';
-import { asciiBar, asciiOrbit } from './ascii.js';
+import { asciiOrbit, asciiSpin } from './ascii.js';
 import { viewFile, reviewChanges, askSide } from './panels.js';
 import { conversationToMarkdown } from './exporter.js';
+import { rateModel } from './ratings.js';
+import { shellCommand } from './tool-title.mjs';
 import { Composer } from './composer.js';
 import { addContext, permissionChip } from './controls.js';
 import { Timeline } from './timeline.js';
@@ -18,12 +21,30 @@ import { Timeline } from './timeline.js';
 // How each thinking level reads in the interface.
 const THINKING = { off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
 const thinkingLabel = (l) => THINKING[l] || String(l).charAt(0).toUpperCase() + String(l).slice(1);
+
+const isReply = (m) => {
+  if (m.role !== 'assistant') return false;
+  const blocks = Array.isArray(m.content) ? m.content : [];
+  return m.stopReason === 'error' || m.stopReason === 'aborted' || (!blocks.some((b) => b.type === 'toolCall') && blocks.some((b) => b.type === 'text' && b.text?.trim()));
+};
+
+/** The gist of a thinking block for its folded row: its first sentence, without Markdown, on one line. */
+function thinkGist(text) {
+  const plain = String(text || '').slice(0, 512).replace(/```[\s\S]*?(```|$)/g, ' ').replace(/[*_`#>]+/g, '').replace(/\s+/g, ' ').trim();
+  const m = /^(.{12,140}?[.!?:])(\s|$)/.exec(plain);
+  return (m ? m[1] : plain.slice(0, 140)).replace(/[.:]$/, '');
+}
+function setGist(el, text) {
+  const p = el.querySelector(':scope > summary .think-p');
+  const g = thinkGist(text);
+  if (p && p.textContent !== g) (p.textContent = g), (p.title = g);
+}
 import { projectTasks, sessionTasks } from './workspace.js';
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
 /** Conversation actions (the toolbar's ⋮ button and the conversation crumb). */
-export function sessionMenu(t, anchor, { rename, close, find, outline, inspect, pin }) {
+export function sessionMenu(t, anchor, { rename, close, find, outline, inspect, pin, move }) {
   const cmd = (c) => t.commands.some((x) => x.name === c);
   popMenu(anchor, [
     { header: t.name },
@@ -32,7 +53,7 @@ export function sessionMenu(t, anchor, { rename, close, find, outline, inspect, 
     '-',
     { icon: 'search', label: 'Find in conversation', hint: 'Ctrl+F', run: find },
     { icon: 'list', label: 'Your messages…', hint: 'Ctrl+Shift+O', run: outline },
-    { icon: 'activity', label: 'Run inspector', hint: 'Ctrl+Shift+R', run: inspect },
+    { icon: 'activity', label: 'Inspect', hint: 'Ctrl+Shift+R', run: inspect },
     ...(cmd('compact') ? [{ icon: 'layers', label: 'Compact context', hint: '/compact', run: () => sendPrompt(t, '/compact').catch(() => {}) }] : []),
     '-',
     { icon: 'copy', label: 'Copy as Markdown', run: () => copyConversation(t) },
@@ -46,6 +67,7 @@ export function sessionMenu(t, anchor, { rename, close, find, outline, inspect, 
         toast(er.message, 'error');
       }
     } },
+    move ? { icon: 'cloud', label: 'Move to a machine…', run: move } : null,
     '-',
     { icon: 'x', label: 'Close conversation', danger: true, run: close },
   ].filter(Boolean), { align: 'end', minWidth: 240 });
@@ -56,28 +78,7 @@ export async function copyConversation(t) {
   else toast('Copy failed', 'error');
 }
 
-/**
- * Where a streaming Markdown text can be split: after the last blank line that is outside a code fence and
- * not followed by an indented continuation. Everything before it is complete and never re-rendered.
- */
-function stableCut(text) {
-  const lines = text.split('\n');
-  let fence = null;
-  let pos = 0;
-  let cut = 0;
-  for (let i = 0; i < lines.length - 1; i++) {
-    const ln = lines[i];
-    const f = /^\s*(`{3,}|~{3,})/.exec(ln);
-    if (fence) {
-      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && /^\s*[`~]+\s*$/.test(ln)) fence = null;
-    } else if (f) fence = f[1];
-    pos += ln.length + 1;
-    if (!fence && !ln.trim() && !/^\s+\S/.test(lines[i + 1])) cut = pos;
-  }
-  return cut;
-}
-
-/** Markdown that grows while it streams: finished blocks are rendered once, only the last block is redrawn. */
+/** Markdown preview while streaming. The final render parses the whole reply for correct cross-block structure. */
 class LiveMarkdown {
   constructor(onPath) {
     this.el = h('div', { class: 'md' });
@@ -85,38 +86,45 @@ class LiveMarkdown {
     this.done = 0;
     this.text = '';
     this.tail = [];
+    this.scanner = new MarkdownBoundary();
   }
   update(text) {
     if (text === this.text) return;
-    if (!text.startsWith(this.text.slice(0, this.done))) {
+    if (!text.startsWith(this.text)) {
       clear(this.el);
       this.done = 0;
       this.tail = [];
+      this.scanner.reset();
     }
     this.text = text;
     for (const n of this.tail) n.remove();
     this.tail = [];
-    const cut = stableCut(text);
+    const cut = this.scanner.advance(text);
     if (cut > this.done) {
-      this.el.append(...renderMarkdown(text.slice(this.done, cut), { onPath: this.onPath }).childNodes);
+      this.appendFull(text.slice(this.done, cut));
       this.done = cut;
     }
     const rest = text.slice(this.done);
-    if (rest.trim()) {
+    if (rest.length > LIVE_MARKDOWN_LIMIT) {
+      this.tail = [h('pre', { class: 'md-stream-preview', 'aria-label': 'Latest part of the streaming reply' }, liveExcerpt(rest))];
+      this.el.append(this.tail[0]);
+    } else if (rest.trim()) {
       this.tail = [...renderMarkdown(rest, { onPath: this.onPath, live: true }).childNodes];
       this.el.append(...this.tail);
     }
   }
-  /** The reply is complete: render the last block in full (highlighting included). */
+  appendFull(text) {
+    const parsed = renderMarkdown(text, { onPath: this.onPath });
+    const fragment = document.createDocumentFragment();
+    while (parsed.firstChild) fragment.append(parsed.firstChild);
+    this.el.append(fragment);
+  }
+
+  /** A final render preserves lists, quotations and their spacing across preview boundaries. */
   finish(text) {
-    for (const n of this.tail) n.remove();
+    clear(this.el);
     this.tail = [];
-    if (!text.startsWith(this.text.slice(0, this.done))) {
-      clear(this.el);
-      this.done = 0;
-    }
-    const rest = text.slice(this.done);
-    if (rest.trim()) this.el.append(...renderMarkdown(rest, { onPath: this.onPath }).childNodes);
+    if (text.trim()) this.appendFull(text);
     this.text = text;
     this.done = text.length;
   }
@@ -183,7 +191,8 @@ function stepLabel(call, workspace) {
     case 'read': return ['Reading', rel(a.path)];
     case 'edit': case 'ast_edit': return ['Editing', rel(a.path)];
     case 'write': return ['Writing', rel(a.path)];
-    case 'bash': case 'eval': return ['Running', cut(a.command || a.code)];
+    case 'bash': return ['Running', cut((typeof a.description === 'string' && a.description.trim()) || shellCommand(a.command))];
+    case 'eval': return ['Running', cut(a.code)];
     case 'grep': case 'ast_grep': return ['Searching for', cut(a.pattern)];
     case 'glob': case 'find': return ['Looking for', cut(a.pattern || a.query)];
     case 'web_search': return ['Searching the web for', cut(a.query)];
@@ -299,7 +308,7 @@ export class TabView {
     });
     this.ta = this.composer.ta;
     this.sendBtn = h('button', { class: 'send', type: 'button', onclick: () => this.onSend(S.ui.whileBusy === 'queue', true) });
-    this.modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model', onclick: () => this.pickModel() });
+    this.modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model', 'aria-haspopup': 'dialog', onclick: () => this.pickModel() });
     this.thinkBtn = h('button', { class: 'cbtn c-effort', type: 'button', title: 'Thinking level', 'aria-haspopup': 'menu', onclick: (e) => this.pickThinking(e.currentTarget) });
     this.permBtn = permissionChip();
     this.planBtn = h('button', { class: 'cbtn plan', type: 'button', title: 'Plan mode: the agent reads and proposes a plan, but changes nothing', onclick: () => this.togglePlan() });
@@ -328,7 +337,10 @@ export class TabView {
       this.showJump(!this.stick);
     }, { passive: true });
     // A window, panel or composer resize keeps a reader who was at the bottom at the bottom.
-    this.scrollerRo = new ResizeObserver(() => this.stick && this.scroller.isConnected && (this.scroller.scrollTop = this.scroller.scrollHeight));
+    this.scrollerRo = new ResizeObserver(() => {
+      if (this.stick && this.scroller.isConnected) this.scroller.scrollTop = this.scroller.scrollHeight;
+      this.timeline.update();
+    });
     this.scrollerRo.observe(this.scroller);
     this.scroller.addEventListener('wheel', (e) => {
       if (e.deltaY < 0 && this.scroller.scrollHeight > this.scroller.clientHeight) {
@@ -352,6 +364,7 @@ export class TabView {
       const d = e.target;
       if (d.classList?.contains('think') && d.dataset.key) d.open ? this.thinkOpen.add(d.dataset.key) : this.thinkOpen.delete(d.dataset.key);
       else if (d.classList?.contains('work') && d.dataset.key) {
+        if (d.dataset.auto) return void delete d.dataset.auto;
         d.open ? (this.workOpen.add(d.dataset.key), this.workShut.delete(d.dataset.key)) : (this.workOpen.delete(d.dataset.key), this.workShut.add(d.dataset.key));
         if (d.open) for (const c of d.querySelectorAll('.tool.open')) c._fill?.();
       }
@@ -374,15 +387,16 @@ export class TabView {
 
   /** The tab is closed for good: release observers and callbacks that would keep this view and its DOM alive. */
   destroy() {
+    this.removeEmpty();
     clearInterval(this.pendingTimer);
+    clearInterval(this.foldTimer);
     this.dead = true;
-    clearInterval(this.statusTimer);
     this.renderLive?.cancel?.();
     if (this._tq) cancelAnimationFrame(this._tq);
     this._tq = 0;
     if (this._sb) cancelAnimationFrame(this._sb);
     this._sb = 0;
-    this.timeline?.destroy();
+    this.timeline.destroy();
     this.bar?.destroy();
     this.quote?.destroy();
     this.scrollerRo?.disconnect();
@@ -401,6 +415,7 @@ export class TabView {
       this.scroller.scrollTop = s.top;
       this.showJump(true);
     } else this.scrollBottom(true);
+    this.timeline.update();
   }
 
   updateComposer() {
@@ -409,22 +424,35 @@ export class TabView {
     const m = t.model;
     const dead = t.dead;
     this.ta.disabled = dead;
-    this.ta.placeholder = dead ? 'This conversation has ended' : t.streaming ? 'Add guidance, or press Esc to stop' : 'Ask anything, @ to mention, / for actions';
+    this.ta.placeholder = dead ? 'This conversation has ended' : t.streaming ? (S.ui.whileBusy === 'queue' ? 'Queue a follow-up…' : 'Add guidance…') : 'Ask anything…  @ for files, / for actions';
     this.composer.el.classList.toggle('busy', !!t.streaming);
     this.updateSend();
 
     this.modelBtn.hidden = dead;
-    this.modelBtn.replaceChildren(brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'));
+    const model = m ? m.name || m.id : 'Default model';
+    const modelKey = `${m?.provider || ''}:${model}`;
+    if (this.modelKey !== modelKey) {
+      this.modelKey = modelKey;
+      const provider = S.engine?.providers?.find((p) => p.id === m?.provider)?.name || m?.provider;
+      this.modelBtn.title = provider ? `${model} · ${provider}` : 'Choose a model';
+      this.modelBtn.replaceChildren(brandMark(m?.provider, 16, 'pv-mark'), h('span', { class: 'ell' }, model), icon('chevron-down', 12, 'cbtn-chev'));
+    }
     this.permBtn.update(dead);
     const efforts = m?.thinking?.efforts || [];
     const lvl = st?.thinkingLevel || 'off';
     this.thinkBtn.hidden = dead || !(m?.reasoning || efforts.length);
-    this.thinkBtn.replaceChildren(h('span', null, lvl === 'off' ? 'Thinking off' : thinkingLabel(lvl)), icon('chevron-down', 12, 'cbtn-chev'));
+    if (this.thinkingLabel !== lvl) {
+      this.thinkingLabel = lvl;
+      this.thinkBtn.replaceChildren(h('span', null, lvl === 'off' ? 'Thinking off' : thinkingLabel(lvl)), icon('chevron-down', 12, 'cbtn-chev'));
+    }
     this.thinkBtn.title = m?.thinking?.canOff === false ? 'How hard the model thinks. This model always thinks, so there is no Off.' : 'How hard the model thinks before it answers';
     this.thinkBtn.classList.toggle('on', lvl !== 'off');
     const hasPlan = !!st && 'planMode' in st;
     this.planBtn.hidden = dead || !hasPlan;
-    this.planBtn.replaceChildren(icon('map', 14), h('span', null, st?.planMode ? 'Plan mode' : 'Plan'));
+    if (this.planOn !== !!st?.planMode) {
+      this.planOn = !!st?.planMode;
+      this.planBtn.replaceChildren(icon('map', 14), h('span', null, this.planOn ? 'Plan mode' : 'Plan'));
+    }
     this.planBtn.classList.toggle('on', !!st?.planMode);
     this.planBtn.setAttribute('aria-pressed', String(!!st?.planMode));
 
@@ -459,34 +487,26 @@ export class TabView {
       this.sendBtn.replaceChildren(icon(mode, 15));
     }
     this.sendBtn.classList.toggle('stop', stop);
-    this.sendBtn.disabled = t.dead || (!stop && !typed);
-    this.sendBtn.title = stop ? 'Stop (Esc)' : t.streaming ? 'Steer (Enter) · Queue (Alt+Enter)' : 'Send (Enter)';
-    this.sendBtn.setAttribute('aria-label', stop ? 'Stop the agent' : t.streaming ? 'Steer' : 'Send');
+    const key = S.ui.sendKey === 'ctrl' ? 'Ctrl+Enter' : 'Enter';
+    const queue = S.ui.whileBusy === 'queue';
+    const action = stop ? 'Stop the agent' : t.streaming ? (queue ? 'Queue message' : 'Steer') : 'Send';
+    this.sendBtn.disabled = t.dead || this.sending === true || (!stop && !typed);
+    this.sendBtn.title = stop ? `${action} (Esc)` : `${action} (${key})${t.streaming ? ` · ${queue ? 'Steer' : 'Queue'} (Alt+Enter)` : ''}`;
+    this.sendBtn.setAttribute('aria-label', action);
   }
 
   updateStatus() {
     const t = this.tab;
+    const rate = t.streaming && t.state?.tokensPerSecond ? t.state.tokensPerSecond.toFixed(0) : '';
+    const sig = JSON.stringify([!!t.compacting, !!t.retry, this.planBtn.hidden, [...t.statuses], rate]);
+    if (this.statusSig === sig) return;
+    this.statusSig = sig;
     const bits = [];
     if (t.compacting) bits.push(h('span', null, 'Compacting context…'));
     if (t.retry) bits.push(h('span', { class: 'warn-text' }, 'Retrying…'));
     for (const [k, v] of t.statuses) if (!(k === 'plan' && !this.planBtn.hidden)) bits.push(h('span', null, v));
-    if (t.streaming && t.state?.tokensPerSecond) bits.push(h('span', { class: 'num' }, `${t.state.tokensPerSecond.toFixed(0)} tok/s`));
-    const now = t.streaming && !t.dead && !this.approvalDlg ? this.nowDoing() : null;
-    if (now) {
-      const secs = Math.floor((Date.now() - now[2]) / 1000);
-      bits.unshift(h('span', { class: 'c-now', title: now[1] ? `${now[0]} ${now[1]}` : now[0] }, spinner(11), h('b', null, now[0]), now[1] ? h('span', { class: 'c-now-a ell' }, now[1]) : null, secs >= 3 ? h('span', { class: 'c-now-t num' }, secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`) : null));
-      if (bits.length === 1) bits.push(h('span', { class: 'c-keys' }, kbd('Enter'), S.ui.whileBusy === 'queue' ? ' queue  ' : ' steer  ', kbd('Alt+Enter'), S.ui.whileBusy === 'queue' ? ' steer  ' : ' queue  ', kbd('Esc'), ' stop'));
-    }
+    if (rate) bits.push(h('span', { class: 'num' }, `${rate} tok/s`));
     replace(this.statusLine, bits);
-    // While the agent works the line ticks once a second, so the step and its time stay current.
-    if (t.streaming && !t.dead && !this.statusTimer) {
-      this.statusTimer = setInterval(() => {
-        if (this.tab.streaming && !this.tab.dead && this.root.isConnected && !this.dead) return this.updateStatus();
-        clearInterval(this.statusTimer);
-        this.statusTimer = 0;
-        if (!this.dead) this.updateStatus();
-      }, 1000);
-    }
   }
 
   /** The step in progress: a tool call without a result, else whether the model is thinking or writing. */
@@ -506,7 +526,7 @@ export class TabView {
     } else {
       const last = Array.isArray(t.live?.message?.content) ? t.live.message.content.at(-1) : null;
       key = last?.type === 'thinking' ? 'think' : last?.type === 'text' ? 'text' : 'wait';
-      label = [key === 'think' ? 'Thinking' : key === 'text' ? 'Writing the reply' : 'Waiting for the model', ''];
+      label = [key === 'text' ? 'Writing the reply' : 'Thinking', '']; // between steps the model is working out the next one
     }
     if (this.stepKey !== key) {
       this.stepKey = key;
@@ -579,7 +599,7 @@ export class TabView {
     const box = h('div', { class: 'approval', tabindex: '-1', role: 'alertdialog', 'aria-label': q },
       h('div', { class: 'ap-h' }, h('span', { class: 'ap-ico' }, icon('shield', 15)), h('span', { class: 'ap-q' }, q)),
       detail ? h('pre', { class: 'ap-d' }, detail) : null,
-      h('div', { class: 'ap-acts' }, d.options.map((o, i) => h('button', { class: 'btn sm ' + (o === 'Deny' ? 'ghost' : i === 0 ? 'primary' : ''), type: 'button', onclick: () => this.answerApproval(o) }, o, kbd(o === 'Deny' ? 'Esc' : String(i + 1))))));
+      h('div', { class: 'ap-acts' }, d.options.map((o, i) => [h('button', { class: 'btn sm ' + (o === 'Deny' ? 'ghost' : i === 0 ? 'primary' : ''), type: 'button', title: o, onclick: () => this.answerApproval(o) }, approvalLabel(o), kbd(o === 'Deny' ? 'Esc' : String(i + 1)))])));
     box.addEventListener('keydown', (e) => this.onApprovalKey(e));
     this.approvalEl = box;
     this.dockCol.prepend(box);
@@ -623,8 +643,10 @@ export class TabView {
     // Keep the reader's place (measured from the bottom, so earlier messages can be added above).
     const sc = this.scroller;
     const fromBottom = !this.stick && sc.isConnected ? sc.scrollHeight - sc.scrollTop : null;
+    this.removeEmpty();
     clear(this.tin);
     this.liveEl = null;
+    this.liveFoldEl = null;
     this.liveBlocks = [];
     this.pendingEl = null;
     this.deadShown = false;
@@ -641,6 +663,7 @@ export class TabView {
     }
     this.tin.append(frag);
     this.foldTurns(start);
+    this.timeline.refresh();
     if (t.dead) this.showDead(false);
     this._renderLive();
     this.updateEmpty();
@@ -666,7 +689,8 @@ export class TabView {
     if (!el) return;
     this.els.set(msg, el);
     el.classList.add('enter');
-    this.tin.insertBefore(el, this.liveEl || this.pendingEl || null);
+    this.tin.insertBefore(el, this.tinRef());
+    if (msg.role === 'user') this.timeline.refresh();
     if (msg.role === 'assistant' || msg.role === 'user') this.refreshActs();
     this.updateEmpty();
     this.updatePending();
@@ -678,15 +702,23 @@ export class TabView {
     if (el) leave(el);
   }
 
+  removeEmpty() {
+    this.emptyMark?.destroy();
+    this.emptyMark = null;
+    this.emptyEl?.remove();
+    this.emptyEl = null;
+  }
+
   updateEmpty() {
     const t = this.tab;
     const show = !t.messages.length && !t.live && !t.dead && !t.streaming;
-    if (!show) return void this.emptyEl?.remove();
-    if (this.emptyEl?.isConnected) return;
+    if (!show) return this.removeEmpty();
+    if (this.emptyEl?.parentNode === this.tin) return;
     // Suggested first tasks for this project; the row keeps its height while the folder is read, so nothing jumps.
     const tasks = h('div', { class: 'ce-tasks-slot' });
+    this.emptyMark = asciiOrbit({ cols: 56, rows: 16 });
     this.emptyEl = h('div', { class: 'chat-empty' },
-      asciiOrbit({ cols: 56, rows: 16 }).el,
+      this.emptyMark.el,
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
       h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
       tasks,
@@ -704,34 +736,121 @@ export class TabView {
       .then((list) => this.emptyEl === empty && tasks.replaceChildren(sessionTasks(this.composer, list)));
   }
 
-  /** The working bar at the end while the agent works but nothing streams yet (between steps). */
+  /** Where to insert a message in the transcript: before the live reply or the status line, when they are in it. */
+  tinRef() {
+    return [this.liveEl, this.pendingEl].find((x) => x?.parentNode === this.tin) || null;
+  }
+
+  /**
+   * While a turn works, its steps (thinking, tool calls, notes) sit in one row whose header says what happens now
+   * and how long the turn has taken ("Running check free disk space   1m 12s"). The row is folded unless you open it
+   * (or Settings → Appearance → Verbose). An answer that streams (text, no tool call) stays in view below. When the
+   * turn ends, the fold is handed back and foldTurn folds it again as "Worked for…". It opens by itself while an
+   * approval waits, so you see the step.
+   */
+  liveFold() {
+    const t = this.tab;
+    if (!t.streaming || t.dead) return this.settleLiveFold();
+    let u = t.messages.length - 1;
+    while (u >= 0 && t.messages[u].role !== 'user') u--;
+    if (u < 0) return null;
+    const key = String(t.messages[u]?.id || t.messages[u]?.timestamp || u);
+    const after = t.messages.slice(u + 1);
+    // Only the terminal event ends a turn. A model can write text, then continue after checks or a token limit.
+    // If the saved turn is already folded, don't unroll it while waiting for the next user message to arrive.
+    const completed = this.tin.querySelector(`:scope > details.work:not(.live)[data-key="${CSS.escape(key)}"]`);
+    if (completed) return this.settleLiveFold();
+    const own = this.liveFoldEl?.dataset.key === key ? this.liveFoldEl.lastChild : null;
+    const blocks = t.live?.message?.content || [];
+    const answering = blocks.some((b) => b.type === 'text' && b.text?.trim()) && !blocks.some((b) => b.type === 'toolCall');
+    const reply = answering ? null : this.els.get(after.findLast(isReply));
+    // Keep the current answer visible, but put any activity that follows it in the same fold above it.
+    const steps = after.map((m) => this.els.get(m)).filter((el) => el && el !== reply && (el.parentNode === this.tin || (own && el.parentNode === own)));
+    if (this.liveEl && !answering && this.liveEl.childElementCount) steps.push(this.liveEl);
+    let f = this.liveFoldEl?.parentNode === this.tin && this.liveFoldEl.dataset.key === key ? this.liveFoldEl : null;
+    if (!f && !steps.length && (answering || reply) && !this.approvalDlg) return null; // a plain answer needs no fold
+    if (!f) {
+      this.settleLiveFold();
+      f = h('details', { class: 'work live', dataset: { key } }, h('summary', { class: 'work-h' }, icon('chevron-right', 12, 'chev'), h('span', { class: 'work-l' }, 'Working'), h('span', { class: 'work-t num' })), h('div', { class: 'work-b' }));
+      if (S.ui.steps === 'verbose' || S.ui.screenReader === true ? !this.workShut.has(key) : this.workOpen.has(key)) f.open = true;
+      const first = steps.find((el) => el.parentNode === this.tin) || (this.liveEl?.parentNode === this.tin && !answering ? this.liveEl : this.tinRef());
+      this.tin.insertBefore(f, first);
+      this.liveFoldEl = f;
+      this.turnAt = t.messages[u]?.timestamp || Date.now();
+    }
+    const body = f.lastChild;
+    for (const el of steps) if (el.parentNode !== body) body.append(el);
+    if (reply?.parentNode === body) f.after(reply);
+    else if (reply?.parentNode === this.tin && (reply.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) reply.before(f);
+    // The reply that streams now follows the fold, outside it.
+    if (this.liveEl && answering && this.liveEl.parentNode !== this.tin) f.after(this.liveEl);
+    // Open while an approval waits, so the step being approved is in view; closed again after, unless you opened it.
+    if (this.approvalDlg && !f.open) (f.dataset.auto = '1'), (f.dataset.autoOpen = '1'), (f.open = true);
+    else if (!this.approvalDlg && f.dataset.autoOpen && f.open && !this.workOpen.has(key)) (f.dataset.auto = '1'), delete f.dataset.autoOpen, (f.open = false);
+    this.tickLiveFold();
+    return f;
+  }
+
+  /** The live fold's header: what happens now ("Running check free disk space") and how long the turn has taken. */
+  tickLiveFold() {
+    const f = this.liveFoldEl;
+    const l = f?.querySelector('.work-l');
+    if (!l) return;
+    const t = this.tab;
+    const [verb, obj] = this.nowDoing();
+    const answering = (t.live?.message?.content || []).some((b) => b.type === 'text' && b.text?.trim());
+    const text = this.approvalDlg ? 'Waiting for your OK' : answering ? 'Writing the reply' : obj ? `${verb} ${obj}` : verb;
+    if (l.textContent !== text) (l.textContent = text), (l.title = text);
+    const secs = Math.max(0, Math.floor((Date.now() - (this.turnAt || Date.now())) / 1000));
+    const tt = f.querySelector('.work-t');
+    const time = secs >= 1 ? fmtElapsed(secs) : '';
+    if (tt && tt.textContent !== time) tt.textContent = time;
+  }
+
+  /** The turn ended (or the view is redrawn): give the steps back to the transcript, where foldTurn folds them. */
+  settleLiveFold() {
+    const f = this.liveFoldEl;
+    this.liveFoldEl = null;
+    if (f?.parentNode !== this.tin) return null;
+    f.replaceWith(...f.lastChild.childNodes);
+    return null;
+  }
+
+  /**
+   * What the agent does now ("Running npm test") and for how long: in the working row's header once the turn has
+   * steps, otherwise on its own line at the end of the conversation (before the first step).
+   */
   updatePending() {
     const t = this.tab;
-    const idle = !t.streaming || t.dead || this.approvalDlg || (this.liveEl && this.liveEl.childElementCount);
+    const fold = this.liveFold();
+    const answering = this.liveEl?.parentNode === this.tin && this.liveEl.childElementCount;
+    const idle = !t.streaming || t.dead || this.approvalDlg || answering || !!fold;
+    if (fold && !this.foldTimer) this.foldTimer = setInterval(() => (this.liveFoldEl ? this.tickLiveFold() : (clearInterval(this.foldTimer), (this.foldTimer = 0))), 1000);
     if (idle) {
       clearInterval(this.pendingTimer);
       this.pendingTimer = 0;
       return void (this.pendingEl?.remove(), (this.pendingEl = null));
     }
     if (!this.pendingEl) {
-      // Between steps: what the agent is waiting on, and for how long, beside the moving bar.
-      const label = h('span', { class: 'pending-l' });
-      const bar = asciiBar();
-      this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-live': 'off' }, bar, label);
+      const verb = h('span', { class: 'pending-l' });
+      const what = h('span', { class: 'pending-o ell' });
+      const time = h('span', { class: 'pending-t num' });
+      this.pendingEl = h('div', { class: 'pending', role: 'status', 'aria-live': 'off' }, asciiSpin(), verb, what, time);
       const tick = () => {
         if (!this.pendingEl) return;
-        const [what, , since] = this.nowDoing();
-        const kind = this.stepKey === 'think' ? 'think' : 'work';
-        if (bar.dataset.kind !== kind) bar.dataset.kind = kind;
+        const [v, o, since] = this.nowDoing();
         const secs = Math.max(0, Math.floor((Date.now() - since) / 1000));
-        const text = secs >= 3 ? `${what} · ${fmtElapsed(secs)}` : what;
-        if (label.textContent !== text) label.textContent = text;
+        if (verb.textContent !== v) verb.textContent = v;
+        if (what.textContent !== (o || '')) (what.textContent = o || ''), (what.title = o || '');
+        const tt = secs >= 3 ? fmtElapsed(secs) : '';
+        if (time.textContent !== tt) time.textContent = tt;
+        this.tickLiveFold();
       };
       tick();
       this.pendingTimer = setInterval(tick, 1000);
     }
     if (this.pendingEl.parentNode !== this.tin || this.pendingEl.nextSibling) this.tin.append(this.pendingEl);
-    this.emptyEl?.remove();
+    this.removeEmpty();
   }
 
   renderMessage(m, idx) {
@@ -857,9 +976,13 @@ export class TabView {
     return wrap;
   }
 
-  /** 👍 and 👎 on a reply. The choice is stored in this browser profile only, per conversation and reply. */
+  /**
+   * 👍 and 👎 on a reply. Kept on this PC only: the mark per reply, and a count per model that Settings → Models
+   * shows, so you can see which models answer well for you. 👎 also offers to answer again, switch or report.
+   */
   rateButtons(m) {
     const key = `rate.${this.tab.state?.sessionId || this.tab.resume || this.tab.id}.${m.timestamp}`;
+    const modelId = typeof m.model === 'string' && m.model ? `${m.provider ? `${m.provider}/` : ''}${m.model}` : '';
     const up = h('button', { class: 'msg-act rate', type: 'button', title: 'Good reply', 'aria-label': 'Good reply' }, icon('thumb-up', 13));
     const down = h('button', { class: 'msg-act rate', type: 'button', title: 'Bad reply: retry, change model or report it', 'aria-label': 'Bad reply' }, icon('thumb-down', 13));
     const show = (v) => {
@@ -867,8 +990,10 @@ export class TabView {
       down.setAttribute('aria-pressed', String(v === -1));
     };
     const set = (v) => {
-      const next = lsGet(key, 0) === v ? 0 : v;
+      const prev = lsGet(key, 0);
+      const next = prev === v ? 0 : v;
       lsSet(key, next || null);
+      if (modelId) rateModel(modelId, prev, next);
       show(next);
       return next;
     };
@@ -876,7 +1001,7 @@ export class TabView {
     up.addEventListener('click', () => set(1));
     down.addEventListener('click', () => {
       if (set(-1) !== -1) return;
-      const model = typeof m.model === 'string' ? `${m.provider ? `${m.provider}/` : ''}${m.model}` : '';
+      const model = modelId;
       const latest = this.tab.messages[this.tab.messages.length - 1] === m || this.els.get(this.tab.messages[this.tab.messages.length - 1])?.contains(down);
       popMenu(down, [
         { header: 'Not a good reply?' },
@@ -971,7 +1096,8 @@ export class TabView {
       }
     }
     const u = t.messages[start];
-    const secs = u?.timestamp && lastAsst?.timestamp ? Math.max(0, Math.round((lastAsst.timestamp - u.timestamp) / 1000)) : null;
+    const endAt = lastAsst?.doneAt || lastAsst?.timestamp;
+    const secs = u?.timestamp && endAt ? Math.max(0, Math.round((endAt - u.timestamp) / 1000)) : null;
     return { files, read, n, check, checkFails, review, edits, lastAsst, lastEl, secs };
   }
 
@@ -980,6 +1106,7 @@ export class TabView {
     const pl = (k, one, many = one + 's') => `${k} ${k === 1 ? one : many}`;
     const { read, n, files, check, checkFails, review, edits } = st;
     return [
+      n.failed ? [icon('alert', 12), pl(n.failed, 'failed step'), true] : null,
       read.size ? [icon('eye', 12), `Read ${pl(read.size, 'file')}`] : null,
       n.search ? [icon('search', 12), pl(n.search, 'search', 'searches')] : null,
       n.run ? [icon('terminal', 12), `Ran ${pl(n.run, 'command')}`] : null,
@@ -987,7 +1114,6 @@ export class TabView {
       files.size ? [icon('pencil', 12), `Changed ${pl(files.size, 'file')}`] : null,
       check ? (check.status === 'passed' ? [icon('check', 12), `${checkWord(check.command)} passed${checkFails ? ` after ${pl(checkFails, 'fix', 'fixes')}` : ''}`] : [icon('alert', 12), `${checkWord(check.command)} ${check.status === 'skipped' ? 'skipped' : 'failed'}`, check.status !== 'skipped']) : null,
       review ? (review.status === 'issues' ? [icon('eye', 12), `Review found ${pl(review.issues?.length || 0, 'issue')}${edits > review.editsBefore ? ', fixed' : ''}`] : [icon('eye', 12), 'Review found no issues']) : null,
-      n.failed ? [icon('alert', 12), pl(n.failed, 'failed step'), true] : null,
     ].filter(Boolean).map(([ic, txt, bad]) => h('span', { class: 'ts-fact' + (bad ? ' bad' : '') }, ic, txt));
   }
 
@@ -1012,27 +1138,21 @@ export class TabView {
     const t = this.tab;
     if (!st.n.calls) return null;
     const msgs = t.messages.slice(start + 1, end);
-    // The final reply: the last message from the agent with text (or the one that failed or was stopped).
-    let fi = -1;
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      const m = msgs[i];
-      if (m.role !== 'assistant') continue;
-      const hasText = (m.content || []).some((b) => b.type === 'text' && b.text?.trim());
-      const calls = (m.content || []).some((b) => b.type === 'toolCall');
-      if ((hasText && !calls) || m.stopReason === 'error' || m.stopReason === 'aborted') fi = i;
-      break;
-    }
-    const stop = fi >= 0 ? fi : msgs.length;
-    // The steps, plus the run-end check and review that come after the reply: the fold's header already says how they went.
-    const steps = [...msgs.slice(0, stop), ...msgs.slice(stop + 1).filter((m) => m.role === 'custom' && (m.customType === 'verify' || m.customType === 'review') && !['failed', 'issues'].includes(m.details?.status))]; // a failed check stays in view
+    // Keep the last standalone answer or terminal error visible even if the turn ended with tool-only messages.
+    const fi = msgs.findLastIndex(isReply);
+    const steps = msgs.filter((m, i) => i < fi || fi < 0 || (i > fi && (
+      m.role === 'assistant' ||
+      (m.role === 'custom' && (m.customType === 'verify' || m.customType === 'review') && !['failed', 'issues'].includes(m.details?.status))
+    )));
     const key = String(t.messages[start]?.id || t.messages[start]?.timestamp || start);
     const old = this.tin.querySelector(`details.work[data-key="${CSS.escape(key)}"]`);
-    const els = steps.map((m) => this.els.get(m)).filter((el) => el?.isConnected && el.parentNode === this.tin);
+    // Membership of the transcript, not of the page: a view is drawn (and its turns folded) before it is shown.
+    const els = steps.map((m) => this.els.get(m)).filter((el) => el && el.parentNode === this.tin);
     if (!els.length) return old; // already folded
     const first = els[0];
     const head = h('summary', { class: 'work-h' },
       icon('chevron-right', 12, 'chev'),
-      h('span', { class: 'work-l' }, st.secs != null ? `Worked for ${fmtElapsed(st.secs)}` : 'Worked'),
+      h('span', { class: 'work-l' }, st.secs != null ? `Worked for ${st.secs >= 1 ? fmtElapsed(st.secs) : '<1s'}` : 'Worked'),
       h('span', { class: 'work-facts' }, this.turnFacts(st)));
     const fold = old || h('details', { class: 'work', dataset: { key } });
     if (old) old.firstChild.replaceWith(head);
@@ -1041,15 +1161,20 @@ export class TabView {
       // Default: each turn's steps fold into "Worked for…"; Verbose (or screen reader mode) keeps them open.
       fold.open = S.ui.steps === 'verbose' || S.ui.screenReader === true ? !this.workShut.has(key) : this.workOpen.has(key);
     }
+    const finalEl = fi >= 0 && this.els.get(msgs[fi]);
     if (!old) first.before(fold);
+    if (finalEl?.parentNode === this.tin && (finalEl.compareDocumentPosition(fold) & Node.DOCUMENT_POSITION_FOLLOWING)) finalEl.before(fold);
     const body = fold.lastChild;
     for (const el of els) {
       el.classList.remove('enter');
       body.append(el);
     }
-    // The final reply now follows the fold directly: it reads as the continuation of the same turn.
-    const finalEl = fi >= 0 && this.els.get(msgs[fi]);
-    if (finalEl?.isConnected) finalEl.classList.add('cont');
+    // The final reply follows the fold directly: it reads as the continuation of the same turn. Its thinking is
+    // one of the steps, so it goes in the fold too and the answer starts right under "Worked for…".
+    if (finalEl?.parentNode === this.tin) {
+      finalEl.classList.add('cont');
+      for (const th of finalEl.querySelectorAll(':scope > details.think')) body.append(th);
+    }
     return fold;
   }
 
@@ -1059,6 +1184,7 @@ export class TabView {
     this.summaryEl?.remove();
     this.summaryEl = null;
     if (t.streaming || t.dead) return;
+    this.settleLiveFold();
     let start = t.messages.length - 1;
     while (start >= 0 && t.messages[start].role !== 'user') start--;
     if (start < 0) return;
@@ -1145,18 +1271,21 @@ export class TabView {
         reuse.md.finish(b.thinking);
         reuse.el.classList.remove('live');
         const l = reuse.el.querySelector('.think-l');
-        if (l) l.textContent = 'Thinking';
+        if (l) l.textContent = 'Thought';
+        setGist(reuse.el, b.thinking);
         return reuse.el;
       }
-      return this.thinkBlock(key, renderMarkdown(b.thinking, { onPath }), false);
+      return this.thinkBlock(key, renderMarkdown(b.thinking, { onPath }), false, b.thinking);
     }
     if (b.type === 'toolCall') return this.toolCard(b);
     if (b.type === 'image' && b.data) return h('img', { class: 'tool-img', src: `data:${b.mimeType || 'image/png'};base64,${b.data}`, alt: 'Image from the agent' });
     return null;
   }
 
-  thinkBlock(key, body, live) {
-    const d = h('details', { class: 'think' + (live ? ' live' : ''), dataset: { key } }, h('summary', null, icon('chevron-right', 12, 'chev'), h('span', { class: 'think-l' }, live ? 'Thinking…' : 'Thinking')), h('div', { class: 'think-b' }, body));
+  /** A thinking block: one quiet row ("Thought  what it was about…") that opens to the full text. */
+  thinkBlock(key, body, live, text = '') {
+    const d = h('details', { class: 'think' + (live ? ' live' : ''), dataset: { key } }, h('summary', null, icon('chevron-right', 12, 'chev'), h('span', { class: 'think-l' }, live ? 'Thinking' : 'Thought'), h('span', { class: 'think-p ell' })), h('div', { class: 'think-b' }, body));
+    setGist(d, text);
     d.open = this.thinkOpen.has(key);
     return d;
   }
@@ -1181,9 +1310,9 @@ export class TabView {
     }
     if (!this.liveEl) {
       this.liveEl = h('div', { class: 'msg asst live enter' });
-      this.tin.insertBefore(this.liveEl, this.pendingEl || null);
+      this.tin.insertBefore(this.liveEl, this.pendingEl?.parentNode === this.tin ? this.pendingEl : null);
       this.liveBlocks = [];
-      this.emptyEl?.remove();
+      this.removeEmpty();
     }
     const blocks = live.content || [];
     const onPath = (p) => viewFile(t, p);
@@ -1192,6 +1321,12 @@ export class TabView {
     blocks.forEach((b, i) => {
       const prev = this.liveBlocks[i];
       const last = i === blocks.length - 1;
+      // Providers open a thinking block before any text (some never send any): no row until there is something to read.
+      if (b.type === 'thinking' && !(b.thinking || '').trim()) {
+        if (prev?.el?.parentNode === this.liveEl) prev.el.remove();
+        this.liveBlocks[i] = undefined;
+        return;
+      }
       if (b.type === 'text' || (b.type === 'thinking' && showThink)) {
         const text = (b.type === 'text' ? b.text : b.thinking) || '';
         if (prev?.type !== b.type) {
@@ -1204,9 +1339,10 @@ export class TabView {
         cur.md.update(text);
         if (b.type === 'thinking') {
           const l = cur.el.querySelector('.think-l');
-          const want = last ? 'Thinking…' : 'Thinking';
+          const want = last ? 'Thinking' : 'Thought';
           if (l && l.textContent !== want) l.textContent = want;
           cur.el.classList.toggle('live', last);
+          setGist(cur.el, text);
         }
         return;
       }
@@ -1228,13 +1364,13 @@ export class TabView {
 
   /** Put a live block's element in place of the previous one (or after the blocks before it). */
   placeLive(prev, el, i) {
-    if (prev?.el?.isConnected) {
+    if (prev?.el?.parentNode === this.liveEl) {
       if (el) prev.el.replaceWith(el);
       else prev.el.remove();
       return;
     }
     if (!el) return;
-    const after = this.liveBlocks.slice(0, i).reverse().find((x) => x?.el?.isConnected)?.el;
+    const after = this.liveBlocks.slice(0, i).reverse().find((x) => x?.el?.parentNode === this.liveEl)?.el;
     if (after) after.after(el);
     else this.liveEl.prepend(el);
   }
@@ -1332,7 +1468,7 @@ export class TabView {
 
   async onSend(followUp = false, fromButton = false) {
     const t = this.tab;
-    if (t.dead) return;
+    if (t.dead || this.sending) return;
     const p = this.composer.payload();
     if (!p) {
       // Enter on an empty box does nothing; only the stop button (or Esc) stops the agent.
@@ -1345,6 +1481,7 @@ export class TabView {
       this.composer.reset(p.raw);
       return askSide(t, btw[1]);
     }
+    this.sending = true;
     this.composer.reset(p.raw);
     const svg = this.sendBtn.querySelector('svg');
     if (svg && !reduced.matches) svg.animate([{ transform: 'none' }, { opacity: 0, transform: 'translateY(-14px)', offset: 0.45 }, { opacity: 0, transform: 'translateY(12px)', offset: 0.46 }, { opacity: 1, transform: 'none' }], { duration: 280, easing: 'cubic-bezier(.2,.8,.2,1)' });
@@ -1354,7 +1491,9 @@ export class TabView {
     } catch {
       // The error is in the transcript; give the message back so nothing typed is lost.
       if (!this.composer.hasContent()) this.composer.restore(p);
+    } finally {
+      this.sending = false;
+      this.updateComposer();
     }
-    this.updateComposer();
   }
 }

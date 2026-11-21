@@ -51,9 +51,12 @@ export function permissionChip() {
     const cur = S.engine?.approvals || 'ask';
     popMenu(btn, [{ header: 'Permissions' }, ...MODES.map(([k, label, ic, desc]) => ({ icon: ic, label, desc, sel: cur === k, run: () => set(k) }))], { align: 'end', minWidth: 300 });
   });
+  let shownMode;
   const update = (hidden = false) => {
     const mode = MODES.find((m) => m[0] === (S.engine?.approvals || 'ask')) || MODES[0];
     btn.hidden = hidden;
+    if (shownMode === mode[0]) return;
+    shownMode = mode[0];
     btn.classList.toggle('risky', mode[0] === 'auto');
     btn.title = `${mode[1]}: ${mode[3]} Click to change.`;
     btn.replaceChildren(icon(mode[2], 13), h('span', null, mode[1]), icon('chevron-down', 12, 'cbtn-chev'));

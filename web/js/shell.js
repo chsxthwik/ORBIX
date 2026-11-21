@@ -9,6 +9,8 @@ import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 import { gitState, panelInfo, showTab } from './panels.js';
 import { firstKey } from './keys.mjs';
+import { onMachine, backToThisPc } from './machines.js';
+import { updatesSupported, checkForUpdates } from './updates.js';
 
 /** The key of a shortcut as you set it (Settings → Shortcuts), for menus and hints. */
 const K = (id) => firstKey(S.ui.keys, id);
@@ -74,7 +76,7 @@ function menus() {
   return [
     ['ORBIX', [
       { label: 'About ORBIX', run: () => H.settings('about') },
-      { label: 'Check for updates', run: () => H.settings('about') },
+      updatesSupported() ? { label: 'Check for updates', run: () => (checkForUpdates(), H.settings('application')) } : null,
       '-',
       { label: 'Settings', hint: K('settings'), run: () => H.settings() },
       { label: 'Providers and models', run: () => H.settings('engine') },
@@ -185,6 +187,8 @@ export function drawToolbar(el, { force = false } = {}) {
       back, fwd,
       iconBtn('search', tip('Search everything', 'search'), () => H.search(), 'tb-search')),
     h('div', { class: 'crumbs' }, crumbs(t, hub)),
+    // This window shows a machine (ORBIX Cloud): say which, and lead back to this PC.
+    onMachine() ? h('button', { class: 'tb-machine', type: 'button', title: window.orbixDesktop?.machines ? 'Back to the ORBIX on this PC' : 'ORBIX on a machine', onclick: () => (window.orbixDesktop?.machines ? backToThisPc() : H.settings('machines')) }, icon('cloud', 13), location.hostname, window.orbixDesktop?.machines ? h('span', { class: 'muted' }, '· Back to this PC') : null) : null,
     h('span', { class: 'grow tb-drag' }),
     t ? h('div', { class: 'tb-end' },
       iconBtn('more-v', 'Conversation actions', (e) => H.sessionMenu(t, e.currentTarget), 'tb-more'),
@@ -219,7 +223,7 @@ function toggleOverview() {
 }
 
 const ORDER = ['review', 'changes', 'files', 'console', 'todos', 'run'];
-const LABEL = { run: ['Inspect', 'activity'], review: ['Review', 'check'], files: ['Files', 'file'], changes: ['Changes', 'branch'], todos: ['Plan', 'list'], console: ['Terminal', 'terminal'] };
+const LABEL = { run: ['Inspect', 'activity'], review: ['Review', 'check'], files: ['Files', 'file'], changes: ['Changes', 'branch'], todos: ['Tasks', 'list'], console: ['Terminal', 'terminal'] };
 let ovEl = null;
 let ovSig = '';
 export function syncOverview(host) {

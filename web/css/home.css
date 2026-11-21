@@ -7,23 +7,17 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  min-height: 100%;
   margin: 0 auto;
-  padding: clamp(24px, 6vh, 64px) 24px 18px;
   overflow-x: clip;
 }
-/* The column grows with a wide window, up to a comfortable reading width. */
-.home > * { width: 100%; max-width: clamp(760px, 46cqw, 960px); min-width: 0; }
+/* Each part fills the column; shell.css sets the column's width. */
+.home > * { width: 100%; min-width: 0; }
 
 /* ---- the question ---- */
 .home-hero { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.home-head { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px; }
+.home-head { display: flex; flex-direction: column; align-items: center; }
 .home-title {
-  max-width: 26ch;
   margin: 0;
-  font-size: clamp(26px, 1.6cqw + 16px, 42px);
-  font-weight: 600;
-  line-height: 1.12;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
@@ -62,14 +56,9 @@
   gap: 0;
   padding: 0;
   border: 1px solid var(--line-2);
-  border-radius: 14px;
   background: var(--bg-raise);
   box-shadow: none;
   transition: border-color var(--t2) var(--ease);
-}
-.home .home-composer:focus-within {
-  border-color: var(--accent-line);
-  box-shadow: none;
 }
 .home .home-composer.busy, .home .home-composer.busy:focus-within { border-color: var(--live-line); }
 .home .home-composer .c-ta {
@@ -90,7 +79,7 @@
   border: 0;
 }
 .home .home-composer .c-row > .grow { flex: 1 1 0; min-width: 8px; }
-.home .home-composer .c-row .cbtn { height: 32px; min-height: 32px; padding: 0 10px; border-radius: 10px; font-size: 13px; }
+.home .home-composer .c-row .cbtn { padding: 0 10px; }
 .home .home-composer .c-row > .ibtn { width: 32px; height: 32px; margin: 0; border-radius: 10px; }
 
 /* Build or Plan: a two-way switch. */
@@ -141,24 +130,8 @@
 .home-status-details > svg { flex: none; color: var(--fg-3); }
 .home-status-summary { flex: none; border-inline-start: 1px solid var(--line-2); padding-inline-start: 8px; color: var(--fg-3); }
 .home-status .ibtn[aria-disabled=true] { opacity: .55; cursor: wait; }
+/* The suggestions under the box are styled in shell.css (.ws-recipe). */
 .home-under { width: 100%; margin-top: 16px; }
-.home-under:empty { display: none; }
-.home .ws-recipes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-.home .ws-recipe {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 14px 0 12px;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  color: var(--fg-2);
-  font-size: 13px;
-  transition: border-color var(--t1) var(--ease), background-color var(--t1) var(--ease), color var(--t1) var(--ease);
-}
-.home .ws-recipe svg { flex: none; color: var(--fg-3); transition: color var(--t1) var(--ease); }
-.home .ws-recipe:hover svg { color: var(--fg-2); }
-.home .ws-recipe:active { transform: scale(.98); transition-duration: 60ms; }
 
 /* ---- what to do first ---- */
 .home-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
@@ -211,14 +184,12 @@
   .cx-s { display: none; }
 }
 @media (max-width: 640px) {
-  .home { padding: 24px 16px 16px; }
   .home .send.start { padding: 0 16px; }
 }
 @media (pointer: coarse) {
   .home .task-mode { height: 40px; }
-  .home .ws-recipe { height: 40px; }
 }
 @media (forced-colors: active) {
-  .home .home-composer, .home .task-modes, .home .ws-recipe, .home-alert, .cx-list, .cx-how, .home-step { border-color: ButtonText; }
+  .home .home-composer, .home .task-modes, .home-alert, .cx-list, .cx-how, .home-step { border-color: ButtonText; }
   .home .task-mode[aria-checked=true] { outline: 2px solid Highlight; }
 }

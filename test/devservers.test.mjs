@@ -1,20 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { findDevServers, pageTitle, isLocalPage } from '../src/devservers.mjs';
+import { findDevServers, pageTitle } from '../src/devservers.mjs';
 
 test('pageTitle reads and cleans the title', () => {
   assert.equal(pageTitle('<html><head><title>\n  Shop &amp; Co </title></head>'), 'Shop & Co');
   assert.equal(pageTitle('<p>no title</p>'), '');
-});
-
-test('isLocalPage: only http pages on this computer', () => {
-  assert.equal(isLocalPage('http://localhost:5173/'), true);
-  assert.equal(isLocalPage('http://127.0.0.1:3000/app'), true);
-  assert.equal(isLocalPage('https://example.com/'), false);
-  assert.equal(isLocalPage('http://192.168.1.4:3000/'), false);
-  assert.equal(isLocalPage('file:///C:/x.html'), false);
-  assert.equal(isLocalPage('not a url'), false);
 });
 
 test('findDevServers lists the ports that answer, with their titles, and skips its own', async () => {

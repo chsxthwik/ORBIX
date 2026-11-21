@@ -206,7 +206,7 @@ export async function commit(backend, ws, message) {
 // branch orbix/<slug>, cut from the commit the main checkout was on. Every call below runs through git() above,
 // so the same guards apply (no hooks, no repo-defined filters or signing programs).
 
-export const WORKTREE_DIR = '.orbix/worktrees';
+const WORKTREE_DIR = '.orbix/worktrees';
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
 const SHA_RE = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
 const conflictErr = (msg) => Object.assign(new Error(msg), { status: 409 });

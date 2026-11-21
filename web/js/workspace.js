@@ -1,4 +1,4 @@
-// Task suggestions: under the Home task box, and in an empty session for the open project.
+// Task suggestions for a project, from what is in its folder: above the Home message box, and in an empty session.
 // A click puts the full text in the message box, ready to edit and send.
 import { h, icon } from './dom.js';
 
@@ -13,10 +13,8 @@ const T = {
   plan: ['Plan the first steps', 'This folder is empty. Ask me what I want to build, then propose a short plan before writing any files.', 'map'],
 };
 
-const RECIPES = [T.explain, T.bug, T.review, T.feature];
-
 /** Buttons that fill `comp` with a task. A task with a blank to fill in starts with that blank selected. */
-function taskButtons(comp, tasks, cls) {
+export function taskButtons(comp, tasks, cls) {
   return tasks.map(([label, text, mark]) => h('button', { class: cls, type: 'button', title: text, onclick: () => {
     comp.value = comp.value.trim() ? `${comp.value.trimEnd()}\n\n${text}` : text;
     comp.focus();
@@ -26,14 +24,6 @@ function taskButtons(comp, tasks, cls) {
       comp.ta.setSelectionRange(start, start + gap[0].length);
     }
   } }, mark ? icon(mark, 14) : null, h('span', null, label)));
-}
-
-let recipesEl = null;
-export function recipes(comp) {
-  if (recipesEl?._comp === comp) return recipesEl;
-  recipesEl = h('div', { class: 'ws-recipes', role: 'group', 'aria-label': 'Task suggestions' }, taskButtons(comp, RECIPES, 'ws-recipe'));
-  recipesEl._comp = comp;
-  return recipesEl;
 }
 
 const BUILD = ['package.json', 'pyproject.toml', 'setup.py', 'requirements.txt', 'cargo.toml', 'go.mod', 'pom.xml', 'build.gradle', 'build.gradle.kts', 'makefile', 'cmakelists.txt', 'gemfile', 'composer.json', 'deno.json', 'mix.exs', 'pubspec.yaml'];

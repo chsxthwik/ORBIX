@@ -3,7 +3,7 @@
 // HTTP, with the page title when there is one. Only this computer is asked; nothing leaves it.
 import http from 'node:http';
 
-export const DEV_PORTS = [3000, 3001, 3002, 4000, 4200, 4321, 5000, 5001, 5173, 5174, 5500, 6006, 7000, 8000, 8001, 8080, 8081, 8443, 8888, 9000, 9090];
+const DEV_PORTS = [3000, 3001, 3002, 4000, 4200, 4321, 5000, 5001, 5173, 5174, 5500, 6006, 7000, 8000, 8001, 8080, 8081, 8443, 8888, 9000, 9090];
 
 /** The title of an HTML page (the first 32 KB), or ''. */
 export function pageTitle(html) {
@@ -34,14 +34,4 @@ function knock(port, timeout) {
 export async function findDevServers({ ports = DEV_PORTS, skip = [], timeout = 700 } = {}) {
   const want = [...new Set(ports)].filter((p) => Number.isInteger(p) && p > 0 && p < 65536 && !skip.includes(p));
   return (await Promise.all(want.map((p) => knock(p, timeout)))).filter(Boolean);
-}
-
-/** Can the panel show this URL inside ORBIX? Only http pages on this computer; anything else opens in your browser. */
-export function isLocalPage(raw) {
-  try {
-    const u = new URL(String(raw || ''));
-    return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
-  } catch {
-    return false;
-  }
 }

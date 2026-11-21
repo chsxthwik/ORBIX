@@ -45,7 +45,7 @@ const { Backend } = await import('../src/backend.mjs');
 
 after(() => {
   globalThis.fetch = realFetch;
-  fs.rmSync(TMP, { recursive: true, force: true });
+  fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 const put = (file, content) => {
@@ -210,6 +210,21 @@ describe('tools: inputs and outputs', () => {
     assert.match(wsl.description, /bash in WSL \(Ubuntu\)/);
     assert.equal(wsl.input_schema.properties.shell, undefined);
   });
+  test('a project inside a WSL distribution, opened from Windows: bash in that distribution, Linux paths map back', () => {
+    const native = new Backend({ kind: 'native' });
+    const ws = '\\\\wsl.localhost\\kali-linux\\root\\WORKSPACE';
+    const bash = tools_.toolDefsFor(native, ws).find((d) => d.name === 'bash');
+    assert.match(bash.description, /^Run a command with bash in WSL \(kali-linux\)/);
+    assert.equal(bash.input_schema.properties.shell, undefined, 'cmd/PowerShell are not offered');
+    const fact = prompt.shellFact(native, ws);
+    assert.match(fact, /^bash in WSL \(kali-linux\).*starting in \/root\/WORKSPACE \(not cmd\.exe or PowerShell\)/);
+    assert.match(prompt.shellFact(native, 'C:\\proj'), /^Windows cmd\.exe/);
+    const T2 = tools_.createTools({ backend: native, cwd: ws, getSignal: () => undefined });
+    assert.equal(T2.inProject('/root/WORKSPACE/PENTEST/a.md'), true);
+    assert.equal(T2.inProject('PENTEST/a.md'), true);
+    assert.equal(T2.inProject('/etc/passwd'), false);
+    assert.equal(T2.inProject('/mnt/c/Users/x'), false);
+  });
   test('every tool schema is a well-formed object schema with described properties', () => {
     for (const d of tools_.toolDefsFor(backend)) {
       assert.equal(d.input_schema.type, 'object', d.name);
@@ -218,15 +233,15 @@ describe('tools: inputs and outputs', () => {
     }
   });
   test('checkArgs coerces numeric and boolean strings and JSON arrays; reports bad types with the signature', () => {
-    const read = tools_.TOOL_DEFS.find((d) => d.name === 'read');
+    const read = tools_.toolDefsFor().find((d) => d.name === 'read');
     assert.deepEqual(tools_.checkArgs(read, { path: 'a', offset: '10', limit: 5.7 }).args, { path: 'a', offset: 10, limit: 5 });
     assert.match(tools_.checkArgs(read, { path: 'a', offset: 'x' }).error, /Invalid argument "offset": expected integer, got string\. Expected read\(path: string, offset\?: integer, limit\?: integer\)/);
     assert.match(tools_.checkArgs(read, {}).error, /Missing required argument "path"/);
     assert.match(tools_.checkArgs(read, 'nope').error, /JSON object/);
-    const grep = tools_.TOOL_DEFS.find((d) => d.name === 'grep');
+    const grep = tools_.toolDefsFor().find((d) => d.name === 'grep');
     assert.equal(tools_.checkArgs(grep, { pattern: 'x', ignore_case: 'true' }).args.ignore_case, true);
     assert.match(tools_.checkArgs(grep, { pattern: 'x', output_mode: 'lines' }).error, /must be one of "content", "files", "count"/);
-    const todo = tools_.TOOL_DEFS.find((d) => d.name === 'todo');
+    const todo = tools_.toolDefsFor().find((d) => d.name === 'todo');
     assert.deepEqual(tools_.checkArgs(todo, { todos: '[{"content":"a","status":"pending"}]' }).args.todos, [{ content: 'a', status: 'pending' }]);
   });
   test('read: an image comes back as an image block with a note; without vision only the note', async () => {
@@ -346,7 +361,7 @@ describe('tools: inputs and outputs', () => {
     assert.match(miss.text, /^No such file or folder: nofile\.txt\..* To create a new file, use write\.$/);
   });
   test('invalidArgsText names the expected arguments and how to escape strings', () => {
-    const edit = tools_.TOOL_DEFS.find((d) => d.name === 'edit');
+    const edit = tools_.toolDefsFor().find((d) => d.name === 'edit');
     const t = tools_.invalidArgsText(edit);
     assert.match(t, /^Not run: the arguments were not valid JSON\./);
     assert.match(t, /edit\(path: string, old_string: string, new_string: string, replace_all\?: boolean\)/);
@@ -363,6 +378,18 @@ describe('tools: inputs and outputs', () => {
     assert.match(miss.text, /Its first line appears at line 2, but the lines after it differ/);
     const ok = await run('edit', { path: 'amb.txt', old_string: 'y = 2', new_string: 'y = 5' });
     assert.match(ok.text, /: line 2$/);
+  });
+  test('edit: a miss shows the closest text as it is now, so old_string can be fixed without a re-read', async () => {
+    put(at('near.js'), 'const x = 1;\nfunction greet(name) {\n  return `Hello, ${name}!`;\n}\nmodule.exports = { greet };\n');
+    const r = await run('edit', { path: 'near.js', old_string: 'function greet(nme) {\n  return `Hello ${name}`;\n}', new_string: 'z' });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /^old_string was not found in .*near\.js\.\nThe closest text is at lines 2-4, currently:\n2\tfunction greet\(name\) \{\n3\t  return `Hello, \$\{name\}!`;\n4\t\}\nCopy old_string exactly from that text/);
+    const none = await run('edit', { path: 'near.js', old_string: 'nothing like this anywhere', new_string: 'z' });
+    assert.doesNotMatch(none.text, /closest/);
+    // In a file of near-identical lines the right place still wins.
+    put(at('rows.js'), Array.from({ length: 3000 }, (_, i) => `  const v${i} = f(${i}, "same text");`).join('\n'));
+    const rows = await run('edit', { path: 'rows.js', old_string: '  const v1234 = f(1234, "sme text");\n  const v1235 = f(1235, "same text")', new_string: 'z' });
+    assert.match(rows.text, /The closest text is at lines 1235-1236/);
   });
   test('bash: long output keeps the start and the end with a marker; ANSI is removed; duration reported', async () => {
     const cmd = process.platform === 'win32' ? 'for /L %i in (1,1,6000) do @echo line %i' : 'for i in $(seq 1 6000); do echo line $i; done';
@@ -540,6 +567,17 @@ describe('system prompt', () => {
     const p = prompt.buildSystemPrompt({ env, approvals: null });
     assert.match(p, /Do not weaken, skip or delete tests/);
     assert.match(p, /Long tool output is cut in the middle at a "\[… omitted …\]" marker/);
+  });
+  test('the core prompt drives planning with todo, self-verification, autonomy and a closing walkthrough', () => {
+    const p = prompt.buildSystemPrompt({ env, approvals: null });
+    assert.match(p, /Plan non-trivial work .* with the todo tool before you start: keep exactly one step in_progress/);
+    assert.match(p, /Verify your own work before you call it done: run the project's own tests, build/);
+    assert.match(p, /re-read the changed parts/);
+    assert.match(p, /Work autonomously: keep going through every step until the task is done and verified\. When the next step is clear, take it/);
+    assert.match(p, /end with a short walkthrough: what changed and where \(path:line\), how you verified it/);
+    assert.match(p, /Do what was asked, completely, and no more/);
+    assert.match(p, /\[Output of this earlier … call was cleared …\]/);
+    assert.match(p, /A failing call repeated unchanged gets a note/);
   });
 });
 
@@ -863,5 +901,137 @@ describe('agent loop end to end (mock provider)', () => {
     assert.equal(p.messages.at(-1).content[0].text, 'two');
     const st = await p.request({ type: 'get_state' });
     assert.deepEqual(st.data.features, ['regenerate', 'edit_message', 'attachments', 'prompt_status', 'branch']);
+  });
+
+  test('results of parallel calls are added in the order of the calls, whatever order they finish in', async () => {
+    const p = await make();
+    put(path.join(ws, 'order', 'slow.txt'), 'slow\n');
+    put(path.join(ws, 'order', 'fast.txt'), 'fast\n');
+    const orig = p.tools.run.bind(p.tools);
+    p.tools.run = async (name, input, hooks) => {
+      if (String(input?.path).endsWith('slow.txt')) await new Promise((r) => setTimeout(r, 150));
+      return orig(name, input, hooks);
+    };
+    script = [sseResponse(turn({ tools: [{ id: 'o1', name: 'read', args: { path: 'order/slow.txt' } }, { id: 'o2', name: 'read', args: { path: 'order/fast.txt' } }, { id: 'o3', name: 'glob', args: { pattern: 'order/*.txt' } }], stop: 'tool_use' })), sseResponse(turn({ text: 'Read both.' }))];
+    await send(p, 'read them');
+    // The UI hears about each call when it ends (fast first) ...
+    const ends = p.events.filter((e) => e.type === 'tool_execution_end').map((e) => e.toolCallId);
+    assert.equal(ends.at(-1), 'o1', 'the slow call finished last');
+    // ... but the conversation, the session file and the next request keep the calls' order.
+    assert.deepEqual(p.messages.filter((m) => m.role === 'toolResult').map((m) => m.toolCallId), ['o1', 'o2', 'o3']);
+    assert.deepEqual(compact.rebuildSession(p.session.file).messages.filter((m) => m.role === 'toolResult').map((m) => m.toolCallId), ['o1', 'o2', 'o3']);
+    assert.deepEqual(lastBody().messages.at(-1).content.map((c) => c.tool_use_id), ['o1', 'o2', 'o3']);
+  });
+
+  test('the same call failing the same way: a note from the 3rd time, not run from the 5th, then the run stops', async () => {
+    const p = await make();
+    const bad = (i) => sseResponse(turn({ tools: [{ id: `rf${i}`, name: 'edit', args: { path: 'hello.txt', old_string: 'NOT IN THE FILE', new_string: 'x' } }], stop: 'tool_use' }));
+    script = [1, 2, 3, 4, 5, 6].map(bad);
+    const end = await send(p, 'edit it');
+    assert.equal(end.stopReason, 'repeated_failure');
+    assert.equal(end.toolCalls, 6);
+    assert.equal(script.length, 0);
+    const texts = p.messages.filter((m) => m.role === 'toolResult').map((m) => m.content[0].text);
+    assert.doesNotMatch(texts[1], /in a row/);
+    assert.match(texts[2], /\[This exact call has now failed 3 times in a row with the same error\./);
+    assert.match(texts[3], /failed 4 times in a row/);
+    assert.match(texts[4], /^Not run: this exact call already failed 4 times in a row/);
+    assert.match(texts[5], /^Not run:/);
+    assert.equal(fs.readFileSync(path.join(ws, 'hello.txt'), 'utf8'), 'hello world\n');
+    assert.ok(p.events.some((e) => e.type === 'notice' && /kept repeating the same failing step/.test(e.message)));
+  });
+
+  test('repeat tracking: a success or a different call starts over; numbers in the error do not make it different', async () => {
+    const p = await make();
+    p.run = {};
+    const fail = (ms) => ({ text: `Command failed [exit code 1 · ${ms}s]`, isError: true });
+    p._noteRepeat('a', fail(1.2));
+    p._noteRepeat('a', fail(3.4));
+    assert.match(p._noteRepeat('a', fail(0.9)).text, /failed 3 times in a row/);
+    assert.equal(p._noteRepeat('b', fail(1)).text, fail(1).text, 'a different call');
+    p._noteRepeat('a', fail(1));
+    p._noteRepeat('a', fail(1));
+    assert.equal(p._noteRepeat('a', { text: 'ok' }).text, 'ok');
+    assert.doesNotMatch(p._noteRepeat('a', fail(1)).text, /in a row/, 'counting starts over after a success');
+    assert.equal(p._repeatBlocked('a'), undefined);
+    p.run = null;
+  });
+
+  test('over the threshold, old tool output is cleared first; no summary is needed when that is enough', async () => {
+    const p = await make();
+    const big = (n) => Array.from({ length: 1000 }, (_, i) => `${n} line ${i} ${'x'.repeat(90)}`).join('\n');
+    for (const n of [1, 2, 3]) put(path.join(ws, 'big', `f${n}.txt`), big(n));
+    script = [
+      sseResponse(turn({ tools: [1, 2, 3].map((n) => ({ id: `pr${n}`, name: 'read', args: { path: `big/f${n}.txt` } })), stop: 'tool_use', input: 1000 })),
+      sseResponse(turn({ tools: [{ id: 'pr4', name: 'read', args: { path: 'hello.txt' } }], stop: 'tool_use', input: 170000 })),
+      sseResponse(turn({ text: 'Done.' })),
+    ];
+    const before = requests.length;
+    const end = await send(p, 'read the big files');
+    assert.equal(end.status, 'completed');
+    assert.equal(requests.length - before, 3, 'no summary request was made');
+    assert.ok(!p.messages.some((m) => m.role === 'compactionSummary'));
+    assert.deepEqual(p.messages.filter((m) => m.role === 'toolResult').map((m) => !!m.pruned), [true, true, false, false]);
+    const sent = JSON.stringify(lastBody().messages);
+    assert.equal(sent.split(compact.prunedText('read')).length - 1, 2);
+    assert.ok(sent.includes('3 line 999'), 'the newest big output is kept');
+    assert.ok(!sent.includes('1 line 999'));
+    assert.match(p.messages.find((m) => m.toolCallId === 'pr1').content[0].text, /1 line 999/, 'the UI keeps the output');
+    assert.ok(p.events.some((e) => e.type === 'notice' && /Cleared the output of 2 earlier tool calls/.test(e.message)));
+    assert.deepEqual(compact.rebuildSession(p.session.file).messages.filter((m) => m.role === 'toolResult').map((m) => !!m.pruned), [true, true, false, false]);
+  });
+
+  test('titles: a greeting names the session only until a real request; a name you gave is never replaced', async () => {
+    const p = await make();
+    script = [sseResponse(turn({ text: 'Hi.' }))];
+    await send(p, 'Hello!');
+    assert.equal(p.title, 'Hello');
+    script = [sseResponse(turn({ text: 'Looking.' }))];
+    await send(p, 'What we work on now?');
+    assert.equal(p.title, 'What we work on now');
+    assert.ok(p.events.some((e) => e.type === 'session_info_update' && e.title === 'What we work on now'));
+    script = [sseResponse(turn({ text: 'Sure.' }))];
+    await send(p, 'Now fix the parser');
+    assert.equal(p.title, 'What we work on now', 'set once from the first real request');
+    const s = (await import('../src/engine/store.mjs')).loadSession(p.session.file);
+    assert.deepEqual([s.title, s.titleBy], ['What we work on now', 'auto']);
+    // A name the user gave stays, even when the first message was a greeting.
+    const q = await make();
+    await q.request({ type: 'set_session_name', name: 'My session' });
+    script = [sseResponse(turn({ text: 'Hi.' }))];
+    await send(q, 'hi');
+    script = [sseResponse(turn({ text: 'Ok.' }))];
+    await send(q, 'Refactor the store module');
+    assert.equal(q.title, 'My session');
+  });
+
+  test('model-written titles: cut-off replies, single words and folder names are refused', async () => {
+    const { isSmallTalk, usableTitle } = await import('../src/engine/proc.mjs');
+    for (const t of ['Hello!', 'hi there', 'Thanks!', 'good morning', 'how are you?']) assert.equal(isSmallTalk(t), true, t);
+    for (const t of ['What we work on now?', 'hello, fix the build', 'ls']) assert.equal(isSmallTalk(t), false, t);
+    const ws2 = '\\\\wsl.localhost\\kali-linux\\root\\WORKSPACE';
+    for (const t of ['ROOT', 'Refactoring', 'root workspace/x', '', 'src\\a.js']) assert.equal(usableTitle(t, ws2), false, t);
+    assert.equal(usableTitle('Review pentest findings', ws2), true);
+    assert.equal(usableTitle('My Project', 'C:\\work\\My Project'), false);
+    const p = await make();
+    p.roles.fast = 'anthropic/claude-test';
+    const reply = (text, reason = 'end_turn') => async () => ({ stream: async function* () { yield { type: 'text', index: 0, text }; yield { type: 'stop', reason }; }, info: null, model: 'fast' });
+    p.title = 'Fix the parser';
+    p.titleBy = 'auto';
+    p._roleConnSafe = reply('ROOT');
+    await p._aiTitle('Fix the parser', 'fix the parser');
+    assert.equal(p.title, 'Fix the parser');
+    p._roleConnSafe = reply('Fix the parser crash on', 'max_tokens');
+    await p._aiTitle('Fix the parser', 'fix the parser');
+    assert.equal(p.title, 'Fix the parser');
+    p._roleConnSafe = reply('"Fix parser crash on empty input."');
+    await p._aiTitle('Fix the parser', 'fix the parser');
+    assert.equal(p.title, 'Fix parser crash on empty input');
+    assert.equal(p.titleBy, 'ai');
+    p.titleBy = 'user';
+    p.title = 'Mine';
+    p._roleConnSafe = reply('Something else entirely');
+    await p._aiTitle('Mine', 'x');
+    assert.equal(p.title, 'Mine');
   });
 });

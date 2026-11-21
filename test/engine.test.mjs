@@ -75,7 +75,7 @@ const result = (id, text, extra = {}) => ({ role: 'toolResult', toolCallId: id, 
 // =====================================================================================================
 describe('tools: classification', () => {
   test('every tool definition is either read-only or needs approval, never both', () => {
-    for (const d of tools_.TOOL_DEFS) {
+    for (const d of tools_.toolDefsFor()) {
       const ro = tools_.READ_ONLY.has(d.name);
       const ap = tools_.NEEDS_APPROVAL.has(d.name);
       assert.ok(ro !== ap || d.name === 'bash' && ap && !ro, `${d.name}: ro=${ro} approval=${ap}`);
@@ -145,13 +145,21 @@ describe('tools: createTools against a real folder', () => {
       assert.equal(r.isError, true);
       assert.match(r.text, /Missing required argument "path"/);
     });
-    test('a directory lists sorted entries with a / suffix on folders', async () => {
+    test('a directory lists sorted entries with a / suffix on folders, under a line naming the folder', async () => {
       const r = await run('read', { path: 'src' });
-      assert.equal(r.text, 'a.mjs\ndeep/');
+      assert.equal(r.text, 'src/ — 2 entries:\na.mjs\ndeep/');
+      assert.equal((await run('read', { path: 'src/deep/' })).text, 'src/deep/ — 2 entries:\nb.mjs\nc.txt');
+      assert.match((await run('read', { path: '.' })).text, /^.*ws \(the project folder\) — \d+ entries:\n/);
     });
     test('an empty directory is reported', async () => {
       fs.mkdirSync(path.join(ws, 'empty'), { recursive: true });
-      assert.equal((await run('read', { path: 'empty' })).text, '(empty folder)');
+      assert.equal((await run('read', { path: 'empty' })).text, 'empty/ — empty folder');
+    });
+    test('a missing path names close matches, else lists what its folder does contain', async () => {
+      assert.match((await run('read', { path: 'src/a.mj' })).text, /Similar names in that folder: a\.mjs\./);
+      assert.match((await run('read', { path: 'src/deep/STATUS.md' })).text, /^No such file or folder: src\/deep\/STATUS\.md\. src\/deep contains: b\.mjs, c\.txt\.$/);
+      assert.match((await run('read', { path: 'src/gone/x.md' })).text, /The folder gone does not exist under .*src, which contains: a\.mjs, deep\/\./);
+      assert.match((await run('read', { path: 'nothing-like-this.md' })).text, /The project folder contains: .*README\.md/);
     });
     test('binary files are refused', async () => {
       const r = await run('read', { path: 'bin.dat' });
@@ -1728,6 +1736,13 @@ describe('compact: estimates, cut points, context', () => {
     test('underscore-prefixed internal roles are skipped', () => {
       assert.deepEqual(contextMessages([u('a'), { role: '_note', text: 'x' }, a('b')]).map((m) => m.role), ['user', 'assistant']);
     });
+    test('a cleared tool result goes to the model as a short note; the stored message keeps its output', () => {
+      const msgs = [u('go'), { role: 'assistant', content: [call('1')] }, result('1', 'BIG OUTPUT', { pruned: true, isError: false })];
+      const out = contextMessages(msgs);
+      assert.deepEqual(out[2].content, [{ type: 'text', text: compact.prunedText('read') }]);
+      assert.equal(out[2].toolCallId, '1');
+      assert.equal(msgs[2].content[0].text, 'BIG OUTPUT');
+    });
     test('does not mutate the stored history', () => {
       const msgs = [u('go', { attachments: [{ path: 'p', text: 't' }] }), { role: 'assistant', content: [call('lost')] }];
       const snap = JSON.stringify(msgs);
@@ -1749,11 +1764,50 @@ describe('compact: estimates, cut points, context', () => {
       const msgs = [u('x'.repeat(36)), a('y'.repeat(36), { usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } })];
       assert.equal(contextTokens(msgs), 20);
     });
+    test('a cleared tool result counts as its short note', () => {
+      const big = result('1', 'r'.repeat(36000));
+      assert.equal(estimateTokens([big]), 10000);
+      assert.equal(estimateTokens([{ ...big, pruned: true }]), Math.ceil(compact.prunedText('read').length / 3.6));
+    });
     test('tokenScale is never below 1 and reflects system prompt overhead', () => {
       assert.equal(tokenScale([]), 1);
       const msgs = [u('x'.repeat(360)), a('y'.repeat(360), { usage: { input: 1000, output: 100, cacheRead: 0, cacheWrite: 0 } })];
       assert.ok(tokenScale(msgs) > 1);
       assert.equal(tokenScale([u('x'.repeat(3600)), a('y', { usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } })]), 1);
+    });
+  });
+
+  describe('pruneOutputs', () => {
+    const { pruneOutputs } = compact;
+    // ~10k tokens each; tool results oldest first
+    const run = (sizes, names = []) => [u('go'), ...sizes.flatMap((n, i) => [{ role: 'assistant', content: [call(String(i), names[i] || 'read')] }, { ...result(String(i), 'r'.repeat(n * 3.6)), toolName: names[i] || 'read' }])];
+    test('clears results older than the newest 40k tokens of output, oldest included', () => {
+      const msgs = run([10000, 10000, 10000, 10000, 10000, 10000, 10000]);
+      const r = pruneOutputs(msgs);
+      assert.deepEqual(r.ids.sort(), ['0', '1', '2']);
+      assert.ok(r.tokens > 29000 && r.tokens <= 30000, String(r.tokens));
+    });
+    test('nothing when less than 20k tokens would be freed (a cache miss is not worth it)', () => {
+      assert.deepEqual(pruneOutputs(run([10000, 10000, 10000, 10000, 10000, 10000])), { ids: [], tokens: 0 }, 'two old results free just under 20k');
+      assert.deepEqual(pruneOutputs(run([1000, 1000])), { ids: [], tokens: 0 });
+    });
+    test('results the model has not read yet (after its last reply) are never cleared', () => {
+      const msgs = [u('go'), { role: 'assistant', content: [call('0'), call('1')] }, result('0', 'r'.repeat(360000)), result('1', 'r'.repeat(360000))];
+      assert.deepEqual(pruneOutputs(msgs, 32000).ids, []);
+    });
+    test('small results, todo and task results, and already cleared ones are left alone', () => {
+      const msgs = run([100, 30000, 30000, 30000, 10000, 10000, 10000, 10000], [, 'task', 'todo']);
+      const r = pruneOutputs(msgs);
+      assert.deepEqual(r.ids, ['3']);
+      msgs.find((m) => m.toolCallId === '3').pruned = true;
+      assert.deepEqual(pruneOutputs(msgs).ids, []);
+    });
+    test('only output after the last compaction counts; small windows keep less and clear sooner', () => {
+      const step = (id) => [{ role: 'assistant', content: [call(id)] }, result(id, 'r'.repeat(36000))];
+      const msgs = [...run([30000, 30000]), marker(), u('next'), ...step('n0'), ...step('n1'), ...step('n2')];
+      assert.deepEqual(pruneOutputs(msgs).ids, []);
+      // a 32k window keeps 6.4k tokens of output and clears from 3.2k
+      assert.deepEqual(pruneOutputs(msgs, 32000).ids.sort(), ['n0', 'n1']);
     });
   });
 
@@ -1833,6 +1887,12 @@ describe('compact: estimates, cut points, context', () => {
       const { droppedUsage, ...ex } = rebuildSession(file).extras;
       assert.deepEqual(ex, { thinkingLevel: 'high', planMode: true, model: 'm2', provider: 'p2', roles: null });
       assert.deepEqual(droppedUsage, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
+    });
+    test('cleared tool output is marked again on resume', () => {
+      fs.writeFileSync(file, lines({ type: 'message', message: u('go') }, { type: 'message', message: { role: 'assistant', content: [call('1'), call('2')] } }, { type: 'message', message: result('1', 'A') }, { type: 'message', message: result('2', 'B') }, { type: 'prune', ids: ['1', 'gone'] }));
+      const { messages } = rebuildSession(file);
+      assert.deepEqual(messages.map((m) => !!m.pruned), [false, false, true, false]);
+      assert.equal(messages[2].content[0].text, 'A', 'the output itself is kept for the UI');
     });
     test('corrupt and blank lines are skipped; a missing file is an empty session', () => {
       fs.writeFileSync(file, lines('{broken', '', '   ', { type: 'message', message: u('ok') }, { type: 'message' }, { type: 'compaction', summary: 5 }, '[1,2]'));

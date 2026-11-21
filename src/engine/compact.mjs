@@ -15,11 +15,20 @@ const IMAGE_TOKENS = 1600;
 
 const textOf = (m) => (Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content ?? '') }]).map((c) => (c.type === 'text' ? c.text : c.type === 'thinking' ? c.thinking : c.type === 'toolCall' ? `${c.name} ${JSON.stringify(c.arguments || {})}` : '')).join('\n');
 
+// Old tool output can be cleared (see pruneOutputs) before a whole summary is needed: the model keeps the
+// conversation and its tool calls, and only the bulky results of early calls are replaced by a short note.
+const PRUNE_KEEP = 40000; // tokens of the newest tool output that are always kept
+const PRUNE_MIN = 20000; // clear nothing unless at least this much is freed (each clearing costs a prompt-cache miss)
+const PRUNE_SMALL = 200; // results smaller than this (edit, write confirmations) are not worth clearing
+const PRUNE_SPARE = new Set(['todo', 'task']); // the plan, and subagent findings that exist nowhere else
+export const prunedText = (name) => `[Output of this earlier ${name} call was cleared to save context. Call the tool again if you need it.]`;
+
 export function estimateTokens(messages) {
   let chars = 0;
   let images = 0;
   for (const m of messages) {
     if (m.role === 'compactionSummary') chars += (m.summary || '').length;
+    else if (m.role === 'toolResult' && m.pruned) chars += prunedText(m.toolName).length;
     else {
       chars += textOf(m).length;
       for (const c of Array.isArray(m.content) ? m.content : []) if (c.type === 'image') images++;
@@ -69,6 +78,7 @@ export function contextMessages(messages) {
       continue;
     }
     let mm = m;
+    if (m.role === 'toolResult' && m.pruned) mm = { ...m, content: [{ type: 'text', text: prunedText(m.toolName) }] };
     if (m.role === 'assistant' && m.content?.some?.((c) => c.type === 'toolCall' && !answered.has(c.id))) mm = { ...m, content: m.content.filter((c) => c.type !== 'toolCall' || answered.has(c.id)) };
     if (m.role === 'user' && m.attachments?.length) mm = { ...m, content: [...(m.content || []), { type: 'text', text: attachmentsText(m.attachments) }] };
     const prev = out[out.length - 1];
@@ -129,6 +139,33 @@ export function findCut(messages, keepTokens) {
   return cut > start ? cut : -1;
 }
 
+/**
+ * Tool results to clear so the context shrinks without a summary: everything older than the newest `keep` tokens of
+ * tool output (since the last compaction), except small results and todo/task. Returns { ids, tokens } (estimated
+ * tokens freed), or no ids when less than `min` would be freed. `contextWindow` scales both for small windows.
+ */
+export function pruneOutputs(messages, contextWindow = 0) {
+  const keep = contextWindow ? Math.min(PRUNE_KEEP, contextWindow * 0.2) : PRUNE_KEEP;
+  const min = contextWindow ? Math.min(PRUNE_MIN, contextWindow * 0.1) : PRUNE_MIN;
+  const start = lastMarker(messages) + 1;
+  // Results after the last reply have not been read by the model yet: always kept.
+  let unread = messages.length;
+  while (unread > start && messages[unread - 1].role !== 'assistant') unread--;
+  const ids = [];
+  let seen = 0;
+  let tokens = 0;
+  for (let i = messages.length - 1; i >= start; i--) {
+    const m = messages[i];
+    if (m.role !== 'toolResult' || m.pruned) continue;
+    const t = estimateTokens([m]);
+    seen += t;
+    if (i >= unread || seen <= keep || t < PRUNE_SMALL || PRUNE_SPARE.has(m.toolName)) continue;
+    ids.push(m.toolCallId);
+    tokens += t - estimateTokens([{ ...m, pruned: true }]);
+  }
+  return tokens >= min ? { ids, tokens } : { ids: [], tokens: 0 };
+}
+
 /** A plain-text transcript of messages for the summarizer, with long tool output clipped. */
 export function transcript(messages, maxChars) {
   const lines = [];
@@ -179,8 +216,8 @@ export async function summarize({ stream, older, focus, contextWindow, signal, o
 }
 
 /**
- * Read a saved agent session file in order and rebuild the message list including compaction markers and rewinds
- * (regenerate / edit), plus engine settings recorded along the way (thinking level, plan mode, model).
+ * Read a saved agent session file in order and rebuild the message list including compaction markers, rewinds
+ * (regenerate / edit) and cleared tool output, plus engine settings recorded along the way (thinking level, plan mode, model).
  */
 export function rebuildSession(file) {
   const messages = [];
@@ -207,6 +244,9 @@ export function rebuildSession(file) {
     } else if (o.type === 'rewind' && Number.isInteger(o.count) && o.count >= 0) {
       for (const k of ['input', 'output', 'cacheRead', 'cacheWrite', 'cost']) extras.droppedUsage[k] += Number(o.dropped?.[k]) || 0;
       messages.length = Math.min(messages.length, o.count);
+    } else if (o.type === 'prune' && Array.isArray(o.ids)) {
+      const ids = new Set(o.ids);
+      for (const m of messages) if (m.role === 'toolResult' && ids.has(m.toolCallId)) m.pruned = true;
     } else if (o.type === 'thinking') extras.thinkingLevel = o.level;
     else if (o.type === 'plan') extras.planMode = !!o.on;
     else if (o.type === 'roles') extras.roles = { fast: String(o.fast || ''), plan: String(o.plan || '') };

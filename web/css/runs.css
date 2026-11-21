@@ -1,13 +1,13 @@
 /* Runs and Review: the hub views beside Home, and the page of one run. Uses the tokens of app.css only. */
 .runs { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .runs:not([hidden]) { animation: fade-in var(--t2) var(--ease); }
-.hub { width: min(100%, 980px); margin: 0 auto; padding: 28px 28px 56px; display: flex; flex-direction: column; gap: 22px; }
-.hub-head h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.02em; }
+.hub { margin: 0 auto; padding: 28px 28px 56px; display: flex; flex-direction: column; gap: 22px; }
+.hub-head h1 { margin: 0 0 4px; }
 .hub-head p { margin: 0; max-width: 68ch; line-height: 1.55; }
 
 /* Start a run */
 .run-new { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-raise); }
-.run-new h2, .run-group h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); display: flex; align-items: center; gap: 8px; }
+.run-new h2, .run-group h2 { margin: 0; display: flex; align-items: center; gap: 8px; }
 .run-new textarea { width: 100%; min-height: 76px; background: var(--bg-field); }
 .run-new-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .run-proj { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; color: var(--fg-3); }
@@ -44,7 +44,7 @@
 .rq-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .rq-err { margin: 0; color: var(--err); font-size: 13px; }
 .ask-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--accent-line); border-radius: 9px; background: var(--accent-soft); }
-.ask-q { display: flex; gap: 8px; align-items: flex-start; font-family: var(--mono); font-size: 13px; line-height: 1.5; }
+.ask-q { display: flex; gap: 8px; align-items: flex-start; }
 .ask-q svg { flex: none; margin-top: 3px; color: var(--accent); }
 .ask-opts { display: flex; flex-wrap: wrap; gap: 8px; }
 

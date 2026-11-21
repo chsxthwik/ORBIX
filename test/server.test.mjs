@@ -395,7 +395,7 @@ describe('static files', () => {
     const expect = [
       [`/js/${jsFile}`, /^text\/javascript/],
       ['/css/app.css', /^text\/css/],
-      ['/fonts/geist-latin-wght-normal.woff2', /^font\/woff2$/],
+      ['/fonts/google-sans-flex-latin-wght-normal.woff2', /^font\/woff2$/],
       ['/assets/icon.png', /^image\/png$/],
       ['/assets/icon.ico', /^image\/x-icon$/],
     ];
@@ -735,6 +735,33 @@ describe('POST /api/sessions/rename', () => {
       assert.equal(r.status, 404, String(p));
     }
     assert.equal(fs.readFileSync(outside, 'utf8'), '{"type":"session"}\n');
+  });
+
+  test('an open conversation is renamed through its session (a tab elsewhere, an automation), not refused', async () => {
+    const f = mk('r4.jsonl', JSON.stringify({ type: 'title', title: 'Before' }) + '\n');
+    const start = await api('POST', '/api/proc/start', { body: { workspace: TMP, resume: f } });
+    assert.equal(start.status, 200, start.text);
+    try {
+      const r = await rename(f, 'While open');
+      assert.equal(r.status, 200, r.text);
+      assert.equal(r.json.title, 'While open');
+      assert.equal(h.procs.get(start.json.id).title, 'While open', 'the session has the new name');
+      assert.equal((await listed(f))?.title, 'While open', 'and it is saved');
+    } finally {
+      await api('POST', '/api/proc/stop', { body: { proc: start.json.id } });
+    }
+  });
+
+  test('two quick opens of one conversation (a double-click) start one agent, not two', async () => {
+    const f = mk('r5.jsonl');
+    const [a, b] = await Promise.all([1, 2].map(() => api('POST', '/api/proc/start', { body: { workspace: TMP, resume: f } })));
+    const ok = [a, b].filter((r) => r.status === 200);
+    try {
+      assert.equal(ok.length, 1, `${a.status} ${b.status}`);
+      assert.equal([a, b].find((r) => r.status !== 200).status, 409);
+    } finally {
+      for (const r of ok) await api('POST', '/api/proc/stop', { body: { proc: r.json.id } });
+    }
   });
 });
 

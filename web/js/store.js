@@ -86,7 +86,9 @@ export class Tab {
     this.retry = null;
   }
   get name() {
-    return makeTitle(this.title) || makeTitle(this.firstUserText()) || baseName(this.worktree?.source || this.workspace) || 'Conversation';
+    // A name you gave (or the one ORBIX already made from the first message) shows exactly as it is; makeTitle is
+    // only for the fallback from the first message.
+    return cleanName(this.title) || makeTitle(this.firstUserText()) || baseName(this.worktree?.source || this.workspace) || 'Conversation';
   }
   firstUserText() {
     const m = this.messages.find((x) => x.role === 'user');
@@ -106,7 +108,7 @@ const msgKey = (m) => `${m.role}:${m.timestamp ?? ''}:${m.toolCallId ?? ''}:${ty
 export async function openTab({ workspace, resume, noSession, model, title, branch }) {
   const j = await api.post('/api/proc/start', { workspace, resume, noSession, model, branch: branch === true || undefined });
   // A session on its own branch works in its worktree: the server says which folder that is.
-  const tab = new Tab(j.id, j.workspace || workspace, { resume, title, worktree: j.worktree });
+  const tab = new Tab(j.id, j.workspace || workspace, { resume, title: j.title || title, worktree: j.worktree });
   tab.commands = j.commands || [];
   S.tabs.set(tab.id, tab);
   setActive(tab.id);
@@ -283,6 +285,7 @@ function reduce(tab, ev) {
       if (tab.turnStartedAt) tab.lastRunMs = Date.now() - tab.turnStartedAt;
       tab.turnStartedAt = 0;
       tab.live = null;
+      emit('tab:turn-ended', tab);
       emit('tab:live', tab);
       emit('tab:status', tab);
       emit('tab:panel', tab, 'git');
@@ -394,6 +397,10 @@ function reduce(tab, ev) {
       refreshState(tab);
       break;
     case 'session_info_update': {
+      if (ev.sessionId && tab.state && tab.state.sessionId !== ev.sessionId) {
+        tab.state.sessionId = ev.sessionId;
+        emit('tabs');
+      }
       const t = ev.title;
       if (t) {
         tab.title = t;
@@ -537,27 +544,40 @@ export async function setThinking(tab, level) {
   await refreshState(tab);
 }
 
+/** A conversation's name as saved: one line, single spaces, at most 200 characters. */
+export const cleanName = (s) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+
+/** Rename an open conversation: the session saves it, and the sidebar (which lists saved files) updates at once. */
 export async function renameSession(tab, name) {
-  await rpc(tab.id, { type: 'set_session_name', name });
-  tab.title = name;
+  const n = cleanName(name);
+  if (!n) throw new Error('A name is required');
+  await rpc(tab.id, { type: 'set_session_name', name: n });
+  tab.title = n;
   emit('tabs');
   emit('tab:status', tab);
+  await loadSessions();
 }
 
-export async function loadEnv() {
+export async function loadEnv({ notify = true } = {}) {
   const j = await api.get('/api/state');
   S.env = { app: j.app, backend: j.backend };
   S.ui = j.ui;
   S.workspaces = j.workspaces;
-  await loadEngine();
+  if (j.engine) {
+    S.engine = j.engine;
+    if (notify) emit('engine');
+  } else await loadEngine();
   return j;
 }
 
 const loadSessionsSoon = debounce(() => loadSessions(), 400);
+let sessionRead = 0;
 
 export async function loadSessions() {
+  const request = ++sessionRead;
   try {
     const j = await api.get('/api/sessions');
+    if (request !== sessionRead) return; // an older read cannot undo a rename or restore a deleted row
     S.sessions = j.sessions;
     emit('sessions');
   } catch (e) {
@@ -578,12 +598,12 @@ export async function onHello(procs, fresh = new Set()) {
   const alive = new Set(procs.map((p) => p.id));
   for (const t of S.tabs.values()) {
     if (!alive.has(t.id) && !t.dead) {
-      reduce(t, { type: 'proc_exit', code: null, message: 'The session process is no longer running.', stderr: [] });
+      reduce(t, { type: 'proc_exit', code: null, message: 'This conversation’s agent process has stopped.', stderr: [] });
     } else if (alive.has(t.id) && t.ready && !fresh.has(t.id)) {
       attach(t).then(() => {
         emit('tab:messages', t, { type: 'reset' });
         emit('tab:state', t);
-      });
+      }).catch((error) => console.warn('reconnect', error.message));
     }
   }
 }
@@ -600,7 +620,9 @@ export function onProcs(procs) {
 }
 
 /** True when the agent has at least one AI provider it can use. */
-export const engineReady = () => !!S.engine?.providers?.some((p) => p.configured);
+export const engineReady = () => !!S.engine?.providers?.some((p) => p.configured) || !!S.engine?.agents?.some((a) => a.installed);
+/** An agent CLI (Claude Code, Codex, OpenCode…) that runs conversations instead of ORBIX's own agent. */
+export const agentOf = (provider) => (typeof provider === 'string' && provider.startsWith('agent-') ? S.engine?.agents?.find((a) => a.id === provider) || { id: provider, name: provider.slice(6) } : null);
 
 export async function loadEngine() {
   try {

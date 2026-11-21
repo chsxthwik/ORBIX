@@ -6,10 +6,11 @@
   <img alt="ORBIX" src="docs/img/logo-light.svg" width="207" height="72">
 </picture>
 
-### The coding agent for Windows that asks first.
+### Every coding agent. Your PC or your cloud.
 
-Plan, approve, review and apply, with any model you choose.<br>
-Every edit waits for your OK and can be undone. Everything runs on your PC.
+An agentic development environment for Windows: its own agent with any model, plus Claude Code, Codex,<br>
+OpenCode and any ACP agent on the plans you already pay for. Every agent asks before it acts.<br>
+Run it on your PC, or on a Linux machine you own that keeps working while your laptop sleeps.
 
 [![Latest release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=4D6B00&labelColor=151514)](https://github.com/chsxthwik/ORBIX/releases/latest)
 [![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=151514)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)
@@ -22,7 +23,7 @@ Every edit waits for your OK and can be undone. Everything runs on your PC.
 
 <br>
 
-<img src="docs/img/shots/done.png" alt="ORBIX 3.4: the menu row and toolbar, the sidebar of projects and conversations, a finished reply whose steps fold into one Worked for line, the changed file with Review and Undo all, and the Overview card on the right.">
+<img src="docs/img/shots/done.png" alt="ORBIX: the menu row and toolbar, the sidebar of projects and conversations, a finished reply whose steps fold into one Worked for line, the changed file with Review and Undo all, and the Overview card on the right.">
 
 <sub>Screenshots come from the real app on a sample project with a scripted local model; the tools in them really ran.</sub>
 
@@ -30,7 +31,8 @@ Every edit waits for your OK and can be undone. Everything runs on your PC.
 
 - **You stay in control.** Reading is free; edits and commands follow the permission chip in the message box: **Ask first**, **Auto edits** or **Turbo**. Destructive commands (recursive delete, push, publish, history rewrite) ask every time, in every mode.
 - **Nothing is final until you say so.** Every file edit can be undone, one at a time or a whole reply at once. Runs work in their own git worktree and only reach your branch when you apply them.
-- **Any model.** 17 providers and any OpenAI-compatible server, including your ChatGPT plan without an API key, or a model on your own PC.
+- **Any model, any agent.** 17 providers and any OpenAI-compatible server, including your ChatGPT plan without an API key, or a model on your own PC. Or run the conversation on **Claude Code**, **Codex**, **OpenCode** or any **ACP agent**, with its own login and plan: ORBIX shows its steps and answers its permission questions with the same approval cards.
+- **Local or cloud.** **ORBIX Cloud** is the same server on a Linux machine you own. Open it from Settings → Machines, and move a conversation there with its project (git history and uncommitted changes included). It keeps working with your PC off.
 - **Built for Windows.** Commands run in WSL or in native Windows (`cmd.exe` or PowerShell), with paths translated between the two. A real installer, no admin rights, automatic updates.
 
 ## Install
@@ -41,6 +43,27 @@ Download `ORBIX-Setup` from the [latest release](https://github.com/chsxthwik/OR
 2. Choose a project folder, describe a task and press <kbd>Enter</kbd>.
 
 ORBIX updates itself from GitHub releases: it downloads in the background and installs when you close it, or at once with **Restart** in the sidebar (Settings → Application → Updates turns this off). Settings and conversations live in `%LOCALAPPDATA%\ORBIX` and stay through every update. There is no account and no subscription; you pay your provider directly, or nothing with a local model.
+
+## Agents
+
+Settings → **Agents** lists the agent CLIs ORBIX found on this computer, with their version and whether they are signed in. Each appears in the model picker as a provider named after the agent.
+
+| Agent | How ORBIX runs it | Approvals |
+| --- | --- | --- |
+| Claude Code | `claude -p` with stream-json and the control protocol | its `can_use_tool` questions become ORBIX approval cards |
+| Codex | `codex app-server` (JSON-RPC), sandbox on | command and file-change approvals ask in ORBIX |
+| OpenCode | `opencode acp` (Agent Client Protocol) | `session/request_permission` asks in ORBIX |
+| Gemini CLI and any ACP agent | the command you give it in ACP mode | as above |
+
+Ask first, Auto edits and Turbo apply to every agent; a destructive command asks in every mode. The agent keeps its own history, and reopening the conversation resumes its native session.
+
+## ORBIX Cloud
+
+```sh
+curl -fsSL https://orbix-agent.vercel.app/install.sh | bash   # Ubuntu or Debian, as your user
+```
+
+It installs ORBIX into `~/.orbix-app`, runs `node src/headless.mjs` as a systemd user service on `127.0.0.1:47821`, and prints the address and token. Reach it with Tailscale (`tailscale serve`), an SSH tunnel or HTTPS in front of it, then add it in **Settings → Machines**. From a conversation's menu, **Move to a machine** sends the project (a gzip tarball without `node_modules`, build and cache folders) and the conversation, and reopens it there. Run the server by hand with `ORBIX_LISTEN=127.0.0.1:47821 node src/headless.mjs` (also `ORBIX_DATA`, `ORBIX_HOSTS`, `ORBIX_TOKEN`).
 
 ## How you work in it
 
@@ -66,11 +89,11 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 </tr>
 <tr>
 <td><img src="docs/img/shots/run-changes.png" alt="A run's Changes tab with the changed files and the diff of one file"></td>
-<td><img src="docs/img/shots/home.png" alt="Home: the task box with project, model, permission and mode, suggested tasks and recent conversations"></td>
+<td><img src="docs/img/shots/home.png" alt="Home: the ORBIX mark and a greeting, three suggestions for the project, and the message box with the project and branch strip"></td>
 </tr>
 <tr>
 <td><b>Changes.</b> What a run changed, file by file.</td>
-<td><b>Home.</b> Pick a project and model, then describe the task.</td>
+<td><b>Home.</b> A greeting, suggestions for the project, and the message box.</td>
 </tr>
 <tr>
 <td><img src="docs/img/shots/automations.png" alt="The Automations page: a weekday test report at 09:00 and a weekly dependency check that is off, each with Run now, Edit and Delete"></td>
@@ -96,14 +119,14 @@ ORBIX updates itself from GitHub releases: it downloads in the background and in
 | --- | --- |
 | **Menu row and toolbar** | ORBIX, Workspace, View and Window menus. Back and forward (<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) across conversations, Runs and Review; search everything (<kbd>Ctrl</kbd>+<kbd>K</kbd>); where you are, with the conversation's state, running time and branch. |
 | **Sidebar** | New conversation, Runs, Review, Automations and Customizations; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
-| **Overview card** | Beside the conversation (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd>): Changes, Files, Terminal, Plan and the run inspector, plus helper agents and background runs when there are any. |
-| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Browser, Side question, Plan and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** starts on the web apps running on this computer; in the Windows app it is a real browser with its own session (any site, back and forward, downloads), in a web browser it shows only this computer's pages. **Side question** answers a quick question about the conversation while the agent keeps working. |
+| **Overview card** | Beside the conversation (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd>): Changes, Files, Terminal, Tasks and Inspect, plus helper agents and background runs when there are any. |
+| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Browser, Side question, Tasks and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** starts on the web apps running on this computer; in the Windows app it is a real browser with its own session (any site, back and forward, downloads), in a web browser it shows only this computer's pages. **Side question** answers a quick question about the conversation while the agent keeps working. |
 | **Automations** | Prompts ORBIX starts by itself every hour, every day, on weekdays or every week, each as a new conversation in its project. **Create with Prompt** turns one sentence ("every weekday at 9am, run the tests") into the schedule and the task. Run now, turn on or off, edit. In Ask first a run waits for your OK in Review. |
 | **Customizations** | Marketplace and Installed, with one search box. The marketplace adds well-known MCP servers in one click (Playwright, Chrome DevTools, Context7, GitHub, Supabase, Figma, Notion, Stripe and more); Installed lists your MCP servers, skills and the project's rules. |
 | **Home** | The ORBIX mark and a greeting; suggestions and the message box at the bottom, with the project and the project-folder or separate-branch choice on a strip on top of the box. |
-| **Settings** | A card over the workspace (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> closes; <kbd>Ctrl</kbd>+<kbd>K</kbd> finds any setting). **General**: permission preset, tool permissions, network access rules, Steer or Queue while the agent works, the send key. **Application**: prevent sleep while agents work, keep running in the tray, Windows notification settings, WSL, updates, data folder, help. **Appearance** (steps Default or Verbose, theme, contrast, font, font size, your own colours, conversation width, screen reader mode), **Shortcuts** (change any key), **Notifications** (with volume), **Providers**, **Models**, **Browser** (where links open, downloads, history, site data). Customizations: Instructions, Checks, Tools & MCP. A page per project (folder, recent conversations, its instruction and rule files, its check command), Conversations (archived and recently deleted), Worktrees, and **Give feedback**. |
+| **Settings** | A card over the workspace (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> closes; <kbd>Ctrl</kbd>+<kbd>K</kbd> finds any setting). **General**: permission preset, tool permissions, network access rules, Steer or Queue while the agent works, the send key. **Application**: prevent sleep while a conversation or run is working, keep running in the tray, Windows notification settings, WSL, updates, data folder, help. **Appearance** (steps Default or Verbose, theme, contrast, font: Google Sans, Segoe UI or the system font, font size, your own colours, conversation width, screen reader mode, which also stops all animation), **Shortcuts** (change any key), **Notifications** (with volume), **Providers**, **Models** (fast and plan models, and your 👍 / 👎 per model), **Browser** (where links open, downloads, history, site data). Agent: Instructions, Checks, Tools & MCP. A page per project (folder, recent conversations, its instruction and rule files, its check command), Conversations (archived and recently deleted), Worktrees, and **Give feedback**. |
 | **Message box** | <kbd>+</kbd> adds files, a mention (<kbd>@</kbd>) or a command (<kbd>/</kbd>); the model and its thinking level; the permission chip; the context meter. |
-| **Conversation** | A centred column; the steps of a turn fold into one "Worked for…" line above the answer. Readable Markdown with code blocks and tables; under each reply copy, 👍, 👎 (answer again, another model, or report it) and retry. A navigator of dots on the left edge (one per message of yours), find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). The side panel stays closed until you open it. |
+| **Conversation** | A centred column; the steps of a turn fold into one "Worked for…" line above the answer. Readable Markdown with code blocks and tables; under each reply copy, 👍, 👎 (answer again, use another model, or report a problem) and retry. Ratings are counted per model on this PC only. <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> between your messages, find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). The side panel stays closed until you open it. |
 
 ## Models
 
@@ -135,8 +158,8 @@ Approvals are a checkpoint, not a sandbox: the agent runs with your Windows user
 - **Local server:** listens only on `127.0.0.1`, behind a per-launch token in an `HttpOnly`, `SameSite=Strict` cookie; checks `Host` and `Origin`; serves the interface with a strict Content Security Policy.
 - **API keys:** encrypted for your Windows account with DPAPI, sent only to their own provider, never written to the log.
 - **What reaches your provider:** your messages, tool definitions, project rules and tool results, including the contents of files the agent reads.
-- **Other network use:** the models.dev catalog, update checks on GitHub (unless turned off), the sign-ins you use, and `web_fetch` / `web_search` when the agent calls them. **No telemetry.**
-- **On disk:** conversations are plain text in `%LOCALAPPDATA%\ORBIX` (or `data/` in a clone) and can contain anything that appeared in a chat; treat that folder as sensitive. A deleted conversation stays in its `trash` folder for 30 days (Settings → Projects → Recently deleted), then it is removed for good.
+- **Other network use:** the models.dev model catalog, update checks on GitHub (unless turned off), the sign-ins you use, `web_fetch` / `web_search` when the agent calls them, the MCP servers you add, and the pages you open in the built-in browser. **No telemetry.**
+- **On disk:** conversations are plain text in `%LOCALAPPDATA%\ORBIX` (or `data/` in a clone) and can contain anything that appeared in a chat; treat that folder as sensitive. A deleted conversation stays in its `trash` folder for 30 days (Settings → Conversations → Recently deleted), then it is removed for good.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -230,7 +253,7 @@ flowchart LR
   A <-->|"messages, tools, results"| M["Model provider<br/>cloud or local"]
 ```
 
-ORBIX is a local Node.js server and an interface in plain ES modules, shown in an Electron window. There is no framework and no build step; the only npm package the app ships is electron-updater. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools, runs and storage, and [docs/parity.md](docs/parity.md) tracks the feature matrix.
+ORBIX is a local Node.js server and an interface in plain ES modules, shown in an Electron window. There is no framework and no build step; the only npm package the app ships is electron-updater. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools, runs and storage.
 
 ## Development
 
@@ -239,7 +262,7 @@ Node.js 22 or newer.
 ```bash
 npm install        # Electron and the installer builder
 npm start          # run the app from source (data stays in ./data)
-npm test           # about 820 tests: no network, no API keys
+npm test           # about 840 tests: no network, no API keys
 npm run e2e        # a run and a conversation driven through the real interface (needs Edge, Chrome or Brave)
 npm run dist       # build the installer into dist/
 ```

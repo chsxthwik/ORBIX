@@ -1,14 +1,15 @@
-// Home: the ORBIX mark and a greeting in the middle; at the bottom what needs you, a few suggestions
+// Home: the ORBIX mark (a live ASCII orbit that speeds up while you type) and a greeting in the middle; at the bottom what needs you, a few suggestions
 // and the message box, with the project and where it works (the project folder or a separate branch) on top of it.
 // Conversations and projects are in the sidebar. Before a model or a project is connected, Home offers setup.
 import { addContext, permissionChip } from './controls.js';
-import { h, icon, iconBtn, replace, baseName, toast, logo, lsGet, lsSet } from './dom.js';
+import { h, icon, iconBtn, replace, baseName, toast } from './dom.js';
+import { asciiOrbit } from './ascii.js';
 import { Composer, dropZone } from './composer.js';
-import { api, rpc } from './api.js';
+import { api } from './api.js';
 import { S, openTab, sendPrompt, tabForSession, engineReady, savePrefs, groupSessions, on, setActive } from './store.js';
 import { popMenu, modelPicker, isApproval } from './dialogs.js';
 import { brandMark } from './brands.js';
-import { recipes } from './workspace.js';
+import { taskButtons, projectTasks } from './workspace.js';
 import { branchToggle } from './review.js';
 
 // The home screen is redrawn when sessions or providers change. The message box stays mounted (so typing, IME
@@ -28,11 +29,11 @@ function persistDraft() {
   } catch { /* Storage restrictions must never interrupt typing or sending. */ }
 }
 addEventListener('pagehide', persistDraft);
-let models = null; // models of the configured providers, fetched once per provider change
+let modelList = null;
 let W = null; // the mounted page: its persistent slots
 let C = null; // the mounted task box: { comp, el, row, go, start }
 let starting = false;
-on('engine', () => (models = null));
+on('engine', () => (modelList = null));
 
 /** The project chosen on Home, for pages that need one while no session is open. */
 export const homeProject = () => draft.project || '';
@@ -47,30 +48,28 @@ export function setHomeProject(path, { ephemeral } = {}) {
 function homeModel() {
   const m = S.ui.homeModel;
   if (!m?.provider || !m.id) return null;
-  return S.engine?.providers?.some((p) => p.id === m.provider && p.configured) ? m : null;
+  return S.engine?.providers?.some((p) => p.id === m.provider && p.configured) || S.engine?.agents?.some((a) => a.id === m.provider && a.installed) ? m : null;
 }
 
-/** Model list without an open session: borrow a running tab, or ask a short-lived unsaved one. */
-async function loadHomeModels(workspace) {
-  if (models) return models;
-  const tab = [...S.tabs.values()].find((t) => !t.dead && t.ready);
-  if (tab) {
-    models = tab.models || (await rpc(tab.id, { type: 'get_available_models' })).data.models || [];
-    return models;
-  }
-  if (!workspace) throw new Error('Choose a project folder first.');
-  const j = await api.post('/api/proc/start', { workspace, noSession: true });
-  try {
-    models = (await rpc(j.id, { type: 'get_available_models' })).data.models || [];
-  } finally {
-    api.post('/api/proc/stop', { proc: j.id }).catch(() => {});
-  }
-  return models;
+/** List models directly, without starting a temporary conversation or requiring a project. */
+function loadHomeModels() {
+  if (modelList && Date.now() < modelList.until) return modelList.promise;
+  const entry = { until: Infinity };
+  entry.promise = api.get('/api/engine/models').then((result) => {
+    entry.until = Date.now() + (result.errors?.length ? 0 : 30000);
+    return result;
+  }, (e) => {
+    if (modelList === entry) modelList = null;
+    throw e;
+  });
+  modelList = entry;
+  return entry.promise;
 }
 
 /** The page's skeleton, built once per mount. */
 function shell(root) {
   if (W && root.contains(W.wrap)) return W;
+  W?.mark.destroy();
   const title = h('h1', { class: 'home-title' });
   const sub = h('p', { class: 'home-sub' });
   const alertSlot = h('div', { class: 'home-alerts' });
@@ -78,10 +77,11 @@ function shell(root) {
   const deckSlot = h('div', { class: 'home-deck' });
   const under = h('div', { class: 'home-under' });
   const statusSlot = h('div', { class: 'home-status-slot' });
-  const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, logo(46)), h('header', { class: 'home-head' }, title, sub));
+  const mark = asciiOrbit({ cols: 56, rows: 15, font: 11, lineH: 12 });
+  const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, mark.el), h('header', { class: 'home-head' }, title, sub));
   const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, under, deckSlot);
   const wrap = h('div', { class: 'home' }, hero, dock);
-  W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot };
+  W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot, mark };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -173,11 +173,11 @@ export function drawHome(root, H) {
     });
 
     const m = homeModel();
-    const modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model for the new conversation' }, brandMark(m?.provider, 14, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
+    const modelBtn = h('button', { class: 'cbtn home-model-pick', type: 'button', title: 'Model for the new conversation', 'aria-haspopup': 'dialog' }, brandMark(m?.provider, 16, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
     modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
-      load: () => loadHomeModels(draft.project),
-      // Without an open session the list comes from a short-lived agent, which takes a moment to start.
-      loading: models || [...S.tabs.values()].some((t) => !t.dead && t.ready) ? 'Loading models…' : 'Asking your providers for their models…',
+      load: loadHomeModels,
+      returnFocus: () => row.querySelector('.home-model-pick'),
+      loading: 'Loading models from your providers…',
       current: homeModel(),
       extra: 'Default: your saved default model, or the first one listed',
       onPick: (x) => {
@@ -212,7 +212,8 @@ export function drawHome(root, H) {
       starting = true;
       updateStart(box);
       try {
-        await api.post('/api/workspaces', { path: workspace }).then((r) => (S.workspaces = r.workspaces)).catch(() => {});
+        // Remembered in the project list alongside the start, not before it (it is not needed to start).
+        api.post('/api/workspaces', { path: workspace }).then((r) => (S.workspaces = r.workspaces)).catch(() => {});
         const tab = await openTab({ workspace, model: mm ? `${mm.provider}/${mm.id}` : undefined, noSession: ephemeral || undefined, branch: !!branch });
         if (draft.project === workspace) draft.ephemeral = false;
         comp.reset(p?.raw);
@@ -233,25 +234,39 @@ export function drawHome(root, H) {
     box.head.replaceChildren(projBtn, branchBtn || '', h('span', { class: 'grow' }), w.statusSlot);
     row.replaceChildren(addContext(comp), modelBtn, unsaved, h('span', { class: 'grow' }), modes, apprBtn, go);
   }
-  const rec = recipes(comp);
-  if (rec.parentNode !== w.under) w.under.replaceChildren(rec);
+  drawSuggestions(w, comp, g);
   const active = document.activeElement;
   if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
   });
 }
 
-// A different greeting at each start of ORBIX, with your first name when Windows has one.
-const GREETINGS = [['Hey NAME, what should we build today?', 'What should we build today?'], ['Good to see you, NAME. What’s next?', 'What’s next?'], ['Welcome back, NAME. Where should we pick up?', 'Where should we pick up?']];
-const greetAt = (() => {
-  const n = (Number(lsGet('greet', -1)) + 1) % GREETINGS.length;
-  lsSet('greet', n);
-  return n;
-})();
+/**
+ * Three suggestions for the chosen project, from what is in its folder: an empty folder gets "Start a project", one
+ * with uncommitted changes "Review my changes", one with a build file "Run the tests", one without a README "Write a
+ * README". Read once per project; nothing is sent.
+ */
+function drawSuggestions(w, comp, project) {
+  if (w.sugFor === (project?.path || '') && w.sugComp === comp) return;
+  w.sugFor = project?.path || '';
+  w.sugComp = comp;
+  if (!project) return void w.under.replaceChildren();
+  const p = encodeURIComponent(project.path);
+  Promise.all([
+    api.get(`/api/fs/list?path=${p}`).then((r) => r.listing?.entries || []).catch(() => [{ name: 'readme.md' }]),
+    api.get(`/api/git/status?ws=${p}`).then((r) => !!r.git?.files?.length).catch(() => false),
+  ]).then(([entries, changed]) => {
+    if (w.sugFor !== project.path) return; // another project was chosen meanwhile
+    w.under.replaceChildren(h('div', { class: 'ws-recipes', role: 'group', 'aria-label': 'Suggested tasks' }, taskButtons(comp, projectTasks(entries, { changed }).slice(0, 3), 'ws-recipe')));
+  });
+}
+
+// The greeting for the time of day, with your first name when Windows has one.
 const greeting = () => {
   const name = S.env?.app?.user || '';
-  const [withName, plain] = GREETINGS[greetAt];
-  return name ? withName.replace('NAME', name) : plain;
+  const hour = new Date().getHours();
+  const part = hour < 5 ? 'evening' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  return name ? `Good ${part}, ${name}` : `Good ${part}`;
 };
 
 /** The greeting for an open project; otherwise the next setup step. */
@@ -350,7 +365,7 @@ function checklist(H, projects) {
 
 /** The providers on the first screen, one row each; a click opens Settings on that provider's form. */
 // The first-run deck: one row per maker. OpenAI's row covers the ChatGPT plan and the API key, and opens on the plan sign-in.
-const PV_SUB = { anthropic: 'Claude models', chatgpt: 'Your ChatGPT plan or an API key', google: 'Gemini models', xai: 'Grok models', openrouter: 'Hundreds of models, one account', ollama: 'Free models on this PC', lmstudio: 'Models from the LM Studio app' };
+const PV_SUB = { anthropic: 'Claude models', chatgpt: 'Your ChatGPT plan or an API key', google: 'Gemini models', xai: 'Grok models', openrouter: 'Models from many providers, one key', ollama: 'Free models on this PC', lmstudio: 'Models from the LM Studio app' };
 const PV_HOW = { anthropic: 'API key', chatgpt: 'Sign in', google: 'API key', xai: 'Sign in', openrouter: 'Sign in', ollama: 'No key', lmstudio: 'No key' };
 const PV_NAME = { chatgpt: 'OpenAI' };
 function focusProvider(H, id) {

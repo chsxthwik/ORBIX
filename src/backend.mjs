@@ -8,6 +8,9 @@ import { log } from './util.mjs';
 const WIN_DRIVE = /^[A-Za-z]:([\\/]|$)/;
 const WSL_UNC = /^\\\\wsl(?:\.localhost|\$)\\([^\\]+)(.*)$/i;
 
+/** True when the server itself runs on Linux or macOS (a self-hosted ORBIX): commands run in bash, no WSL, no cmd.exe. */
+export const POSIX = process.platform !== 'win32';
+
 export const isWinPath = (p) => WIN_DRIVE.test(p) || p.startsWith('\\\\');
 
 /** Windows path (or Linux path) -> Linux path as WSL sees it. */
@@ -21,6 +24,17 @@ export function toLinuxPath(p) {
     return `/mnt/${m[1].toLowerCase()}${rest ? '/' + rest : ''}`;
   }
   return p.replace(/\\/g, '/');
+}
+
+/**
+ * A Windows path into a WSL distribution (\\wsl.localhost\<distro>\… or \\wsl$\<distro>\…, either slash):
+ * { root, distro, linux } with `root` the \\wsl…\<distro> prefix as written and `linux` the path inside it.
+ * null for any other path.
+ */
+export function wslUncPath(p) {
+  const m = /^(\\\\wsl(?:\.localhost|\$)\\([^\\]+))(\\.*)?$/i.exec(String(p || '').replace(/\//g, '\\'));
+  if (!m) return null;
+  return { root: m[1], distro: m[2], linux: (m[3] || '').replace(/\\+/g, '/').replace(/(.)\/+$/, '$1') || '/' };
 }
 
 /** Linux path -> a path the Windows-side Node process can open with fs. */
@@ -48,6 +62,13 @@ function batchArg(a) {
 /** Kill a child and everything it started. On Windows child.kill() only ends the direct child (cmd.exe, wsl.exe). */
 export function killTree(child) {
   if (!child || child.exitCode != null || child.signalCode != null) return;
+  if (POSIX && child.pid) {
+    // Children that may start their own (shells, agent CLIs) lead their own process group: end the whole group.
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+      return;
+    } catch {}
+  }
   if (process.platform === 'win32' && child.pid) {
     const k = spawn('taskkill.exe', ['/pid', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
     k.on('error', () => {
@@ -133,7 +154,7 @@ export class Backend {
 
   /** Apply a backend config. The cached HOME lookup is kept unless something changed. */
   update(cfg) {
-    const kind = cfg.kind === 'native' ? 'native' : 'wsl';
+    const kind = POSIX || cfg.kind === 'native' ? 'native' : 'wsl';
     const distro = cfg.distro || '';
     if (kind === this.kind && distro === this.distro) return;
     this.kind = kind;
@@ -161,8 +182,14 @@ export class Backend {
     return this.kind === 'wsl';
   }
 
+  /** The server runs on Linux or macOS (see POSIX). */
+  get isPosix() {
+    return POSIX;
+  }
+
   /** Installed WSL distributions and the default one, from a single `wsl.exe -l -v`. */
   static async wslInfo() {
+    if (POSIX) return { distros: [], defaultDistro: '' };
     const r = await runProc('wsl.exe', ['-l', '-v'], { timeout: 15000 });
     if (r.code !== 0) return { distros: [], defaultDistro: '' };
     return parseDistroList(decodeWsl(r.stdout));
@@ -227,6 +254,7 @@ export class Backend {
   /** Normalised identity used to match workspaces with session cwds. */
   keyPath(p) {
     const x = this.execPath(p || '');
+    if (POSIX) return x.replace(/\/+$/, '') || '/';
     return this.isWsl ? x.replace(/\/+$/, '') || '/' : x.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
   }
 
@@ -263,32 +291,65 @@ export class Backend {
     return { cmd: bin, args: rest, opts: { cwd } };
   }
 
-  /** Run a shell command line (written for bash on WSL, cmd.exe or, with shell 'powershell', PowerShell on Windows) as is. */
-  spawnShell(command, { cwd, env, shell } = {}) {
-    // The command is not logged: it may carry a token the user typed.
-    if (this.isWsl) return this.spawn(['bash', '-lc', command], { cwd, env, quiet: true });
-    if (shell === 'powershell') {
+  /**
+   * The shell commands run in, for a working folder: 'bash' on WSL and, on the native backend, for a folder inside a
+   * WSL distribution (\\wsl.localhost\<distro>\…), where cmd.exe cannot work; else 'powershell' when asked, or 'cmd'.
+   */
+  shellFor(cwd, shell) {
+    if (POSIX) return 'bash';
+    if (this.isWsl) return 'bash';
+    if (shell === 'powershell') return 'powershell';
+    return wslUncPath(cwd) ? 'bash' : 'cmd';
+  }
+
+  /**
+   * How a shell command line runs: { shell, cmd, args, opts } for spawn(). Written for bash on WSL (and for a WSL
+   * folder on the native backend), cmd.exe, or with shell 'powershell' PowerShell on Windows.
+   */
+  shellSpawn(command, { cwd, env, shell } = {}) {
+    const kind = this.shellFor(cwd, shell);
+    const io = { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] };
+    if (POSIX) return { shell: 'bash', cmd: 'bash', args: ['-lc', command], opts: { ...io, cwd, env: { ...process.env, ...env }, detached: true } };
+    if (this.isWsl) {
+      const { cmd, args, opts } = this.buildSpawn(['bash', '-lc', command], { cwd });
+      return { shell: kind, cmd, args, opts: { ...opts, ...io, env: { ...process.env, WSL_UTF8: '1', ...env } } };
+    }
+    if (kind === 'bash') {
+      // A project inside a WSL distribution, opened by path from Windows: cmd.exe cannot use a UNC folder (it falls
+      // back to C:\Windows), so the command runs in that distribution's bash, in the same folder seen from Linux.
+      // -e hands the arguments to bash as they are (no second shell parsing them), as the WSL backend does.
+      const w = wslUncPath(cwd);
+      return { shell: kind, cmd: 'wsl.exe', args: ['-d', w.distro, '--cd', w.linux, '-e', 'bash', '-lc', command], opts: { ...io, env: { ...process.env, WSL_UTF8: '1', ...env } } };
+    }
+    if (kind === 'powershell') {
       // -EncodedCommand (UTF-16LE base64) passes the script untouched: no quoting layer at all. UTF-8 output, no progress bars.
       // On its own, -EncodedCommand reports only 0 or 1; the epilogue passes on the exit code of the last native program
       // that ran (pytest, npm, git, ...), or 1 when the last command failed. An explicit `exit N` in the script still wins.
       const script = `$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; $OutputEncoding=[Text.Encoding]::UTF8; $global:LASTEXITCODE = 0\n${command}\n$orbixOk = $?; if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE } elseif (-not $orbixOk) { exit 1 }`;
-      return spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
-        cwd,
-        env: { ...process.env, ...env },
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      return { shell: kind, cmd: 'powershell.exe', args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], opts: { ...io, cwd, env: { ...process.env, ...env } } };
     }
     // cmd.exe fixes its output code page when it starts, so switch the (hidden) console to UTF-8 first and run the
     // command in a second cmd. The command travels in a variable expanded late (!VAR!), so the first cmd never parses it.
     const comspec = process.env.ComSpec || 'cmd.exe';
-    return spawn(comspec, ['/d /v:on /s /c "chcp 65001 >nul & cmd.exe /d /s /c !ORBIX_SHELL_CMD!"'], {
-      cwd,
-      env: { ...process.env, ...env, ORBIX_SHELL_CMD: `"${command}"` },
-      windowsHide: true,
-      windowsVerbatimArguments: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    if (cwd && /^[\\/]{2}/.test(cwd)) {
+      // A network folder: cmd.exe started there would say "UNC paths are not supported" and run in C:\Windows. pushd
+      // maps it to a drive letter first; when that fails the command does not run, and the exit code says so.
+      return {
+        shell: kind,
+        cmd: comspec,
+        args: ['/d /v:on /s /c "chcp 65001 >nul & pushd !ORBIX_SHELL_CWD! && (cmd.exe /d /s /c !ORBIX_SHELL_CMD! & set "ORBIX_RC=!errorlevel!" & popd & exit /b !ORBIX_RC!)"'],
+        opts: { ...io, cwd: os.homedir(), env: { ...process.env, ...env, ORBIX_SHELL_CMD: `"${command}"`, ORBIX_SHELL_CWD: `"${cwd}"` }, windowsVerbatimArguments: true },
+      };
+    }
+    return { shell: kind, cmd: comspec, args: ['/d /v:on /s /c "chcp 65001 >nul & cmd.exe /d /s /c !ORBIX_SHELL_CMD!"'], opts: { ...io, cwd, env: { ...process.env, ...env, ORBIX_SHELL_CMD: `"${command}"` }, windowsVerbatimArguments: true } };
+  }
+
+  /** Run a shell command line (see shellSpawn) as is. */
+  spawnShell(command, { cwd, env, shell } = {}) {
+    // The command is not logged: it may carry a token the user typed.
+    const { cmd, args, opts } = this.shellSpawn(command, { cwd, env, shell });
+    if (this.isWsl) log('spawn', cmd, `(${args.length} arguments)`);
+    return spawn(cmd, args, opts);
   }
 
   /** Spawn a long-running child with piped stdio. */
@@ -299,6 +360,7 @@ export class Backend {
       ...opts,
       env: { ...process.env, WSL_UTF8: '1', ...env },
       windowsHide: true,
+      detached: POSIX,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
   }

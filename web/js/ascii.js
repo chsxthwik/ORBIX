@@ -1,13 +1,16 @@
-// ASCII effects: the orbit in a new chat, the COM-X mark in About, the bar that runs while the agent works, and small
-// art for empty panels. All of it is decoration: hidden from screen readers, never behind text, it sleeps while off
-// screen, and under prefers-reduced-motion it shows one still frame.
+// ASCII effects: the orbit on Home, the COM-X mark in About, the spinner while the agent works, and small art for
+// empty panels. All of it is decoration: hidden from screen readers, never behind text, it sleeps while off screen,
+// and under reduced motion (Windows' setting or Settings → Appearance → Screen reader mode) it shows one still frame.
 import { h } from './dom.js';
 
-const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const motionOff = matchMedia('(prefers-reduced-motion: reduce)');
+const reduced = { get matches() {
+  const root = document.documentElement;
+  return motionOff.matches || root.classList.contains('sr') || root.dataset.motion === 'off';
+} };
 const TAU = Math.PI * 2;
 // 4x4 ordered dither, so shading steps between two characters instead of banding.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16 - 0.5);
-const NOISE = '/\\|-+*=<>#%';
 const hash = (i) => {
   const n = Math.sin(i * 12.9898) * 43758.5453;
   return n - Math.floor(n);
@@ -18,9 +21,8 @@ const shade = (ramp, v, c, r, lo = 1, spread = 0.7) => ramp.charCodeAt(clamp(Mat
 
 /**
  * A grid of characters on a canvas, and the loop that draws it: `compose(time, dt, still)` fills the cells each frame
- * (cell = character code, alpha = strength, sig = drawn in the signal colour). The first time it is seen the picture
- * decodes outward from its centre: a front of flickering characters, settled ones behind it. It draws about 25 times
- * a second, sleeps while hidden or off screen, stops for good once removed, and holds one frame under reduced motion.
+ * (cell = character code, alpha = strength, sig = drawn in the signal colour). The picture fades in from its centre.
+ * The owner destroys the canvas with its view; hidden canvases and still frames have no animation loop.
  */
 function charCanvas({ cols, rows, font, lineH, cls }) {
   const cw = font * 0.6;
@@ -42,6 +44,8 @@ function charCanvas({ cols, rows, font, lineH, cls }) {
 
   const g = {
     canvas, W, H, cw, cols, rows, cell, alpha, sig, signal: stop.signal,
+    destroy: () => stop.abort(),
+    active: () => false,
     /** Mark a cell. With `keep`, a stronger plain mark already there wins. */
     put(c, r, ch, al, s = 0, keep = false) {
       if (c < 0 || r < 0 || c >= cols || r >= rows) return;
@@ -52,24 +56,22 @@ function charCanvas({ cols, rows, font, lineH, cls }) {
       sig[i] = s;
     },
     start(compose) {
-      const born = performance.now();
-      let shownAt = 0;
+      if (!ctx) return;
+      let visible = false;
+      let frame = 0;
+      let dirty = true;
       let last = 0;
-      let drawnAt = 0;
-      let seen = false;
+      let elapsed = 0;
       let colors = null;
-      let colorsAt = -1e9;
       let dpr = 0;
-      const paint = (time) => {
+      const paint = (still) => {
         const ratio = Math.min(2, devicePixelRatio || 1);
         if (ratio !== dpr) {
           dpr = ratio;
           canvas.width = Math.round(W * dpr);
           canvas.height = Math.round(H * dpr);
         }
-        // Re-read the palette about twice a second, so a theme or light/dark change is picked up however it happens.
-        if (!colors || time - colorsAt > 500) {
-          colorsAt = time;
+        if (!colors) {
           const css = getComputedStyle(document.documentElement);
           const get = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
           colors = [get('--fg', '#888'), get('--live', '#4c4')];
@@ -78,41 +80,65 @@ function charCanvas({ cols, rows, font, lineH, cls }) {
         ctx.clearRect(0, 0, W, H);
         ctx.font = `${font}px "Geist Mono Variable", Consolas, monospace`;
         ctx.textBaseline = 'middle';
-        const p = reduced.matches ? 1 : Math.min(1, (time - shownAt) / 1100);
+        const p = still ? 1 : Math.min(1, elapsed / 560);
         const front = (1 - (1 - p) ** 2) * 1.25; // eases out: quick at the centre, gentle at the edge
-        const flick = Math.floor(time / 55);
         let fill = '';
         for (let i = 0; i < N; i++) {
           if (!cell[i] || order[i] > front) continue;
-          const settled = order[i] < front - 0.16;
-          const nf = colors[settled ? sig[i] : 1];
+          const nf = colors[sig[i]];
           if (nf !== fill) ctx.fillStyle = fill = nf;
-          ctx.globalAlpha = settled ? alpha[i] : 0.25 + 0.5 * alpha[i];
-          ctx.fillText(settled ? String.fromCharCode(cell[i]) : NOISE[(i * 7 + flick) % NOISE.length], (i % cols) * cw, (Math.floor(i / cols) + 0.5) * lineH);
+          ctx.globalAlpha = alpha[i] * Math.min(1, (front - order[i]) * 7);
+          ctx.fillText(String.fromCharCode(cell[i]), (i % cols) * cw, (Math.floor(i / cols) + 0.5) * lineH);
         }
         ctx.globalAlpha = 1;
       };
-      const tick = (time) => {
-        if (stop.signal.aborted) return;
-        if (canvas.isConnected) seen = true;
-        else if (seen || time - born > 10000) return stop.abort(); // removed for good, or never inserted
-        requestAnimationFrame(tick);
-        const still = reduced.matches;
-        if (!canvas.isConnected || document.hidden || !canvas.checkVisibility()) {
-          last = time; // no time debt while asleep: it resumes smoothly instead of jumping
-          return;
-        }
-        // 40 ms (not 50) so 60 Hz screens draw every third frame evenly instead of alternating 3 and 4.
-        if (time - drawnAt < (still ? 1000 : 40)) return;
-        drawnAt = time;
-        if (!shownAt) shownAt = time;
-        const dt = Math.min(0.1, (time - last) / 1000 || 0);
-        last = time;
-        cell.fill(0);
-        compose(still ? 0 : time, still ? 0 : dt, still);
-        paint(time);
+      const inView = () => visible && canvas.isConnected && !document.hidden && !stop.signal.aborted;
+      g.active = () => inView() && !reduced.matches;
+      const pause = () => {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0;
+        last = 0;
       };
-      requestAnimationFrame(tick);
+      const schedule = () => {
+        if (!inView()) return pause();
+        if (!frame && (dirty || !reduced.matches)) frame = requestAnimationFrame(tick);
+      };
+      function tick(time) {
+        frame = 0;
+        if (!inView()) return;
+        const still = reduced.matches;
+        if (dirty || (!still && time - last >= 32)) {
+          const dt = still || !last ? 0 : Math.min(0.1, (time - last) / 1000);
+          last = time;
+          if (!still) elapsed += dt * 1000 || 16;
+          cell.fill(0);
+          compose(still ? 0 : elapsed, dt, still);
+          paint(still);
+          dirty = false;
+        }
+        schedule();
+      }
+      const observer = new IntersectionObserver(([entry]) => {
+        visible = entry.isIntersecting;
+        schedule();
+      });
+      observer.observe(canvas);
+      const invalidate = () => {
+        colors = null;
+        dirty = true;
+        schedule();
+      };
+      const theme = new MutationObserver(invalidate);
+      theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme', 'data-mode', 'data-motion'] });
+      const options = { signal: stop.signal };
+      motionOff.addEventListener('change', invalidate, options);
+      document.addEventListener('visibilitychange', schedule, options);
+      addEventListener('resize', invalidate, options);
+      stop.signal.addEventListener('abort', () => {
+        pause();
+        observer.disconnect();
+        theme.disconnect();
+      }, { once: true });
     },
   };
   return g;
@@ -260,28 +286,30 @@ export function asciiOrbit({ cols = 64, rows = 15, font = 10, lineH = 12 } = {})
   }
   g.start(compose);
 
-  if (!reduced.matches) {
-    let queued = false;
-    let ev = null;
+  {
+    let frame = 0;
+    let px = 0, py = 0;
     addEventListener('pointermove', (e) => {
-      ev = e;
-      if (queued) return;
-      queued = true; // measure at most once per frame: no layout read on every pointer event
-      requestAnimationFrame(() => {
-        queued = false;
-        if (!ev || !g.canvas.isConnected) return;
+      if (!g.active()) return;
+      px = e.clientX;
+      py = e.clientY;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!g.active()) return;
         const box = g.canvas.getBoundingClientRect();
-        if (box.width) aim = [clamp((ev.clientX - (box.left + box.width / 2)) / 600, -0.55, 0.55), clamp((ev.clientY - (box.top + box.height / 2)) / 400, -0.55, 0.55)];
+        if (box.width) aim = [clamp((px - (box.left + box.width / 2)) / 600, -0.55, 0.55), clamp((py - (box.top + box.height / 2)) / 400, -0.55, 0.55)];
       });
     }, { passive: true, signal: g.signal });
+    g.signal.addEventListener('abort', () => { if (frame) cancelAnimationFrame(frame); }, { once: true });
     // The light settles back when the pointer leaves the window.
     document.documentElement.addEventListener('pointerleave', () => (aim = [-0.34, -0.4]), { signal: g.signal });
     // Typing a task gives the orbit a push.
     addEventListener('input', (e) => {
-      if (e.target?.matches?.('textarea, input:not([type=checkbox], [type=radio], [type=range])')) energy = Math.min(1, energy + 0.16);
+      if (g.active() && e.target?.matches?.('textarea.c-ta')) energy = Math.min(1, energy + 0.16);
     }, { passive: true, signal: g.signal });
   }
-  return { el: g.canvas };
+  return { el: g.canvas, destroy: g.destroy };
 }
 
 /**
@@ -381,23 +409,14 @@ export function asciiComx({ cols = 30, rows = 14, font = 10, lineH = 12 } = {}) 
   g.start(compose);
   g.canvas.addEventListener('pointerenter', () => (hover = true), { signal: g.signal });
   g.canvas.addEventListener('pointerleave', () => (hover = false), { signal: g.signal });
-  return { el: g.canvas };
+  return { el: g.canvas, destroy: g.destroy };
 }
 
 /**
- * The bar beside "Thinking" or a running step: ten cells of dots with a comet running through them. While the model
- * thinks the light ripples out from the middle instead. Each cell fades on its own (CSS, off the main thread).
+ * The spinner beside what the agent does now: one braille character stepping through ten frames, like a terminal
+ * agent's. Pure CSS (no timer), one fixed-width cell so the words beside it never move; still under reduced motion.
  */
-export function asciiBar() {
-  const bar = h('span', { class: 'ascii-bar', 'aria-hidden': 'true' });
-  for (let i = 0; i < 10; i++) {
-    const cell = h('i');
-    cell.style.setProperty('--i', i);
-    cell.style.setProperty('--m', Math.abs(i - 4.5) - 0.5);
-    bar.append(cell);
-  }
-  return bar;
-}
+export const asciiSpin = () => h('span', { class: 'ascii-spin', 'aria-hidden': 'true' });
 
 // Art for empty panels. Characters inside {} are live: they glow in the signal colour, one after another.
 const ART = {

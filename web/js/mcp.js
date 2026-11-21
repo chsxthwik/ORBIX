@@ -11,7 +11,7 @@ const BUILTIN = [
   ['web_fetch', 'Read a public web page as text. Local network addresses need your OK.', false],
   ['web_search', 'Search the web. It is available once you set up a search service below.', false],
   ['task', 'Run read-only helper agents in parallel for research.', false],
-  ['todo', 'Keep a task list, shown in the Plan panel.', false],
+  ['todo', 'Keep a task list, shown in the Tasks panel.', false],
   ['write, edit', 'Change files. Each change can be undone.', true],
   ['bash', 'Run shell commands in the project.', true],
 ];
@@ -77,7 +77,7 @@ function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) 
     root,
     h('div', { class: 'card mcp-edit' },
       h('div', { class: 'card-h' }, h('strong', null, isNew ? 'Add an MCP server' : `Edit ${name}`)),
-      h('p', null, 'A program: {"command", "args", "env"}. A server on the web: {"url", "headers"}. "disabled": true keeps it without starting it. Commands run where your sessions run.'),
+      h('p', null, 'A program: {"command", "args", "env"}. A server on the web: {"url", "headers"}. "disabled": true keeps it without starting it. Commands run where the agent runs commands (Windows or WSL).'),
       nameIn,
       ta,
       h('div', { class: 'card-f' }, save, test, btn('Cancel', () => done(false))),

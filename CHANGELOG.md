@@ -1,7 +1,86 @@
 # Changelog
 
+## 4.0.0 (2026-11-21)
+ORBIX becomes one place for every coding agent, on your PC or on a machine you own. Includes the unreleased 3.9.1 to 3.9.6.
+
+**Other agents**
+- **Claude Code, Codex, OpenCode, Gemini CLI and any ACP agent** can run a conversation, with the plan or key each already uses. Pick one in the model picker: each is a provider named after the agent, with its own models (Codex and OpenCode list theirs).
+- ORBIX shows the agent's work as steps, thinking and replies, in the same working row and "Worked for…" fold. Its permission questions become ORBIX approval cards: Ask first, Auto edits and Turbo apply to every agent, and a destructive command asks in every mode.
+- Claude Code runs through stream-json and its control protocol, Codex through `codex app-server`, the others through the Agent Client Protocol. The conversation is saved in ORBIX with the agent's own session id, and reopening it resumes the agent's session.
+- **Settings → Agents** shows what ORBIX found on this computer, each version, and whether it is signed in, with the command to install or sign in when it is not. Add your own ACP agents by command. The sidebar marks conversations that run on another agent.
+
+**ORBIX Cloud**
+- **A server for a Linux machine you own** (`src/headless.mjs`): the same ORBIX with no window, for agents that keep working while your PC sleeps. `install.sh` sets it up as a systemd user service on 127.0.0.1:47821 and prints its address and token. On Linux, commands run in bash and API keys are sealed with AES-256-GCM.
+- **Settings → Machines**: add a machine by address and token (stored encrypted; plain http:// is refused across the internet), check it, and open it in the app window. "Back to this PC" returns.
+- **Move to a machine** (conversation menu): the project goes with its git history and uncommitted changes (dependency and build folders left out), the conversation follows, and it continues on the machine.
+- The server accepts the token as `Authorization: Bearer` as well as the cookie, answers to the host names you allow, and marks its cookie Secure over HTTPS.
+
+## 3.9.6 (2026-11-21)
+- Streaming Markdown scans only the new text. Very long unfinished blocks use a bounded preview; the finished message renders in full.
+- Home starts with one fewer API request. Older conversation-list responses can no longer put old names or deleted rows back on screen.
+- The model picker has one keyboard focus target, shows the result count, and returns focus to the model button on close. Modals keep the background out of the tab order.
+- Wider reading space on big windows; less artwork above the Home composer in short windows. The composer border stays still, activity text stays readable, and ASCII art stops scheduling frames off screen or with reduced motion.
+- Closing Settings releases its shortcut recording, About artwork and update listeners. Desktop sleep protection follows state changes rather than polling.
+
+## 3.9.5 (2026-11-21)
+- **Compact message index.** A short stack of clickable ticks and dots replaces the full-height navigator. It highlights the current message and keeps the existing message-jump shortcuts.
+- **Composer.** Shorter working placeholders, clearer focus, key hints that follow your preferences, and protection against sending twice before the first request is acknowledged. The model, thinking, and permission icons no longer redraw on unrelated updates.
+- **Model picker.** Home lists models without opening an agent or asking for a project folder. Overlapping lists share a request per provider, and the picker shows provider errors without hiding the models that loaded.
+
+## 3.9.4 (2026-11-20)
+Includes the unreleased 3.9.1, 3.9.2 and 3.9.3.
+
+**The working turn**
+- While the agent works, the turn's steps sit in one folded row. Its header shows the current step and how long the turn has taken ("Running check free disk space   1m 12s"); open it to see the steps. It opens by itself while an approval waits and becomes "Worked for…" when the turn ends. Before the first step, one line at the end of the conversation says what happens.
+- **Commands get a description.** The command tool asks the model for a few plain words ("check free disk space"), shown as the step's title. Without one, the title is the command without its shell wrapper (`powershell -NoProfile -Command "Get-ChildItem x"` shows as `Get-ChildItem x`; also pwsh, cmd /c, bash -lc, sh -c and wsl -e). The full command is in the step and in every approval.
+- "Worked for…" counts to when the last reply ended, not when it started (a 15-second turn said 3s); a turn under a second reads "<1s". The last reply's thinking goes in the fold, so the answer starts right under it.
+- A thinking block with no text yet no longer shows an empty "Thinking…" row.
+- **Steps stay in their turn.** Sending a new message pulled the previous turn's steps out of its "Worked for…" fold and left them above your message. They now stay folded, and only the new turn's steps go into the working row.
+- The working row and the finished "Worked for…" row look the same, with no box around the live one. Steps inside sit on one even rhythm, and their › shows only on the row you point at.
+- A braille spinner (CSS only, still under reduced motion) replaces the dotted bar. The keys (steer, queue, stop) are in the message box's placeholder instead of a strip under it.
+
+**Home**
+- A greeting for the time of day with your first name ("Good morning, NAME"), instead of three rotating lines.
+- Three suggestions from what is in the project folder: an empty folder gets "Start a project", uncommitted changes "Review my changes", a build file "Run the tests", no README "Write a README".
+- The mark is the live ASCII orbit. Starting from Home no longer waits for the project list to be saved.
+
+**Look**
+- **Google Sans Flex** is the interface font (Settings → Appearance → Font: Google Sans, Segoe UI or System font). Geist Mono stays for code.
+- A new dark palette: frame #0a0a0a, menu row #161616, conversation #101010, text #cccccc, secondary #9d9d9d, muted #6e6e6e, message box and bubble #1c1c1c, a blue accent, and amber inline code with no box.
+- Runs, Review, Automations and Customizations share one column, one heading size and one empty state. In the light theme, your own message and the selected conversation were pale text on a pale ground; both read normally again.
+- Inline code looks the same everywhere. Search and menu rows are compact. Fields focus with a neutral border. The Terminal command line is a field inside the panel.
+
+**Features that now do what they say**
+- **👍 and 👎 count per model.** Settings → Models → Your ratings lists them, so you can see which models answer well for you. Kept on this PC only.
+- **ORBIX → Check for updates** starts a check (it only opened Settings). It is not shown where ORBIX cannot update itself.
+- **Customizations → Installed** shows each MCP server's real state: its tool count when running, Starting, Failed or Off. A running server used to show "Starts when used".
+- **Stripe** in the marketplace uses Stripe's own server with an agent API key. The npm package it used is no longer maintained, and Stripe stops accepting other keys in December 2026.
+- **Screen reader mode** also stops the ASCII animations (the Home orbit and the COM-X mark). Before, only Windows' reduce-motion setting stopped them.
+- **Prevent sleep** also keeps the PC awake while a run works, not only while an open conversation does.
+- **Ctrl+K** finds every Appearance and Application setting; two entries pointed at labels that no longer existed. A test keeps the list in step with the pages.
+
+**Fixes**
+- Tool calls and verification that happen after initial reply text stay in the turn’s activity row. Reloading keeps finished activity folded and shows at most one live row.
+- Parallel file reads keep their original call order in the saved conversation and in model requests. Directory listings identify their folder, and a missing path reports useful names to try instead of returning only an error.
+- Commands in a WSL workspace opened by its Windows path use the matching distro and Linux working directory instead of silently running in `C:\Windows`.
+- **Rename** works from the toolbar or sidebar with Enter or Save. Empty names are flagged in place, and Enter does not activate the menu behind the dialog. The sidebar shows the name immediately, and double-clicking a saved conversation only opens one tab.
+- Leaving Shortcut settings while recording no longer captures typing in chat. Opening a conversation no longer sends its focus to the Browser or Side question field. Terminal output updates after switching panel tabs.
+- **No rail on the left edge.** The navigator of dots beside the conversation is gone; Alt+↑ and Alt+↓ still step between your messages, and Ctrl+Shift+O jumps to one.
+- The toolbar orbit stays still at idle and moves more slowly while the agent works. Reduced motion and screen-reader mode keep it still.
+- **A new conversation is listed once.** For a moment after its first message, the sidebar could show it twice.
+- **Approvals are calmer.** A neutral card with an amber shield, the command in the code font, and one row of buttons: Allow once, Allow in this conversation, Always allow, and Deny at the end.
+- In scene themes the conversation fades out at the top and above the message box instead of being cut by a hard edge. Home's greeting sits near the message box, with a larger orbit. Runs shows the project's name in its picker, with the folder in the hint.
+- **One name per thing.** "Tasks" (not "Plan", which is plan mode), "Inspect" (not "Run" or "Run inspector", also in the shortcut list and the conversation menu) and "Terminal" (not "Console"). The Settings group with Instructions, Checks and Tools is "Agent".
+- Messages that pointed to settings that had moved now point to the right place: Recently deleted is in Settings → Conversations, WSL is in Settings → Application, and tool permissions are in Settings → General.
+- "Check my setup" says what it checks: that a model is set up (it does not test the key).
+
+**Removed**
+- `session-library.mjs` and its tests, `isLocalPage` (the interface has its own), two aliases only tests used, an unused import, and exports nothing outside their file used.
+- Marketing lines in About and the provider list, and `docs/parity.md` (an internal comparison that had gone stale).
+- Styles that later rules overrode, duplicate definitions and unused variables.
+
 ## 3.9.0 (2026-11-20)
-- **Home.** The ORBIX mark and a greeting with your first name in the middle ("Hey Ravi, what should we build today?", a different one at each start); three suggestions and the message box at the bottom, in the conversation's column. The project and where the conversation works (project folder or a separate branch) sit on a strip on top of the box, with the branch and working tree; the project menu lists recent projects first. Start is a round send button. The Recent conversations and Projects lists are gone from Home (the sidebar has both).
+- **Home.** The ORBIX mark and a greeting with your first name in the middle (a different one at each start); three suggestions and the message box at the bottom, in the conversation's column. The project and where the conversation works (project folder or a separate branch) sit on a strip on top of the box, with the branch and working tree; the project menu lists recent projects first. Start is a round send button. The Recent conversations and Projects lists are gone from Home (the sidebar has both).
 - **Customizations page** (sidebar → Customizations): Marketplace and Installed, with one search box. The marketplace adds well-known MCP servers in one click: Playwright, Chrome DevTools, Firecrawl, Exa, Context7, Sequential Thinking, Memory, GitHub, Supabase, Filesystem, Figma, Notion and Stripe (it asks for a token or folder when one is needed). Installed lists your MCP servers with their state (test, edit or remove each), the skills, and the project's instruction and rule files.
 - **Automations: Create with Prompt.** One sentence such as "Every weekday at 9am, run the tests and tell me what fails" fills in the schedule and the task for you to check. The page has Create with Prompt and New at the top.
 - **Settings → Appearance:** Conversation steps (Default folds a turn's steps, Verbose keeps them open), the theme as three icons, Contrast (Default or Strong), Font (Geist, Segoe UI, system font), Font size, your own Background, Foreground and Accent colours with a reset, Conversation width (Narrow, Default, Wide, Fill), and Screen reader mode (no motion, steps open).

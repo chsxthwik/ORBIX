@@ -159,7 +159,7 @@ async function listProjectFiles(backend, root) {
   return files;
 }
 
-/** Forget cached file lists. Used by tests and after a bulk change to a project. */
+/** Forget cached file lists (they expire after FIND_TTL anyway). For tests. */
 export function clearFileIndex() {
   findGen++;
   findCache.clear();

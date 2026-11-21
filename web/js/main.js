@@ -3,7 +3,9 @@
 import './desktop.js';
 import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, lsGet, lsSet, copyText, fmtElapsed } from './dom.js';
 import { api, rpc, connectEvents } from './api.js';
-import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, engineReady, renameSession, keyPath } from './store.js';
+import { brandMark } from './brands.js';
+import { moveToMachine, onMachine, backToThisPc } from './machines.js';
+import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, engineReady, renameSession, cleanName, keyPath, agentOf } from './store.js';
 import { TabView, sessionMenu, copyConversation } from './session.js';
 import { drawHome, setHomeProject } from './home.js';
 import { openCleanup, confirmDeleteConversation } from './cleanup.js';
@@ -58,7 +60,7 @@ function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth || 0) 
 const SIDE_MIN = 200, SIDE_MAX = 440, SIDE_W = 240;
 
 /** Settings → Appearance: font, contrast, your own colours, and screen reader mode. */
-const FONTS = { geist: '', segoe: "'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif", system: 'system-ui, sans-serif' };
+const FONTS = { google: '', segoe: "'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif", system: 'system-ui, sans-serif' };
 const LOOK_VARS = ['--bg', '--chrome', '--bg-side', '--bg-raise', '--bg-raise-2', '--bg-inset', '--bg-field', '--bg-modal', '--bubble', '--menubar', '--fg', '--fg-2', '--fg-3', '--accent', '--accent-solid', '--accent-soft', '--accent-line', '--on-accent'];
 const hexOk = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 /** Black or white text on a colour, whichever reads better. */
@@ -210,14 +212,16 @@ function togglePin(s) {
 
 /** Rename a conversation, open or not: an open one through its session, a saved one in its file. */
 async function renameConversation(s) {
+  // A double-click opens the conversation with its first click: rename the tab once it is open.
+  await opening.get(s.path)?.catch(() => {});
   const tab = tabForSession(s);
   if (tab) return renameTab(tab);
-  const n = (await promptDialog('Rename conversation', 'Name', s.title))?.trim();
+  const n = cleanName(await promptDialog('Rename conversation', 'Name', s.title));
   if (!n || n === s.title) return;
   try {
+    // The server renames through the session when the conversation is open somewhere (another window, an automation).
     await api.post('/api/sessions/rename', { path: s.path, title: n });
     await loadSessions();
-    drawSidebar();
   } catch (e) {
     toast(e.message, 'error');
   }
@@ -264,6 +268,7 @@ function sessionRow(s, where) {
     h('button', { class: 's-btn', type: 'button', dataset: { path: s.path }, 'aria-label': s.title, 'aria-current': cur ? 'page' : null, onclick: () => openSession(s), ondblclick: (e) => (e.preventDefault(), renameConversation(s)), onkeydown: (e) => rowKeys(s, e), oncontextmenu: (e) => (e.preventDefault(), rowMenu(s, e.currentTarget)) },
       stateDot(tab),
       s.branch ? icon('branch', 12, 's-br') : null,
+      s.agent ? h('span', { class: 's-agent', title: `Runs on ${agentOf(s.agent)?.name || s.agent}` }, brandMark(s.agent, 12)) : null,
       h('span', { class: 'ell grow' }, s.title),
       where ? h('span', { class: 's-where ell' }, where) : h('span', { class: 's-when' }, timeAgo(s.mtime))),
     h('span', { class: 'row-acts' }, pin, arch, more));
@@ -348,9 +353,13 @@ function drawSidebar() {
   if (sortByName) groups.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
   const term = searchTerm.toLowerCase().trim();
   // The sidebar is rebuilt on every change; keep the search box focused (with its caret) and the list scroll.
-  const typing = document.activeElement?.matches?.('.side-search input') ? document.activeElement.selectionStart : -1;
+  const focused = document.activeElement;
+  const typing = focused?.matches('.side-search input') ? focused.selectionStart : -1;
+  const row = focused?.closest('#sidebar .s-row')?.querySelector('.s-btn[data-path]');
+  const rowIndex = row ? [...sideEl.querySelectorAll('.s-btn[data-path]')].indexOf(row) : -1;
   const scroll = sideEl.querySelector('.side-scroll')?.scrollTop || 0;
   const search = h('input', { type: 'search', placeholder: 'Filter conversations', value: searchTerm, 'aria-label': 'Filter conversations', spellcheck: 'false', oninput: (e) => ((searchTerm = e.target.value), drawSidebar()), onkeydown: (e) => {
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Escape') return e.stopPropagation(), (searchTerm = ''), (filterOpen = false), drawSidebar(), sideEl.querySelector('.side-filter-btn')?.focus();
     if (e.key === 'Enter') return e.preventDefault(), sideEl.querySelector('.side-scroll .s-btn')?.click();
     if (e.key === 'ArrowDown') return e.preventDefault(), sideEl.querySelector('.side-scroll .s-btn, .side-scroll .proj-btn')?.focus();
@@ -420,7 +429,7 @@ function drawSidebar() {
           ], { minWidth: 220 }), 'sm side-filter-btn' + (showFilter || sortByName || showArchived ? ' on' : '')),
           iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm'))),
       showFilter ? h('div', { class: 'side-search' }, icon('search', 14), search) : null,
-      projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'Your projects will live here.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
+      projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'No projects yet.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
     sideUpdate(icon('download', 15)) || '', // native append() would print null as text
     h('div', { class: 'side-foot' },
       h('button', { class: 'side-link foot-set', type: 'button', title: 'Settings (Ctrl+,)', onclick: () => settingsDialog() }, icon('cog', 15), h('span', null, 'Settings')),
@@ -430,6 +439,10 @@ function drawSidebar() {
   if (typing >= 0) {
     search.focus({ preventScroll: true });
     search.setSelectionRange(typing, typing);
+  } else if (row) {
+    const rows = [...sideEl.querySelectorAll('.s-btn[data-path]')];
+    const next = rows.find((b) => b.dataset.path === row.dataset.path) || rows[Math.min(rowIndex, rows.length - 1)] || sideEl.querySelector('.side-new');
+    next?.focus({ preventScroll: true });
   }
 }
 
@@ -468,8 +481,9 @@ function runNow(t, st) {
   return now ? `${now[0]} ${now[1]}`.trim() : 'Working';
 }
 
-// Once a second: running times and steps in the sidebar, and the window title (it shows on the taskbar).
+// Once a second while visible and working: update the elapsed labels, not the rest of the chrome.
 setInterval(() => {
+  if (document.hidden || !document.documentElement.classList.contains('agent-busy')) return;
   for (const row of sideEl.querySelectorAll('.run-row[data-id]')) {
     const t = S.tabs.get(row.dataset.id);
     if (!t || t.dead) continue;
@@ -477,9 +491,11 @@ setInterval(() => {
     const st = row.querySelector('.run-st');
     const now = row.querySelector('.run-now');
     if (st && state === 'working') st.textContent = runTime(t);
-    if (now) now.textContent = runNow(t, state);
+    if (now) {
+      const text = runNow(t, state);
+      if (text !== now.textContent) now.textContent = text;
+    }
   }
-  syncTitle();
   tickToolbar(topEl);
 }, 1000);
 function syncTitle() {
@@ -541,10 +557,19 @@ async function openFolder() {
   }
 }
 
-async function openSession(s) {
+// Saved conversations being opened (path -> promise): a second click (a double-click) waits for the first open
+// instead of starting a second agent on the same file.
+const opening = new Map();
+function openSession(s) {
   const existing = tabForSession(s);
   if (narrowSide.matches && overlay.side) (overlay.side = false), applyPrefs();
   if (existing) return setActive(existing.id);
+  if (opening.has(s.path)) return opening.get(s.path);
+  const p = openSaved(s).finally(() => opening.delete(s.path));
+  opening.set(s.path, p);
+  return p;
+}
+async function openSaved(s) {
   try {
     // cwdDisplay is the Windows form of the folder: the file tree, git panel and @mentions all use it.
     await openTab({ workspace: s.cwdDisplay || s.cwd, resume: s.path, title: s.title });
@@ -567,8 +592,23 @@ async function closeWithCheck(t) {
 }
 
 async function renameTab(t) {
-  const n = await promptDialog('Rename conversation', 'Name', t.name);
-  if (n) renameSession(t, n).catch((e) => toast(e.message, 'error'));
+  const n = cleanName(await promptDialog('Rename conversation', 'Name', t.name));
+  // Same text as shown is still saved when the shown name is only the automatic one (nothing was saved yet).
+  if (!n || (n === t.name && cleanName(t.title) === n)) return;
+  try {
+    if (t.dead) {
+      // Its agent has stopped: rename the saved file instead (nothing was saved yet: only the tab has a name).
+      const s = S.sessions.find((x) => (t.state?.sessionId && x.id === t.state.sessionId) || (t.resume && x.path === t.resume));
+      if (s) await api.post('/api/sessions/rename', { path: s.path, title: n });
+      t.title = n;
+      emit('tabs');
+      if (s) await loadSessions();
+      return;
+    }
+    await renameSession(t, n);
+  } catch (e) {
+    toast(`Could not rename: ${e.message}`, 'error');
+  }
 }
 
 /** The project crumb in the toolbar: a new conversation there, show the folder, copy its path. */
@@ -618,7 +658,7 @@ Object.assign(shell, {
   projectMenu: projectCrumbMenu,
   sessionMenu: (t, anchor) => {
     const s = S.sessions.find((x) => tabForSession(x) === t);
-    sessionMenu(t, anchor, { rename: () => renameTab(t), close: () => closeWithCheck(t), find: () => viewOf(t)?.bar.openFind(), outline: () => viewOf(t)?.bar.openOutline(), inspect: () => showTab('run'), pin: s ? { on: pinned().includes(s.path), run: () => togglePin(s) } : null });
+    sessionMenu(t, anchor, { rename: () => renameTab(t), close: () => closeWithCheck(t), find: () => viewOf(t)?.bar.openFind(), outline: () => viewOf(t)?.bar.openOutline(), inspect: () => showTab('run'), pin: s ? { on: pinned().includes(s.path), run: () => togglePin(s) } : null, move: t.noSession ? null : () => moveToMachine(t) });
   },
 });
 on('chrome', () => {
@@ -745,6 +785,7 @@ on('prefs', (patch = {}) => {
   drawTop();
   const t = activeTab();
   if (t && 'showThinking' in patch) views.get(t.id)?.renderAll();
+  if (t && ('whileBusy' in patch || 'sendKey' in patch)) views.get(t.id)?.updateComposer();
 });
 const viewOf = (tab) => views.get(tab.id);
 on('zen', () => syncOverview(mainEl));
@@ -759,16 +800,19 @@ on('tab:messages', (tab, d) => {
   if (d.msg?.role === 'user') drawTop();
 });
 on('tab:live', (tab) => viewOf(tab)?.renderLive());
+on('tab:turn-ended', (tab) => viewOf(tab)?.refreshActs());
 on('tab:tool', (tab, id) => viewOf(tab)?.updateTool(id));
 // The mark in the toolbar speeds up its orbit while any session is working.
 const syncBusy = () => {
   document.documentElement.classList.toggle('agent-busy', [...S.tabs.values()].some((t) => t.streaming && !t.dead));
 };
 on('tab:state', (tab) => (viewOf(tab)?.updateComposer(), syncBusy()));
-on('tabs', syncBusy);
+on('tabs', () => { syncBusy(); syncTitle(); });
 on('tab:status', (tab) => {
   const v = viewOf(tab);
   v?.updateComposer();
+  syncBusy();
+  syncTitle();
   if (tab.dead && v && !v.deadShown) v.showDead();
   drawTop();
   drawSidebar();
@@ -776,6 +820,7 @@ on('tab:status', (tab) => {
 });
 on('tab:editor', (tab) => viewOf(tab)?.setText(tab.draft));
 on('tab:dialog', (tab) => {
+  syncTitle();
   viewOf(tab)?.updateApproval();
   if (tab === activeTab()) syncExtDialogs(tab);
   drawSidebar(); // "needs you" in the Running list
@@ -827,7 +872,7 @@ function paletteItems() {
   if (t) {
     items.push({ group: 'View', icon: 'panel-right', label: 'Toggle side panel', key: firstKey(S.ui.keys, 'panel'), run: togglePanel });
     items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: firstKey(S.ui.keys, 'zen'), run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Conversation', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Conversation', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
-    for (const [k, l, ic] of [['run', 'Run inspector', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['console', 'Console', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
+    for (const [k, l, ic] of [['run', 'Inspect', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Tasks', 'list'], ['agents', 'Agents', 'users'], ['console', 'Terminal', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
     items.push({ group: 'Conversation', icon: 'pencil', label: 'Rename conversation…', run: () => renameTab(t) }, { group: 'Conversation', icon: 'copy', label: 'Copy conversation as Markdown', run: () => copyConversation(t) }, { group: 'Conversation', icon: 'x', label: 'Close conversation', run: () => closeWithCheck(t) });
     for (const c of t.commands) items.push({ group: 'Slash commands', icon: 'command', label: `/${c.name}`, hint: c.description, run: () => emit('insert', `/${c.name} `) });
   }
@@ -968,7 +1013,7 @@ function layoutOnce() {
 async function boot() {
   initInterface();
   try {
-    await loadEnv();
+    await loadEnv({ notify: false });
   } catch (e) {
     setBanner(e.message);
     return;
@@ -996,11 +1041,10 @@ async function boot() {
     let awake = null;
     const syncSystem = () => {
       if ((S.ui.tray === true) !== tray) sys.tray((tray = S.ui.tray === true));
-      const want = S.ui.preventSleep === true && [...S.tabs.values()].some((t) => t.streaming && !t.dead);
+      const want = S.ui.preventSleep === true && ([...S.tabs.values()].some((t) => t.streaming && !t.dead) || workingCount() > 0);
       if (want !== awake) sys.keepAwake((awake = want));
     };
-    on('prefs', syncSystem);
-    setInterval(syncSystem, 3000);
+    for (const event of ['prefs', 'tabs', 'tab:state', 'tab:status', 'runs']) on(event, syncSystem);
     syncSystem();
   }
   // The Windows app's built-in browser: where downloads go, and a note when one is saved.
@@ -1020,6 +1064,11 @@ async function boot() {
         if (hubView()?.view === 'automations') refreshAutomations();
       }
       else if (g.g === 'run' || g.g === 'run_removed') onRunEvent(g);
+      else if (g.g === 'sessions') loadSessions();
+      else if (g.g === 'engine' && g.engine) {
+        S.engine = g.engine;
+        emit('engine');
+      }
     },
     onOpen: () => {
       S.connected = true;

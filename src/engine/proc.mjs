@@ -12,12 +12,12 @@ import * as providers from './providers.mjs';
 import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor, invalidArgsText } from './tools.mjs';
 import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession } from './store.mjs';
 import { loadInstructions, readMentions, promptAttachments, promptImages, loadUserInstructions, loadRules } from './context.mjs';
-import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, rebuildSession, summarize, tokenScale, transcript } from './compact.mjs';
+import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, pruneOutputs, rebuildSession, summarize, tokenScale, transcript } from './compact.mjs';
 import { runTasks, SUBAGENT_TOOLS } from './subagent.mjs';
 import { TurnAssembler, collectTurn } from './assemble.mjs';
 import { HookRunner } from './hooks.mjs';
 import { stripSgr } from './files.mjs';
-import { buildSystemPrompt, environmentFacts, subagentPrompt } from './prompt.mjs';
+import { buildSystemPrompt, environmentFacts, shellFact, subagentPrompt } from './prompt.mjs';
 import { McpManager } from './mcp.mjs';
 import { discoverSkills, skillsPrompt } from './skills.mjs';
 import { BUILTIN_COMMANDS, discoverCommands } from './commands.mjs';
@@ -46,9 +46,26 @@ const CONTINUE_TEXT = 'Your previous reply was cut off by the output token limit
 const FEATURES = ['regenerate', 'edit_message', 'attachments', 'prompt_status', 'branch'];
 const GOAL_ROUNDS = 6;
 const SIDE_SYSTEM = 'You answer a side question about a coding conversation, without tools and without continuing its task. Answer from the conversation shown, briefly and exactly; say plainly when the conversation does not contain the answer.';
-const TITLE_SYSTEM = 'You name chat sessions. Reply with only a title of at most 6 words for the conversation that starts with the message below: no quotes, no trailing punctuation, same language as the message.';
+const TITLE_SYSTEM = 'You name chat sessions. Reply with only a title of 2 to 6 words saying what the user wants done in the message below (the task, not a file, folder or project name): no quotes, no trailing punctuation, same language as the message.';
 
+const SMALL_TALK = new Set(['hi', 'hello', 'hey', 'hiya', 'yo', 'sup', 'howdy', 'hola', 'greetings', 'good', 'morning', 'afternoon', 'evening', 'day', 'there', 'thanks', 'thank', 'you', 'thx', 'ok', 'okay', 'cool', 'nice', 'great', 'bye', 'how', 'are', 'u', 'r', 'doing', 'whats', "what's", 'up']);
 
+/** True for a message that is only a greeting or thanks ("Hello!", "hi there", "thanks"): not a task to name a session by. */
+export function isSmallTalk(text) {
+  const words = String(text || '').toLowerCase().replace(/[^\p{L}\p{N}'\s]/gu, ' ').split(/\s+/).filter(Boolean);
+  return words.length <= 5 && words.every((w) => SMALL_TALK.has(w));
+}
+
+/**
+ * Whether a model-written title is fit to show: two words or more, not a path, and not just the name of a folder
+ * of the project path (a model that sees little context tends to answer "ROOT" or "WORKSPACE").
+ */
+export function usableTitle(t, workspace = '') {
+  const s = String(t || '').trim();
+  if (!s || !/\s/.test(s) || /[\\/]/.test(s)) return false;
+  const folders = new Set(String(workspace).split(/[\\/]+/).filter(Boolean).map((x) => x.toLowerCase()));
+  return !folders.has(s.toLowerCase());
+}
 
 const hasAnswer = (m) => m.content.some((c) => (c.type === 'text' && c.text.trim()) || c.type === 'toolCall');
 /** Wait `ms`, or less when `signal` aborts (at once when it already has). Never rejects. */
@@ -83,6 +100,8 @@ export class AgentProc extends EventEmitter {
     this.cache = { commands: [] };
     this.messages = [];
     this.title = '';
+    this.titleBy = ''; // 'auto' (first words), 'ai' (fast model), '' (named by the user, or not known)
+    this.titleSmallTalk = false; // the auto title came from a greeting: the next real request replaces it
     this.session = null;
     this.sessionId = null;
     // An explicit model wins; otherwise the saved default ("provider/model" or a bare model id).
@@ -117,7 +136,7 @@ export class AgentProc extends EventEmitter {
     // Set by the run controller when this conversation works on a run: { id, phase(), writeArtifact(args) }.
     this.runInfo = null;
     this.envFacts = null; // environment block of the system prompt, captured once (stable prefix for caching)
-    this.defs = toolDefsFor(backend);
+    this.defs = toolDefsFor(backend, workspace);
     this.tools = createTools({ backend, cwd: workspace, getSignal: () => this.abortCtl?.signal });
     this.consoleTools = createTools({ backend, cwd: workspace, getSignal: () => this.bashCtl?.signal });
     this.hooks = new HookRunner({ backend, workspace, hostRoot: backend.hostPath(workspace), getSessionId: () => this.sessionId, ask: (title, options) => this._askUser(title, options), notice: (level, message) => this._emit({ type: 'notice', level, message }) });
@@ -139,6 +158,8 @@ export class AgentProc extends EventEmitter {
       const rebuilt = rebuildSession(this.opts.resume);
       this.messages = rebuilt.messages;
       this.title = s.title;
+      this.titleBy = s.titleBy || '';
+      this.titleSmallTalk = this.titleBy === 'auto' && isSmallTalk(s.title);
       this.session = { id: s.header.id, file: this.opts.resume };
       this.sessionId = s.header.id;
       if (s.header.worktree) this.worktree = s.header.worktree;
@@ -214,10 +235,16 @@ export class AgentProc extends EventEmitter {
         const file = writeExport({ title: this.title || 'Conversation', workspace: this.workspace, model: this.model ? `${this.provider}/${this.model}` : '', messages: this.messages });
         return ok({ path: file });
       }
-      case 'set_session_name':
-        this.title = String(cmd.name || '').trim();
-        if (this.session) appendEntry(this.session.file, { type: 'title', title: this.title });
-        return ok({});
+      case 'set_session_name': {
+        const name = String(cmd.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!name) throw Object.assign(new Error('A name is required'), { status: 400 });
+        // Saved now when the conversation has a file; a new one saves it with its first entries (_ensureSession).
+        if (this.session) appendEntry(this.session.file, { type: 'title', title: name });
+        this.title = name;
+        this.titleBy = 'user';
+        this._emit({ type: 'session_info_update', title: name });
+        return ok({ title: name });
+      }
       case 'abort':
         this._endGoal(this.goal ? 'Goal stopped.' : '');
         this.queue.steer.length = 0;
@@ -352,6 +379,9 @@ export class AgentProc extends EventEmitter {
     this.sessionId = this.session.id;
     if (this.thinkingLevel !== 'off') appendEntry(this.session.file, { type: 'thinking', level: this.thinkingLevel });
     if (this.planMode) appendEntry(this.session.file, { type: 'plan', on: true });
+    if (this.title) appendEntry(this.session.file, { type: 'title', title: this.title }); // renamed before the first message
+    // The sidebar lists saved files: tell it which file is this conversation now, so it is not listed twice.
+    this._emit({ type: 'session_info_update', sessionId: this.sessionId });
   }
 
   /** The branch of a session on its own branch, for the UI (null otherwise). */
@@ -478,11 +508,7 @@ export class AgentProc extends EventEmitter {
       prep.catch(() => {});
       const men = await this._mentions(text);
       this._pushUser(text, [...images, ...men.images], attribution, [...attachments, ...men.attachments]);
-      if (!this.title) {
-        this.title = makeTitle(attribution === 'goal' && this.goal ? this.goal.text : text) || (attachments[0]?.path ? makeTitle(attachments[0].path) : '') || 'New session';
-        this._persistRaw({ type: 'title', title: this.title });
-        this._aiTitle(this.title, attribution === 'goal' && this.goal ? this.goal.text : text).catch(() => {});
-      }
+      this._autoTitle(attribution === 'goal' && this.goal ? this.goal.text : text, attachments);
       const [conn] = await prep;
       await this._loop(conn);
     });
@@ -498,10 +524,16 @@ export class AgentProc extends EventEmitter {
       if (this.abortCtl.signal.aborted) break;
       // A long run can pass the threshold again after a compaction; three per run is the limit, so a compaction that
       // cannot bring the context down does not repeat every turn.
-      if (this.autoCompact && once.compactions < 3 && this._overThreshold(conn.contextWindow, conn.args?.({}).maxTokens ?? 8192)) {
-        once.compactions++;
-        await this._compact({ conn, reason: 'threshold' });
-        if (this.abortCtl.signal.aborted) break;
+      const reserve = conn.args?.({}).maxTokens ?? 8192;
+      if (this.autoCompact && once.compactions < 3 && this._overThreshold(conn.contextWindow, reserve)) {
+        // Clearing old tool output first is free and keeps the conversation as it was; a summary only when that
+        // is not enough. (The last reply's token count does not know about the clearing yet: subtract it.)
+        const freed = this._prune(conn.contextWindow);
+        if (contextTokens(this.messages) - freed > compactLimit(conn.contextWindow, reserve)) {
+          once.compactions++;
+          await this._compact({ conn, reason: 'threshold' });
+          if (this.abortCtl.signal.aborted) break;
+        }
       }
       this._emit({ type: 'turn_start' });
       run.turns++;
@@ -575,6 +607,12 @@ export class AgentProc extends EventEmitter {
       const results = await this._runTools(calls, conn);
       end(results);
       if (this.abortCtl.signal.aborted) break;
+      // The model sent a call it was already told is not run (see _repeatBlocked) a second time: it is stuck.
+      if (run.repeatBlocked >= 2) {
+        run.stopReason = 'repeated_failure';
+        this._emit({ type: 'notice', level: 'warn', message: 'Stopped: the agent kept repeating the same failing step. Send a message to continue, or give it another approach.' });
+        break;
+      }
       if (turn === MAX_TURNS - 1) {
         run.stopReason = 'max_turns';
         this._emit({ type: 'notice', level: 'warn', message: `Stopped after ${MAX_TURNS} steps. Send a message to continue.` });
@@ -582,7 +620,22 @@ export class AgentProc extends EventEmitter {
     }
   }
 
-  /** Edits of the current run that are still in place, oldest first. */
+  /**
+   * Clear the output of old tool calls from what the model sees (pruneOutputs); the UI and the session keep it.
+   * Returns the context tokens freed (estimated, in the provider's count), 0 when nothing was worth clearing.
+   */
+  _prune(cw) {
+    const { ids, tokens } = pruneOutputs(this.messages, cw);
+    if (!ids.length) return 0;
+    const freed = Math.round(tokens * tokenScale(this.messages)); // scale while the counts still describe the same context
+    const set = new Set(ids);
+    for (const m of this.messages) if (m.role === 'toolResult' && set.has(m.toolCallId)) m.pruned = true;
+    this._persistRaw({ type: 'prune', ids });
+    this._emit({ type: 'notice', level: 'info', message: `Cleared the output of ${ids.length} earlier tool call${ids.length === 1 ? '' : 's'} from the model's context to make room (about ${Math.max(1, Math.round(freed / 1000))}k tokens). The full output stays in this conversation.` });
+    return freed;
+  }
+
+  /** True when the context is past the automatic compaction limit (the reply's max_tokens reserved). */
   _overThreshold(cw = this.meta?.contextWindow, reserve = this._maxTokens() ?? 8192) {
     return !!cw && contextTokens(this.messages) > compactLimit(cw, reserve);
   }
@@ -597,7 +650,7 @@ export class AgentProc extends EventEmitter {
   }
 
   async _system({ subagent = false, tools } = {}) {
-    const [env, found, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: this.backend.isWsl ? 'bash in WSL' : 'Windows cmd.exe', os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null), loadRules(this.backend, this.workspace).catch(() => ({ always: [], listed: [] }))]), subagent ? [] : this._skills()]);
+    const [env, found, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: shellFact(this.backend, this.workspace), os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null), loadRules(this.backend, this.workspace).catch(() => ({ always: [], listed: [] }))]), subagent ? [] : this._skills()]);
     const [own, mine, projectRules] = found;
     // Nearest first (as loadInstructions returns them): .agents/rules that always apply, then AGENTS.md up the tree, then yours.
     const rules = [...projectRules.always, ...own, ...(mine ? [mine] : [])];
@@ -684,6 +737,7 @@ export class AgentProc extends EventEmitter {
     const cost = this._costOf(msg.usage, conn.info);
     if (cost !== undefined) msg.usage.cost = { total: cost };
     this._addUsage(msg.usage, cost);
+    msg.doneAt = Date.now(); // when the reply ended: "Worked for…" counts to here, not to when it started
     this.messages.push(msg);
     this._persist(msg);
     this._emit({ type: 'message_end', message: structuredClone(msg) });
@@ -844,7 +898,7 @@ export class AgentProc extends EventEmitter {
     const g = this.goal;
     if (!run.goalRound || !g) return;
     if (aborted) return this._endGoal('Goal stopped.');
-    if (run.status === 'error' || run.stopReason === 'error' || run.stopReason === 'refusal') return this._endGoal('Goal stopped because of an error. Fix it and run /goal again.');
+    if (run.status === 'error' || run.stopReason === 'error' || run.stopReason === 'refusal' || run.stopReason === 'repeated_failure') return this._endGoal('Goal stopped because of an error. Fix it and run /goal again.');
     const last = [...this.messages].reverse().find((m) => m.role === 'assistant' && !m.discard);
     const lines = (last?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').split('\n').map((l) => l.trim()).filter(Boolean);
     const end = lines[lines.length - 1] || '';
@@ -893,17 +947,37 @@ export class AgentProc extends EventEmitter {
     return { text: answer || 'The model returned no answer.', model: conn.model };
   }
 
+  /**
+   * Name the session from the first message that asks for something: the first words now, then (with a fast model)
+   * a model-written title. A greeting gives a title only until a real request comes. A name you gave is never changed.
+   */
+  _autoTitle(text, attachments = []) {
+    if (this.title && (this.titleBy !== 'auto' || !this.titleSmallTalk)) return;
+    const smallTalk = isSmallTalk(text) && !attachments.length;
+    if (this.title && smallTalk) return;
+    const t = makeTitle(text) || (attachments[0]?.path ? makeTitle(attachments[0].path) : '') || 'New session';
+    const renamed = !!this.title;
+    Object.assign(this, { title: t, titleBy: 'auto', titleSmallTalk: smallTalk });
+    this._persistRaw({ type: 'title', title: t, by: 'auto' });
+    if (renamed) this._emit({ type: 'session_info_update', title: t });
+    if (!smallTalk) this._aiTitle(t, text).catch(() => {});
+  }
+
   /** Replace the first-words title by a short model-written one. Only when a fast model is chosen; never the main model. */
   async _aiTitle(fallback, text) {
     if (!this._roleSpec('fast')) return;
     const conn = await this._roleConnSafe('fast');
     if (!conn) return;
-    const msg = await collectTurn(conn.stream({ system: TITLE_SYSTEM, messages: [{ role: 'user', content: [{ type: 'text', text: clip(String(text), 1500) }], timestamp: Date.now() }], tools: [], signal: AbortSignal.timeout(20000), maxTokens: 40, thinking: undefined }));
-    const t = (msg.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').split('\n')[0].replace(/^["'`*#\s]+|["'`*.\s]+$/g, '').slice(0, 60);
+    const msg = await collectTurn(conn.stream({ system: TITLE_SYSTEM, messages: [{ role: 'user', content: [{ type: 'text', text: clip(String(text), 1500) }], timestamp: Date.now() }], tools: [], signal: AbortSignal.timeout(20000), maxTokens: 200, thinking: undefined }));
     this._addUsage(msg.usage, this._costOf(msg.usage, conn.info));
-    if (!t || this.title !== fallback) return; // empty, or you renamed the session meanwhile
+    // A reply cut off (a reasoning model can spend the budget thinking) or failed is not a title.
+    if (msg.stopReason !== 'stop') return;
+    const t = (msg.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim().split('\n')[0].replace(/^(title:\s*)?["'`*#\s]+|["'`*.\s]+$/gi, '').slice(0, 60);
+    // Only over the first-words title it was asked for: not after you renamed the session, or a newer request retitled it.
+    if (!usableTitle(t, this.workspace) || this.title !== fallback || this.titleBy !== 'auto') return;
     this.title = t;
-    this._persistRaw({ type: 'title', title: t });
+    this.titleBy = 'ai';
+    this._persistRaw({ type: 'title', title: t, by: 'ai' });
     this._emit({ type: 'session_info_update', title: t });
   }
 

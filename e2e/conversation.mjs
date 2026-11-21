@@ -29,7 +29,7 @@ let page;
 let ok = false;
 try {
   if (DESKTOP) {
-    page = await startDesktop(path.join(ROOT, 'dist', 'win-unpacked', 'ORBIX.exe'), data, path.join(root, 'desktop'));
+    page = await startDesktop(process.env.ORBIX_DESKTOP_EXE || path.join(ROOT, 'dist', 'win-unpacked', 'ORBIX.exe'), data, path.join(root, 'desktop'));
     assert(await page.eval(`return !!window.orbixDesktop`), 'the Electron preload bridge');
     say('desktop e2e: running the packaged ORBIX window');
   } else {
@@ -38,6 +38,60 @@ try {
     await page.goto(orbix.url);
   }
   await page.until(`document.querySelector('#welcome textarea')`, 'Home');
+  assert(await page.eval(`return !performance.getEntriesByType('resource').some((e) => new URL(e.name).pathname === '/api/engine')`), 'boot gets provider status in the initial state response');
+  await page.eval(`const trigger = document.querySelector('.home-model-pick'); trigger.focus(); trigger.click();`);
+  await page.until(`document.querySelector('.mp-list .list-h') && document.querySelector('.mp-list')?.textContent.includes('orbix-fixture')`, 'the Home provider and model');
+  assert(await page.eval(`return performance.getEntriesByType('resource').some((e) => new URL(e.name).pathname === '/api/engine/models') && !performance.getEntriesByType('resource').some((e) => new URL(e.name).pathname === '/api/proc/start')`), 'Home lists models directly and starts no temporary agent');
+  await page.until(`document.activeElement?.matches('.model-picker input[role=combobox]')`, 'model search receives focus');
+  await page.press('ArrowDown', 40);
+  assert(await page.eval(`
+    const q = document.activeElement;
+    const row = document.getElementById(q.getAttribute('aria-activedescendant'));
+    return row?.textContent.includes('orbix-fixture') && row.tabIndex === -1 && document.querySelector('#app').inert;
+  `), 'one focus target tracks keyboard selection and the background is inert');
+  await page.press('Escape', 27);
+  await page.until(`!document.querySelector('.modal')`, 'the model picker closed');
+  assert(await page.eval(`return !document.querySelector('#app').inert && document.activeElement?.title === 'Model for the new conversation'`), 'Escape restores the model button and the background');
+  assert(await page.eval(`
+    const st = await import('/js/store.js');
+    const { api } = await import('/js/api.js');
+    const original = api.get;
+    let old, fresh;
+    api.get = (url) => url !== '/api/sessions' ? original(url) : new Promise((resolve) => { if (old) fresh = resolve; else old = resolve; });
+    try {
+      const a = st.loadSessions(), b = st.loadSessions();
+      const item = { id: 'profile', path: 'profile', cwdKey: '', cwd: '', title: 'New name' };
+      fresh({ sessions: [item] });
+      await b;
+      old({ sessions: [{ ...item, title: 'Old name' }] });
+      await a;
+      return st.S.sessions[0]?.title === 'New name';
+    } finally {
+      api.get = original;
+      await st.loadSessions();
+    }
+  `), 'a delayed session-list response cannot restore an older title');
+  const stillPaints = await page.eval(`
+    const st = await import('/js/store.js');
+    const proto = CanvasRenderingContext2D.prototype;
+    const clearRect = proto.clearRect;
+    let paints = 0;
+    proto.clearRect = function (...args) {
+      if (this.canvas.classList.contains('ascii-orbit')) paints++;
+      return Reflect.apply(clearRect, this, args);
+    };
+    try {
+      st.savePrefs({ screenReader: true });
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const before = paints;
+      await new Promise((r) => setTimeout(r, 1150));
+      return paints - before;
+    } finally {
+      proto.clearRect = clearRect;
+      await st.savePrefs({ screenReader: false });
+    }
+  `);
+  assert(stillPaints === 0, `the reduced-motion orbit holds its frame without periodic repaints (${stillPaints})`);
   const status = '#welcome .home-status';
   const dirtyFile = path.join(repo, 'typing ñ.txt');
   await page.until(`document.querySelector('${status}')?.textContent.includes('Working tree clean')`, 'a clean working tree');
@@ -56,6 +110,15 @@ try {
   await shot('14-home-working-tree');
   await page.fill('#welcome textarea', 'Explain sign-in and fix it for mixed-case emails.');
   await page.key('Enter', { keyCode: 13, code: 'Enter' });
+  const reload = async () => {
+    const url = await page.eval(`window.__oldPage = true; return location.href`);
+    await page.goto(url);
+    await page.until(`!window.__oldPage && document.querySelector('#session .session-inner')`, 'the conversation after reload');
+  };
+  await page.until(`document.querySelector('.approval .btn.primary')`, 'the first approval before reload');
+  await reload();
+  await page.until(`document.querySelector('.approval .btn.primary') && document.querySelector('details.work.live')`, 'the restored working turn and approval');
+  assert(await page.eval(`return document.querySelectorAll('details.work.live').length === 1`), 'a running turn does not duplicate on reload');
   // The edit asks first (approvals are on): the approval card, then Allow once. The check command asks too.
   for (let i = 0; i < 2; i++) {
     await page.until(`document.querySelector('.approval .btn.primary')`, 'an approval');
@@ -91,6 +154,37 @@ try {
   await page.eval(`document.querySelector('#topbar .tb-nav').click()`);
   await page.until(`!document.querySelector('#session').hidden && /explain sign-in/i.test(document.querySelector('#topbar .crumb.cur')?.textContent || '')`, 'Back returns to the conversation');
   say('conversation e2e: menu row, toolbar, Overview and back');
+  // Rename through the dialog, as a person does it: the name's menu, Rename…, type, Enter. The name is kept exactly
+  // as typed, in the toolbar and at once in the sidebar, and the Enter does nothing else (it used to also press the
+  // button the focus went back to, which reopened the menu or opened the conversation a second time).
+  const exact = 'Hey: fix *login*. Now';
+  const renameField = `document.activeElement?.matches('.modal input[type=text]')`;
+  await page.mouse('#topbar .crumb.cur');
+  await page.until(`document.querySelector('.menu:not(.leaving)')`, 'the conversation menu');
+  await page.click('Rename', '.menu');
+  await page.until(renameField, 'the rename dialog');
+  await page.eval(`document.activeElement.select()`);
+  await page.type(exact);
+  await page.press('Enter', 13);
+  await page.until(`!document.querySelector('.modal') && !document.querySelector('.menu:not(.leaving)')`, 'the dialog closed, and no menu opened again');
+  await page.until(`(async () => { const st = await import('/js/store.js'); return st.activeTab().name === ${JSON.stringify(exact)} && st.S.sessions.some((s) => s.title === ${JSON.stringify(exact)}); })()`, 'the exact name, also in the saved list');
+  await page.until(`document.querySelector('#topbar .crumb.cur')?.textContent.includes(${JSON.stringify(exact)})`, 'the new name in the toolbar');
+  await page.until(`[...document.querySelectorAll('#sidebar .s-btn')].some((b) => b.textContent.includes(${JSON.stringify(exact)}))`, 'the new name in the sidebar');
+  // A double-click on the name opens the dialog with no menu left behind it; a blank name is refused there.
+  await page.mouse('#topbar .crumb.cur', 2);
+  await page.until(renameField, 'rename on double-click');
+  assert(!(await page.eval(`return !!document.querySelector('.menu:not(.leaving)')`)), 'no menu behind the rename dialog');
+  await page.eval(`document.activeElement.select()`);
+  await page.type(' ');
+  await page.press('Enter', 13);
+  assert(await page.eval(`return !!document.querySelector('.modal') && !document.querySelector('.modal .field-err').hidden`), 'a blank name is refused and the dialog stays');
+  await page.press('Escape', 27);
+  await page.until(`!document.querySelector('.modal')`, 'Esc cancels');
+  assert(await page.eval(`return document.querySelector('#topbar .crumb.cur').textContent.includes(${JSON.stringify(exact)})`), 'cancelling keeps the name');
+  await reload();
+  await page.until(`document.querySelector('#topbar .crumb.cur')?.textContent.includes(${JSON.stringify(exact)}) && document.querySelector('details.work:not(.live) .tool')`, 'the saved name and folded tool history after reload');
+  assert(await page.eval(`return document.querySelectorAll('.tin > details.work').length === 1 && !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track')`), 'only the work fold contains the old tools, and there is no left rail');
+  say('conversation e2e: rename');
   // 👍 on a reply stays marked; 👎 offers what to do next.
   await page.eval(`[...document.querySelectorAll('#session .msg.asst [aria-label="Good reply"]')].pop().click()`);
   assert(await page.eval(`return [...document.querySelectorAll('#session .msg.asst [aria-label="Good reply"]')].pop().getAttribute('aria-pressed') === 'true'`), '👍 marks the reply');
@@ -172,6 +266,21 @@ try {
   await page.key('Escape', { keyCode: 27, code: 'Escape' });
   await page.until(`!document.querySelector('.modal.settings-card')`, 'Settings closed');
   say('conversation e2e: shortcuts and settings search');
+  await page.click('New conversation', '#sidebar');
+  await page.fill('#welcome textarea', 'Show activity after a partial reply.');
+  await page.key('Enter', { keyCode: 13, code: 'Enter' });
+  await page.until(`document.querySelector('.approval .btn.primary')`, 'an approval after initial text');
+  assert(await page.eval(`return document.querySelectorAll('.tin > details.work.live').length === 1 && !!document.querySelector('.tin > details.work.live .tool') && !document.querySelector('.tin > .msg .tool')`), 'late tools stay inside the live activity row');
+  await page.click('Allow once', '.approval');
+  await page.until(`document.querySelector('.tin > details.work:not(.live) + .msg .md')?.textContent.includes('Final answer after the check.')`, 'the final answer below the finished activity');
+  assert(await page.eval(`return !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track, .session-inner > .tl') && getComputedStyle(document.querySelector('.tb-mark .lg-node')).animationName === 'none'`), 'no loose calls, no dotted rail, no idle logo animation');
+  await page.fill('#session textarea', 'Keep this as the second message.');
+  await page.key('Enter', { keyCode: 13, code: 'Enter' });
+  await page.until(`document.querySelectorAll('.turn-map .turn-mark').length === 2 && document.querySelector('.turn-mark:last-child')?.hasAttribute('aria-current')`, 'compact message markers track the current message');
+  await page.mouse('.turn-mark:first-child');
+  await page.until(`document.querySelector('.tin .msg.user')?.classList.contains('tl-flash')`, 'a compact marker jumps to its message');
+  assert(await page.eval(`return document.querySelector('.turn-map').getBoundingClientRect().height <= 250`), 'the turn map is a short stack, not a full-height rail');
+  say('conversation e2e: tools after an initial answer');
   if (DESKTOP) {
     // The built-in browser shows a web page in the Windows app (a <webview> with its own session).
     const http = await import('node:http');
@@ -202,6 +311,14 @@ try {
   page?.close();
   orbix?.proc.kill();
   model.server.close();
-  if (ok && !KEEP) setTimeout(() => { try { fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 400 }); } catch {} }, 600);
 }
-setTimeout(() => process.exit(ok ? 0 : 1), 900);
+if (ok && !KEEP) {
+  // Windows holds files of the closed browser and server for a moment: wait, then remove the folder before exiting.
+  await sleep(800);
+  try {
+    fs.rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 400 });
+  } catch (e) {
+    say(`Note: could not remove ${root} (${e.code}); delete it later.`);
+  }
+}
+process.exit(ok ? 0 : 1);
