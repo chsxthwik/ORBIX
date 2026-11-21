@@ -3,12 +3,12 @@
 //   Review  one queue of everything that waits for you: approvals, plans, finished changes, interrupted runs
 //   a run   its timeline (each step links to its output, diff or document), the plan, the changes, the test log
 //           and the walkthrough, with comments, feedback and the decision that is yours to make
-import { drawAutomations, refreshAutomations } from './automations.js';
+import { drawAutomations } from './automations.js';
 import { drawCustomizations, leaveCustomizations } from './customize.js';
 import { h, icon, iconBtn, replace, toast, timeAgo, baseName, spinner, skeleton, errorState, fmtDuration, debounce } from './dom.js';
 import { api } from './api.js';
 import { S, on, emit, setActive, replyUi } from './store.js';
-import { modal, btn, confirmDialog, popMenu, isApproval } from './dialogs.js';
+import { modal, btn, confirmDialog, popMenu, isApproval, approvalLabel } from './dialogs.js';
 import { renderMarkdown } from './markdown.js';
 import { renderUnifiedDiff, statChips } from './tools.js';
 
@@ -237,7 +237,7 @@ function decisionButtons(run, { compact = false } = {}) {
 function askCard(run, ask, answer = (o) => answerAsk(run, ask, o)) {
   return h('div', { class: 'ask-card', role: 'group', 'aria-label': 'The agent asks' },
     h('div', { class: 'ask-q' }, icon('shield', 15), h('span', { class: 'prewrap' }, ask.title)),
-    h('div', { class: 'ask-opts' }, (ask.options || []).map((o) => btn(o, () => answer(o), `sm ${o === 'Deny' ? 'danger' : o === 'Allow once' ? 'primary' : ''}`))));
+    h('div', { class: 'ask-opts' }, (ask.options || []).map((o) => btn(approvalLabel(o), () => answer(o), `sm ${o === 'Deny' ? 'danger' : o === 'Allow once' ? 'primary' : ''}`))));
 }
 
 // ---- Runs board and Review queue -----------------------------------------------------------------------------------
@@ -254,8 +254,10 @@ function newRunBox() {
     localStorage.setItem('orbix.run.mode', val);
     for (const b of e.currentTarget.parentNode.children) b.classList.toggle('on', b === e.currentTarget), b.setAttribute('aria-pressed', String(b === e.currentTarget));
   } }, label);
-  const sel = h('select', { 'aria-label': 'Project', onchange: (e) => ((project = e.target.value), localStorage.setItem('orbix.run.project', project)) }, projects.map((p) => h('option', { value: p.path, selected: p.path === project ? true : null }, `${p.name || baseName(p.path)}  ·  ${p.path}`)));
+  // The name in the box; the folder in its hint, so a long path does not crowd the row.
+  const sel = h('select', { 'aria-label': 'Project', title: project || '', onchange: (e) => ((project = e.target.value), (e.target.title = project), localStorage.setItem('orbix.run.project', project)) }, projects.map((p) => h('option', { value: p.path, title: p.path, selected: p.path === project ? true : null }, p.name || baseName(p.path))));
   async function start() {
+    if (go.disabled) return;
     const text = task.value.trim();
     if (!project) return toast('Open a project folder first (the folder button in the sidebar).', 'warn');
     if (!text) return task.focus();
@@ -702,7 +704,9 @@ class RunDetail {
     const box = h('textarea', { rows: '2', placeholder: WORKING.has(r.status) ? 'Steer the agent while it works…' : r.phase === 'plan' ? 'Ask for changes to the plan, or answer the agent…' : 'Ask for changes…', 'aria-label': 'Feedback to the agent' });
     box.value = keep;
     const send = async () => {
+      if (this.sendingFeedback) return;
       if (!box.value.trim() && !pending) return box.focus();
+      this.sendingFeedback = true;
       sendBtn.disabled = true;
       try {
         await api.post('/api/run/feedback', { id: r.id, text: box.value });
@@ -710,6 +714,7 @@ class RunDetail {
       } catch (e) {
         toast(e.message, 'error', 9000);
       } finally {
+        this.sendingFeedback = false;
         sendBtn.disabled = false;
       }
     };

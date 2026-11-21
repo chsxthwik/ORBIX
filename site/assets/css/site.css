@@ -1,8 +1,8 @@
 /* ORBIX website. The visual language of the 3.4.0 app: a neutral near-black frame, quiet hairlines, rounded
-   surfaces, and one lime accent kept for the primary action and the agent's own marks. Geist for reading, Geist
+   surfaces, and one lime accent kept for the primary action and the agent's own marks. Google Sans Flex for reading, Geist
    Mono for anything the app or a terminal would print. Motion lives in assets/js/site.js; without the script, or
    with reduced motion, the page is complete and still. No inline styles: the CSP allows only this file. */
-@font-face { font-family: 'Geist'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('../fonts/geist-latin-wght-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Google Sans Flex'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('../fonts/google-sans-flex-latin-wght-normal.woff2') format('woff2'); }
 @font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('../fonts/geist-mono-latin-wght-normal.woff2') format('woff2'); }
 
 :root {
@@ -16,7 +16,7 @@
   --shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 24px 60px -24px rgba(0, 0, 0, .7);
   --shadow-win: 0 0 0 1px rgba(255, 255, 255, .1), 0 30px 80px -24px rgba(0, 0, 0, .9), 0 80px 160px -60px rgba(0, 0, 0, .8);
   --wordmark: #0E0E0E; --orbit-fg: #E9E9E7; --orbit-accent: #D4FF4F;
-  --sans: 'Geist', 'Segoe UI', system-ui, sans-serif;
+  --sans: 'Google Sans Flex', 'Segoe UI', system-ui, sans-serif;
   --mono: 'Geist Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
   --col: 1120px; --gut: clamp(16px, 5vw, 40px);
   --r-sm: 8px; --r: 12px; --r-lg: 16px;
@@ -361,3 +361,6 @@ html:not(.js) .g-view figure { grid-area: auto; }
   .btn, .seg button, .g-tabs button, kbd, .st { border: 1px solid ButtonText; }
   .foot-word { color: CanvasText; }
 }
+
+/* 4.0: ORBIX Cloud install line */
+.cmd-line { display: block; margin-top: 12px; padding: 10px 12px; overflow-x: auto; border: 1px solid var(--line, rgba(255,255,255,.1)); border-radius: 8px; background: rgba(127,127,127,.08); font: 12.5px/1.5 "Geist Mono", ui-monospace, monospace; white-space: nowrap; }

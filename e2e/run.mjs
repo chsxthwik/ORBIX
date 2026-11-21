@@ -182,7 +182,7 @@ async function main() {
       const rid = await startRun('Publish the docs branch.', 'direct');
       await page.key('3', { ctrl: true, keyCode: 51, code: 'Digit3' });
       await page.until(`document.querySelector('#runs .ask-card')?.innerText.includes('It pushes to a remote')`, 'the approval in the queue');
-      assert(!(await page.text('#runs .ask-card')).includes('Allow for this session'), 'no lasting permission offered for a destructive command');
+      assert(!(await page.text('#runs .ask-card')).includes('Allow in this conversation'), 'no lasting permission offered for a destructive command');
       await shot('07-approval-denied');
       await page.click('Deny', '#runs .ask-card');
       await waitStatus(rid, 'review');

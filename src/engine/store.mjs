@@ -66,6 +66,8 @@ export class EngineConfig {
       // ('off' = this project has none).
       verify: VERIFY_MODES.includes(d.verify) ? d.verify : 'ask',
       review: d.review !== false,
+      // Your own Agent Client Protocol agents (Settings → Agents): [{ id, name, command }], see harness/registry.mjs.
+      agents: Array.isArray(d.agents) ? d.agents.filter((a) => a && typeof a.name === 'string' && typeof a.command === 'string').slice(0, 20) : [],
       checkCommands: d.checkCommands && typeof d.checkCommands === 'object' ? Object.fromEntries(Object.entries(d.checkCommands).filter(([k, v]) => k && typeof v === 'string' && v.trim())) : {},
     };
     // Decrypted keys by their stored (encrypted) form: each DPAPI call starts PowerShell (~250 ms), so a key is
@@ -151,19 +153,30 @@ export class EngineConfig {
    */
   async listModels(id, { fresh = false } = {}) {
     this.lists ||= new Map();
+    this.listJobs ||= new Map();
+    const rev = this.rev;
     const hit = this.lists.get(id);
-    if (!fresh && hit && hit.rev === this.rev && Date.now() - hit.at < LIST_TTL) return hit.list;
+    const pending = this.listJobs.get(id);
+    if (!fresh && pending && pending.rev === rev) return pending.job;
+    if (!fresh && hit && hit.rev === rev && Date.now() - hit.at < LIST_TTL) return hit.list;
     // A provider that reports its models' facts also has the accepted effort levels checked (see chatgpt.probeEfforts).
-    const ask = async () => clientFor(this.type(id)).listModels({ apiKey: await this.getKey(id), baseUrl: this.baseUrl(id), providerId: id, signal: AbortSignal.timeout(LIST_TIMEOUT), probe: !!this.provider?.(id)?.listsFacts });
-    let list;
-    try {
-      list = await ask();
-    } catch (e) {
+    const ask = async () => {
+      const baseUrl = this.baseUrl(id);
+      const apiKey = await this.getKey(id);
+      if (baseUrl !== this.baseUrl(id)) throw new Error('Provider address changed. Try again.');
+      return clientFor(this.type(id)).listModels({ apiKey, baseUrl, providerId: id, signal: AbortSignal.timeout(LIST_TIMEOUT), probe: !!this.provider?.(id)?.listsFacts });
+    };
+    const job = ask().catch(async (e) => {
       if (!(e?.status === 401 || e?.status === 403) || !this.isSignIn(id) || !(await this.renewSignIn(id).catch(() => null))) throw e;
-      list = await ask();
-    }
-    this.lists.set(id, { rev: this.rev, at: Date.now(), list });
-    return list;
+      return ask();
+    }).then((list) => {
+      if (this.rev === rev && this.listJobs.get(id)?.job === job) this.lists.set(id, { rev, at: Date.now(), list });
+      return list;
+    }).finally(() => {
+      if (this.listJobs.get(id)?.job === job) this.listJobs.delete(id);
+    });
+    this.listJobs.set(id, { rev, job });
+    return job;
   }
   async setProvider(id, { key, baseUrl, models, via, refresh, expiresAt, orgId } = {}) {
     const p = this.provider(id);
@@ -323,12 +336,12 @@ function projectFolder(keyPath) {
  * Start a session file. `worktree` ({ repo, slug, path, branch, base, baseBranch, source }) is set for a session that
  * works on its own branch: it goes into the header, so a reopened session still knows its branch and where it came from.
  */
-export function createSession({ cwd, keyPath, model, provider, worktree }) {
+export function createSession({ cwd, keyPath, model, provider, worktree, engine = 'builtin' }) {
   const id = uid('b');
   const dir = path.join(sessionsDir(), projectFolder(keyPath));
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${id}.jsonl`);
-  const header = { type: 'session', engine: 'builtin', version: 1, id, cwd, model: model || '', provider: provider || '', timestamp: new Date().toISOString() };
+  const header = { type: 'session', engine: engine || 'builtin', version: 1, id, cwd, model: model || '', provider: provider || '', timestamp: new Date().toISOString() };
   if (worktree) header.worktree = worktree;
   fs.writeFileSync(file, JSON.stringify(header) + '\n');
   return { id, file, header };
@@ -382,9 +395,14 @@ export function loadSession(file) {
   const messages = [];
   let header = null;
   let title = '';
+  let titleBy = ''; // who chose the last title: 'auto' (first words), 'ai' (the fast model), '' (the user, or an older file)
   const undone = [];
   const checkpoints = [];
   let worktreeState = null; // last { state: 'merged' | 'kept' | 'discarded', hash, at } of a branch session
+  const usageOf = new Map();
+  let handoff = false;
+  let teleported = null; // { to, url, at } once this conversation moved to another machine
+  let native = ''; // the session id of the agent CLI (Claude Code, Codex, an ACP agent) that runs this conversation
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
     let o;
@@ -394,17 +412,26 @@ export function loadSession(file) {
       continue; // a torn last line from a crash is ignored
     }
     if (o.type === 'session') header = o;
-    else if (o.type === 'title') title = o.title;
-    else if (o.type === 'undone') undone.push(o.toolCallId);
+    else if (o.type === 'title') {
+      title = o.title;
+      titleBy = o.by === 'auto' || o.by === 'ai' ? o.by : '';
+    } else if (o.type === 'undone') undone.push(o.toolCallId);
     else if (o.type === 'checkpoint') checkpoints.push({ toolCallId: o.toolCallId, undo: o.undo });
     else if (o.type === 'worktree') worktreeState = { state: o.state, hash: o.hash || '', at: o.at || 0 };
+    else if (o.type === 'native') {
+      native = String(o.id || '');
+      if (native) handoff = false;
+    } else if (o.type === 'handoff') handoff = true; // moved here without the agent's own session: tell it what happened
+    else if (o.type === 'teleported') teleported = { to: o.to || '', url: o.url || '', at: o.at || 0 };
+    else if (o.type === 'usage' && o.id && o.usage) usageOf.set(o.id, o.usage); // an agent's turn total, known after its last message
     else if (o.type === 'message' && o.message) messages.push(o.message);
   }
-  return { header, messages, title, undone, checkpoints, worktreeState };
+  if (usageOf.size) for (const m of messages) if (m.id && usageOf.has(m.id)) m.usage = usageOf.get(m.id);
+  return { header, messages, title, titleBy, undone, checkpoints, worktreeState, native, handoff, teleported };
 }
 
 /** The last title entry in a stretch of session lines, or ''. */
-export function lastTitle(text) {
+function lastTitle(text) {
   let title = '';
   for (const line of text.split('\n')) {
     if (!line.includes('"title"')) continue;
@@ -465,14 +492,14 @@ export async function listAgentSessions(backend) {
     if (!header) return null;
     // A session on its own branch is listed under the project it was started from, not under its worktree folder.
     const wt = header.worktree;
-    return { id: header.id, path: file, cwd: header.cwd, cwdKey: backend.keyPath(wt?.source || header.cwd), branch: wt?.branch || '', cwdDisplay: backend.displayPath(header.cwd), projectDisplay: backend.displayPath(wt?.source || header.cwd), title: makeTitle(title || first) || 'Untitled', preview: clip(first, 140), mtime: st.mtimeMs, size: st.size, chain: [file], chainIds: [header.id], resumes: 0 };
+    return { id: header.id, path: file, cwd: header.cwd, cwdKey: backend.keyPath(wt?.source || header.cwd), branch: wt?.branch || '', agent: header.engine && header.engine !== 'builtin' ? header.engine : '', cwdDisplay: backend.displayPath(header.cwd), projectDisplay: backend.displayPath(wt?.source || header.cwd), title: (title ? String(title).replace(/\s+/g, ' ').trim().slice(0, 200) : makeTitle(first)) || 'Untitled', preview: clip(first, 140), mtime: st.mtimeMs, size: st.size, chain: [file], chainIds: [header.id], resumes: 0 };
   });
   const live = new Set(files);
   for (const k of listCache.keys()) if (!live.has(k)) listCache.delete(k);
   return rows.filter(Boolean);
 }
 
-// Deleted conversations go to data/trash for 30 days, so a delete can be undone (Settings → Projects → Recently
+// Deleted conversations go to data/trash for 30 days, so a delete can be undone (Settings → Conversations → Recently
 // deleted). A trashed file is named <deleted-at>~<project folder>~<file name>, which is all a restore needs.
 const trashDir = () => path.join(DATA_DIR, 'trash');
 const TRASH_DAYS = 30;
@@ -601,4 +628,29 @@ export function branchSession(file, index, { title = '' } = {}) {
   if (title) body.push(JSON.stringify({ type: 'title', title }));
   fs.writeFileSync(out, body.join('\n') + '\n');
   return { id, file: out, count: index };
+}
+
+/**
+ * A conversation moved here from another ORBIX (Teleport): its session lines are written as a new file under the
+ * project it now works in. The header points at the new folder; a branch of its own on the other machine is not
+ * carried over (the project arrives as files). Returns the new file's path.
+ */
+export function importSession({ cwd, keyPath, lines, from }) {
+  const parsed = String(lines || '').split('\n').filter((l) => l.trim()).map((l) => {
+    try {
+      return JSON.parse(l);
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+  const header = parsed.find((o) => o?.type === 'session');
+  if (!header) throw Object.assign(new Error('The conversation that was sent has no header'), { status: 400 });
+  const { worktree, ...rest } = header;
+  const dir = path.join(sessionsDir(), projectFolder(keyPath));
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${header.id}.jsonl`);
+  const body = [JSON.stringify({ ...rest, cwd, teleportedFrom: from || '' }), ...parsed.filter((o) => o?.type !== 'session' && o?.type !== 'worktree').map((o) => JSON.stringify(o))];
+  body.push(JSON.stringify({ type: 'teleport', from: from || '', at: Date.now() }));
+  fs.writeFileSync(file, body.join('\n') + '\n');
+  return file;
 }

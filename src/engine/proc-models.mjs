@@ -6,8 +6,16 @@ import * as providers from './providers.mjs';
 import { loadCatalog, modelInfo } from './catalog.mjs';
 
 /** Model facts (context window, prices) from the catalog; waits at most 3 s for a first download, then goes on without. */
-export async function catalogReady() {
+async function catalogReady() {
   await Promise.race([loadCatalog(), new Promise((r) => setTimeout(r, 3000).unref?.())]).catch(() => {});
+}
+
+export function modelChoice(provider, model) {
+  const { id } = model;
+  const info = modelInfo(provider, id);
+  const all = providers.thinkingLevels(provider, id);
+  const levels = all.filter((x) => x && x !== 'off');
+  return { id, provider, name: model.name || id, reasoning: levels.length > 0, input: info?.vision === false ? ['text'] : ['text', 'image'], contextWindow: info?.contextWindow, maxTokens: info?.maxOutput, cost: info?.cost, thinking: levels.length ? { efforts: levels, mode: 'effort', canOff: all.includes('off'), default: providers.defaultThinking(provider, id) } : undefined };
 }
 
 export class ModelChoice {
@@ -17,8 +25,7 @@ export class ModelChoice {
 
   /** Context window, thinking levels and prices of the current model (from the catalog when it exists). */
   async _refreshMeta(emit = true) {
-    await catalogReady();
-    await this._providerFacts(this.provider);
+    if (this.provider && this.model) await Promise.all([catalogReady(), this._providerFacts(this.provider)]);
     const info = (this.provider && this.model && modelInfo(this.provider, this.model)) || null;
     const all = this.provider && this.model ? providers.thinkingLevels(this.provider, this.model) : [];
     const levels = [...new Set(all.map(String).filter((x) => x && x !== 'off'))];
@@ -83,20 +90,16 @@ export class ModelChoice {
     if (this.models && this.modelsRev === rev && (!this.modelsPartial || Date.now() - this.modelsAt < 60 * 1000)) return this.models;
     const ids = this.config.configuredIds();
     if (!ids.length) throw new Error('No AI provider is set up yet. Open Settings → Providers and add an API key.');
-    await catalogReady();
+    const facts = catalogReady();
     const results = await Promise.allSettled(
       ids.map(async (id) => {
         const list = this.config.listModels ? await this.config.listModels(id) : await providers.clientFor(this.config.type(id)).listModels({ apiKey: await this.config.getKey(id), baseUrl: this.config.baseUrl(id) });
-        return list.map((m) => {
-          const info = modelInfo(id, m.id);
-          const all = providers.thinkingLevels(id, m.id);
-          const levels = all.filter((x) => x && x !== 'off');
-          return { id: m.id, provider: id, name: m.name, reasoning: levels.length > 0, input: info?.vision === false ? ['text'] : ['text', 'image'], contextWindow: info?.contextWindow, maxTokens: info?.maxOutput, cost: info?.cost, thinking: levels.length ? { efforts: levels, mode: 'effort', canOff: all.includes('off'), default: providers.defaultThinking(id, m.id) } : undefined };
-        });
+        await facts;
+        return list.map((m) => modelChoice(id, m));
       }),
     );
     const good = results.filter((r) => r.status === 'fulfilled').flatMap((r) => r.value);
-    if (!good.length) throw results.find((r) => r.status === 'rejected').reason;
+    if (!good.length) throw results.find((r) => r.status === 'rejected')?.reason || new Error('Your providers returned no models. Check their model lists in Settings → Providers.');
     // A provider that failed to answer is reported, never silently dropped.
     results.forEach((r, i) => r.status === 'rejected' && this._emit({ type: 'notice', level: 'warn', message: `${this.config.provider(ids[i]).name}: could not load models (${r.reason?.message || r.reason})` }));
     this.models = good;

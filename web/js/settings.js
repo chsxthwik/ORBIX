@@ -1,7 +1,7 @@
-// Settings: a card over the workspace, as in Antigravity. Pages on the left (Settings, Customizations, one page per
+// Settings: a card over the workspace. Pages on the left (Settings, Customizations, one page per
 // project, conversations and worktrees), Give feedback and this copy of ORBIX at the bottom. Esc or × closes it.
 // Ctrl+K finds any setting by name (settingsSearchItems) and opens its page.
-import { h, icon, iconBtn, toast, replace, clear, logo, errorState, loadingState, copyText, timeAgo, baseName, kbd } from './dom.js';
+import { h, icon, iconBtn, toast, replace, clear, logo, errorState, loadingState, copyText, timeAgo, baseName, kbd, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { colWidth, setColWidth } from './workbench.js';
@@ -20,6 +20,9 @@ import { previewCelebration } from './backdrop.js';
 import { updatesSupported, checkForUpdates, setAutoUpdates, restartToUpdate, updateLine } from './updates.js';
 import { ACTIONS, FIXED, comboOf, comboParts, comboProblem, effectiveKeys, assignCombo, removeCombo, resetKeys } from './keys.mjs';
 import { browserPrefs, clearBrowserHistory, desktopBrowser } from './browser.js';
+import { modelRatings, clearRatings } from './ratings.js';
+import { tabAgents } from './agents.js';
+import { tabMachines } from './machines.js';
 
 /** The pages in the list: [key, label, one line under the title]. Headings are { h }. */
 const NAV = [
@@ -30,9 +33,11 @@ const NAV = [
   ['keys', 'Shortcuts', 'Add keys to an action with +, remove them with the bin. Keys need Ctrl or Alt, or are a function key.'],
   ['notify', 'Notifications', 'When ORBIX gets your attention, and how.'],
   ['engine', 'Providers', 'Sign in, paste an API key or connect a local model. Keys are checked, stored encrypted for your Windows account and sent only to their provider.'],
+  ['agents', 'Agents', 'Claude Code, Codex, OpenCode and other coding agents a conversation can run on, with their own plans and logins.'],
   ['models', 'Models', 'Which model does which job.'],
   ['browser', 'Browser', 'Where links open, the built-in browser, its history and downloads.'],
-  { h: 'Customizations' },
+  ['machines', 'Machines', 'ORBIX on computers you own, such as a Linux VPS: agents that keep working while this PC sleeps.'],
+  { h: 'Agent' },
   ['rules', 'Instructions', 'What the agent should always know about you and how you work. It follows these in every project.'],
   ['checks', 'Checks', 'How the agent checks its own work before it replies.'],
   ['tools', 'Tools & MCP', 'What the agent can use, and the extra tools you add.'],
@@ -55,6 +60,8 @@ const OLD = { start: 'general', prefs: 'general', about: 'application' }; // pag
 const FIND = [
   ['API keys', 'engine', 'provider key anthropic openai gemini openrouter connect sign in'],
   ['Local models', 'engine', 'ollama lm studio offline server custom'],
+  ['Machines', 'machines', 'cloud vps server remote teleport move self-host linux tailscale'],
+  ['Agents', 'agents', 'claude code codex opencode gemini acp harness cli agent subscription plan'],
   ['Fast model', 'models', 'titles summaries helper agents cheap'],
   ['Plan model', 'models', 'plan mode'],
   ['Permission preset', 'general', 'approval ask allow permission auto edits turbo'],
@@ -84,13 +91,24 @@ const FIND = [
   ['MCP servers', 'tools', 'server tools mcp'],
   ['Hooks', 'tools', 'before after tool'],
   ['Theme', 'look', 'dark light system midnight frost orbix scene synthwave koi aurora dusk animated backdrop fireworks color'],
-  ['Message text size', 'look', 'font zoom bigger smaller'],
+  ['Font size', 'look', 'text size zoom bigger smaller'],
+  ['Font', 'look', 'typeface google sans segoe system'],
+  ['Contrast', 'look', 'strong high contrast'],
+  ['Theme colours', 'look', 'background foreground accent colour color custom'],
+  ['Animate scenes', 'look', 'animation motion backdrop'],
+  ['Conversation steps', 'look', 'verbose fold steps worked for'],
+  ['Screen reader mode', 'look', 'accessibility a11y motion narrator'],
+  ['Interface size', 'look', 'scale zoom ui size'],
   ['Density', 'look', 'compact comfortable spacing rows'],
-  ['Reading column', 'look', 'wide width'],
+  ['Conversation width', 'look', 'reading column wide narrow fill width'],
+  ['Your ratings', 'models', 'thumbs up down rating feedback model'],
   ['Show model thinking', 'look', 'reasoning'],
   ['Keyboard shortcuts', 'keys', 'keys hotkeys keybindings rebind'],
   ['Updates', 'application', 'update upgrade new version check download install release'],
   ['Data folder', 'application', 'logs folder settings location'],
+  ['Prevent sleep', 'application', 'awake sleep power'],
+  ['Keep running in the tray', 'application', 'tray background close minimize'],
+  ['Windows Subsystem for Linux', 'application', 'wsl distribution distro linux'],
   ['Give feedback', 'feedback', 'bug report feature request issue problem'],
 ];
 
@@ -118,8 +136,14 @@ export function openSettings(initial = 'general', focus = '') {
   const foot = h('div', { class: 'set-foot' });
   const nav = h('nav', { class: 'set-nav', 'aria-label': 'Settings' }, list, foot);
   const content = h('div', { class: 'set-content', role: 'tabpanel', tabindex: '-1' });
+  let disposePage;
+  let offSessions;
   const closeBtn = iconBtn('x', 'Close (Esc)', () => m.close(), 'set-close');
-  const m = modal({ title: 'Settings', cls: 'settings settings-card', body: h('div', { class: 'set-wrap' }, nav, h('div', { class: 'set-main' }, closeBtn, content)), onClose: () => (current = null) });
+  const m = modal({ title: 'Settings', cls: 'settings settings-card', body: h('div', { class: 'set-wrap' }, nav, h('div', { class: 'set-main' }, closeBtn, content)), onClose: () => {
+    disposePage?.();
+    offSessions?.();
+    current = null;
+  } });
 
   const tab = (key, label, extra = null) => h('button', { type: 'button', role: 'tab', id: `set-${key.replace(/[^\w-]/g, '_')}`, 'aria-selected': String(key === cur), tabindex: key === cur ? '0' : '-1', class: 'set-tab' + (key === cur ? ' cur' : ''), title: label, onclick: () => show(key) }, h('span', { class: 'ell grow' }, label), extra);
   const badge = (k) => {
@@ -155,6 +179,8 @@ export function openSettings(initial = 'general', focus = '') {
     drawNav();
     nav.querySelector('.set-tab.cur')?.scrollIntoView({ block: 'nearest' });
     content.setAttribute('aria-labelledby', `set-${name.replace(/[^\w-]/g, '_')}`);
+    disposePage?.();
+    disposePage = null;
     clear(content);
     content.scrollTop = 0;
     const body = h('div', { class: 'set-body' });
@@ -169,7 +195,8 @@ export function openSettings(initial = 'general', focus = '') {
       content.append(h('header', { class: 'set-head' },
         parent ? h('button', { class: 'set-crumb', type: 'button', onclick: () => show(parent[0]) }, icon('arrow-left', 13), parent[1]) : null,
         h('h3', { class: 'set-title' }, page[1]), h('p', { class: 'set-lead' }, page[2])), body);
-      ({ general: tabGeneral, application: tabApplication, look: tabLook, keys: tabKeys, notify: tabNotify, engine: renderEngineSettings, models: tabModels, browser: tabBrowser, rules: tabRules, checks: tabChecks, tools: renderMcpSettings, conversations: tabConversations, worktrees: tabWorktrees, behavior: tabBehavior, network: tabNetwork, projects: tabProjects, feedback: tabFeedback })[name](body, show, m);
+      const cleanup = ({ general: tabGeneral, application: tabApplication, look: tabLook, keys: tabKeys, notify: tabNotify, engine: renderEngineSettings, agents: tabAgents, machines: tabMachines, models: tabModels, browser: tabBrowser, rules: tabRules, checks: tabChecks, tools: renderMcpSettings, conversations: tabConversations, worktrees: tabWorktrees, behavior: tabBehavior, network: tabNetwork, projects: tabProjects, feedback: tabFeedback })[name](body, show, m);
+      if (typeof cleanup === 'function') disposePage = cleanup;
     }
     if (focusLabel) pointAt(content, focusLabel);
     if (focusNav) nav.querySelector('.set-tab.cur')?.focus();
@@ -185,7 +212,7 @@ export function openSettings(initial = 'general', focus = '') {
     next.click();
     nav.querySelector('.set-tab.cur')?.focus();
   });
-  const offSessions = on('sessions', () => (content.isConnected ? drawNav() : offSessions()));
+  offSessions = on('sessions', drawNav);
   show(cur, focus);
   setTimeout(() => nav.querySelector('.set-tab.cur')?.focus({ preventScroll: true }), 0);
   current = { isOpen: () => content.isConnected, show: (k, f) => show(OLD[k] || k, f) };
@@ -286,7 +313,7 @@ function tabNetwork(el) {
       if (items().length === before) toast('That is not a site: use a name like example.com, *.example.com or example.com/docs.', 'error', 4500);
       else (input.value = ''), input.focus();
     };
-    input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), add()));
+    onEnter(input, add);
     function draw() {
       const list = items();
       replace(listEl, list.length ? list.map((r) => h('div', { class: 'trust-row' }, h('code', { class: 'ell', title: r }, r), h('button', { class: 'btn sm ghost', type: 'button', 'aria-label': `Remove ${r}`, onclick: () => save(list.filter((x) => x !== r)) }, 'Remove'))) : h('p', { class: 'set-none' }, key === 'allow' ? 'None. Every site that is not denied is read without asking.' : 'None.'));
@@ -421,6 +448,7 @@ function tabKeys(el) {
     const chip = h('span', { class: 'kc-rec', role: 'status' }, 'Press keys…');
     slot.replaceWith(chip);
     const onKey = (e) => {
+      if (!chip.isConnected || chip.closest('.closing')) return stopRecording();
       // Ahead of every other handler, so the keys you press set the shortcut instead of running one.
       e.preventDefault();
       e.stopPropagation();
@@ -469,6 +497,7 @@ function tabKeys(el) {
   q.addEventListener('keydown', (e) => e.key === 'Escape' && q.value && (e.stopPropagation(), e.preventDefault(), (q.value = ''), draw()));
   el.append(h('div', { class: 'keys-bar' }, q, reset), box);
   draw();
+  return stopRecording;
 }
 
 // ================= notifications =================
@@ -575,7 +604,7 @@ function tabFeedback(el) {
   const sync = () => {
     const k = KINDS.find(([x]) => x === kind);
     guide.textContent = k[2];
-    text.placeholder = kind === 'feature' ? 'Describe the feature you would like…' : kind === 'general' ? 'Tell us what you think…' : 'Describe what happened…';
+    text.placeholder = kind === 'feature' ? 'Describe the feature you would like…' : kind === 'general' ? 'What do you think of ORBIX?' : 'Describe what happened…';
   };
   sync();
   const facts = () => {
@@ -636,8 +665,22 @@ async function tabModels(el, show) {
     return replace(el, h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'No model is connected yet'), h('p', null, 'Connect a provider first, then choose your models here.')), btn('Open Providers', () => show('engine'), 'primary')));
   }
   const roles = h('div', { class: 'roles' });
-  replace(el, roles);
+  replace(el, roles, ratingsGroup(() => tabModels(el, show)));
   renderModelRoles(roles, engine);
+}
+
+/** Your 👍 and 👎 per model (Settings → Models), from the marks on replies. Nothing when you have rated none. */
+function ratingsGroup(redraw) {
+  const list = modelRatings();
+  if (!list.length) return '';
+  const tally = (r) => h('span', { class: 'rate-tally num' }, icon('thumb-up', 13), String(r.up), icon('thumb-down', 13), String(r.down));
+  return group('Your ratings', 'The 👍 and 👎 you gave replies, per model. Kept on this PC only.',
+    ...list.map((r) => row(h('code', null, r.model), tally(r))),
+    row('', btn('Clear ratings', async () => {
+      if (!(await confirmDialog('Clear ratings', 'Forget the counts for every model? The marks on replies stay.', { ok: 'Clear' }))) return;
+      clearRatings();
+      redraw();
+    }, 'sm')));
 }
 
 // ================= appearance =================
@@ -657,7 +700,7 @@ function tabLook(el) {
   } }, themePreview(v), h('span', { class: 'theme-n' }, h('span', null, l), icon('check', 13, 'theme-ok')));
   const themes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Theme' }, [['system', 'System'], ['dark', 'Dark'], ['light', 'Light'], ['midnight', 'Midnight'], ['frost', 'Frost']].map(card));
   const scenes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Scene theme' }, [['orbix', 'ORBIX'], ['sunset', 'Synthwave'], ['koi', 'Koi pond'], ['aurora', 'Aurora'], ['dusk', 'Halftone dusk']].map(card));
-  // Theme as three icons (System, Light, Dark), as in Antigravity; the presets below choose any of the themes.
+  // Theme as three icons (System, Light, Dark); the presets below choose any of the themes.
   const modeOf = (t) => (t === 'system' ? 'system' : ['light', 'frost'].includes(t) ? 'light' : 'dark');
   const modeSeg = h('div', { class: 'seg seg-ic', role: 'radiogroup', 'aria-label': 'Theme' }, [['system', 'monitor', 'System'], ['light', 'sun', 'Light'], ['dark', 'moon', 'Dark']].map(([v, ic, l]) => h('button', { type: 'button', role: 'radio', title: l, 'aria-label': l, 'aria-checked': String(modeOf(theme) === v), onclick: (e) => {
     for (const x of e.currentTarget.parentNode.children) x.setAttribute('aria-checked', String(x === e.currentTarget));
@@ -666,7 +709,7 @@ function tabLook(el) {
   } }, icon(ic, 14))));
   const sizes = [12, 13, 14, 15, 16, 17, 18];
   const fontSize = pick('Font size', sizes.map((n) => [String(n), `${n}px`]), String(u.fontSize || 14), (v) => savePrefs({ fontSize: Number(v) }));
-  const font = pick('Font', [['geist', 'Geist'], ['segoe', 'Segoe UI'], ['system', 'System font']], ['segoe', 'system'].includes(u.font) ? u.font : 'geist', (v) => savePrefs({ font: v }));
+  const font = pick('Font', [['google', 'Google Sans'], ['segoe', 'Segoe UI'], ['system', 'System font']], ['segoe', 'system'].includes(u.font) ? u.font : 'google', (v) => savePrefs({ font: v }));
   // Your own colours for the theme in use: background, text and accent. Empty = the theme's own.
   const colors = { ...(u.colors || {}) };
   const css = getComputedStyle(document.documentElement);
@@ -704,7 +747,7 @@ function tabLook(el) {
     group('Chat', null,
       row('Conversation steps', seg('Conversation steps', [['default', 'Default'], ['verbose', 'Verbose']], u.steps === 'verbose' ? 'verbose' : 'default', (v) => savePrefs({ steps: v })), 'Default folds each turn’s steps into “Worked for…” above the answer. Verbose keeps them open.'),
       row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'The model’s reasoning above its reply, folded until you open it.')),
-    group('Appearance', null,
+    group('Theme and text', null,
       row('Theme', modeSeg),
       row('Contrast', seg('Contrast', [['default', 'Default'], ['strong', 'Strong']], u.contrast === 'strong' ? 'strong' : 'default', (v) => savePrefs({ contrast: v }))),
       row('Font', font),
@@ -716,7 +759,7 @@ function tabLook(el) {
       colorRow('accent', 'Accent', '--accent'),
       row('Theme colours', reset, 'Back to the theme’s own colours.')),
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Scenes'),
-      h('p', { class: 'set-note' }, 'Themes with a moving picture behind the conversation. Text stays on a calm column in the middle, the scene speeds up while the agent works, and fireworks go up when a task finishes.'),
+      h('p', { class: 'set-note' }, 'Themes with a moving picture behind the conversation. Text stays in a plain column in the middle, the scene speeds up while the agent works, and fireworks go up when a task finishes.'),
       scenes,
       h('div', { class: 'set-card scene-opts' },
         row('Animate scenes', toggle(u.sceneMotion !== false, (v) => savePrefs({ sceneMotion: v }), 'Animate scenes'), 'Turn this off to keep the picture still. Scenes also stay still when Windows is set to reduce motion.'),
@@ -725,7 +768,7 @@ function tabLook(el) {
       row('Conversation width', seg('Conversation width', [['narrow', 'Narrow'], ['default', 'Default'], ['wide', 'Wide'], ['fill', 'Fill']], colWidth(), (v) => setColWidth(v)), 'The widest the conversation and the message box get.'),
       window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales everything in the window. Auto picks a size for your screen and goes larger on wide, high-resolution screens.') : null,
       row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on the screen.'),
-      row('Overview card', toggle(u.overview !== false, (v) => savePrefs({ overview: v }), 'Overview card'), 'The card beside the conversation with Changes, Files, Terminal and Plan.')),
+      row('Overview card', toggle(u.overview !== false, (v) => savePrefs({ overview: v }), 'Overview card'), 'The card beside the conversation with Changes, Files, Terminal and Tasks.')),
     group('Sidebar', null,
       row('Sort projects', seg('Sort projects', [['recent', 'Recent activity'], ['name', 'Name']], u.sortProjects === 'name' ? 'name' : 'recent', (v) => savePrefs({ sortProjects: v }))),
       row('Show archived conversations', toggle(u.showArchived === true, (v) => savePrefs({ showArchived: v }), 'Show archived conversations'), 'Archived conversations stay on disk; Settings → Conversations lists them.')),
@@ -815,7 +858,7 @@ function trustedGroup() {
     if (/[;&|`<>]|\$\(/.test(c)) return toast('A trusted command cannot chain, pipe or redirect (; & | < >).', 'error', 5000);
     save([...(S.engine?.trusted || []), c], () => { input.value = ''; input.focus(); });
   };
-  input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), add()));
+  onEnter(input, add);
   function draw() {
     const items = S.engine?.trusted || [];
     replace(list, items.length
@@ -869,7 +912,7 @@ function checkCommandGroup(ws) {
     }
   };
   api.get(`/api/engine/check?ws=${encodeURIComponent(ws)}`).then(show).catch((e) => (found.textContent = e.message));
-  input.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), save(input.value)));
+  onEnter(input, () => save(input.value));
   return h('section', { class: 'set-group' }, head,
     h('p', { class: 'set-note' }, 'For ', h('bdi', null, ws), '. Leave the box empty to use the command found in the project.'),
     h('div', { class: 'set-card trust-card' }, found, h('div', { class: 'trust-add' }, input, btn('Save', () => save(input.value), 'sm'), btn('No check in this project', () => save('off'), 'sm ghost'))));
@@ -961,7 +1004,7 @@ const COMX_URL = 'https://comx-site.vercel.app';
 const RELEASES_URL = 'https://github.com/chsxthwik/ORBIX/releases';
 
 /** Settings → Application → Updates, in the Windows app. It redraws itself as the status changes. */
-function updatesGroup() {
+function updatesGroup(onDispose) {
   if (!updatesSupported()) return ''; // el.append() would print null
   const box = h('div');
   let drawn = false;
@@ -979,6 +1022,7 @@ function updatesGroup() {
       row('What’s new', btn('Release notes', () => openLink(RELEASES_URL), 'sm'), 'Every version and what changed in it.')));
   };
   const off = on('update', draw);
+  onDispose(off);
   draw();
   return box;
 }
@@ -1000,7 +1044,7 @@ function versionInfo() {
 }
 
 /** A small pill next to the version: where the update stands. Nothing outside the Windows app. */
-function updatePill() {
+function updatePill(onDispose) {
   if (!updatesSupported()) return '';
   const pill = h('button', { class: 'about-pill', type: 'button' });
   let drawn = false;
@@ -1015,6 +1059,7 @@ function updatePill() {
     replace(pill, h('span', { class: 'dot' + (tone === 'ok' ? ' ok' : tone === 'warn' ? ' warn' : tone === 'on' ? ' live' : '') }), text);
   };
   const off = on('update', draw);
+  onDispose(off);
   draw();
   return pill;
 }
@@ -1025,11 +1070,14 @@ function tabApplication(el, show) {
   const b = S.env.backend;
   const v = window.orbixDesktop?.versions;
   const data = S.env.app.data || '';
+  const mark = asciiComx();
+  const cleanups = [mark.destroy];
+  const onDispose = (fn) => cleanups.push(fn);
   el.append(
     h('header', { class: 'about-h' }, logo(44),
       h('div', { class: 'about-id' },
         h('div', { class: 'about-name' }, h('strong', null, 'ORBIX'), h('span', { class: 'tag on', title: 'Features and screens may still change between versions.' }, 'Beta')),
-        h('div', { class: 'about-ver' }, h('span', { class: 'num' }, `Version ${S.env.app.version}`), updatePill())),
+        h('div', { class: 'about-ver' }, h('span', { class: 'num' }, `Version ${S.env.app.version}`), updatePill(onDispose))),
       btn('Copy version info', async (e) => {
         const b2 = e.currentTarget;
         if (!(await copyText(versionInfo(), { quiet: true }))) return toast('Copy failed. Click into ORBIX and try again.', 'error');
@@ -1042,7 +1090,7 @@ function tabApplication(el, show) {
     window.orbixDesktop?.system ? group('Notifications', null,
       row('Notification settings', btn('Open Windows settings', () => window.orbixDesktop.system.openNotifications(), 'sm'), 'How Windows shows ORBIX’s notifications (banners, sound, Do not disturb). What ORBIX tells you about is in Settings → Notifications.')) : '',
     group('Windows Subsystem for Linux', 'Run commands, tools, git and MCP servers in a WSL distribution instead of Windows.', whereRow()),
-    h('div', { class: 'about-upd' }, updatesGroup()),
+    h('div', { class: 'about-upd' }, updatesGroup(onDispose)),
     group('This copy', null,
       v ? row('Runtime', h('span', { class: 'about-v num' }, `Electron ${v.electron}`), `With Chromium ${v.chrome} and Node.js ${v.node}.`) : null,
       S.env.app.os ? row('System', h('span', { class: 'about-v' }, S.env.app.os)) : null,
@@ -1050,14 +1098,13 @@ function tabApplication(el, show) {
     group('Help', null,
       row('How ORBIX works', btn('Open', () => openHelp(), 'sm'), 'A short guide to connecting a model, approvals, undo and project rules.'),
       row('Keyboard shortcuts', btn('Open', () => show('keys'), 'sm'), 'Every shortcut. Change the keys of any action.'),
-      row('Check my setup', btn('Run', () => openDiagnostics(), 'sm'), 'Checks the data folder, WSL and your providers, and says what to fix.'),
+      row('Check my setup', btn('Run', () => openDiagnostics(), 'sm'), 'Checks the data folder, WSL and that a model is set up, and says what to fix.'),
       row('Report a problem', btn('Give feedback', () => show('feedback'), 'sm'), 'A bug, a feature you miss, or anything else. It opens as a GitHub issue you check before sending.')),
     h('section', { class: 'about-maker', 'aria-label': 'Made by COM-X Corporation' },
-      asciiComx().el,
+      mark.el,
       h('div', { class: 'about-maker-t' },
         h('span', { class: 'about-by' }, 'Developed by'),
         h('strong', null, 'COM-X Corporation'),
-        h('p', null, 'Company X finds the problems that matter most and builds their solutions. ORBIX is its coding workspace.'),
         h('button', { class: 'link', type: 'button', title: COMX_URL, onclick: () => openLink(COMX_URL) }, 'Visit COM-X', icon('external', 12)))),
     h('nav', { class: 'about-links', 'aria-label': 'ORBIX links' }, extLink('Website', SITE_URL), extLink('GitHub', REPO_URL), extLink('Release notes', RELEASES_URL), extLink('License', LICENSE_URL)),
     group(null, null,
@@ -1066,5 +1113,6 @@ function tabApplication(el, show) {
           await api.post('/api/quit').catch(() => {});
         }
       }, 'sm danger'), 'Stops every running conversation and closes the window. A downloaded update installs now.')),
-    h('p', { class: 'about-legal' }, '© 2026 chsxthwik. Licensed under FSL-1.1-MIT: free to use, and each release becomes MIT two years after it ships. Geist and Geist Mono are used under the SIL Open Font License.'));
+    h('p', { class: 'about-legal' }, '© 2026 chsxthwik. Licensed under FSL-1.1-MIT: free to use, and each release becomes MIT two years after it ships. Google Sans Flex and Geist Mono are used under the SIL Open Font License.'));
+  return () => cleanups.forEach((cleanup) => cleanup());
 }

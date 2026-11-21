@@ -6,7 +6,7 @@ import { app, session, ipcMain } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const PARTITION = 'persist:orbix-browser';
+const PARTITION = 'persist:orbix-browser';
 const web = (u) => /^https?:\/\//i.test(String(u || ''));
 let downloads = '';
 

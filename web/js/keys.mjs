@@ -28,7 +28,7 @@ export const ACTIONS = [
   { id: 'prevMine', group: 'Conversation', label: 'Previous message of yours', keys: ['Alt+↑'] },
   { id: 'nextMine', group: 'Conversation', label: 'Next message of yours', keys: ['Alt+↓'] },
   { id: 'sideQuestion', group: 'Conversation', label: 'Ask a side question', keys: [] },
-  { id: 'inspector', group: 'Conversation', label: 'Run inspector', keys: ['Ctrl+Shift+R'] },
+  { id: 'inspector', group: 'Conversation', label: 'Inspect', keys: ['Ctrl+Shift+R'] },
   { id: 'zen', group: 'Conversation', label: 'Focus mode', keys: ['Ctrl+Shift+F'] },
   { id: 'textBigger', group: 'Conversation', label: 'Bigger text', keys: ['Ctrl+='] },
   { id: 'textSmaller', group: 'Conversation', label: 'Smaller text', keys: ['Ctrl+-'] },

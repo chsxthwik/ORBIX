@@ -1,29 +1,47 @@
 // Modals, menus and pickers: modal, confirm, prompt, folder picker, model picker, agent requests, palette.
-import { h, $, icon, iconBtn, replace, toast, fmtTokens, skeleton, kbd, leave, errorState, loadingState } from './dom.js';
+import { h, $, icon, iconBtn, replace, toast, fmtTokens, skeleton, kbd, leave, errorState, loadingState, onEnter } from './dom.js';
 import { api } from './api.js';
 import { replyUi, S } from './store.js';
 import { brandMark } from './brands.js';
 import { fuzzy, marked } from './composer.js';
 
 const FOCUSABLE = 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"],a[href]';
+function topModal(root) {
+  for (let el = root.lastElementChild; el; el = el.previousElementSibling) {
+    if (!el.classList.contains('closing')) return el;
+  }
+  return null;
+}
 
-export function modal({ title, body, actions = [], size = '', cls = '', onClose, initialFocus }) {
+function syncModalFocus(root) {
+  const top = topModal(root);
+  for (const layer of root.children) layer.inert = layer !== top;
+  for (const id of ['app', 'chrome']) {
+    const page = document.getElementById(id);
+    if (page) page.inert = !!top;
+  }
+}
+
+export function modal({ title, body, actions = [], size = '', cls = '', onClose, initialFocus, returnFocus }) {
   const root = $('#modal-root');
-  const prev = document.activeElement;
+  // A dialog replaces any open menu (a double-click on a name opens its menu with the first click, then renames).
+  const openMenu = document.querySelector('.menu:not(.leaving)');
+  const prev = openMenu?.contains(document.activeElement) ? openMenu._anchor : document.activeElement;
+  openMenu?._close?.();
   const scrim = h('div', { class: 'scrim', onmousedown: (e) => e.target === scrim && close() });
   const bodyEl = h('div', { class: 'modal-b' }, body);
   const foot = actions.length ? h('div', { class: 'modal-f' }, actions) : null;
   const box = h('div', { class: `modal${size ? ' ' + size : ''}${cls ? ' ' + cls : ''}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': title, tabindex: '-1' }, h('div', { class: 'modal-h' }, h('h2', null, title), iconBtn('x', 'Close (Esc)', () => close())), bodyEl, foot);
   scrim.append(box);
-  const isTop = () => [...root.children].filter((x) => !x.classList.contains('closing')).pop() === scrim;
+  const isTop = () => topModal(root) === scrim;
   const onKey = (e) => {
-    if (!isTop()) return;
+    if (!isTop() || e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Escape') {
       e.stopPropagation();
       e.preventDefault();
       close();
     } else if (e.key === 'Tab') {
-      const f = [...box.querySelectorAll(FOCUSABLE)].filter((x) => x.offsetParent);
+      const f = [...box.querySelectorAll(FOCUSABLE)].filter((x) => x.tabIndex >= 0 && x.getClientRects().length && !x.closest('[inert]'));
       if (!f.length) return;
       const first = f[0];
       const last = f[f.length - 1];
@@ -33,16 +51,19 @@ export function modal({ title, body, actions = [], size = '', cls = '', onClose,
   };
   document.addEventListener('keydown', onKey, true);
   root.append(scrim);
+  syncModalFocus(root);
   let closed = false;
   function close(val) {
     if (closed) return;
     closed = true;
     document.removeEventListener('keydown', onKey, true);
     scrim.classList.add('closing');
+    syncModalFocus(root);
     setTimeout(() => scrim.remove(), 140);
     onClose?.(val);
     try {
-      if (prev?.isConnected) prev.focus({ preventScroll: true });
+      const target = returnFocus?.() || prev;
+      if (target?.isConnected && !target.closest('[inert]')) target.focus({ preventScroll: true });
     } catch {}
   }
   setTimeout(() => {
@@ -80,13 +101,34 @@ export function confirmDialog(title, message, { ok = 'OK', danger = false } = {}
   });
 }
 
-export function promptDialog(title, label, value = '') {
+/**
+ * Ask for one line of text. Resolves with the trimmed text, or null when cancelled. A blank answer is not accepted:
+ * the field says so and the dialog stays open (unless `allowEmpty`).
+ */
+export function promptDialog(title, label, value = '', { ok = 'Save', allowEmpty = false, maxLength = 200 } = {}) {
   return new Promise((resolve) => {
-    const inp = h('input', { type: 'text', value, 'aria-label': label });
-    const go = () => m.close(inp.value.trim());
-    inp.addEventListener('keydown', (e) => e.key === 'Enter' && go());
-    const m = modal({ title, size: 'sm', body: h('label', { class: 'field' }, h('span', null, label), inp), onClose: (v) => resolve(v || null), actions: [btn('Cancel', () => m.close(null)), btn('Save', go, 'primary')] });
-    setTimeout(() => inp.select(), 0);
+    const err = h('small', { class: 'field-err', role: 'alert', hidden: true }, `${label} cannot be empty`);
+    const inp = h('input', { type: 'text', value, maxlength: String(maxLength), spellcheck: 'false', 'aria-label': label, oninput: () => ((err.hidden = true), inp.removeAttribute('aria-invalid')) });
+    const go = () => {
+      const v = inp.value.trim();
+      if (!v && !allowEmpty) {
+        err.hidden = false;
+        inp.setAttribute('aria-invalid', 'true');
+        inp.focus();
+        return;
+      }
+      m.close(v);
+    };
+    inp.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
+      // Handled here, once: without preventDefault the same Enter would also press whatever button gets the focus back
+      // when the dialog closes (the conversation row or the menu that opened it).
+      e.preventDefault();
+      e.stopPropagation();
+      go();
+    });
+    const m = modal({ title, size: 'sm', initialFocus: inp, body: h('label', { class: 'field' }, h('span', null, label), inp, err), onClose: (v) => resolve(typeof v === 'string' ? v : null), actions: [btn('Cancel', () => m.close(null)), btn(ok, go, 'primary')] });
+    setTimeout(() => inp.isConnected && inp.select(), 0);
   });
 }
 
@@ -121,6 +163,7 @@ export function popMenu(anchor, items, { align = 'start', minWidth = 200 } = {})
     removeEventListener('resize', close);
   };
   m._close = close;
+  m._anchor = anchor;
   const pick = (it) => {
     close();
     anchor.focus?.({ preventScroll: true });
@@ -173,7 +216,7 @@ export function folderPicker(start = '') {
         replace(list, errorState(e.message, { title: 'Couldn’t open this folder.', retry: () => load(p) }));
       }
     };
-    pathIn.addEventListener('keydown', (e) => e.key === 'Enter' && load(pathIn.value.trim()));
+    onEnter(pathIn, () => load(pathIn.value.trim()));
     const m = modal({
       title: 'Choose a project folder',
       body: h('div', { class: 'stack' }, h('div', { class: 'row' }, pathIn, btn('Drives', () => load(''))), list),
@@ -195,75 +238,119 @@ function modelTip(x) {
   return [x.id, x.contextWindow ? `Context: ${fmtTokens(x.contextWindow)} tokens` : '', levels].filter(Boolean).join('\n');
 }
 
-export function modelPicker({ load, current, onPick, extra, loading = 'Loading models…' }) {
-  const list = h('div', { class: 'list mp-list', role: 'listbox', 'aria-label': 'Models' });
-  const q = h('input', { type: 'search', placeholder: 'Search models', 'aria-label': 'Search models', spellcheck: 'false' });
-  const m = modal({ title: 'Choose a model', body: h('div', { class: 'stack' }, q, list), initialFocus: q });
+let pickerId = 0;
+export function modelPicker({ load, current, onPick, extra, loading = 'Loading models…', returnFocus }) {
+  const id = `models-${++pickerId}`;
+  const list = h('div', { id, class: 'list mp-list', role: 'listbox', 'aria-label': 'Models' });
+  const q = h('input', { type: 'search', role: 'combobox', 'aria-autocomplete': 'list', 'aria-controls': id, 'aria-expanded': 'false', placeholder: 'Search by model or provider', 'aria-label': 'Search models', spellcheck: 'false' });
+  const feedback = h('span', { class: 'mp-results', role: 'status' });
+  const footer = h('div', { class: 'mp-footer' }, feedback, h('span', { 'aria-hidden': 'true' }, kbd('↑'), kbd('↓'), ' navigate ', kbd('Enter'), ' choose'));
+  const m = modal({ title: 'Choose a model', cls: 'model-picker', body: h('div', { class: 'mp-layout' }, q, list, footer), initialFocus: q, returnFocus });
   let models = [];
+  let errors = [];
+  let options = [];
+  let marked = null;
   let sel = 0;
   let shown = [];
+  let choosing = false;
   const choose = async (x) => {
+    if (choosing || !list.isConnected) return;
+    choosing = true;
+    list.setAttribute('aria-busy', 'true');
     try {
       await onPick(x);
       m.close();
     } catch (e) {
       toast(e.message, 'error');
+    } finally {
+      choosing = false;
+      list.removeAttribute('aria-busy');
     }
   };
-  const draw = () => {
+  const draw = (initial = false) => {
     const f = q.value.toLowerCase().trim();
     const byProv = new Map();
     shown = [];
-    for (const x of models) if (!f || `${x.provider} ${x.id} ${x.name || ''}`.toLowerCase().includes(f)) (byProv.get(x.provider) || byProv.set(x.provider, []).get(x.provider)).push(x);
+    options = [];
+    marked = null;
+    const providerNames = new Map([...(S.engine?.providers || []), ...(S.engine?.agents || [])].map((p) => [p.id, p.name]));
+    for (const x of models) if (!f || `${providerNames.get(x.provider) || ''} ${x.provider} ${x.id} ${x.name || ''}`.toLowerCase().includes(f)) (byProv.get(x.provider) || byProv.set(x.provider, []).get(x.provider)).push(x);
     const kids = [];
+    const option = (x, b) => {
+      b.id = `${id}-${shown.length}`;
+      b.tabIndex = -1;
+      shown.push(x);
+      options.push(b);
+      kids.push(b);
+    };
     if (extra && !f) {
-      kids.push(h('button', { class: 'list-it' + (!current ? ' cur' : ''), type: 'button', role: 'option', onclick: () => choose(null) }, h('span', { class: 'grow' }, extra)));
-      shown.push(null);
+      option(null, h('button', { class: 'list-it' + (!current ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(!current), onclick: () => choose(null) }, h('span', { class: 'grow' }, extra)));
     }
     // "thinking" only tells models apart where a provider has some that think and some that do not.
     const mixed = new Set([...byProv].filter(([, arr]) => arr.some((x) => x.reasoning) && arr.some((x) => !x.reasoning)).map(([p]) => p));
     for (const [p, arr] of byProv) {
-      kids.push(h('div', { class: 'list-h with-mark' }, brandMark(p, 14), S.engine?.providers?.find((q) => q.id === p)?.name || p));
+      kids.push(h('div', { class: 'list-h with-mark' }, brandMark(p, 16), providerNames.get(p) || p));
       for (const x of arr) {
         const isCur = current && current.id === x.id && current.provider === x.provider;
-        shown.push(x);
-        kids.push(h('button', { class: 'list-it' + (isCur ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(!!isCur), title: modelTip(x), onclick: () => choose(x) }, h('span', { class: 'grow ell' }, x.name || x.id), x.reasoning && mixed.has(p) ? h('span', { class: 'tag' }, 'thinking') : null, x.contextWindow ? h('span', { class: 'muted small num' }, fmtTokens(x.contextWindow)) : null, isCur ? icon('check', 14) : null));
+        option(x, h('button', { class: 'list-it' + (isCur ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(!!isCur), title: modelTip(x), onclick: () => choose(x) }, h('span', { class: 'grow ell' }, x.name || x.id), x.reasoning && mixed.has(p) ? h('span', { class: 'tag' }, 'thinking') : null, x.contextWindow ? h('span', { class: 'muted small num' }, fmtTokens(x.contextWindow)) : null, isCur ? icon('check', 14) : null));
       }
     }
+    if (errors.length) kids.push(h('div', { class: 'pad small warn-text', role: 'status' }, errors.join(' · ')));
     if (!byProv.size && !(extra && !f)) kids.push(h('div', { class: 'empty' }, 'No matching models'));
     replace(list, kids);
+    const count = shown.filter(Boolean).length;
+    feedback.textContent = `${count} ${count === 1 ? 'model' : 'models'}${errors.length ? ` · ${errors.length} source${errors.length === 1 ? '' : 's'} unavailable` : ''}`;
+    q.setAttribute('aria-expanded', String(shown.length > 0));
+    if (initial) sel = shown.findIndex((x) => x ? x.id === current?.id && x.provider === current?.provider : !current);
     sel = Math.max(0, Math.min(sel, shown.length - 1));
     mark();
   };
   const mark = () => {
-    const items = [...list.querySelectorAll('.list-it')];
-    items.forEach((x, i) => x.classList.toggle('sel', i === sel));
-    items[sel]?.scrollIntoView({ block: 'nearest' });
+    const next = options[sel];
+    if (next === marked) return;
+    marked?.classList.remove('sel');
+    marked = next;
+    marked?.classList.add('sel');
+    if (marked) q.setAttribute('aria-activedescendant', marked.id);
+    else q.removeAttribute('aria-activedescendant');
+    marked?.scrollIntoView({ block: 'nearest' });
   };
   q.addEventListener('input', () => {
     sel = 0;
     draw();
   });
   q.addEventListener('keydown', (e) => {
+    if (!shown.length || e.isComposing || e.keyCode === 229) return;
     if (e.key === 'ArrowDown') (e.preventDefault(), (sel = Math.min(shown.length - 1, sel + 1)), mark());
     else if (e.key === 'ArrowUp') (e.preventDefault(), (sel = Math.max(0, sel - 1)), mark());
     else if (e.key === 'Enter' && shown.length) (e.preventDefault(), choose(shown[sel]));
   });
   const fetchModels = () => {
+    feedback.textContent = 'Loading model list';
+    q.removeAttribute('aria-activedescendant');
+    q.setAttribute('aria-expanded', 'false');
     replace(list, loadingState(loading, 6));
     return Promise.resolve()
       .then(load)
-      .then((ms) => {
-        models = ms || [];
-        const i = models.findIndex((x) => current && x.id === current.id && x.provider === current.provider);
-        sel = i >= 0 ? i + (extra ? 1 : 0) : 0;
-        draw();
+      .then((result) => {
+        if (!list.isConnected) return;
+        models = Array.isArray(result) ? result : result?.models || [];
+        errors = Array.isArray(result?.errors) ? result.errors : [];
+        draw(true);
       })
-      .catch((e) => list.isConnected && replace(list, errorState(e.message, { title: 'Couldn’t load the models.', retry: fetchModels })));
+      .catch((e) => {
+        if (!list.isConnected) return;
+        feedback.textContent = 'Model list unavailable';
+        replace(list, errorState(e.message, { title: 'Couldn’t load the models.', retry: fetchModels }));
+      });
   };
   fetchModels();
   return m;
 }
+
+/** Approval answers are fixed values the engine understands; the buttons say them in the interface's words. */
+const APPROVAL_LABEL = { 'Allow for this session': 'Allow in this conversation', 'Always allow this command': 'Always allow' };
+export const approvalLabel = (o) => APPROVAL_LABEL[o] || o;
 
 /** Tool approvals ("Allow once / Allow for this session / Deny") are shown inline above the composer, not as a modal. */
 export const isApproval = (d) => d?.method === 'select' && Array.isArray(d.options) && d.options.every((o) => typeof o === 'string') && d.options.includes('Deny');

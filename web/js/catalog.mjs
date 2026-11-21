@@ -73,9 +73,9 @@ export const CATALOG = [
   },
   {
     id: 'stripe', name: 'Stripe', cat: 'Design and business', mono: 'S', color: '#635BFF',
-    blurb: 'Customers, payments, products and docs in your Stripe account.',
-    fields: [{ key: 'STRIPE_SECRET_KEY', label: 'Secret key (use a test or restricted key)', secret: true }],
-    config: (v) => ({ command: 'npx', args: ['-y', '@stripe/mcp', '--tools=all'], env: { STRIPE_SECRET_KEY: v.STRIPE_SECRET_KEY } }),
+    blurb: 'Customers, payments, products and docs in your Stripe account, through Stripe’s own server.',
+    fields: [{ key: 'key', label: 'Agent API key', secret: true, hint: 'dashboard.stripe.com → Developers → API keys → Create agent key (start in a sandbox)' }],
+    config: (v) => ({ url: 'https://mcp.stripe.com', headers: { Authorization: `Bearer ${v.key}` } }),
   },
 ];
 

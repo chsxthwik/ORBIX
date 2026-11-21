@@ -15,10 +15,10 @@ import { mkdirp, readJson, writeJson, clip } from './util.mjs';
 /** While a run is in one of these states an agent is working on it. */
 export const WORKING = new Set(['planning', 'executing']);
 /** States that wait for you. */
-export const NEEDS_YOU = new Set(['awaiting_plan', 'question', 'review', 'interrupted', 'failed', 'stopped']);
+const NEEDS_YOU = new Set(['awaiting_plan', 'question', 'review', 'interrupted', 'failed', 'stopped']);
 /** States after which nothing more happens. */
 export const FINAL = new Set(['applied', 'kept', 'discarded']);
-export const STATUSES = new Set([...WORKING, ...NEEDS_YOU, ...FINAL]);
+const STATUSES = new Set([...WORKING, ...NEEDS_YOU, ...FINAL]);
 
 /** Artifact kinds, with who writes them and what the UI calls them. */
 export const ARTIFACTS = {
@@ -34,7 +34,7 @@ const ID_RE = /^r[0-9a-z]{6,40}$/;
 
 const bad = (message, status = 400) => Object.assign(new Error(message), { status });
 
-export function newRunId() {
+function newRunId() {
   return `r${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`;
 }
 

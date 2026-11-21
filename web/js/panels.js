@@ -1,4 +1,4 @@
-// Right-hand panel: Files, Changes (git), Todos, Agents, Console.
+// Side panel: Overview, Inspect, Review, Files, Changes (git), Tasks, Agents, Side question, Terminal and Browser.
 import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce, errorState } from './dom.js';
 import { asciiArt } from './ascii.js';
 import { api, rpc } from './api.js';
@@ -11,7 +11,7 @@ import { coalesce } from './coalesce.mjs';
 import { drawReview, loadReview, reviewCount } from './review.js';
 import { workingRuns } from './runs.js';
 import { renderMarkdown } from './markdown.js';
-import { asciiBar } from './ascii.js';
+import { asciiSpin } from './ascii.js';
 import { openLink } from './engine.js';
 import { desktopBrowser, canShowInside, addressToUrl, rememberVisit } from './browser.js';
 
@@ -21,7 +21,7 @@ let body;
 let tabsEl;
 let inspector = null;
 
-const ALL_TABS = [['home', 'Overview', 'overview'], ['run', 'Run', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Plan', 'list'], ['agents', 'Agents', 'users'], ['ask', 'Side question', 'message'], ['console', 'Console', 'terminal'], ['browser', 'Browser', 'globe']];
+const ALL_TABS = [['home', 'Overview', 'overview'], ['run', 'Inspect', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Tasks', 'list'], ['agents', 'Agents', 'users'], ['ask', 'Side question', 'message'], ['console', 'Terminal', 'terminal'], ['browser', 'Browser', 'globe']];
 // Review is there for a session on its own branch only.
 let TABS = ALL_TABS.filter(([k]) => k !== 'review');
 function syncTabs(t) {
@@ -97,7 +97,9 @@ export function showTab(name) {
   if (name === 'review' && activeTab()?.worktree) loadReview(activeTab(), reviewRedraw);
   savePrefs({ rightTab: name, rightPanel: true });
   emit('panel:open');
-  if (name === 'console') setTimeout(() => body.querySelector('.console-in input')?.focus(), 0);
+  const field = { console: '.console-in input', ask: '.ask-in', browser: '.br-url' }[name];
+  const input = field && body.querySelector(field);
+  if (input) queueMicrotask(() => input.isConnected && input.focus({ preventScroll: true }));
 }
 
 /** The panel's tabs for a session and the counts on them (also shown on the Overview card). */
@@ -157,7 +159,7 @@ function homeCounts() {
 function drawHome(t) {
   const { tabs, badge } = panelInfo(t);
   const find = h('button', { class: 'ph-find', type: 'button', onclick: () => emit('search', 'files') }, icon('search', 14), h('span', { class: 'grow' }, `Find a file in ${baseName(t.workspace) || 'the project'}`), h('kbd', null, 'Ctrl+K'));
-  const ITEMS = { review: ['Review', 'check'], changes: ['Changes', 'branch'], files: ['Open file', 'file'], console: ['Terminal', 'terminal'], ask: ['Side question', 'message'], browser: ['Browser', 'globe'], todos: ['Plan', 'list'], run: ['Inspect', 'activity'] };
+  const ITEMS = { review: ['Review', 'check'], changes: ['Changes', 'branch'], files: ['Open file', 'file'], console: ['Terminal', 'terminal'], ask: ['Side question', 'message'], browser: ['Browser', 'globe'], todos: ['Tasks', 'list'], run: ['Inspect', 'activity'] };
   const have = new Set(tabs.map(([k]) => k));
   const items = ['review', 'changes', 'files', 'console', 'browser', 'ask', 'todos', 'run'].filter((k) => have.has(k)).map((k) => h('button', { class: 'ph-it', type: 'button', dataset: { k }, onclick: () => showTab(k) }, icon(ITEMS[k][1], 15), h('span', { class: 'grow' }, ITEMS[k][0]), badge[k] ? h('span', { class: 'ph-n num' }, badge[k]) : null));
   const helpers = [...(t.subagents?.values() || [])];
@@ -214,12 +216,11 @@ function drawAsk(t) {
   const log = h('div', { class: 'p-scroll pad ask-log' },
     list.length ? list.map((it) => h('div', { class: 'ask-qa' },
       h('div', { class: 'ask-q' }, it.q),
-      it.busy ? h('div', { class: 'pending' }, asciiBar(), h('span', { class: 'pending-l' }, 'Thinking'))
+      it.busy ? h('div', { class: 'pending' }, asciiSpin(), h('span', { class: 'pending-l' }, 'Thinking'))
         : it.err ? h('div', { class: 'ask-err' }, it.err)
         : h('div', { class: 'ask-a' }, renderMarkdown(it.a), it.model ? h('div', { class: 'ask-m' }, it.model) : null))) : emptyState('users', 'Ask a quick question about this conversation, even while the agent works: what it changed, why, where something is. It answers without tools and does not add to the conversation. You can also type /btw in the message box.'));
   body.append(log, h('div', { class: 'ask-bar' }, box, iconBtn('send', 'Ask (Enter)', send, 'ask-go')));
   log.scrollTop = log.scrollHeight;
-  setTimeout(() => box.focus({ preventScroll: true }), 0);
 }
 
 /**
@@ -265,7 +266,6 @@ function drawBrowser(t) {
         servers.length ? servers.map((s) => h('button', { class: 'ph-row br-row', type: 'button', title: s.url, onclick: () => go(s.url) }, h('span', { class: 'dot ok' }), h('span', { class: 'ell grow' }, s.title || `localhost:${s.port}`), h('span', { class: 'muted num' }, `:${s.port}`)))
           : emptyState('files', `No web app is running on the usual ports (3000, 5173, 8000, 8080…). Start your dev server, or ask the agent to, then look again. ${desk ? 'You can also type any address or a search above.' : 'You can also type a port or a localhost address above.'}`));
     }, (e) => list.isConnected && replace(list, errorState(e.message, { retry: () => draw() })));
-    setTimeout(() => input.focus({ preventScroll: true }), 0);
     return;
   }
   const home = iconBtn('layers', 'Running apps', () => {
@@ -584,7 +584,8 @@ function drawConsole(t) {
     out.scrollTop = out.scrollHeight;
   };
   inp.addEventListener('keydown', async (e) => {
-    if (e.key !== 'Enter' || !inp.value.trim() || t.dead) return;
+    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229 || !inp.value.trim() || t.dead) return;
+    e.preventDefault();
     const entry = { cmd: inp.value.trim(), out: null };
     inp.value = '';
     t.console.push(entry);
@@ -597,9 +598,13 @@ function drawConsole(t) {
       entry.out = er.message;
       entry.code = 1;
     }
-    if (P.tab === 'console' && activeTab() === t) paint();
+    if (P.tab === 'console' && activeTab() === t) {
+      if (out.isConnected) paint();
+      else body.querySelector('.console-out')?._paint?.();
+    }
     emit('tab:panel', t, 'git');
   });
   body.append(out, h('div', { class: 'console-in' }, h('span', { class: 'prompt', 'aria-hidden': 'true' }, '$'), inp, iconBtn('stop', 'Stop the running command', () => rpc(t.id, { type: 'abort_bash' }).catch(() => {}), 'sm')));
+  out._paint = paint;
   paint();
 }

@@ -33,7 +33,7 @@ export async function collect(app) {
   if (backend.isWsl) {
     ({ distros } = await Backend.wslInfo().catch(() => ({ distros: [] })));
     add('wsl', 'WSL is available', distros.length > 0, distros.length ? distros.join(', ') : 'no distributions found', 'Install WSL and a Linux distribution (wsl --install), or switch the backend to Windows in Settings.');
-    add('distro', `WSL distribution "${backend.distro}" exists`, distros.includes(backend.distro), backend.distro || '(none selected)', 'Pick an installed distribution in Settings → Backend.');
+    add('distro', `WSL distribution "${backend.distro}" exists`, distros.includes(backend.distro), backend.distro || '(none selected)', 'Pick an installed distribution in Settings → Application → Windows Subsystem for Linux.');
     if (distros.includes(backend.distro)) {
       const home = (await backend.probe().catch(() => ({}))).home;
       add('wsl-start', `WSL distribution "${backend.distro}" starts`, !!home, home ? `home ${home}` : 'no answer from the distribution', 'Start it once from a terminal (wsl -d <name>) to finish its setup, then run this check again.');

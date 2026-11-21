@@ -9,6 +9,18 @@ import { destructiveReason, siteVerdict } from './policy.mjs';
 // File tools whose path is checked against the project folder before they run.
 const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
 
+// The same call failing the same way with no other call between it: from the REPEAT_NOTE-th time the result tells the
+// model to change course; from the REPEAT_BLOCK-th time it is not run at all (see _loop for when the run stops).
+export const REPEAT_NOTE = 3;
+export const REPEAT_BLOCK = 5;
+
+/** JSON with object keys sorted, so two calls with the same arguments in another order compare equal. */
+const stableJson = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((key) => [key, x[key]])) : x));
+/** A call's identity: tool name and arguments. */
+const callKey = (call) => `${call.name}\0${stableJson(call.arguments || {})}`;
+/** An error text without its numbers (durations, timestamps), so two runs of one failure compare equal. */
+const failureOf = (text) => String(text ?? '').replace(/\d+/g, '#').slice(0, 4000);
+
 /** True when a message the user typed names `host` as a whole word ("10.0.0.1" does not match "10.0.0.15"). */
 export function userMentionsHost(messages, host) {
   const esc = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -111,7 +123,11 @@ export class ToolRuns {
     return false;
   }
 
-  /** Run tool calls: consecutive read-only calls run side by side, everything else one at a time, in order. */
+  /**
+   * Run tool calls: consecutive read-only calls run side by side, everything else one at a time. Results are added
+   * to the conversation in the order of the calls, whatever order they finish in: some models match results to
+   * calls by position, not by id.
+   */
   async _runTools(calls, conn) {
     const results = new Array(calls.length);
     let i = 0;
@@ -120,10 +136,10 @@ export class ToolRuns {
         let j = i;
         while (j < calls.length && this._isReadOnly(calls[j].name)) j++;
         const done = await Promise.all(calls.slice(i, j).map((c) => this._runTool(c, conn)));
-        done.forEach((r, k) => (results[i + k] = r));
+        done.forEach((m, k) => (results[i + k] = this._add(m)));
         i = j;
       } else {
-        results[i] = await this._runTool(calls[i], conn);
+        results[i] = this._add(await this._runTool(calls[i], conn));
         i++;
       }
     }
@@ -132,7 +148,16 @@ export class ToolRuns {
     return results;
   }
 
+  /** Record a tool result and add it to the conversation at once. */
   _record(call, result, announce = true, startedAt) {
+    return this._add(this._toolMessage(call, result, announce, startedAt));
+  }
+
+  /**
+   * The toolResult message for a finished call, not yet added to the conversation: keeps its undo checkpoint and
+   * tells the UI the call ended (`announce`).
+   */
+  _toolMessage(call, result, announce = true, startedAt) {
     const content = [{ type: 'text', text: result.text }, ...(result.images || [])];
     const details = { ...(result.details || {}) };
     const undo = details.undo;
@@ -146,8 +171,7 @@ export class ToolRuns {
     if (startedAt && details.wallTimeMs == null) details.wallTimeMs = Date.now() - startedAt;
     if (call.name === 'todo' && details.phases) this.todoPhases = details.phases;
     if (announce) this._emit({ type: 'tool_execution_end', toolCallId: call.id, toolName: call.name, result: { content, details }, isError: !!result.isError });
-    const tr = { role: 'toolResult', toolCallId: call.id, toolName: call.name, content, details, isError: !!result.isError, timestamp: Date.now() };
-    return this._add(tr);
+    return { role: 'toolResult', toolCallId: call.id, toolName: call.name, content, details, isError: !!result.isError, timestamp: Date.now() };
   }
 
   /** Ask the user about a call that needs approval. Returns the denial result, or undefined when it may run. */
@@ -172,10 +196,38 @@ export class ToolRuns {
     }
   }
 
+  /**
+   * Track identical failing calls in this run (`run.repeat`: { key, fail, count }). Returns the result, with a note
+   * once the same failure repeats REPEAT_NOTE times in a row. A different call, or any success, starts over.
+   */
+  _noteRepeat(key, result) {
+    const run = this.run;
+    if (!run) return result;
+    if (result.details?.repeated) {
+      run.repeatBlocked = (run.repeatBlocked || 0) + 1;
+      return result;
+    }
+    const fail = result.isError ? failureOf(result.text) : null;
+    const r = run.repeat;
+    if (fail !== null && r?.key === key && r.fail === fail) r.count++;
+    else run.repeat = fail === null ? null : { key, fail, count: 1 };
+    const n = run.repeat?.count || 0;
+    if (n < REPEAT_NOTE) return result;
+    return { ...result, text: `${result.text}\n[This exact call has now failed ${n} times in a row with the same error. Sending it again unchanged will fail again: find the cause (read the file, check the path or the command), change the arguments or the approach, or stop and tell the user what is blocking you.]` };
+  }
+
+  /** The result for a call that already failed REPEAT_BLOCK - 1 times in a row the same way, or undefined. */
+  _repeatBlocked(key) {
+    const r = this.run?.repeat;
+    if (!r || r.key !== key || r.count < REPEAT_BLOCK - 1) return undefined;
+    return { text: `Not run: this exact call already failed ${r.count} times in a row with the same error, so it was not sent again. Do something different, or stop and tell the user what is blocking you.`, isError: true, details: { repeated: true } };
+  }
+
   async _runTool(call, conn) {
     const args = call.arguments || {};
+    const key = callKey(call);
     let t0 = Date.now();
-    const intent = call.name === 'bash' ? clip(String(args.command ?? ''), 80) : call.name === 'web_fetch' ? clip(String(args.url ?? ''), 80) : this.mcp.has(call.name) ? this.mcp.describe(call.name) : undefined;
+    const intent = call.name === 'bash' ? clip(String(args.description || args.command || ''), 80) : call.name === 'web_fetch' ? clip(String(args.url ?? ''), 80) : this.mcp.has(call.name) ? this.mcp.describe(call.name) : undefined;
     this._emit({ type: 'tool_execution_start', toolCallId: call.id, toolName: call.name, args, intent });
     let result;
     if (call.truncated || call.invalidArguments) {
@@ -184,6 +236,7 @@ export class ToolRuns {
         : { text: invalidArgsText(this._toolDefs().find((d) => d.name === call.name)), isError: true };
     } else if (this.planMode && !this._isReadOnly(call.name)) result = { text: 'Plan mode is on, so this tool is not available. Only read and plan; the user can turn plan mode off with /plan.', isError: true };
     else if ((!this.defs.some((d) => d.name === call.name) && !this.mcp.has(call.name) && !(call.name === 'artifact' && this.runInfo)) || (call.name === 'web_search' && !this._searchOn())) result = { text: `Unknown tool "${call.name}". Available tools: ${this._toolDefs().map((d) => d.name).join(', ')}.`, isError: true };
+    else result = this._repeatBlocked(key);
     if (!result) {
       const signal = this.abortCtl.signal;
       const onUpdate = (text) => this._emit({ type: 'tool_execution_update', toolCallId: call.id, toolName: call.name, args, partialResult: { content: [{ type: 'text', text }], details: {} } });
@@ -206,6 +259,8 @@ export class ToolRuns {
         },
       });
     }
-    return this._record(call, result, true, t0);
+    // A run that was stopped is not a failure of the call.
+    if (!this.abortCtl.signal.aborted) result = this._noteRepeat(key, result);
+    return this._toolMessage(call, result, true, t0); // added to the conversation by _runTools, in call order
   }
 }

@@ -19,7 +19,7 @@ const PROMPTS = {
 export const HELP = [
   'ORBIX agent. What you can do here:',
   '• Describe a task. The agent reads, searches, edits files, runs commands and fetches web pages to do it.',
-  '• Every file change and command asks for your approval first (change this in Settings → Behavior).',
+  '• Every file change and command asks for your approval first (change this in Settings → General → Tool permissions).',
   '• `@path` in a message attaches that file (an image is sent as an image; a folder as a listing). `/plan` switches to read-only planning and back.',
   '• `/retry` answers your last message again (the old reply is replaced).',
   '• `/init` writes an AGENTS.md for the project, `/review` reviews your uncommitted changes, `/commit` writes a message for the staged changes and commits (it asks first).',

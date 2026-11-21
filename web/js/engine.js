@@ -1,5 +1,5 @@
 // "Providers": add a key (or a local server) for the ORBIX agent. Each provider is checked before it is saved.
-import { h, icon, toast, replace, spinner, skeleton, errorState } from './dom.js';
+import { h, icon, toast, replace, spinner, skeleton, errorState, onEnter } from './dom.js';
 import { api } from './api.js';
 import { loadEngine } from './store.js';
 import { confirmDialog } from './dialogs.js';
@@ -131,7 +131,7 @@ export async function renderEngineSettings(root) {
         save.textContent = label;
       }
     });
-    for (const el of [key, url]) el?.addEventListener('keydown', (e) => e.key === 'Enter' && save?.click());
+    for (const el of [key, url]) onEnter(el, () => save?.click());
 
     const remove = p.configured
       ? h('button', { class: 'btn sm', type: 'button', onclick: async () => {
@@ -178,7 +178,7 @@ export async function renderEngineSettings(root) {
               finish.disabled = false;
             }
           } }, 'Finish');
-          paste.addEventListener('keydown', (e) => e.key === 'Enter' && finish.click());
+          onEnter(paste, () => finish.click());
           oauthRow = h('div', { class: 'pv-signin' },
             h('div', { class: 'pv-signin-h' }, spinner(12), h('span', null, 'Finish signing in in your browser.'), h('span', { class: 'grow' }), again, cancel),
             h('details', { class: 'pv-paste-d' },

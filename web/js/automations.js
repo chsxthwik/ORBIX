@@ -1,6 +1,6 @@
 // Automations (sidebar → Automations): prompts ORBIX sends by itself on a schedule, each as a new conversation in
 // its project. The page lists them with their next and last run, and has a form to add or change one.
-import { h, icon, replace, toast, baseName, timeAgo, errorState, skeleton } from './dom.js';
+import { h, icon, replace, toast, baseName, timeAgo, errorState, skeleton, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, emit, groupSessions } from './store.js';
 import { btn, confirmDialog, toggle, modal } from './dialogs.js';
@@ -143,7 +143,7 @@ function createWithPrompt(root) {
     drawAutomations(root);
     toast(found ? 'Check the schedule and the task, then add it.' : 'No time was found, so it runs every day at 09:00. Change it below.', found ? 'ok' : 'info', 3500);
   };
-  ta.addEventListener('keydown', (e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), go()));
+  onEnter(ta, go);
   const m = modal({ title: 'Create with Prompt', size: 'sm', body: h('div', { class: 'au-ask-b' }, h('p', { class: 'muted small' }, 'Say what it should do and when: every hour, every day, on weekdays or on a day of the week, at a time.'), ta), actions: [btn('Cancel', () => m.close()), btn('Continue', go, 'primary')] });
 }
 
@@ -168,7 +168,7 @@ export function drawAutomations(root) {
           h('button', { class: 'btn sm au-new', type: 'button', 'aria-label': 'New automation', onclick: () => ((form = { enabled: true, project: projects()[0]?.[0] || '' }), drawAutomations(root)) }, icon('plus', 13), 'New'))),
       ask ? h('p', { class: 'au-note' }, icon('shield', 13), 'With Ask first or Auto edits, a run waits for your OK on commands. Review lists what it waits for.') : null,
       form ? editor() : null,
-      error ? errorState(error, { retry: () => ((error = ''), load()) }) : !items ? skeleton(3) : !items.length && !form ? h('div', { class: 'au-empty' }, h('b', null, 'No automations yet'), h('span', null, 'Run a prompt on a schedule, like a morning summary of yesterday’s changes. Each run opens as a new conversation in its project.')) : h('div', { class: 'au-list' }, items.map(row))));
+      error ? errorState(error, { retry: () => ((error = ''), load()) }) : !items ? skeleton(3) : !items.length && !form ? h('div', { class: 'empty' }, icon('clock', 22), h('b', null, 'No automations yet'), h('span', null, 'Run a prompt on a schedule, like a morning summary of yesterday’s changes. Each run opens as a new conversation in its project.')) : h('div', { class: 'au-list' }, items.map(row))));
 }
 
 /** Refresh the list (another window changed it, or a run started or ended). */

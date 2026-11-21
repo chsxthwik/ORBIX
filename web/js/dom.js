@@ -94,6 +94,9 @@ const P = {
   bolt: 'M13 2 3 14h9l-1 8 10-12h-9Z',
   brain: 'M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18ZM12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18ZM12 5v13',
   globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z',
+  cloud: 'M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z',
+  server: 'M4 3h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM4 13h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1ZM7 7h.01M7 17h.01',
+  laptop: 'M4 5h16a1 1 0 0 1 1 1v10H3V6a1 1 0 0 1 1-1ZM1 19h22',
   eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   layers: 'm12 2 10 5-10 5L2 7ZM2 17l10 5 10-5M2 12l10 5 10-5',
   monitor: 'M3 4h18v12H3zM8 20h8M12 16v4',
@@ -195,6 +198,19 @@ export function iconBtn(name, title, onclick, cls = '') {
 
 export const kbd = (k) => h('kbd', null, k);
 
+/**
+ * Run `fn` on a plain Enter in `el` (not Shift+Enter, not while an IME is composing). The Enter is consumed, so it
+ * cannot also press the button that gets the focus when `fn` closes a dialog or redraws.
+ */
+export function onEnter(el, fn) {
+  el?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    fn(e);
+  });
+  return el;
+}
+
 export function spinner(size = 14) {
   return h('span', { class: 'spin', style: { width: size + 'px', height: size + 'px', fontSize: size + 1 + 'px' }, 'aria-hidden': 'true' });
 }
@@ -241,7 +257,8 @@ export function errorState(message, { title, hint, retry, retryLabel = 'Retry', 
       acts.length ? h('div', { class: 'err-acts' }, acts) : null));
 }
 
-const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const motionOff = matchMedia('(prefers-reduced-motion: reduce)');
+const reduced = { get matches() { return motionOff.matches || document.documentElement.classList.contains('sr'); } }; // or Screen reader mode
 /**
  * Play the exit animation (class `leaving`, see app.css), then remove the element (or hide it with `hide`).
  * Taking the `leaving` class off before it ends cancels the exit (the element stays).
@@ -333,6 +350,7 @@ export function toast(msg, kind = 'info', ms = 4200) {
   root.append(t);
   t._timer = setTimeout(() => leave(t), ms);
   while (root.children.length > 5) root.firstChild.remove();
+  return t;
 }
 
 /** Copy to the clipboard. `quiet` skips the toast (the caller shows its own feedback). Returns true on success. */

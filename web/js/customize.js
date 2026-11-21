@@ -1,7 +1,7 @@
-// Customizations (sidebar → Customizations), as in Antigravity: a page with Marketplace and Installed and one search
+// Customizations (sidebar → Customizations): a page with Marketplace and Installed and one search
 // box. Marketplace adds well-known MCP servers with one click (catalog.mjs has their exact configs); Installed lists
 // what the agent can use in the open project: MCP servers, skills, and the instruction and rule files.
-import { h, icon, replace, toast, baseName, skeleton, errorState } from './dom.js';
+import { h, icon, replace, toast, baseName, skeleton, errorState, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, emit, activeTab } from './store.js';
 import { modal, btn, confirmDialog, folderPicker, popMenu } from './dialogs.js';
@@ -47,7 +47,7 @@ async function add(e) {
   const save = async (values) => {
     const config = configFor(e, values);
     await api.post('/api/mcp/save', { name: e.id, config });
-    toast(`${e.name} added. It starts when a conversation first uses its tools.`, 'ok', 3500);
+    toast(`${e.name} added. It starts with the next message you send.`, 'ok', 3500);
     await load();
   };
   if (!e.fields?.length) return save({}).catch((err) => toast(err.message, 'error'));
@@ -74,7 +74,7 @@ async function add(e) {
     body: h('div', { class: 'cz-form' }, h('p', { class: 'muted small' }, e.blurb), ...rows, h('p', { class: 'muted small' }, 'Saved in the ORBIX data folder (mcp.json) on this PC and sent only to the server itself.')),
     actions: [btn('Cancel', () => m.close()), btn('Add', go, 'primary')],
   });
-  for (const el of Object.values(inputs)) el.addEventListener('keydown', (ev) => ev.key === 'Enter' && (ev.preventDefault(), go()));
+  for (const el of Object.values(inputs)) onEnter(el, go);
 }
 
 function addButton(e, big = false) {
@@ -103,7 +103,12 @@ function installedView() {
   const head = (title, n, extra = null) => h('h3', { class: 'cz-h' }, title, h('span', { class: 'cz-n num' }, n), h('span', { class: 'grow' }), extra);
   const servers = data.servers.filter((s) => match(s.name, JSON.stringify(s.config)));
   const what = (c) => (c.url ? c.url : [c.command, ...(c.args || [])].join(' '));
-  const stat = (s) => (s.status === 'ready' ? h('span', { class: 'cz-st ok' }, `${s.tools?.length || 0} tools`) : s.status === 'failed' || s.error ? h('span', { class: 'cz-st err', title: s.error || '' }, 'Failed') : h('span', { class: 'cz-st' }, 'Starts when used'));
+  // The states a server reports (src/engine/mcp.mjs): running, starting, error, stopped, not started.
+  const stat = (s) => (s.config?.disabled ? h('span', { class: 'cz-st' }, 'Off')
+    : s.status === 'running' ? h('span', { class: 'cz-st ok' }, `${s.tools?.length || 0} tools`)
+    : s.status === 'error' ? h('span', { class: 'cz-st err', title: s.error || '' }, 'Failed')
+    : s.status === 'starting' ? h('span', { class: 'cz-st' }, 'Starting')
+    : h('span', { class: 'cz-st' }, 'Starts with the next message'));
   const more = (s, el) => popMenu(el, [
     { icon: 'activity', label: 'Test it now', run: async () => {
       try {

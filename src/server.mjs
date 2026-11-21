@@ -8,12 +8,16 @@ import os from 'node:os';
 import { ROOT, VERSION, log, uid, safeLink } from './util.mjs';
 import { Backend, runProc, isWinPath } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
+import { HarnessProc } from './harness/proc.mjs';
+import { Machines, receiveFiles, openTeleport } from './cloud.mjs';
+import { AgentRegistry, isAgentId, cleanCustomAgent } from './harness/registry.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
 import { DATA_DIR } from './store.mjs';
 import { Automations } from './automations.mjs';
 import { findDevServers } from './devservers.mjs';
 import { discoverSkills } from './engine/skills.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, listTrash, restoreFromTrash, emptyTrash, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
+import { modelChoice } from './engine/proc-models.mjs';
 import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
 import * as pkce from './engine/oauth-pkce.mjs';
@@ -135,6 +139,11 @@ export function osName(version = os.version(), release = os.release()) {
   }
 }
 
+/** Windows showing the conversation list refresh it (a conversation moved away). */
+function loadSessionsHint(s) {
+  s.broadcast({ g: 'sessions' });
+}
+
 export class AppServer {
   constructor({ store, token, webRoot = path.join(ROOT, 'web'), assetsRoot = path.join(ROOT, 'assets') }) {
     this.store = store;
@@ -143,7 +152,13 @@ export class AppServer {
     this.assetsRoot = assetsRoot;
     this.backend = new Backend(store.data.backend);
     this.engineCfg = new EngineConfig();
+    // Other agent CLIs a conversation can run on (Claude Code, Codex, OpenCode, ACP agents): see harness/.
+    this.agents = new AgentRegistry({ backend: this.backend, config: this.engineCfg });
+    this.agentView = [];
+    // Other ORBIX servers you run (ORBIX Cloud), and moving conversations to them: see cloud.mjs.
+    this.machines = new Machines(this);
     this.procs = new Map();
+    this.resuming = new Map();
     this.clients = new Set();
     this.envInfo = {};
     this.envReady = Promise.resolve();
@@ -164,14 +179,21 @@ export class AppServer {
     setInterval(() => this.heartbeat(), 15000).unref();
   }
 
-  listen(port) {
+  /**
+   * Listen on `host` (127.0.0.1 unless a self-hosted server is told otherwise). `allowHosts`: the names a server
+   * reached from other machines answers to ("orbix.example.com", "vps:47821"); anything else is refused (DNS rebinding).
+   */
+  listen(port, { host = '127.0.0.1', allowHosts = [], remote = false } = {}) {
     return new Promise((resolve, reject) => {
       const onErr = (e) => reject(e);
       this.server.once('error', onErr);
-      this.server.listen(port, '127.0.0.1', () => {
+      this.server.listen(port, host, () => {
         this.server.off('error', onErr);
         this.port = this.server.address().port;
-        this.hosts = new Set([`127.0.0.1:${this.port}`, `localhost:${this.port}`]);
+        this.hosts = new Set([`127.0.0.1:${this.port}`, `localhost:${this.port}`, ...allowHosts.map((x) => String(x).toLowerCase().trim()).filter(Boolean)]);
+        // A self-hosted server (headless.mjs) is reached by other machines: it also takes the token as a bearer
+        // token. The app's own server takes only its cookie.
+        this.remote = remote || host !== '127.0.0.1' || allowHosts.length > 0;
         this.automations.begin();
         resolve(this.port);
       });
@@ -184,6 +206,8 @@ export class AppServer {
       .autodetect(this.backend)
       .catch((e) => log('autodetect failed', e))
       .then(() => this.refreshEnv());
+    // Which agent CLIs are installed: found in the background, then every window hears it.
+    this.envReady.then(() => this.refreshAgents()).then(() => this.broadcast({ g: 'engine', engine: this.engineView() }));
     return this.envReady;
   }
 
@@ -284,10 +308,22 @@ export class AppServer {
 
   async startProc({ workspace, resume, model, noSession, branch, worktree: given }) {
     if (!workspace) throw new Error('A workspace folder is required');
-    // Two agents appending to one saved conversation would interleave it.
-    if (resume && [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume)) {
+    // Two agents appending to one saved conversation would interleave it. A conversation still starting counts as
+    // open: two quick opens (a double-click) would otherwise both pass this check before either is listed.
+    if (resume && (this.resuming.has(resume) || [...this.procs.values()].some((p) => p.opts.resume === resume || p.session?.file === resume))) {
       throw Object.assign(new Error('That conversation is already open in another tab.'), { status: 409 });
     }
+    if (!resume) return this._startProc({ workspace, resume, model, noSession, branch, worktree: given });
+    const starting = this._startProc({ workspace, resume, model, noSession, branch, worktree: given });
+    this.resuming.set(resume, starting);
+    try {
+      return await starting;
+    } finally {
+      this.resuming.delete(resume);
+    }
+  }
+
+  async _startProc({ workspace, resume, model, noSession, branch, worktree: given }) {
     this.backend.update(this.store.data.backend);
     // "Separate branch": the session works in its own git worktree, on a new branch cut from the current commit.
     // `given`: a run continuing in the worktree it already has (no saved conversation to resume from).
@@ -299,7 +335,10 @@ export class AppServer {
       log('worktree added', wt.branch, wt.path);
     }
     const id = uid('p');
-    const proc = new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg, worktree });
+    const agent = this.agentFor(model, resume);
+    const proc = agent
+      ? new HarnessProc({ id, backend: this.backend, workspace, resume, model: model && model.includes('/') ? model.slice(model.indexOf('/') + 1) : undefined, noSession, config: this.engineCfg, worktree, agent, registry: this.agents })
+      : new AgentProc({ id, backend: this.backend, workspace, resume, model, noSession, config: this.engineCfg, worktree });
     proc.cache = { commands: [] };
     // Questions waiting for the user (approvals, inputs): a window that reloads or reconnects gets them again.
     proc.openUi = new Map();
@@ -330,6 +369,36 @@ export class AppServer {
     this.runs.adopt(proc); // a saved conversation that belongs to a run keeps recording into it
     this.broadcastProcs();
     return proc;
+  }
+
+  /** The agent CLI a new or reopened conversation runs on (null: ORBIX's own agent). */
+  agentFor(model, resume) {
+    let id = '';
+    if (resume) {
+      try {
+        const head = fs.readFileSync(resume, 'utf8').split('\n', 1)[0];
+        const h = JSON.parse(head);
+        if (isAgentId(h.engine)) id = h.engine;
+      } catch {}
+    } else if (model && isAgentId(model.split('/')[0])) id = model.split('/')[0];
+    if (!id) return null;
+    const a = this.agents.get(id);
+    if (!a) throw Object.assign(new Error(`This conversation runs on an agent that is no longer set up (${id}). Add it again in Settings → Agents.`), { status: 400 });
+    return a;
+  }
+
+  /** Provider status for the UI, with the agent CLIs found on this computer. */
+  engineView() {
+    return { ...this.engineCfg.publicView(), agents: this.agentView };
+  }
+
+  async refreshAgents(force = false) {
+    try {
+      this.agentView = await this.agents.view(force);
+    } catch (e) {
+      log('agent detection failed', e);
+    }
+    return this.agentView;
   }
 
   /**
@@ -369,9 +438,18 @@ export class AppServer {
     return a.length === b.length && crypto.timingSafeEqual(a, b);
   }
 
+  /** The token cookie (the app window, a browser), or a bearer token (another ORBIX moving a conversation here). */
   authed(req) {
     const m = /(?:^|;\s*)orbix=([^;]+)/.exec(req.headers.cookie || '');
-    return !!m && this.tokenOk(m[1]);
+    if (m && this.tokenOk(m[1])) return true;
+    if (!this.remote) return false;
+    const bearer = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1] || req.headers['x-orbix-token'];
+    return !!bearer && this.tokenOk(bearer);
+  }
+
+  /** A request that came over HTTPS (directly, or through a proxy that says so). */
+  secure(req) {
+    return !!req.socket.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
   }
 
   json(res, status, obj) {
@@ -421,7 +499,7 @@ export class AppServer {
 
     if (url.pathname === '/' && url.searchParams.get('t')) {
       if (!this.tokenOk(url.searchParams.get('t'))) return this.json(res, 403, { ok: false, error: 'Bad token' });
-      res.writeHead(302, { location: '/', 'set-cookie': `orbix=${this.token}; Path=/; HttpOnly; SameSite=Strict`, 'cache-control': 'no-store', ...SECURITY_HEADERS });
+      res.writeHead(302, { location: '/', 'set-cookie': `orbix=${this.token}; Path=/; HttpOnly; SameSite=Strict${this.secure(req) ? '; Secure' : ''}`, 'cache-control': 'no-store', ...SECURITY_HEADERS });
       return res.end();
     }
     // OpenRouter sign-in comes back from the user's browser, which has no token cookie; it is checked by a one-time state instead.
@@ -432,17 +510,18 @@ export class AppServer {
     if (site && site !== 'same-origin' && site !== 'none') return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
     if (!this.authed(req)) {
       res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...SECURITY_HEADERS });
-      return res.end('ORBIX: this address only opens inside the ORBIX app.');
+      return res.end(this.remote ? 'ORBIX: open the link with your token (orbix-server prints it, and Settings → Machines in the app opens it for you).' : 'ORBIX: this address only opens inside the ORBIX app.');
     }
     if (url.pathname.startsWith('/api/')) {
       // SameSite does not separate ports: a page on another local port would send our cookie. Browsers add Origin to
       // its cross-origin reads, and to every write.
       const origin = req.headers.origin;
-      if ((origin && origin !== `http://${req.headers.host}`) || (req.method !== 'GET' && req.headers['x-orbix'] !== '1')) return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
+      if ((origin && origin !== `${this.secure(req) ? 'https' : 'http'}://${req.headers.host}`) || (req.method !== 'GET' && req.headers['x-orbix'] !== '1')) return this.json(res, 403, { ok: false, error: 'Cross-site request blocked' });
       const route = this.routes[`${req.method} ${url.pathname}`];
       if (!route) return this.json(res, 404, { ok: false, error: 'No such endpoint' });
       if (url.pathname !== '/api/events') await this.envReady; // the backend is settled before anything uses it
-      const body = req.method === 'GET' ? {} : await this.readBody(req);
+      // A project arriving by Teleport is a raw tarball, read by its route; everything else is JSON.
+      const body = req.method === 'GET' || url.pathname === '/api/teleport/files' ? {} : await this.readBody(req);
       const out = await route({ req, res, url, body, q: Object.fromEntries(url.searchParams) });
       if (out === undefined) return; // handler took over the response (SSE)
       return this.json(res, 200, { ok: true, ...out });
@@ -508,7 +587,7 @@ export class AppServer {
     return {
       ...mcpRoutes(this),
       ...runRoutes(this),
-      'GET /api/state': async () => this.stateSnapshot(),
+      'GET /api/state': async () => ({ ...this.stateSnapshot(), engine: this.engineView() }),
 
       'GET /api/env': async () => ({ ...(await Backend.wslInfo()), ...this.stateSnapshot().backend }),
 
@@ -545,7 +624,7 @@ export class AppServer {
         const own = await listAgentSessions(this.backend).catch(() => []);
         return { sessions: own.sort((a, b) => b.mtime - a.mtime) };
       },
-      'GET /api/engine': async () => ({ engine: this.engineCfg.publicView() }),
+      'GET /api/engine': async () => ({ engine: this.engineView() }),
       'POST /api/engine/provider': async ({ body }) => {
         const id = String(body.id || '');
         const p = this.engineCfg.provider(id);
@@ -559,7 +638,7 @@ export class AppServer {
         // Check with the provider BEFORE saving, so a typo or a wrong address is never stored.
         const models = await clientFor(p.type).listModels({ apiKey: key, baseUrl, providerId: id, signal: AbortSignal.timeout(LIST_TIMEOUT) });
         await this.engineCfg.setProvider(id, { key: typedKey || undefined, baseUrl, models: models.length });
-        return { models: models.length, engine: this.engineCfg.publicView() };
+        return { models: models.length, engine: this.engineView() };
       },
       'POST /api/engine/oauth/start': async ({ body }) => {
         const provider = String(body.provider || 'openrouter');
@@ -580,12 +659,12 @@ export class AppServer {
       },
       'GET /api/engine/oauth/status': async ({ q }) => {
         const or = oauth.oauthStatus(q.state);
-        return { ...(or.status !== 'unknown' ? or : pkce.pkceStatus(q.state)), engine: this.engineCfg.publicView() };
+        return { ...(or.status !== 'unknown' ? or : pkce.pkceStatus(q.state)), engine: this.engineView() };
       },
       // The browser could not reach ORBIX's local sign-in port: finish from the address it ended on.
       'POST /api/engine/oauth/paste': async ({ body }) => {
         const r = await pkce.finishFromUrl(String(body.state || ''), String(body.url || ''));
-        return { ...r, engine: this.engineCfg.publicView() };
+        return { ...r, engine: this.engineView() };
       },
       'POST /api/engine/oauth/cancel': async ({ body }) => {
         oauth.cancelOAuth(body.state);
@@ -594,14 +673,14 @@ export class AppServer {
       },
       'POST /api/engine/provider/clear': async ({ body }) => {
         this.engineCfg.clearProvider(String(body.id || ''));
-        return { engine: this.engineCfg.publicView() };
+        return { engine: this.engineView() };
       },
       'POST /api/engine/settings': async ({ body }) => {
         if (body.approvals !== undefined) this.engineCfg.setApprovals(body.approvals);
         if (body.trusted !== undefined) this.engineCfg.setTrusted(body.trusted);
         if (body.network !== undefined) this.engineCfg.setNetwork(body.network || {});
         if (body.verify !== undefined || body.review !== undefined) this.engineCfg.setChecks({ verify: body.verify, review: body.review });
-        return { engine: this.engineCfg.publicView() };
+        return { engine: this.engineView() };
       },
       // The check command of one project: the one you chose (or 'off'), and the one ORBIX finds in its files.
       'GET /api/engine/check': async ({ q }) => {
@@ -627,7 +706,7 @@ export class AppServer {
         else await fs.promises.rm(file, { force: true });
         return { text: text.trim() ? text : '', file };
       },
-      // Models of every connected provider, for the "Models" section of Settings.
+      // Models of every connected provider, for Home and Settings, without opening a conversation.
       'GET /api/engine/models': async () => {
         const ids = this.engineCfg.configuredIds();
         const errors = [];
@@ -635,14 +714,65 @@ export class AppServer {
           ids.map(async (id) => {
             try {
               const list = await this.engineCfg.listModels(id);
-              return list.map((m) => ({ provider: id, providerName: this.engineCfg.provider(id).name, id: m.id, name: m.name || m.id }));
+              return list.map((m) => ({ ...modelChoice(id, m), providerName: this.engineCfg.provider(id).name }));
             } catch (e) {
               errors.push(`${this.engineCfg.provider(id).name}: ${e.message}`);
               return [];
             }
           }),
         );
-        return { models: lists.flat(), errors };
+        const agentLists = await Promise.all(
+          this.agentView.filter((a) => a.installed).map(async (a) => {
+            try {
+              return (await this.agents.models(a.id)).map((m) => ({ ...m, provider: a.id, providerName: a.name, agent: true }));
+            } catch (e) {
+              errors.push(`${a.name}: ${e.message}`);
+              return [];
+            }
+          }),
+        );
+        return { models: [...lists.flat(), ...agentLists.flat()], errors };
+      },
+      // ORBIX Cloud: your machines, opening one in the window, and moving a conversation there (cloud.mjs).
+      'GET /api/machines': async () => ({ machines: this.machines.view() }),
+      'POST /api/machines': async ({ body }) => {
+        await this.machines.add(body);
+        return { machines: this.machines.view() };
+      },
+      'POST /api/machines/remove': async ({ body }) => {
+        this.machines.remove(String(body.id || ''));
+        return { machines: this.machines.view() };
+      },
+      'POST /api/machines/check': async ({ body }) => {
+        const m = this.machines.get(String(body.id || ''));
+        const c = await this.machines.check(m);
+        m.lastSeen = Date.now();
+        m.version = c.version;
+        this.machines.save();
+        return { ...c, machines: this.machines.view() };
+      },
+      'POST /api/machines/open': async ({ body }) => ({ url: await this.machines.openUrl(String(body.id || '')) }),
+      'POST /api/teleport': async ({ body }) => {
+        const r = await this.machines.teleport(String(body.proc || ''), String(body.machine || ''));
+        this.broadcastProcs();
+        loadSessionsHint(this);
+        return r;
+      },
+      'POST /api/teleport/files': async ({ req }) => receiveFiles(req),
+      'POST /api/teleport/open': async ({ body }) => openTeleport(this, body),
+      // The agent CLIs on this computer and your own ACP agents (Settings → Agents).
+      'GET /api/agents': async ({ q }) => ({ agents: await this.refreshAgents(q.refresh === '1') }),
+      'POST /api/agents': async ({ body }) => {
+        const list = Array.isArray(body.agents) ? body.agents.map(cleanCustomAgent) : [];
+        const ids = new Set();
+        for (const a of list) {
+          if (ids.has(a.id)) throw Object.assign(new Error(`Two agents are named “${a.name}”`), { status: 400 });
+          ids.add(a.id);
+        }
+        this.engineCfg.data.agents = list;
+        this.engineCfg.save();
+        this.agents.modelCache.clear();
+        return { agents: await this.refreshAgents(true), engine: this.engineView() };
       },
       // Default models for the roles: fast (titles, summaries, helper agents) and plan. '' = use the session's model.
       'POST /api/engine/models': async ({ body }) => {
@@ -672,7 +802,7 @@ export class AppServer {
           this.engineCfg.data.defaultModel = next.default;
           this.engineCfg.save();
         }
-        return { engine: this.engineCfg.publicView() };
+        return { engine: this.engineView() };
       },
       // Web search service for the web_search tool. The service is tried once before anything is saved.
       'POST /api/engine/search': async ({ body }) => {
@@ -690,11 +820,11 @@ export class AppServer {
         } catch (e) {
           throw Object.assign(e, { status: 400 });
         }
-        return { engine: this.engineCfg.publicView() };
+        return { engine: this.engineView() };
       },
       'POST /api/engine/search/clear': async () => {
         this.engineCfg.clearSearch();
-        return { engine: this.engineCfg.publicView() };
+        return { engine: this.engineView() };
       },
       // Hooks (read-only here): your hooks.json and the project's .orbix/hooks.json.
       'GET /api/hooks': async ({ q }) => {
@@ -726,15 +856,22 @@ export class AppServer {
       'GET /api/diagnostics': async () => ({ report: await collectDiagnostics(this) }),
       'POST /api/sessions/rename': async ({ body }) => {
         const file = typeof body.path === 'string' ? body.path : '';
-        // An open session keeps its title in memory and writes it itself; renaming it here would be overwritten.
-        const open = [...this.procs.values()].some((p) => p.opts.resume === file || p.session?.file === file);
-        if (open) throw Object.assign(new Error('That conversation is open. Rename it from its tab.'), { status: 409 });
+        // Still opening (a double-click opens and renames at once): wait for it, then rename it through its session.
+        await this.resuming.get(file)?.catch(() => {});
+        // An open session (a tab in any window, a running automation, or one still opening) keeps its title in memory
+        // and writes it itself: rename it through the session, which saves it and tells every window.
+        const open = [...this.procs.values()].find((p) => p.opts.resume === file || p.session?.file === file);
+        if (open) {
+          const r = await open.request({ type: 'set_session_name', name: body.title });
+          this.broadcastProcs();
+          return { title: r.data.title };
+        }
         return { title: renameAgentSession(file, body.title) };
       },
       'POST /api/sessions/delete': async ({ body }) => {
         const paths = Array.isArray(body.paths) ? body.paths : [];
         if (!paths.length || paths.length > 500) throw Object.assign(new Error('Nothing to delete'), { status: 400 });
-        const busy = [...this.procs.values()].find((p) => (p.opts.resume && paths.includes(p.opts.resume)) || (p.session?.file && paths.includes(p.session.file)));
+        const busy = paths.some((file) => this.resuming.has(file)) || [...this.procs.values()].some((p) => (p.opts.resume && paths.includes(p.opts.resume)) || (p.session?.file && paths.includes(p.session.file)));
         if (busy) throw Object.assign(new Error('That conversation is open. Close it first.'), { status: 409 });
         // Only ORBIX's own conversation files can be deleted; any other path is refused before anything is removed.
         if (!paths.every(isAgentSessionPath)) throw Object.assign(new Error('Only ORBIX conversations can be deleted'), { status: 400 });
@@ -768,7 +905,7 @@ export class AppServer {
 
       'POST /api/proc/start': async ({ body }) => {
         const proc = await this.startProc({ workspace: body.workspace, resume: body.resume, model: body.model, noSession: !!body.noSession, branch: body.branch === true });
-        return { id: proc.id, workspace: proc.workspace, commands: proc.cache.commands, worktree: proc.worktreeView() };
+        return { id: proc.id, workspace: proc.workspace, title: proc.title, commands: proc.cache.commands, worktree: proc.worktreeView() };
       },
 
       // Review of a session on its own branch: what it changed, then merge, keep or discard. Merge and discard need

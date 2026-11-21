@@ -162,12 +162,25 @@ describe('model roles', () => {
     const both = byModel({ 'claude-test': sse(turn({ text: 'Hi.' })), 'claude-fast': slowSse(turn({ text: 'Model title' }), 400) });
     script = [both, both];
     q.title = '';
-    const r = send(q, 'hello there');
+    const r = send(q, 'fix the flaky upload test');
     await waitFor(() => q.title);
     await q.request({ type: 'set_session_name', name: 'Mine' });
     await r;
     await new Promise((x) => setTimeout(x, 100));
     assert.equal(q.title, 'Mine');
+  });
+
+  test('a name given before the first message is saved with the conversation, exactly as typed', async () => {
+    const q = await make();
+    script = [sse(turn({ text: 'Hi.' }))];
+    await q.request({ type: 'set_session_name', name: '  Hey:  fix *login*. Now  ' });
+    assert.equal(q.title, 'Hey: fix *login*. Now');
+    assert.ok(q.events.some((e) => e.type === 'session_info_update' && e.title === 'Hey: fix *login*. Now'));
+    await send(q, 'please fix the login bug');
+    assert.equal(q.title, 'Hey: fix *login*. Now', 'the first message does not replace it');
+    assert.equal(store.loadSession(q.session.file).title, 'Hey: fix *login*. Now');
+    await assert.rejects(q.request({ type: 'set_session_name', name: '   ' }), /name is required/);
+    assert.ok(q.messages.filter((m) => m.role === 'assistant').every((m) => typeof m.doneAt === 'number' && m.doneAt >= m.timestamp), 'replies record when they ended');
   });
 
   test('compaction summaries and helper agents use the fast model; plan mode uses the plan model', async () => {
@@ -208,7 +221,7 @@ describe('model roles', () => {
   test('a role whose provider is not set up falls back to the current model with one clear note', async () => {
     const p = await make(makeConfig({ roles: () => ({ fast: 'openai/gpt-test', plan: '' }) }));
     script = [sse(turn({ text: 'ok' }))];
-    await send(p, 'hello');
+    await send(p, 'list the open issues');
     await new Promise((r) => setTimeout(r, 50));
     const notes = p.events.filter((e) => e.type === 'notice' && /fast model/.test(e.message));
     assert.equal(notes.length, 1);
@@ -229,10 +242,10 @@ describe('model roles', () => {
     assert.equal(p.roles.fast, 'anthropic/claude-fast');
     await p.request({ type: 'prompt', message: '/model' });
     assert.match(out(), /Fast model \(titles, summaries, helper agents\): \*\*anthropic\/claude-fast\*\*/);
-    const both = byModel({ 'claude-test': sse(turn({ text: 'ok' })), 'claude-fast': sse(turn({ text: 'Named' })) });
+    const both = byModel({ 'claude-test': sse(turn({ text: 'ok' })), 'claude-fast': sse(turn({ text: 'Named session' })) });
     script = [both, both];
     await send(p, 'save this session');
-    await waitFor(() => p.title === 'Named', 'title');
+    await waitFor(() => p.title === 'Named session', 'title');
     const r = await make(makeConfig(), { resume: p.session.file });
     assert.equal(r.roles.fast, 'anthropic/claude-fast');
     await r.request({ type: 'prompt', message: '/model fast default' });
@@ -724,6 +737,7 @@ describe('goal mode', () => {
 describe('server routes: models, search, hooks', () => {
   let srv;
   let port;
+  let keyReads = 0;
   let mock;
   let mockBase;
   const TOKEN = 'b'.repeat(48);
@@ -747,7 +761,11 @@ describe('server routes: models, search, hooks', () => {
     port = await srv.listen(0);
     srv.engineCfg.configured = (id) => id === 'anthropic';
     srv.engineCfg.configuredIds = () => ['anthropic'];
-    srv.engineCfg.getKey = async () => 'k';
+    srv.engineCfg.getKey = async () => {
+      keyReads++;
+      await new Promise((r) => setTimeout(r, 25));
+      return 'k';
+    };
     srv.engineCfg.baseUrl = () => 'http://mock.anthropic';
     mock = http.createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -762,7 +780,9 @@ describe('server routes: models, search, hooks', () => {
   });
 
   test('models: lists what the providers offer; saves only ids the provider really has; says what is wrong', async () => {
-    const list = await call('GET', '/api/engine/models');
+    const [list, same] = await Promise.all([call('GET', '/api/engine/models'), call('GET', '/api/engine/models')]);
+    assert.deepEqual(same.json, list.json);
+    assert.equal(keyReads, 1, 'overlapping requests share a provider discovery');
     assert.deepEqual(list.json.models.map((m) => m.id), ['claude-test', 'claude-fast']);
     assert.equal(list.json.models[0].providerName, 'Anthropic');
     let r = await call('POST', '/api/engine/models', { fast: 'claude-fast' });

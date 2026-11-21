@@ -13,7 +13,7 @@ process.env.ORBIX_DATA = path.join(SCRATCH, 'data');
 const prevCeiling = process.env.GIT_CEILING_DIRECTORIES;
 process.env.GIT_CEILING_DIRECTORIES = path.dirname(SCRATCH);
 
-const { Backend, isWinPath, toLinuxPath, linuxToHost, runProc } = await import('../src/backend.mjs');
+const { Backend, isWinPath, toLinuxPath, linuxToHost, runProc, wslUncPath } = await import('../src/backend.mjs');
 const fsapi = await import('../src/fsapi.mjs');
 const { parseStatus } = await import('../src/gitapi.mjs');
 
@@ -275,6 +275,48 @@ describe('backend: buildSpawn', () => {
     // The first token is the shim path itself (escaped once); strip it, then parse the rest as a C runtime command line.
     const afterBin = seenByTarget.slice(seenByTarget.indexOf('mytool.cmd') + 'mytool.cmd'.length + 1);
     assert.deepEqual(parseArgv(afterBin), nasty);
+  });
+});
+
+describe('backend: a WSL folder opened from Windows (native backend)', () => {
+  test('wslUncPath maps \\\\wsl.localhost and \\\\wsl$ paths to the distribution and its Linux path', () => {
+    assert.deepEqual(wslUncPath('\\\\wsl.localhost\\kali-linux\\root\\WORKSPACE'), { root: '\\\\wsl.localhost\\kali-linux', distro: 'kali-linux', linux: '/root/WORKSPACE' });
+    assert.deepEqual(wslUncPath('\\\\wsl$\\Ubuntu-22.04\\home\\me\\my app\\'), { root: '\\\\wsl$\\Ubuntu-22.04', distro: 'Ubuntu-22.04', linux: '/home/me/my app' });
+    assert.deepEqual(wslUncPath('//WSL.LOCALHOST/Debian/srv'), { root: '\\\\WSL.LOCALHOST\\Debian', distro: 'Debian', linux: '/srv' });
+    assert.equal(wslUncPath('\\\\wsl.localhost\\Ubuntu').linux, '/');
+    assert.equal(wslUncPath('\\\\wsl.localhost\\Ubuntu\\').linux, '/');
+    for (const p of ['C:\\Users\\x', '\\\\server\\share\\x', '/root', '', null]) assert.equal(wslUncPath(p), null, String(p));
+  });
+  test('commands in a WSL folder run in that distribution with bash -lc, in the Linux path, never cmd.exe', () => {
+    const b = new Backend({ kind: 'native' });
+    const ws = '\\\\wsl.localhost\\kali-linux\\root\\WORKSPACE';
+    assert.equal(b.shellFor(ws), 'bash');
+    const r = b.shellSpawn('ls -la && echo "a b"', { cwd: ws });
+    assert.equal(r.shell, 'bash');
+    assert.equal(r.cmd, 'wsl.exe');
+    assert.deepEqual(r.args, ['-d', 'kali-linux', '--cd', '/root/WORKSPACE', '-e', 'bash', '-lc', 'ls -la && echo "a b"']);
+    assert.equal(r.opts.cwd, undefined, 'the UNC folder is not given to Windows as a working folder');
+    assert.equal(r.opts.env.WSL_UTF8, '1');
+    assert.deepEqual(b.shellSpawn('pwd', { cwd: '\\\\wsl$\\Ubuntu\\home\\me' }).args, ['-d', 'Ubuntu', '--cd', '/home/me', '-e', 'bash', '-lc', 'pwd']);
+    // PowerShell, asked for explicitly, can work in a UNC folder and still runs there.
+    assert.equal(b.shellSpawn('dir', { cwd: ws, shell: 'powershell' }).cmd, 'powershell.exe');
+  });
+  test('cmd.exe in another network folder maps it with pushd and stops when that fails (no silent C:\\Windows)', () => {
+    const b = new Backend({ kind: 'native' });
+    const r = b.shellSpawn('dir', { cwd: '\\\\server\\share\\proj' });
+    assert.equal(r.shell, 'cmd');
+    assert.match(r.args[0], /pushd !ORBIX_SHELL_CWD! && \(cmd\.exe \/d \/s \/c !ORBIX_SHELL_CMD! & set "ORBIX_RC=!errorlevel!" & popd & exit \/b !ORBIX_RC!\)/);
+    assert.equal(r.opts.env.ORBIX_SHELL_CWD, '"\\\\server\\share\\proj"');
+    assert.equal(r.opts.env.ORBIX_SHELL_CMD, '"dir"');
+    assert.ok(!/^[\\/]{2}/.test(r.opts.cwd), 'cmd.exe itself starts in a local folder');
+  });
+  test('a local folder still runs cmd.exe there; the WSL backend still runs bash through wsl.exe', () => {
+    const r = new Backend({ kind: 'native' }).shellSpawn('dir', { cwd: 'C:\\proj' });
+    assert.equal(r.shell, 'cmd');
+    assert.equal(r.opts.cwd, 'C:\\proj');
+    assert.doesNotMatch(r.args[0], /pushd/);
+    const w = new Backend({ kind: 'wsl', distro: 'Ubuntu' }).shellSpawn('ls', { cwd: 'C:\\proj' });
+    assert.deepEqual([w.shell, w.cmd, w.args], ['bash', 'wsl.exe', ['-d', 'Ubuntu', '--cd', '/mnt/c/proj', '-e', 'bash', '-lc', 'ls']]);
   });
 });
 

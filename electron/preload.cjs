@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
       return () => ipcRenderer.removeListener('orbix:download', f);
     },
   },
+  // Settings → Machines: show another ORBIX (a machine you own) in this window, and come back to this PC.
+  machines: {
+    open: (url) => ipcRenderer.invoke('orbix:machine:open', String(url)),
+    home: () => ipcRenderer.invoke('orbix:machine:home'),
+  },
   updates: {
     get: () => ipcRenderer.invoke('orbix:update:get'),
     check: () => ipcRenderer.invoke('orbix:update:check'),

@@ -68,7 +68,7 @@ export function frontMatter(text) {
 const RULE_TRIGGERS = new Set(['always_on', 'model_decision', 'glob', 'manual']);
 
 /**
- * Rules in the project's .agents/rules folder (as in Antigravity), each a Markdown file whose front matter says when
+ * Rules in the project's .agents/rules folder, each a Markdown file whose front matter says when
  * it applies: `trigger: always_on` (the default) is part of every prompt; `model_decision` and `glob` are listed with
  * their description or file patterns, and the agent reads them when they apply; `manual` only when you @mention it.
  * Returns { always: [{ path, text, truncated }], listed: [{ path, trigger, description, globs }] }.

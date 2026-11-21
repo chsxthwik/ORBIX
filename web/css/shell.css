@@ -1,21 +1,23 @@
 /* The desktop shell, loaded last. A menu row and a toolbar across the top; the sidebar on the same dark frame; the
-   workspace as one sheet with a rounded top-left corner; a floating Overview card; a quiet, narrow conversation
-   with a navigator of dots on its left edge; a rounded message box with "+", the model and its thinking level on the
-   left and the permission chip and a round send button on the right. Dark is a neutral near-black. Only layout,
-   size and the Dark palette are set here; every other theme keeps its own colours. */
+   workspace as one sheet with a rounded top-left corner; a floating Overview card; a quiet, narrow conversation;
+   a rounded message box with "+", the model and its thinking level on the left and the permission chip and a round
+   send button on the right. Dark is a neutral near-black. Only layout, size and the Dark palette are set here;
+   every other theme keeps its own colours. */
 
-/* ---- Dark: neutral near-black, the frame darker than the sheet ---- */
+/* ---- Dark: neutral near-black, the frame darker than the sheet; a blue accent and amber inline code ---- */
 :root:not([data-mode=light]):not([data-theme=midnight]):not([data-scene]) {
-  --chrome: #0B0B0B; --bg-side: #0B0B0B; --bg: #111111; --bg-raise: #1A1A1A; --bg-raise-2: #212121; --bg-modal: #171717; --bg-inset: #0D0D0D; --bg-field: #161616;
-  --bg-hover: rgba(255,255,255,.05); --bg-active: rgba(255,255,255,.085); --bubble: #1F1F1F; --bubble-line: transparent;
-  --line: rgba(255,255,255,.075); --line-2: rgba(255,255,255,.11); --line-3: rgba(255,255,255,.2);
-  --fg: #E9E9E7; --fg-2: #A5A5A2; --fg-3: #777774;
-  --menubar: #151515;
+  --chrome: #0A0A0A; --bg-side: #0A0A0A; --menubar: #161616; --bg: #101010; --bg-raise: #191919; --bg-raise-2: #222222; --bg-modal: #161616; --bg-inset: #0C0C0C; --bg-field: #1C1C1C; --bubble: #1C1C1C; --bubble-line: transparent;
+  --bg-hover: rgba(255,255,255,.05); --bg-active: rgba(255,255,255,.1);
+  --line: rgba(255,255,255,.065); --line-2: rgba(255,255,255,.1); --line-3: rgba(255,255,255,.18);
+  --fg: #CCCCCC; --fg-2: #9D9D9D; --fg-3: #929292;
+  --accent: #6A9FCB; --accent-solid: #007ACC; --on-accent: #FFFFFF; --accent-soft: rgba(0,122,204,.14); --accent-line: rgba(0,122,204,.5);
+  --live: #7AAE66; --live-line: rgba(122,174,102,.42);
+  --ok: #7AAE66; --warn: #E8975F; --err: #DE5555; --code-ink: #D7BA7D;
 }
 :root {
   --menubar: color-mix(in srgb, var(--chrome) 90%, var(--fg));
   --mb-h: 30px; --tb-h: 42px;
-  --col: clamp(600px, 46vw, 720px);
+  --col: clamp(560px, 42vw, 728px);
   --fs: 14px;
 }
 
@@ -54,7 +56,7 @@ body { display: flex; flex-direction: column; height: 100vh; background: var(--c
 .crumbs { display: flex; align-items: center; gap: 2px; flex: 0 1 auto; min-width: 0; padding-left: 6px; font-size: 13px; }
 .crumb { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; max-width: 34ch; height: 26px; padding: 0 6px; border-radius: 6px; color: var(--fg-2); white-space: nowrap; }
 .crumb > bdi { overflow: hidden; text-overflow: ellipsis; }
-.crumb.cur { color: var(--fg); font-weight: 500; max-width: 52ch; }
+.crumb.cur { color: var(--fg); font-weight: 450; max-width: 52ch; }
 .crumb:not(.static):hover { background: var(--bg-hover); color: var(--fg); }
 .crumb.static { cursor: default; }
 .crumb-sep { flex: none; color: var(--fg-3); }
@@ -69,26 +71,25 @@ body { display: flex; flex-direction: column; height: 100vh; background: var(--c
 
 /* ================= sidebar ================= */
 .sidebar { --sb-pad: 8px; --sb-ic: 28px; }
-.app .sidebar .side-new { height: 32px; margin: 4px var(--sb-pad) 8px; padding: 0 10px; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-raise); color: var(--fg); font-size: 13px; font-weight: 500; box-shadow: none; }
-.sidebar .side-new:hover { border-color: var(--line-2); background: var(--bg-raise-2); }
-.sidebar .side-new.cur { border-color: var(--line-2); }
+.app .sidebar .side-new { height: 30px; margin: 4px var(--sb-pad) 6px; padding: 0 10px; gap: 8px; border: 1px solid transparent; border-radius: 8px; background: var(--bg-raise); color: var(--fg); font-size: 13px; font-weight: 500; box-shadow: none; }
+.sidebar .side-new:hover, .sidebar .side-new.cur { border-color: transparent; background: var(--bg-raise-2); }
 .sidebar .side-new svg { color: var(--fg-2); }
 .app .sidebar .side-nav { gap: 1px; padding: 0 var(--sb-pad) 4px; }
-.sidebar .side-link { height: 30px; gap: 9px; padding: 0 10px; border-radius: 7px; color: var(--fg-2); font-size: 13px; font-weight: 400; }
+.sidebar .side-link { height: 28px; gap: 9px; padding: 0 10px; border-radius: 7px; color: var(--fg-2); font-size: 13px; font-weight: 400; }
 .sidebar .side-link svg { width: 15px; height: 15px; color: var(--fg-3); }
-.sidebar .side-link.cur { background: var(--bg-active); color: var(--fg); font-weight: 500; box-shadow: none; }
+.sidebar .side-link.cur { background: var(--bg-active); color: var(--fg); font-weight: 400; box-shadow: none; }
 .app .sidebar .side-scroll { padding: 4px var(--sb-pad) 12px; }
-.sidebar .side-h { height: 28px; margin-top: 14px; padding: 0 2px 0 10px; font: 400 12px/1 var(--font); color: var(--fg-3); }
-.sidebar .proj-btn { height: 30px; font-size: 13px; font-weight: 400; color: var(--fg-3); }
+.sidebar .side-h { height: 28px; margin-top: 12px; padding: 0 2px 0 10px; font: 400 12px/1 var(--font); color: var(--fg-3); }
+.sidebar .proj-btn { height: 28px; font-size: 13px; font-weight: 400; color: var(--fg-3); }
 .sidebar .proj-btn:hover { color: var(--fg); }
 .sidebar .proj-n { display: none; }
-.sidebar .s-btn { height: 30px; padding-right: 8px; border-radius: 7px; font-size: 13px; color: var(--fg-2); }
-.sidebar .s-row.cur .s-btn { background: var(--bg-active); color: var(--fg); box-shadow: none; font-weight: 500; }
+.sidebar .s-btn { height: 28px; padding-right: 8px; border-radius: 7px; font-size: 13px; color: var(--fg-2); }
+.sidebar .s-row.cur .s-btn { background: var(--bg-active); color: var(--fg); box-shadow: none; font-weight: 400; }
 .sidebar .s-when { font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .sidebar .s-row:hover .s-when, .sidebar .s-row:focus-within .s-when { visibility: hidden; }
 .sidebar .row-acts .ibtn.on { color: var(--fg); background: transparent; }
 .app .sidebar .side-foot { padding: 6px var(--sb-pad) 8px; border-top: 0; }
-.sidebar .foot-set { height: 30px; }
+.sidebar .foot-set { height: 28px; }
 .sidebar .run-row { min-height: 40px; border-radius: 7px; }
 .sidebar .run-row.cur { box-shadow: none; }
 
@@ -119,12 +120,14 @@ body { display: flex; flex-direction: column; height: 100vh; background: var(--c
 @container main (max-width: 840px) { .overview { display: none; } }
 
 /* ================= conversation ================= */
-.tin { gap: 22px; padding-top: 28px; }
-.bubble { padding: 8px 14px; border: 0; border-radius: 18px; background: var(--bubble); font-size: calc(var(--fs) - .5px); box-shadow: none; }
+.tin { gap: 20px; padding-top: 28px; }
+/* Your message: a compact bubble. */
+.bubble { padding: 7px 13px; border: 0; border-radius: 14px; background: var(--bubble); font-size: calc(var(--fs) - .5px); line-height: 1.55; box-shadow: none; }
 .msg-acts { gap: 0; }
-.msg-act { height: 26px; padding: 0 7px; font-size: 0; gap: 0; border-radius: 7px; }
+.msg-act { width: 26px; height: 26px; padding: 0; justify-content: center; font-size: 0; gap: 0; border-radius: 7px; color: var(--fg-3); }
+.msg-act:hover { color: var(--fg); }
 .msg-act svg { width: 14px; height: 14px; }
-.msg-time { padding: 0 6px; color: var(--fg-3); font-size: 11.5px; }
+.msg-time { padding: 0 6px; color: var(--fg-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .msg.asst:last-child .msg-acts, .msg.asst:hover .msg-acts, .msg.asst:focus-within .msg-acts { opacity: 1; }
 
 /* The folded steps of a turn read like a quiet link: "Worked for 14s ›" with what was done beside it. */
@@ -140,20 +143,28 @@ details.work[open] > .work-h .work-l, .work-h:hover .work-l { color: var(--fg-2)
 .sbar-wrap:has(.sfind[hidden]) { display: none; }
 .sfind { height: 38px; border-top: 0; border-bottom: 1px solid var(--line); }
 
-/* The navigator: dots on the left edge of the conversation, one per turn. */
-.tl { top: 24px; right: auto; left: 10px; width: 18px; opacity: 1; animation: fade-in var(--t3) var(--ease); }
-.tl-track::before { width: 0; border-left: 1px dotted var(--line-3); background: none; }
-.tl .tl-mark, .tl .tl-mark.you { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-3); opacity: .55; box-shadow: 0 0 0 3px var(--bg); filter: none; }
-.tl .tl-mark.cur { width: 8px; height: 8px; background: var(--fg); opacity: 1; }
-.tl .tl-mark.err { width: 6px; height: 6px; border-radius: 1px; background: var(--err); opacity: .9; }
-.tl .tl-mark:hover, .tl .tl-mark:focus-visible { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
-.tl .tl-tip { right: auto; left: 26px; }
-.tl .tl-tip-k.you { color: var(--fg-3); font-weight: 500; }
+/* ================= compact conversation index ================= */
+.turn-map { position: absolute; inset-inline-start: 6px; top: 45%; transform: translateY(-50%); z-index: 2; display: grid; justify-items: center; gap: 1px; }
+.turn-mark { position: relative; display: grid; place-items: center; width: 18px; height: clamp(9px, 1.65vh, 12px); border-radius: 6px; color: var(--fg); }
+.turn-mark::after { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .2; }
+.turn-mark.tick::after { width: 3px; height: min(10px, 100%); border-radius: 2px; }
+.turn-mark[aria-current]::after { width: 6px; height: 6px; border-radius: 50%; opacity: .8; }
+.turn-mark:hover::after, .turn-mark:focus-visible::after { opacity: 1; }
+.turn-mark:focus-visible { outline-offset: -1px; }
+@media (pointer: coarse) { .turn-map { display: none; } }
 
 /* ================= message box ================= */
 .composer { padding: 10px 8px 8px 14px; border: 1px solid var(--line-2); border-radius: 16px; background: var(--bg-raise); box-shadow: none; }
 .composer:focus-within, .dock-col .composer:focus-within { border-color: var(--line-3); box-shadow: none; }
-.composer.busy { border-color: var(--line-2); }
+.composer.busy { border-color: color-mix(in srgb, var(--live) 32%, var(--line-2)); }
+.session .composer:focus-within { outline: 1px solid var(--line-2); outline-offset: 2px; }
+.model-picker > .modal-h { border-bottom: 1px solid var(--line); }
+.model-picker > .modal-b { padding-top: 12px; }
+.mp-layout { display: grid; gap: 10px; }
+.mp-list .list-h { color: var(--fg-2); }
+.mp-list .list-it.sel { box-shadow: inset 2px 0 var(--accent); }
+.mp-layout .mp-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--fg-3); font-size: 12px; }
+.mp-footer kbd { margin-right: 3px; }
 .c-row { gap: 2px; }
 .c-row .cbtn { height: 28px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--fg-2); font-size: 12.5px; }
 .c-row .cbtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
@@ -196,15 +207,7 @@ html.zen .main { border-left: 0; border-radius: 0; }
 @media (forced-colors: active) { .overview, .hcard, .crumb-br { border-color: CanvasText; } }
 
 /* ================= reading: replies, code and tables ================= */
-.md { line-height: 1.7; }
-.md > * + * { margin-top: .8em; }
-.md > :is(h1, h2, h3, h4) { margin-top: 1.4em; }
-.md h1 { font-size: 1.32em; } .md h2 { font-size: 1.16em; } .md h3 { font-size: 1.04em; }
-.md :is(h1, h2, h3) { font-weight: 600; letter-spacing: -.012em; }
-.md li + li { margin-top: .35em; }
-.md code.ic { padding: .12em .42em; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg); font-size: .86em; }
 .md code.pathref { color: color-mix(in srgb, var(--accent) 82%, var(--fg)); text-decoration: underline dotted color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 3px; }
-.md code.pathref:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); text-decoration-color: currentColor; }
 .md blockquote { padding: 2px 0 2px 14px; border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--line-3)); color: var(--fg-2); }
 .codeblock { border: 1px solid var(--line); border-radius: 12px; background: var(--bg-inset); }
 .codeblock > pre.code, .session .md .codeblock > pre { border: 0; border-radius: 0; background: transparent; font-size: 12.5px; line-height: 1.65; padding: 12px 16px 14px; }
@@ -214,20 +217,15 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .table-wrap { border-color: var(--line); border-radius: 12px; }
 .table-wrap th { background: color-mix(in srgb, var(--fg) 4%, transparent); color: var(--fg-2); font-weight: 500; }
 .table-wrap tbody tr:hover td { background: var(--bg-hover); }
-.bubble { line-height: 1.55; }
-/* The actions under a reply stay in view (quiet until pointed at); under your own message they appear on hover. */
-.msg.asst > .msg-acts { opacity: .72; transform: none; }
+/* The actions under a reply stay in view (quiet until pointed at); under your own message they appear on hover.
+   A reply ends in one quiet row: copy, 👍, 👎, retry, then when and which model. */
+.msg.asst > .msg-acts { gap: 2px; margin-top: 2px; opacity: .8; transform: none; }
 .msg.asst:hover > .msg-acts, .msg.asst:focus-within > .msg-acts { opacity: 1; }
 .msg-model { color: var(--fg-3); font-size: 11.5px; }
 
 /* ================= life: the agent at work ================= */
-/* The words beside the working bar ("Thinking", "Running npm test") shimmer while they wait. */
-.pending-l, .crumb-st.run .num { background: linear-gradient(90deg, var(--fg-3) 0 38%, var(--fg) 50%, var(--fg-3) 62% 100%); background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer-text 2.4s linear infinite; }
-@keyframes shimmer-text { from { background-position: 100% 0; } to { background-position: -160% 0; } }
-/* While the agent works, a thin light travels round the message box. */
-@property --orb-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-.composer.busy::before { content: ''; position: absolute; inset: -1px; z-index: 0; padding: 1px; border-radius: inherit; background: conic-gradient(from var(--orb-a), transparent 0 58%, color-mix(in srgb, var(--live) 75%, transparent) 76%, transparent 92%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none; animation: orb-spin 2.8s linear infinite; }
-@keyframes orb-spin { to { --orb-a: 360deg; } }
+/* Activity has one moving cue. Labels stay readable and the composer doesn't repaint a gradient every frame. */
+.pending-l, .crumb-st.run .num { color: var(--fg-2); }
 /* A view that comes on screen (a conversation, Home, Runs) settles in instead of popping. */
 .v-in { animation: view-in 240ms var(--ease-out); }
 @keyframes view-in { from { opacity: .001; transform: translateY(5px); } }
@@ -237,17 +235,13 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .sidebar .dot.run { background: transparent; }
 .sidebar .dot.run::after { content: ''; position: absolute; inset: -2px; border: 1.5px solid color-mix(in srgb, var(--live) 28%, transparent); border-top-color: var(--live); border-radius: 50%; animation: dot-spin .85s linear infinite; }
 @keyframes dot-spin { to { transform: rotate(360deg); } }
-.sidebar .dot.warn { box-shadow: 0 0 0 0 color-mix(in srgb, var(--warn) 50%, transparent); animation: dot-ping 1.8s var(--ease-out) infinite; }
-@keyframes dot-ping { 70% { box-shadow: 0 0 0 5px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 .sidebar .s-btn, .sidebar .side-link, .sidebar .proj-btn, .sidebar .run-row { transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
 
 /* Home's narrow layout (home.css) answers to Home's own width. */
 #welcome { container: ws / inline-size; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pending-l, .crumb-st.run .num { animation: none; background: none; color: var(--fg-2); }
-  .composer.busy::before, .v-in, .sidebar .dot.run::after, .sidebar .dot.warn { animation: none; }
-  .composer.busy::before { background: color-mix(in srgb, var(--live) 45%, transparent); }
+  .v-in, .sidebar .dot.run::after { animation: none; }
 }
 
 /* ================= toolbar over a docked side panel ================= */
@@ -259,6 +253,7 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .ph { display: flex; flex-direction: column; gap: 18px; padding: 14px 12px 20px; }
 .ph-find { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-inset); color: var(--fg-3); font-size: 13px; text-align: left; transition: border-color var(--t1) var(--ease), color var(--t1) var(--ease); }
 .ph-find:hover { border-color: var(--line-2); color: var(--fg-2); }
+.ph-find .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ph-find kbd { opacity: .7; }
 .ph-list, .ph-sec { display: flex; flex-direction: column; gap: 1px; }
 .ph-it, .ph-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 30px; padding: 0 8px; border-radius: 7px; color: var(--fg-2); font-size: 13px; text-align: left; transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
@@ -278,17 +273,15 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .menu-it:hover .menu-ic, .menu-it:focus-visible .menu-ic { color: var(--fg-2); }
 .menu-it.danger .menu-ic { color: currentColor; }
 
-/* ================= replies: Antigravity-style detail ================= */
+/* ================= replies: inline code colour, folded steps ================= */
 :root { --code-ink: #E5C07B; }
 :root[data-mode=light] { --code-ink: #8A5A00; }
-.md code.ic:not(.pathref) { background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--code-ink); }
 /* "Worked for 14s ›" stays one quiet line; what was done shows when you point at it or open it. */
 .work-h .work-facts { opacity: 0; transition: opacity var(--t2) var(--ease); }
 .work-h:hover .work-facts, .work-h:focus-visible .work-facts, details.work[open] > .work-h .work-facts { opacity: .85; }
-.msg-time { font-variant-numeric: tabular-nums; }
 
-/* ================= Settings: a card over the workspace, as in Antigravity ================= */
-/* Below the menu row (the window buttons and menus stay usable), over a light dim; the page list on the left. */
+/* ================= Settings: a card over the workspace ================= */
+/* Below the menu row (native window buttons stay usable), over a light dim; the page list on the left. */
 .scrim:has(> .modal.settings-card) { inset: var(--mb-h) 0 0 0; padding: 20px 24px 24px; place-items: stretch center; background: color-mix(in srgb, #000 38%, transparent); animation: fade-in var(--t2) var(--ease); }
 .modal.settings-card { width: min(1120px, 100%); max-width: none; height: 100%; max-height: none; border: 1px solid var(--line-2); border-radius: 16px; background: var(--bg); box-shadow: 0 30px 90px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .02); overflow: hidden; animation: set-in var(--t3) var(--ease-out); }
 @keyframes set-in { from { opacity: 0; transform: translateY(8px) scale(.99); } }
@@ -340,7 +333,7 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .settings-card .set-v { max-width: 60%; }
 .settings-card .set-after-note { margin-top: 14px; }
 
-/* Controls: pill buttons, pill selects and pill switches, as in Antigravity. */
+/* Controls: pill buttons, pill selects and pill switches. */
 .settings-card .set-card .btn.sm, .settings-card .set-actions .btn, .settings-card .keys-bar .btn { height: 28px; padding: 0 13px; border: 0; border-radius: 999px; background: var(--bg-active); color: var(--fg); font-weight: 500; }
 .settings-card .set-card .btn.sm:hover, .settings-card .keys-bar .btn:hover { background: var(--bg-raise-2); }
 .settings-card .set-card .btn.sm:disabled { background: var(--bg-hover); color: var(--fg-3); }
@@ -410,10 +403,7 @@ html.zen .main { border-left: 0; border-radius: 0; }
   .settings-card .set-v, .kc-v { justify-content: flex-start; max-width: 100%; }
 }
 
-/* ================= sidebar, like Antigravity's ================= */
-.app .sidebar .side-new { border-color: transparent; background: var(--bg-raise); }
-.sidebar .side-new:hover { border-color: transparent; background: var(--bg-raise-2); }
-.sidebar .side-new.cur { border-color: transparent; background: var(--bg-raise-2); }
+/* ================= sidebar rows: archived sessions, row actions, the connection chip ================= */
 .sidebar .proj-btn .proj-ic { opacity: .85; }
 .sidebar .s-btn .dot { flex: none; }
 .sidebar .s-row.archived .s-btn { color: var(--fg-3); font-style: italic; }
@@ -473,62 +463,50 @@ html.zen .main { border-left: 0; border-radius: 0; }
 .br-err { flex: none; padding: 8px 12px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--err) 8%, transparent); color: var(--err); font-size: 12.5px; overflow-wrap: anywhere; }
 webview.br-frame { display: flex; }
 
-/* ================= sharp: the density and weight of Antigravity's conversation view ================= */
-/* A narrower sidebar and reading column, tighter line rhythm, quieter inline code and replies that end in one row
-   of small actions. Every size stays relative to the text size you choose (Appearance → Message text size). */
-:root { --col: clamp(560px, 38vw, 664px); }
-.tin { gap: 20px; }
+/* ================= reading rhythm ================= */
+/* Every size stays relative to the text size you choose (Appearance → Message text size). */
 .msg .md, .md { line-height: 1.6; }
 .md > * + * { margin-top: .62em; }
 .md > :is(h1, h2, h3, h4) { margin-top: 1.15em; }
 .md > :is(h1, h2, h3, h4) + * { margin-top: .45em; }
-.md :is(h1, h2, h3) { font-weight: 600; letter-spacing: -.01em; }
+.md :is(h1, h2, h3) { letter-spacing: -.01em; }
 .md h1 { font-size: 1.24em; } .md h2 { font-size: 1.12em; } .md h3 { font-size: 1.02em; }
 .md ul, .md ol { padding-left: 1.25em; }
 .md li + li { margin-top: .16em; }
 .md li > :is(ul, ol) { margin-top: .16em; }
 .md li::marker { color: var(--fg-2); }
-.md strong { font-weight: 600; color: var(--fg); }
-/* Inline code: amber on a faint ground, no border; a file path looks the same and underlines when you point at it. */
-.md code.ic, .md code.ic.pathref { padding: .06em .34em; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--fg) 5.5%, transparent); color: var(--code-ink); font-size: .85em; text-decoration: none; }
-.md code.pathref:hover { background: color-mix(in srgb, var(--fg) 9%, transparent); text-decoration: underline dotted; text-underline-offset: 3px; }
-/* Your message: a compact bubble. */
-.bubble { padding: 7px 13px; border-radius: 14px; }
-/* A reply ends in one quiet row: copy, 👍, 👎, retry, then when and which model. */
-.msg.asst > .msg-acts { gap: 2px; margin-top: 2px; opacity: .8; }
+.md strong { color: var(--fg); }
+/* Inline code: amber text on the page, no box. A file path looks the same and underlines when you point at it. */
+.md code.ic, .md code.ic.pathref { padding: 0 .1em; border: 0; border-radius: 4px; background: transparent; color: var(--code-ink); font-size: .85em; text-decoration: none; }
+.md code.ic:not(.pathref) { background: transparent; color: var(--code-ink); }
+.md code.pathref:hover { background: color-mix(in srgb, var(--fg) 7%, transparent); text-decoration: underline dotted; text-underline-offset: 3px; }
 .msg-acts .msg-time { order: 10; }
 .msg-acts .msg-model { order: 11; color: var(--fg-3); font-size: 11.5px; }
-.msg-act { width: 26px; height: 26px; padding: 0; justify-content: center; color: var(--fg-3); }
-.msg-act:hover { color: var(--fg); }
 .msg-act.rate[aria-pressed=true] { color: var(--fg); }
 .msg-act.rate[aria-pressed=true] svg { fill: currentColor; fill-opacity: .2; }
 .msg.user .msg-act { width: auto; padding: 0 7px; }
-/* The sidebar: tighter rows, quieter selection. */
-.app .sidebar .side-new { height: 30px; margin-bottom: 6px; }
-.sidebar .side-link, .sidebar .proj-btn, .sidebar .s-btn, .sidebar .foot-set { height: 28px; }
-.sidebar .side-h { margin-top: 12px; }
-.sidebar .s-row.cur .s-btn, .sidebar .side-link.cur { font-weight: 400; }
-/* Home asks quietly. */
-.home-title { font-size: clamp(22px, .9cqw + 15px, 30px); font-weight: 600; letter-spacing: -.02em; }
 
-/* ================= Home, as in Antigravity ================= */
-/* The mark and a greeting in the middle; suggestions and the message box at the bottom, in the conversation's column,
-   with the project and where it works on a strip on top of the box. */
+/* ================= Home ================= */
+/* The mark and a greeting above the suggestions and the message box, all in the conversation's column, with the
+   project and where it works on a strip on top of the box. The group sits low on the screen, near the box, so a tall
+   window does not leave a gap between the greeting and what you act on. */
 .home { justify-content: space-between; min-height: 100%; padding: 0 24px 14px; }
 .home > * { max-width: var(--col); }
-.home-hero { flex: 1 0 auto; justify-content: center; gap: 16px; padding: 56px 0 28px; }
-.home-mark { display: grid; place-items: center; opacity: .5; }
-.home-mark .logo { width: 46px; height: 46px; }
+.home-hero { flex: 1 0 auto; justify-content: flex-end; gap: 18px; padding: 40px 0 clamp(24px, 6vh, 72px); }
+.home-mark { display: grid; place-items: center; opacity: .9; }
+.home-mark .ascii-orbit { max-width: 100%; }
 .home-head { gap: 8px; margin: 0; }
-.home .home-title { max-width: 40ch; font-size: 18px; font-weight: 400; line-height: 1.35; letter-spacing: -.005em; color: var(--fg); }
+.home .home-title { max-width: 40ch; font-size: 22px; font-weight: 420; line-height: 1.35; letter-spacing: -.005em; color: var(--fg); }
 .home .home-sub { font-size: 13.5px; color: var(--fg-3); }
 .home-dock { display: flex; flex-direction: column; gap: 10px; flex: none; }
 .home-steps-slot:empty, .home-under:empty { display: none; }
 /* Suggestions: three quiet rows above the box. */
-.home .ws-recipes { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-start; gap: 1px; }
-.home .ws-recipe { height: 28px; padding: 0 8px; gap: 9px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-2); font-size: 13px; }
-.home .ws-recipe:hover { background: var(--bg-hover); color: var(--fg); }
-.home .ws-recipe:nth-child(n+4) { display: none; }
+.home .ws-recipes { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-start; gap: 1px; }
+.home .ws-recipe { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; gap: 9px; border: 0; border-radius: 7px; background: transparent; color: var(--fg-2); font-size: 13px; box-shadow: none; transform: none; transition: border-color var(--t1) var(--ease), background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
+.home .ws-recipe svg { flex: none; color: var(--fg-3); transition: color var(--t1) var(--ease); }
+.home .ws-recipe:hover svg { color: var(--fg-2); }
+.home .ws-recipe:active { transform: scale(.98); transition-duration: 60ms; }
+.home .ws-recipe:hover { border-color: var(--line-2); background: var(--bg-hover); color: var(--fg); transform: none; box-shadow: none; }
 /* The box: an outer tray with the project strip, the message box inside it. */
 .home-box { display: flex; flex-direction: column; gap: 0; padding: 0 5px 5px; border: 1px solid var(--line); border-radius: 18px; background: color-mix(in srgb, var(--bg-raise) 50%, var(--bg)); }
 .home-box-h { display: flex; align-items: center; gap: 2px; min-width: 0; height: 32px; padding: 0 4px; }
@@ -547,11 +525,15 @@ webview.br-frame { display: flex; }
 .home .send.start:not(.text) { width: 30px; min-width: 30px; height: 30px; padding: 0; border-radius: 50%; }
 .home .send.start.text { height: 30px; padding: 0 14px; border-radius: 999px; font-size: 13px; }
 @container ws (max-width: 600px) { .home-box-h .home-status-summary { display: none; } }
+@media (max-height: 680px) {
+  .home-hero { gap: 8px; padding: 12px 0 16px; }
+  .home-mark .ascii-orbit { max-width: min(210px, 100%); }
+  .home .home-composer .c-ta { min-height: 70px; padding: 12px 16px 6px; }
+}
 
-/* ================= Customizations (sidebar → Customizations), as in Antigravity ================= */
-.hub.cz { max-width: 880px; }
+/* ================= Customizations (sidebar → Customizations) ================= */
 .cz-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-.cz-head h1 { margin: 0; font-size: 20px; font-weight: 500; }
+.cz-head h1 { margin: 0; }
 .cz-head > .grow { flex: 1; }
 .cz-tabs { display: inline-flex; padding: 2px; border: 1px solid var(--line-2); border-radius: 999px; }
 .cz-tabs button { height: 26px; padding: 0 12px; border-radius: 999px; color: var(--fg-2); font-size: 12.5px; }
@@ -614,14 +596,12 @@ webview.br-frame { display: flex; }
 @container hub (max-width: 640px) { .cz-grid { grid-template-columns: minmax(0, 1fr); } .cz-hero { grid-template-columns: minmax(0, 1fr); } .cz-hero-art { height: 120px; } }
 @media (max-width: 760px) { .cz-grid { grid-template-columns: minmax(0, 1fr); } .cz-hero { grid-template-columns: minmax(0, 1fr); } .cz-hero-art { height: 120px; } }
 
-/* Automations: title on the left, Create with Prompt and New on the right, as in Antigravity. */
+/* Automations: title on the left, Create with Prompt and New on the right. */
 .au-head { display: flex; align-items: center; gap: 12px; }
 .au-head h1 { flex: 1; margin: 0; }
 .au-head-acts { display: flex; gap: 6px; }
 .au-head-acts .btn { gap: 6px; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--bg-active); color: var(--fg); font-weight: 400; }
 .au-head-acts .btn:hover { background: var(--bg-raise-2); }
-.au-empty { display: flex; flex-direction: column; gap: 6px; max-width: 46ch; margin: 56px auto 0; color: var(--fg-3); font-size: 13px; line-height: 1.5; }
-.au-empty b { color: var(--fg); font-size: 14px; font-weight: 500; }
 .au-ask-b { display: flex; flex-direction: column; gap: 10px; }
 .au-ask { width: 100%; min-height: 84px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-field); color: var(--fg); font: inherit; font-size: 13.5px; line-height: 1.5; resize: vertical; }
 
@@ -652,3 +632,99 @@ html.sr .ascii-art, html.sr .backdrop, html.sr .fireworks { display: none !impor
 .settings-card .about-upd:empty { display: none; }
 .settings-card .set-v .clr .clr-hex { width: 7ch; height: 24px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .hub.cz .cz-search .cz-q { padding-left: 36px; }
+
+/* ================= text weights; the selected row in dark themes ================= */
+/* Text is set a little lighter than regular. */
+body { font-weight: 380; }
+.md strong, .md b, .md :is(h1, h2, h3, h4) { font-weight: 560; }
+.md :is(h1, h2, h3, h4) { color: var(--fg); }
+:root:not([data-mode=light]) :is(.sidebar .s-row.cur .s-btn, .sidebar .side-link.cur, .settings-card .set-tab.cur) { background: rgba(255,255,255,.155); color: #E0E0E0; }
+:root:not([data-mode=light]) .bubble { color: #DDDDDD; }
+
+/* ================= a working turn ================= */
+/* Live and finished turns share one header: "Running check free disk space  2m 3s ›" while it works (the words
+   shimmer), "Worked for 2m 18s ›" after. Steps inside read as plain muted sentences on one 28px rhythm: no icons,
+   the code font only for a path or command with no description, the chevron only on the row you point at. */
+details.work.live > .work-h .work-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: linear-gradient(90deg, var(--fg-3) 0 38%, var(--fg) 50%, var(--fg-3) 62% 100%); background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer-text 2.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { details.work.live > .work-h .work-l { animation: none; background: none; color: var(--fg-2); } }
+.pending { gap: 6px; min-height: 22px; margin-top: -10px; padding: 0 0 0 26px; font-size: 12.5px; }
+.pending-o { flex: 0 1 auto; min-width: 0; color: var(--fg-3); font: 12px/1.4 var(--mono); }
+.pending-t { flex: none; color: var(--fg-3); font-size: 11.5px; }
+details.work.live > .work-h { max-width: 100%; }
+.work-t { order: 1; flex: none; margin-left: 2px; color: var(--fg-3); font-size: 12.5px; }
+details.work.live > .work-h .chev { order: 2; margin-left: -6px; }
+details.work > .work-b { display: flex; flex-direction: column; gap: 0; margin: 4px 0 6px; padding-left: 14px; border-left: 0; }
+details.work > .work-b > .msg { gap: 0; margin: 0; }
+details.work .tool-head { height: auto; min-height: 28px; gap: 6px; padding: 3px 6px; }
+details.work .tool + .tool, .compact details.work .tool + .tool { margin-top: 0; }
+.compact details.work .tool-head, .compact details.work .think > summary { min-height: 24px; }
+details.work .tool-ico { display: none; }
+details.work .tool-name { color: var(--fg-3); font-weight: 400; }
+details.work .tool .tool-sum { flex: 0 1 auto; color: var(--fg-3); font-size: 12px; }
+details.work .tool-sum.plain, .tool-sum.plain { font-family: var(--font); font-size: 13px; }
+details.work .tool-dur, details.work .tool-exit { display: none; }
+details.work .tool-head .chev { order: 0; opacity: 0; transition: opacity var(--t1) var(--ease); }
+details.work .tool-head:is(:hover, :focus-visible) .chev, details.work .tool.open .tool-head .chev { opacity: .7; }
+details.work .tool-head:hover :is(.tool-name, .tool-sum) { color: var(--fg-2); }
+details.work .tool.error .tool-name, details.work .tool.denied .tool-name { color: var(--err); }
+details.work .think > summary { min-height: 28px; padding: 3px 6px; color: var(--fg-3); font-size: 13px; }
+details.work .msg > .md { color: var(--fg-2); }
+details.work > .work-b > .msg > .md { margin: 4px 0; padding-left: 6px; }
+/* The message box focuses with a brighter hairline and no glow. */
+.home .home-composer:focus-within, .session .composer:focus-within { border-color: var(--line-3); box-shadow: none; }
+
+/* ================= One rhythm on every screen ================= */
+/* Menus and the search palette: compact rows, icons without boxes. */
+.menu-it { min-height: 30px; font-size: 13px; }
+.pal-ico { width: 18px; height: 18px; border: 0; background: transparent; }
+.pal-list .list-it { min-height: 32px; font-size: 13.5px; }
+.pal-list .list-it.sel .pal-ico svg { color: var(--fg); }
+/* Runs, Review, Automations and Customizations: one column, one heading, one empty state. */
+.hub, .hub.cz { width: min(100%, 920px); max-width: none; }
+.hub-head h1, .cz-head h1, .au-head h1 { font-size: 20px; font-weight: 550; letter-spacing: -.01em; }
+.hub-head p { color: var(--fg-3); font-size: 13px; }
+.run-new h2, .run-group h2 { color: var(--fg-2); font-size: 12.5px; font-weight: 450; letter-spacing: 0; text-transform: none; }
+.hub .empty { padding: 56px 16px; }
+.hub .empty b { color: var(--fg); font-size: 14px; font-weight: 500; }
+.hub .empty > span { max-width: 46ch; }
+/* Fields in Settings and the hubs focus with a neutral border, like the message box. */
+.settings-card :is(textarea, input[type=text], input[type=search], input[type=number], input[type=url], select):focus, .hub :is(textarea, input, select):focus { border-color: var(--line-3); box-shadow: none; }
+/* Terminal: the command line is a field inside the panel, not a bar cut by the window edge. */
+.console-in { margin: 0 8px 8px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-field); }
+.console-in:focus-within { border-color: var(--line-3); border-radius: 8px; box-shadow: none; }
+/* Settings → Models → Your ratings: 👍 n 👎 n. */
+.rate-tally { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 12px; }
+.rate-tally svg + svg { margin-left: 6px; }
+/* Scene themes have no solid ground behind the conversation: it fades out at the top and above the message box
+   instead of being cut by a hard edge. */
+:root[data-scene] .transcript { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 28px), transparent); }
+
+/* ================= Settings → Agents ================= */
+.ag-row { align-items: center; gap: 12px; }
+.ag-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-raise); color: var(--fg); }
+.ag-ver { margin-left: 8px; color: var(--fg-3); font: 12px var(--mono); }
+.ag-path { display: block; max-width: 46ch; color: var(--fg-3); font: 11.5px var(--mono); }
+.ag-st { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--bg-active); color: var(--fg-2); font-size: 11.5px; }
+.ag-st.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.ag-st.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.ag-st.off { color: var(--fg-3); }
+.ag-add { gap: 8px; }
+.ag-add input { flex: 1; min-width: 0; height: 30px; }
+.ag-add input:first-child { flex: 0 1 180px; }
+.set-sub-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.set-sub-row .set-sub { margin: 0; }
+/* A conversation that runs on another agent shows that agent's mark in the sidebar. */
+.s-agent { display: inline-grid; place-items: center; flex: none; width: 14px; height: 14px; margin-right: 6px; color: var(--fg-3); }
+.s-row.cur .s-agent { color: var(--fg-2); }
+
+/* ================= Settings → Machines ================= */
+.mc-add { gap: 8px; flex-wrap: wrap; }
+.mc-add input { flex: 1 1 160px; min-width: 0; height: 30px; }
+.mc-cmd { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; padding: 8px 10px 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-inset); }
+.mc-cmd code { flex: 1; min-width: 0; overflow-x: auto; color: var(--fg); font: 12.5px var(--mono); white-space: nowrap; }
+.mc-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+/* The window shows a machine, not this PC: a chip in the toolbar says which, and leads back. */
+.tb-machine { display: inline-flex; align-items: center; gap: 6px; height: 24px; margin-left: 8px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--fg-2); font-size: 12px; }
+.tb-machine:hover { border-color: var(--line-3); color: var(--fg); }
+.ag-row .set-l { flex: 1 1 auto; min-width: 0; text-align: left; }
+.ag-row .set-t { display: flex; align-items: baseline; gap: 0; }

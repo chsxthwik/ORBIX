@@ -2,7 +2,7 @@
 // app sets ORBIX_DATA to %LOCALAPPDATA%\ORBIX; run from a clone it is <repo>/data. Tests set their own folder.
 import path from 'node:path';
 import { ROOT, readJson, writeJson, uid } from './util.mjs';
-import { Backend } from './backend.mjs';
+import { Backend, POSIX } from './backend.mjs';
 
 export const DATA_DIR = process.env.ORBIX_DATA || path.join(ROOT, 'data');
 const FILE = path.join(DATA_DIR, 'config.json');
@@ -45,6 +45,13 @@ export class Store {
    */
   async autodetect(backend) {
     if (this.data.backendChosen) return;
+    if (POSIX) {
+      // A server on Linux or macOS runs commands where it is: no WSL to look for.
+      this.data.backend = { kind: 'native', distro: '' };
+      this.data.backendChosen = true;
+      backend.update(this.data.backend);
+      return this.save();
+    }
     const { distros, defaultDistro } = await Backend.wslInfo().catch(() => ({ distros: [], defaultDistro: '' }));
     const order = [defaultDistro, ...distros].filter((d, i, a) => d && a.indexOf(d) === i);
     const choose = (b) => {

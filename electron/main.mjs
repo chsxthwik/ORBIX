@@ -75,8 +75,11 @@ function createWindow(url) {
   });
   win.on('close', () => keepPlace(win));
 
-  // Links to anything but ORBIX itself open in the default browser; the window never leaves the app.
+  // Links to anything but ORBIX itself (this PC's, or a machine you opened from Settings → Machines) open in the
+  // default browser; the window never leaves the app.
   const origin = new URL(url).origin;
+  homeUrl = url;
+  allowed.add(origin);
   const external = (target) => {
     try {
       const u = new URL(target);
@@ -88,7 +91,7 @@ function createWindow(url) {
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, target) => {
-    if (new URL(target).origin !== origin) {
+    if (!allowed.has(new URL(target).origin)) {
       e.preventDefault();
       external(target);
     }
@@ -115,6 +118,35 @@ function createWindow(url) {
   win.on('closed', () => (win = null));
   win.loadURL(url);
 }
+
+// Settings → Machines → Open: only this PC's ORBIX may send the window to a machine (an http(s) address it gave);
+// a machine's page may only send it back home.
+let homeUrl = '';
+const allowed = new Set();
+const fromHome = (e) => {
+  try {
+    return new URL(e.senderFrame?.url || '').origin === new URL(homeUrl).origin;
+  } catch {
+    return false;
+  }
+};
+ipcMain.handle('orbix:machine:open', (e, target) => {
+  if (!win || !fromHome(e)) return false;
+  let u;
+  try {
+    u = new URL(String(target));
+  } catch {
+    return false;
+  }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  allowed.add(u.origin);
+  win.loadURL(u.href);
+  return true;
+});
+ipcMain.handle('orbix:machine:home', () => {
+  if (win && homeUrl) win.loadURL(homeUrl);
+  return true;
+});
 
 // The page tells the window its theme, so the window buttons match it (light, dark, midnight, frost).
 ipcMain.on('orbix:titlebar', (e, { bg, fg }) => {

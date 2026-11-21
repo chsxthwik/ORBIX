@@ -1,6 +1,6 @@
 // Settings → Providers → "Models": the default fast model and plan model. Both are optional; empty means
 // "use the model of the session". Each choice is checked against the provider's own model list before it is saved.
-import { h, toast, replace } from './dom.js';
+import { h, toast, replace, onEnter } from './dom.js';
 import { api } from './api.js';
 import { loadEngine } from './store.js';
 import { row, btn } from './dialogs.js';
@@ -33,7 +33,7 @@ export function renderModelRoles(root, engine) {
     let saved = input.value.trim();
     const sync = () => save.classList.toggle(SAVED, input.value.trim() === saved);
     input.addEventListener('input', sync);
-    input.addEventListener('keydown', (e) => e.key === 'Enter' && input.value.trim() !== saved && save.click());
+    onEnter(input, () => input.value.trim() !== saved && save.click());
     save.classList.add(SAVED);
     return row(label, h('div', { class: 'role-ctl' }, input, save), hint);
   });
