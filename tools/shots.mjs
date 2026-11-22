@@ -3,6 +3,8 @@
 //
 //   node tools/shots.mjs            regenerate docs/img/shots/*.png and site/assets/img/shots/*.webp (full, -1200 and -800)
 //   node tools/shots.mjs --keep     keep the temporary folder afterwards (it holds the server log)
+//   node tools/shots.mjs --ui DIR   interface review: the sidebar (empty, busy, rail), the side panel's launcher, Home and a
+//                                   conversation, in Dark, Light and Graphite at scale 1 and 1.5, as PNGs in DIR only
 //
 // It starts ORBIX with ORBIX_DATA in a temporary folder, a small sample project ("shop-api", a git repository) and a
 // scripted local model: a tiny OpenAI-compatible server in this file that streams the replies of each scenario
@@ -19,7 +21,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const KEEP = args.includes('--keep');
-const PNG_DIR = path.join(ROOT, 'docs', 'img', 'shots');
+const UI_DIR = args.includes('--ui') ? path.resolve(args[args.indexOf('--ui') + 1] || path.join(ROOT, 'data', 'ui-shots')) : '';
+const PNG_DIR = UI_DIR || path.join(ROOT, 'docs', 'img', 'shots');
 const WEBP_DIR = path.join(ROOT, 'site', 'assets', 'img', 'shots');
 const VIEW = { width: 1200, height: 759 }; // every shot is this window; the scale sets the pixel size
 // The sample project lives in a temporary folder whose path names the user's account. Screens show it as this instead.
@@ -489,12 +492,73 @@ async function scenes(page, project) {
 
 // ============================================================================ main
 
+// ============================================================================ interface review (--ui)
+
+const UI_THEMES = ['dark', 'light', 'graphite'];
+const UI_SCALES = [1, 1.5];
+async function uiMatrix(page, name, prep = async () => {}) {
+  for (const theme of UI_THEMES) {
+    await setTheme(page, theme);
+    await prep();
+    for (const dsf of UI_SCALES) await page.capture(`${name}-${theme}-${String(dsf).replace('.', '_')}x`, { dsf });
+  }
+}
+
+async function uiScenes(page, project, project2) {
+  await page.eval(`const { api } = await import('/js/api.js');
+    await api.post('/api/workspaces', { path: ${JSON.stringify(project)} });
+    await api.post('/api/workspaces', { path: ${JSON.stringify(project2)} });`);
+  await page.eval('location.reload()').catch(() => {});
+  await sleep(500);
+  await page.until("document.readyState === 'complete' && document.querySelector('.home .home-composer')", 'Home');
+  await page.eval(`window.__shotProject = ${JSON.stringify(project)};`);
+  say('Empty sidebar and Home');
+  await uiMatrix(page, 'home-empty');
+
+  say('Busy sidebar: working, needs you, unread, pinned');
+  await converse(page, 'explain');
+  await page.eval(`const st = await import('/js/store.js'); await st.closeTab(window.__tabs.explain);`);
+  await converse(page, 'done');
+  await page.eval("const { api } = await import('/js/api.js'); await api.post('/api/engine/settings', { approvals: 'ask' }); await (await import('/js/store.js')).loadEngine();");
+  await converse(page, 'approval', { waitFor: 'approval' });
+  await page.eval(`const st = await import('/js/store.js');
+    await st.loadSessions?.();
+    const first = st.S.sessions.find((x) => /put together|Explain/i.test(x.title || ''));
+    if (first) st.savePrefs({ pinned: [first.path] });
+    const done = st.S.tabs.get(window.__tabs.done);
+    done.unread = true;
+    const t = await st.openTab({ workspace: ${JSON.stringify(project2)} });
+    t.name = 'Add a health check endpoint'; t.streaming = true; window.__tabs.live = t.id;
+    st.setActive(window.__tabs.approval);
+    st.emit('tabs');`);
+  await page.settle(500);
+  await uiMatrix(page, 'sidebar-busy');
+
+  say('A conversation');
+  await page.eval(`const st = await import('/js/store.js'); st.setActive(window.__tabs.done); st.savePrefs({ rightPanel: false });`);
+  await page.settle(400);
+  await uiMatrix(page, 'session', () => page.eval("const tr = document.querySelector('.session:not([hidden]) .transcript'); if (tr) tr.scrollTop = tr.scrollHeight;"));
+
+  say('Side panel launcher');
+  await page.eval(`const st = await import('/js/store.js'); st.savePrefs({ rightPanel: true }); await new Promise((r) => setTimeout(r, 300)); (await import('/js/panels.js')).showTab('new');`);
+  await page.settle(500);
+  await uiMatrix(page, 'launcher');
+
+  say('Rail');
+  const rail = await page.eval(`const st = await import('/js/store.js'); st.savePrefs({ rightPanel: false, sideRail: true }); await new Promise((r) => setTimeout(r, 400)); return !!document.querySelector('.app.side-rail');`);
+  if (rail) await uiMatrix(page, 'sidebar-rail');
+  else say('  (no rail mode yet)');
+  await page.eval(`(await import('/js/store.js')).savePrefs({ sideRail: false });`);
+}
+
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-shots-'));
   tmpRoot = tmp;
   const project = path.join(tmp, 'shop-api');
+  const project2 = path.join(tmp, 'billing-service');
   const data = path.join(tmp, 'data');
   makeProject(project);
+  if (UI_DIR) makeProject(project2);
   const model = await startModelServer();
   const orbix = await startOrbix(data, model.address().port);
   let browser = null;
@@ -519,15 +583,16 @@ async function main() {
     await cdp.send('Page.navigate', { url: orbix.url });
     await page.until("document.readyState === 'complete' && document.querySelector('.app')", 'ORBIX to load');
     fs.mkdirSync(PNG_DIR, { recursive: true });
-    fs.mkdirSync(WEBP_DIR, { recursive: true });
-    await scenes(page, project);
+    if (!UI_DIR) fs.mkdirSync(WEBP_DIR, { recursive: true });
+    if (UI_DIR) await uiScenes(page, project, project2);
+    else await scenes(page, project);
     const errs = page.errors.filter(Boolean);
     if (errs.length) say(`Console errors:\n  ${errs.join('\n  ')}`);
     else say('Console: no errors');
   } finally {
     await stop();
   }
-  say(`Done. PNG: ${path.relative(ROOT, PNG_DIR)}  WebP: ${path.relative(ROOT, WEBP_DIR)}`);
+  say(UI_DIR ? `Done. PNG: ${PNG_DIR}` : `Done. PNG: ${path.relative(ROOT, PNG_DIR)}  WebP: ${path.relative(ROOT, WEBP_DIR)}`);
 }
 
 main().catch((e) => {

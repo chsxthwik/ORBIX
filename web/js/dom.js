@@ -1,4 +1,5 @@
 // Tiny DOM helpers. All text goes through createTextNode → no HTML injection by construction.
+import { tileIndex, tileLetter } from './tile.mjs';
 export const $ = (sel, root = document) => root.querySelector(sel);
 
 export function h(tag, props, ...kids) {
@@ -513,17 +514,15 @@ export function dotGrid(cls = '') {
 }
 
 /** A project's letter tile: the first letter or digit of its name on a quiet square (the sidebar, the toolbar). */
-const TILE_HUES = [262, 330, 212, 158, 24, 46, 188, 290, 352, 140];
+/** A project's tile: its first letter on its own colour (js/tile.mjs), the same in the sidebar, the rail and the toolbar. */
 export function projTile(name, size = 18, cls = '') {
-  const ch = (String(name || '').match(/[\p{L}\p{N}]/u)?.[0] || '·').toUpperCase();
-  const el = h('span', { class: `ptile ${cls}`.trim(), 'aria-hidden': 'true' }, ch);
+  const el = h('span', { class: `ptile ${cls}`.trim(), 'aria-hidden': 'true', dataset: { tile: String(tileIndex(name)) } }, tileLetter(name));
   el.style.setProperty('--s', `${size}px`);
-  // Each project keeps one colour, picked from its name, so it is recognised at a glance in the sidebar and toolbar.
-  let n = 0;
-  for (const c of String(name || '')) n = (n * 31 + c.codePointAt(0)) >>> 0;
-  el.style.setProperty('--ph', String(TILE_HUES[n % TILE_HUES.length]));
   return el;
 }
+
+/** A shortcut as one quiet text hint, "Ctrl+Alt+R", the same everywhere it is shown. Nothing when there is none. */
+export const keyHint = (combo, cls = '') => (combo ? h('span', { class: `khint num${cls ? ' ' + cls : ''}`, 'aria-hidden': 'true' }, combo) : null);
 
 export function iconBtn(name, title, onclick, cls = '') {
   return h('button', { class: `ibtn ${cls}`.trim(), 'data-tooltip':title, 'aria-label': title.replace(/\s*\(.*\)$/, ''), onclick, type: 'button' }, icon(name, 16));
