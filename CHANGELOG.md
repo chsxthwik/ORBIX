@@ -55,6 +55,7 @@ The unified open-source ADE: every coding agent and every model in one environme
 - **Home hero made of light:** about 1,300 particles spiral into the mark, swap into the X and respond to the pointer. Still under reduced motion.
 - **One motion rhythm** (140/220/320/460 ms on a soft ease-out) and one set of controls: 32px buttons and fields with 8px corners and a clear focus ring.
 - **Google Sans Flex** for the interface, **Geist Mono** for code.
+- **Graphite:** a quiet monochrome dark theme. Ink instead of Plasma for the accent, the mark and the current item; colour only for state (amber waits on you, blue marks the agent at work, red stops); your message as a pill and a softer message box.
 - **Editor palettes:** Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula and Gruvbox, from each project's published colours, for surfaces, text, status and code.
 - **Nebula scene:** slow clouds of colour and twinkling stars in deep space. It replaces Koi pond and Halftone dusk; those settings move to Catppuccin Latte and Nebula.
 

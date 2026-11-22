@@ -82,7 +82,7 @@ It starts ORBIX as a service on `127.0.0.1:47821` and prints the address and tok
 </tr>
 <tr>
 <td align="center"><b>Home</b> · start from a project</td>
-<td align="center"><b>Themes</b> · Dark, Light, Midnight, Frost, eight editor palettes and four scenes</td>
+<td align="center"><b>Themes</b> · Dark, Light, Midnight, Frost, Graphite, eight editor palettes and four scenes</td>
 </tr>
 </table>
 

@@ -21,6 +21,8 @@
   --accent: #E6E6E6; --accent-solid: #E6E6E6; --on-accent: #0B0B0B;
   --accent-soft: rgba(255,255,255,.08); --accent-line: rgba(255,255,255,.32);
   --brand: #E6E6E6;
+  /* The mark, the wordmark dot and the home hero go monochrome too: light ink instead of Plasma. */
+  --mark: #F4F4F0; --plasma: #E6E6E6;
   /* State colours: the only hues on screen. */
   --live: #8AB4F8; --live-line: rgba(138,180,248,.40);
   --ok: #81C995; --ok-soft: rgba(129,201,149,.10); --ok-line: rgba(129,201,149,.32);
@@ -85,8 +87,9 @@
 :root[data-theme=graphite] .c-row .cbtn:hover:not(:disabled), :root[data-theme=graphite] .c-row .cbtn.on { color: var(--fg); }
 :root[data-theme=graphite] :is(.cbtn.plan-pick.on, .c-row .cbtn.plan.on) { background: var(--bg-active); }
 :root[data-theme=graphite] :is(.cbtn.plan-pick.on, .c-row .cbtn.plan.on) svg { color: var(--fg); }
-/* Send stays ink on hover; Stop stays red. */
+/* Send stays ink on hover; Stop stays red. Anything filled with the (now light) Plasma takes dark text. */
 :root[data-theme=graphite] .send:not(.stop):not(:disabled):hover { background: #FFFFFF; color: #0B0B0B; }
+:root[data-theme=graphite] .update-pill.ready { color: #0B0B0B; }
 
 /* ================= model picker ================= */
 :root[data-theme=graphite] .mp-pv.on::after { background: var(--fg-2); }
