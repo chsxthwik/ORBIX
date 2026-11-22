@@ -1,7 +1,7 @@
 // Side panel: Review (a branch session), Changes (git), Files, Terminal, Browser, Tasks (with helper agents), Inspect
 // and Side question. It works for the open conversation, and on Home for the project chosen there (Changes, Files,
 // Terminal and Browser, which need no conversation).
-import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce, errorState, fmtTokens, fmtCost } from './dom.js';
+import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce, errorState, fmtTokens, fmtCost, keyHint } from './dom.js';
 import { asciiSpin } from './ascii.js';
 import { api, rpc } from './api.js';
 import { S, activeTab, emit, on, savePrefs, sendPrompt } from './store.js';
@@ -206,19 +206,20 @@ export function stepPanelTab(dir) {
  */
 function surfaces(t) {
   const conv = !!t && !t.home;
+  const first = 'Open a conversation first';
   return [
-    { id: 'surfReview', icon: 'check', label: 'Review', off: !t?.worktree, why: 'For a conversation on its own branch', run: () => showTab('review') },
-    { id: 'surfBrowser', icon: 'globe', label: 'Browser', run: () => openBrowser(t, { incog: false, device: false }) },
-    { id: 'surfIncognito', icon: 'incognito', label: 'Incognito browser', note: 'Keeps nothing after ORBIX closes', run: () => openBrowser(t, { incog: true, device: false }) },
-    { id: 'terminal', icon: 'terminal', label: 'Terminal', run: () => showTab('console') },
-    { id: 'files', icon: 'search', label: 'Open file', off: !conv, why: 'Open a conversation first', run: () => emit('search', 'files') },
-    { id: 'surfFiles', icon: 'folder', label: 'Files', run: () => showTab('files') },
-    { id: 'surfChanges', icon: 'branch', label: 'Changes', run: () => showTab('changes') },
-    { id: 'surfTasks', icon: 'list', label: 'Tasks', off: !conv, why: 'Open a conversation first', run: () => showTab('todos') },
-    { id: 'inspector', icon: 'activity', label: 'Inspect', off: !conv, why: 'Open a conversation first', run: () => showTab('run') },
-    { id: 'surfDevice', icon: 'smartphone', label: 'Device', note: 'The page at phone size', run: () => openBrowser(t, { incog: !!t?.browser?.incog, device: true }) },
-    { id: 'sideQuestion', icon: 'message', label: 'Side question', off: !conv, why: 'Open a conversation first', run: () => showTab('ask') },
-    { id: 'surfContext', icon: 'gauge', label: 'Context', note: 'Tokens, cost and the system prompt', off: !conv, why: 'Open a conversation first', run: () => showTab('context') },
+    { group: 'Workspace', id: 'surfFiles', icon: 'folder', label: 'Files', run: () => showTab('files') },
+    { group: 'Workspace', id: 'surfChanges', icon: 'branch', label: 'Changes', run: () => showTab('changes') },
+    { group: 'Workspace', id: 'surfReview', icon: 'check', label: 'Review', off: !t?.worktree, why: 'For a conversation on its own branch', run: () => showTab('review') },
+    { group: 'Workspace', id: 'surfTasks', icon: 'list', label: 'Tasks', off: !conv, why: first, run: () => showTab('todos') },
+    { group: 'Tools', id: 'terminal', icon: 'terminal', label: 'Terminal', run: () => showTab('console') },
+    { group: 'Tools', id: 'surfBrowser', icon: 'globe', label: 'Browser', run: () => openBrowser(t, { incog: false, device: false }) },
+    { group: 'Tools', id: 'surfIncognito', icon: 'incognito', label: 'Incognito browser', note: 'Keeps nothing after ORBIX closes', run: () => openBrowser(t, { incog: true, device: false }) },
+    { group: 'Tools', id: 'surfDevice', icon: 'smartphone', label: 'Device', note: 'The page at phone size', run: () => openBrowser(t, { incog: !!t?.browser?.incog, device: true }) },
+    { group: 'Tools', id: 'inspector', icon: 'activity', label: 'Inspect', off: !conv, why: first, run: () => showTab('run') },
+    { group: 'Conversation', id: 'files', icon: 'search', label: 'Open file', off: !conv, why: first, run: () => emit('search', 'files') },
+    { group: 'Conversation', id: 'sideQuestion', icon: 'message', label: 'Side question', off: !conv, why: first, run: () => showTab('ask') },
+    { group: 'Conversation', id: 'surfContext', icon: 'gauge', label: 'Context', note: 'Tokens, cost and the system prompt', off: !conv, why: first, run: () => showTab('context') },
   ];
 }
 
@@ -252,23 +253,35 @@ function openBrowser(t, { incog, device }) {
   showTab('browser');
 }
 
-/** The New tab page: every surface as a row with its shortcut. ↑ ↓ move, Enter opens. */
+/**
+ * The New tab page: every surface as a flat row under its group, with its shortcut as one quiet hint. A row that
+ * cannot open here stays focusable, says why on its second line and is marked aria-disabled. ↑ ↓ move, Enter opens.
+ */
 function drawNew(t) {
-  const rows = surfaces(t).map((it, i) => {
+  const rows = [];
+  const groups = [];
+  for (const it of surfaces(t)) {
+    let g = groups.find((x) => x.name === it.group);
+    if (!g) groups.push((g = { name: it.group, rows: [] }));
     const key = surfaceKey(it.id);
-    const b = h('button', { class: 'nt-it' + (it.off ? ' off' : ''), type: 'button', title: it.off ? it.why : it.note || null, 'aria-disabled': it.off ? 'true' : null, 'aria-keyshortcuts': key || null, onclick: () => (it.off ? toast(`${it.label}: ${it.why}.`, 'info', 2400) : it.run()) },
-      icon(it.icon, 15), h('span', { class: 'nt-l grow' }, it.label, it.note ? h('small', null, it.note) : null),
-      key ? h('span', { class: 'nt-k' }, key.split('+').map((k) => h('kbd', null, k === 'Ctrl' ? 'Ctrl' : k))) : null);
-    b.style.setProperty('--i', i);
-    return b;
-  });
-  const list = h('div', { class: 'nt-list', role: 'list', 'aria-label': 'Open a surface' }, rows);
+    const second = it.off ? it.why : it.note;
+    const b = h('button', { class: 'nt-it' + (it.off ? ' off' : ''), type: 'button', role: 'listitem', 'aria-disabled': it.off ? 'true' : null, 'aria-keyshortcuts': key || null,
+      'aria-description': it.off ? it.why : null, onclick: () => (it.off ? toast(`${it.label}: ${it.why}.`, 'info', 2200) : it.run()) },
+      icon(it.icon, 16),
+      h('span', { class: 'nt-l' }, h('span', { class: 'nt-n' }, it.label), second ? h('span', { class: it.off ? 'nt-why' : 'nt-note' }, second) : null),
+      keyHint(key));
+    b.style.setProperty('--i', rows.length);
+    rows.push(b);
+    g.rows.push(b);
+  }
+  const list = h('div', { class: 'nt-list', 'aria-label': 'Open a surface' },
+    groups.map((g) => h('section', { class: 'nt-group', 'aria-label': g.name }, h('h3', { class: 'nt-h' }, g.name), h('div', { role: 'list' }, g.rows))));
   list.addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
-    const all = rows.filter((x) => !x.classList.contains('off'));
-    const i = all.indexOf(document.activeElement);
-    all[(i + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length]?.focus();
+    const i = rows.indexOf(document.activeElement);
+    const n = e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+    rows[n]?.focus();
   });
   body.append(h('div', { class: 'p-scroll nt-page' }, list));
 }
