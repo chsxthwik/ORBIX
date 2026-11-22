@@ -2,7 +2,7 @@
 import { h, $, icon, iconBtn, replace, toast, fmtTokens, skeleton, kbd, leave, errorState, loadingState, onEnter } from './dom.js';
 import { api } from './api.js';
 import { replyUi, S, savePrefs } from './store.js';
-import { brandMark, modelMark } from './brands.js';
+import { brandMark, brandTile, modelMark } from './brands.js';
 import { fuzzy, marked } from './composer.js';
 
 const FOCUSABLE = 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"],a[href]';
@@ -499,6 +499,11 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
       starBtn,
       n <= 9 ? h('kbd', { class: 'mp-key' }, `Ctrl+${n}`) : null);
   };
+  // Connect another provider or agent: the picker closes and Connect opens; the next picker lists the new models.
+  const connectMore = () => {
+    m.close();
+    import('./connect.js').then((x) => x.openConnect());
+  };
   // The reasoning column: the highlighted model's levels; a click picks that model at that level.
   let sideFor = null;
   const drawSide = () => {
@@ -526,9 +531,11 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
         const n = f ? g.models.filter(match).length : g.models.length;
         const sep = i && g.kind !== groups[i - 1].kind && (g.kind === 'provider' || g.kind === 'agent') ? h('div', { class: 'mp-rail-sep', role: 'separator' }) : null;
         const b = h('button', { class: 'mp-pv' + (g.key === pv && !f ? ' on' : '') + (f && !n ? ' dim' : ''), type: 'button', role: 'tab', title: `${g.name} · ${n} ${n === 1 ? 'model' : 'models'}`, 'aria-label': g.name, 'aria-selected': String(g.key === pv && !f), onclick: () => ((pv = g.key), (q.value = ''), (sel = 0), draw(), q.focus()) },
-          g.mark ? brandMark(g.mark, 18, 'mp-pmark') : icon(g.icon, 16));
+          g.mark ? brandTile(g.mark, 24, 'mp-pmark') : icon(g.icon, 16));
         return [sep, b];
       }),
+      h('div', { class: 'mp-rail-sep', role: 'separator' }),
+      h('button', { class: 'mp-pv mp-add', type: 'button', title: 'Connect a provider or agent', 'aria-label': 'Connect a provider or agent', onclick: connectMore }, icon('plus', 16)),
     ].filter(Boolean));
     const kids = [];
     shown = [];
@@ -556,7 +563,7 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
       if (g) {
         kids.push(h('div', { class: 'list-h' }, g.name));
         for (const x of g.models) add(x, g.kind === 'recent' || g.kind === 'fav');
-      } else kids.push(h('div', { class: 'empty' }, 'No models. Connect a provider in Settings → Providers, or install an agent.'));
+      } else kids.push(h('div', { class: 'empty mp-empty' }, h('p', null, 'No models yet. Connect a provider or an agent CLI to start.'), h('button', { class: 'btn primary sm', type: 'button', onclick: connectMore }, icon('plug', 14), 'Connect')));
     }
     if (errors.length) kids.push(h('div', { class: 'pad small warn-text', role: 'status' }, errors.join(' · ')));
     replace(list, kids);

@@ -513,10 +513,15 @@ export function dotGrid(cls = '') {
 }
 
 /** A project's letter tile: the first letter or digit of its name on a quiet square (the sidebar, the toolbar). */
+const TILE_HUES = [262, 330, 212, 158, 24, 46, 188, 290, 352, 140];
 export function projTile(name, size = 18, cls = '') {
   const ch = (String(name || '').match(/[\p{L}\p{N}]/u)?.[0] || '·').toUpperCase();
   const el = h('span', { class: `ptile ${cls}`.trim(), 'aria-hidden': 'true' }, ch);
   el.style.setProperty('--s', `${size}px`);
+  // Each project keeps one colour, picked from its name, so it is recognised at a glance in the sidebar and toolbar.
+  let n = 0;
+  for (const c of String(name || '')) n = (n * 31 + c.codePointAt(0)) >>> 0;
+  el.style.setProperty('--ph', String(TILE_HUES[n % TILE_HUES.length]));
   return el;
 }
 

@@ -4,7 +4,7 @@
 // context is, the Context menu (MCP, skills, rules) and the side panel. Also here: back/forward history across
 // conversations and views, and the card that previews a conversation when you rest the pointer on it in the sidebar.
 // main.js owns the actions and passes them in through `H`.
-import { h, icon, iconBtn, wordmark, baseName, fmtElapsed, timeAgo, projTile, fmtTokens } from './dom.js';
+import { h, icon, iconBtn, wordmark, logo, baseName, fmtElapsed, timeAgo, projTile, fmtTokens } from './dom.js';
 import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 import { contextMenu } from './context.js';
@@ -94,6 +94,7 @@ function menus() {
       { label: 'New conversation', hint: K('new'), run: () => H.newSession() },
       { label: 'New conversation without saving it', run: () => H.newSession(undefined, { ephemeral: true }) },
       { label: 'Open project folder…', run: H.openFolder },
+      { label: 'Connect a provider or agent…', hint: K('connect'), run: () => H.connect() },
       '-',
       ...HUB_LINKS.map(({ label, view, key }) => ({ label, hint: key ? K(key) : undefined, run: () => H.goHub(view) })),
       { label: 'Search everything', hint: K('search'), run: () => H.search() },
@@ -131,7 +132,7 @@ export function drawMenubar(el) {
       if (menuOpenFrom === b) return document.querySelector('.menu:not(.leaving)')?._close?.();
       openMenu(b, menus().find((m) => m[0] === name)[1]);
       e.stopPropagation();
-    } }, ...(name === 'ORBIX' ? [wordmark(13)] : [name]));
+    } }, ...(name === 'ORBIX' ? [h('span', { class: 'mb-mark', 'aria-hidden': 'true' }, logo(12, { alive: true })), wordmark(12)] : [name]));
     if (name === 'ORBIX') (b.classList.add('mb-brand'), b.setAttribute('aria-label', 'ORBIX'));
     // With one menu open, moving along the row opens the next, as in any desktop menu bar.
     b.addEventListener('pointerenter', () => menuOpenFrom && menuOpenFrom !== b && openMenu(b, menus().find((m) => m[0] === name)[1]));

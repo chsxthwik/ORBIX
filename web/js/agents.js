@@ -4,7 +4,7 @@ import { h, icon, toast, replace, copyText, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, emit, savePrefs } from './store.js';
 import { btn } from './dialogs.js';
-import { brandMark } from './brands.js';
+import { brandTile } from './brands.js';
 
 const status = (a) => (!a.installed ? ['off', 'Not installed'] : a.signedIn === false ? ['warn', 'Not signed in'] : a.signedIn ? ['ok', 'Ready'] : ['ok', 'Installed']);
 
@@ -20,7 +20,7 @@ function agentRow(a, close) {
   const copy = (cmd, what) => btn(what, () => copyText(cmd), 'sm');
   const fix = !a.installed ? (a.install ? copy(a.install, 'Copy install command') : null) : a.signedIn === false && a.login ? copy(a.login, 'Copy sign-in command') : btn('New conversation', () => useAgent(a, close), 'sm');
   return h('div', { class: 'set-row ag-row' },
-    h('div', { class: 'ag-mark' }, brandMark(a.id, 20)),
+    brandTile(a.id, 32, 'ag-mark'),
     h('div', { class: 'set-l' },
       h('div', { class: 'set-t' }, a.name, a.version ? h('span', { class: 'ag-ver' }, a.version.replace(/\s*\(.*\)$/, '')) : null),
       h('div', { class: 'set-d' }, a.installed ? h('code', { class: 'ag-path ell', title: a.path }, a.path) : a.note)),
@@ -58,7 +58,7 @@ export function tabAgents(el, show, m) {
     const builtin = (agents || []).filter((a) => !a.custom);
     replace(list, builtin.map((a) => agentRow(a, () => m?.close?.())));
     replace(mine,
-      ...custom().map((a) => h('div', { class: 'set-row ag-row' }, h('div', { class: 'ag-mark' }, icon('cpu', 18)), h('div', { class: 'set-l' }, h('div', { class: 'set-t' }, a.name), h('div', { class: 'set-d' }, h('code', null, a.command))), h('span', { class: `ag-st ${status(a)[0]}` }, status(a)[1]), btn('Remove', () => save(custom().filter((x) => x.id !== a.id)), 'sm'))),
+      ...custom().map((a) => h('div', { class: 'set-row ag-row' }, brandTile(a.id, 32, 'ag-mark'), h('div', { class: 'set-l' }, h('div', { class: 'set-t' }, a.name), h('div', { class: 'set-d' }, h('code', null, a.command))), h('span', { class: `ag-st ${status(a)[0]}` }, status(a)[1]), btn('Remove', () => save(custom().filter((x) => x.id !== a.id)), 'sm'))),
       h('div', { class: 'set-row ag-add' }, name, cmd, btn('Add', add, 'sm')));
   }
   const refresh = async (force) => {

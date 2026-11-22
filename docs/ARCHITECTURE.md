@@ -167,6 +167,7 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `context.js` | the toolbar's Context menu: where the project runs, MCP servers, skills and rule files, each in a submenu (`cascade()` in dialogs.js) |
 | `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
 | `web/css/themes.css` | the editor palettes (Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula, Gruvbox): surfaces, ink, status and syntax colours, and their Settings previews |
+| `web/css/side.css`, `side-icons.js` | the sidebar and brand: the lit mark tile, duotone page icons, project colours, the This week card; provider tiles and the Connect dialog's styles |
 | `updates.js` | update status: the pill at the top right of the menu row, and Settings → About |
 | `store.js` | client state and the reducer that turns session events into UI state |
 | `api.js` | HTTP calls and the SSE connection |
@@ -182,6 +183,7 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `keys.mjs` | the shortcuts you can change: actions, default keys, `comboOf(event)`, your changes in `prefs.keys` |
 | `browser.js` | where links open, the Browser tab's addresses and history; `electron/browser.mjs` is the Windows app's browser session |
 | `brands.js` | provider logo marks, drawn inline |
+| `connect.js` | Connect (Ctrl+Shift+M): Providers and Agents in one dialog, reusing the Settings pages; `brandTile()` in `brands.js` draws each provider as an app icon |
 | `ascii.js` | the COM-X mark in About (characters on a canvas) and the working loader (the ORBIX mark swapping O ↔ X); one still frame under reduced motion or screen reader mode |
 | `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js` | dialogs and notifications |
 | `dom.js` | DOM helpers, icons and logo |

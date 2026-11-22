@@ -103,6 +103,8 @@ At every level, destructive commands (recursive delete, push, publish, history r
 
 ## Agents
 
+**Connect** (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>, or **+** in the model picker) adds a provider or an agent in one place.
+
 ORBIX finds the agent CLIs installed on your computer (**Settings → Agents**) and adds each one to the model picker. They keep their own login and history. ORBIX shows their steps and turns their permission requests into ORBIX approvals.
 
 | Agent | How ORBIX runs it |

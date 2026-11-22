@@ -1,0 +1,140 @@
+/* The sidebar and the brand, drawn last of the layout layers (graphite.css still overrides for its theme).
+   - The brand: the mark in a small lit tile beside the wordmark; the mark swaps O and X while an agent works.
+   - New conversation: one clear first action with its own tile and shortcut.
+   - Pages: duotone icons (js/side-icons.js); the current page takes the accent, a soft lift and a short pill at its
+     left edge, inside the row.
+   - Projects: each with its own colour, picked from its name.
+   - This week: tokens per day, your messages and agent time, above Settings. Opens Analytics.
+   Every colour comes from the theme's tokens, so all themes follow. */
+
+/* ================= brand ================= */
+.mb-it.mb-brand { gap: 8px; padding: 0 10px 0 6px; border-radius: 8px; }
+.mb-mark { position: relative; display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 6px; overflow: hidden;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--plasma) 92%, #fff), color-mix(in srgb, var(--plasma) 70%, #000));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .35), inset 0 -1px 0 rgb(0 0 0 / .18), 0 1px 2px rgb(0 0 0 / .35), 0 0 0 .5px rgb(0 0 0 / .25); }
+.mb-mark::after { content: ''; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / .45) 50%, transparent 70%); transform: translateX(-120%); }
+.mb-brand:hover .mb-mark::after { transform: translateX(120%); transition: transform .7s var(--ease-out); }
+.mb-mark .logo { width: 12px; height: 12px; color: #FFFFFF; filter: drop-shadow(0 .5px 0 rgb(0 0 0 / .25)); }
+.agent-busy .mb-mark .logo.alive { color: #FFFFFF; }
+.mb-brand .wordmark { color: var(--fg); }
+.mb-brand:hover .wordmark { color: var(--mark); }
+
+/* ================= first action ================= */
+.app .sidebar .side-new { gap: 10px; padding: 0 8px 0 6px; font-weight: 550; }
+.sidebar .sn-ic { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 7px; background: var(--accent-solid); color: var(--on-accent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .25), 0 1px 2px rgb(0 0 0 / .25); transition: transform var(--t2) var(--ease-out); }
+.app .sidebar .side-new .sn-ic svg { width: 13px; height: 13px; color: inherit; stroke-width: 2.4; }
+.sidebar .side-new:hover .sn-ic { transform: rotate(90deg); }
+.app .sidebar .side-new { position: relative; }
+.sidebar .side-new > span:not(.sn-ic) { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* the shortcut floats over the row's end on hover, so the label never wraps to make room for it */
+.app .sidebar .side-new .side-kbd { position: absolute; top: 50%; right: 8px; margin: 0; transform: translateY(-50%); background: var(--bg-raise-2); }
+
+/* ================= pages ================= */
+.sidebar .sic { flex: none; overflow: visible; }
+.sidebar .sic-f { fill: currentColor; opacity: .1; transition: opacity var(--t2) var(--ease); }
+.sidebar .sic-l { stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.app .sidebar .side-link .sic { width: 18px; height: 18px; color: var(--fg-3); transition: color var(--t2) var(--ease), transform var(--t2) var(--ease-out); }
+.sidebar .side-link:hover .sic { color: var(--fg-2); }
+.sidebar .side-link:hover .sic-f { opacity: .16; }
+.sidebar .side-link:active .sic { transform: scale(.92); }
+.app .sidebar .side-link.cur .sic { color: var(--accent); }
+.sidebar .side-link.cur .sic-f { opacity: .24; }
+
+/* the current row: a soft lift and a short pill inside its left edge (Windows' own navigation selection) */
+:root .app .sidebar :is(.side-link.cur, .s-row.cur > .s-btn) { background: var(--bg-active); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 5%, transparent); }
+.app .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .side-new.cur)::before { top: 50%; bottom: auto; left: 0; width: 3px; height: 16px; margin-top: -8px; border-radius: 3px; background: var(--accent-solid); }
+.app .sidebar .s-row.cur > .s-btn::before { height: 14px; margin-top: -7px; }
+
+/* shortcuts show under the pointer; counts stay */
+.sidebar .side-link .side-kbd, .sidebar .side-new .side-kbd { margin-left: auto; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 5px; background: transparent; color: var(--fg-3); font: 500 10.5px/1.5 var(--font); letter-spacing: .02em; opacity: 0; transition: opacity var(--t2) var(--ease); }
+.sidebar :is(.side-link, .side-new):is(:hover, :focus-visible) .side-kbd { opacity: 1; }
+.sidebar .side-search-btn .side-kbd { opacity: .75; }
+
+/* ================= projects ================= */
+.ptile { --ph: 262; background: linear-gradient(150deg, hsl(var(--ph) 72% 64%), hsl(var(--ph) 58% 45%)); color: #FFFFFF; font-weight: 650;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .28), inset 0 -1px 0 rgb(0 0 0 / .14), 0 1px 1.5px rgb(0 0 0 / .3); text-shadow: 0 .5px 0 rgb(0 0 0 / .2); }
+.proj:has(.s-row.cur) > .proj-head .ptile { background: linear-gradient(150deg, hsl(var(--ph) 80% 68%), hsl(var(--ph) 64% 50%)); box-shadow: inset 0 1px 0 rgb(255 255 255 / .3), 0 0 0 2px color-mix(in srgb, hsl(var(--ph) 70% 60%) 30%, transparent); }
+.proj-btn[aria-expanded=false] .ptile { opacity: .7; filter: saturate(.7); }
+.sidebar .proj-btn .proj-name { letter-spacing: -.005em; }
+
+/* ================= this week ================= */
+.app .sidebar .side-week { display: flex; flex-direction: column; gap: 8px; flex: none; margin: 0 var(--sb-pad) 8px; padding: 11px 12px 10px; border: 0; border-radius: 12px; text-align: left; cursor: pointer;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fg) 4.5%, transparent), color-mix(in srgb, var(--fg) 2%, transparent));
+  box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 color-mix(in srgb, var(--fg) 5%, transparent); color: var(--fg-2); font: inherit;
+  transition: box-shadow var(--t2) var(--ease), background-color var(--t2) var(--ease); }
+.app .sidebar .side-week:hover { box-shadow: inset 0 0 0 1px var(--line-2), inset 0 1px 0 color-mix(in srgb, var(--fg) 6%, transparent); }
+.app .sidebar .side-week:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+.sw-top { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.sw-k { flex: 1 1 auto; color: var(--fg-3); font-size: 12px; }
+.sw-v { color: var(--fg); font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.sw-u { color: var(--fg-3); font-size: 11.5px; }
+.sw-bars { display: grid; grid-template-columns: repeat(7, 1fr); align-items: end; gap: 4px; height: 30px; }
+.sw-bars i { display: block; height: max(var(--v), 3px); border-radius: 3px; background: color-mix(in srgb, var(--fg) 22%, transparent); transform-origin: bottom; animation: sw-grow .6s var(--ease-out) both; }
+.sw-bars i.z { height: 3px; background: color-mix(in srgb, var(--fg) 9%, transparent); }
+.sw-bars i.today { background: linear-gradient(180deg, color-mix(in srgb, var(--accent-solid) 85%, #fff), var(--accent-solid)); }
+.sw-bars i:nth-child(2) { animation-delay: 40ms; } .sw-bars i:nth-child(3) { animation-delay: 80ms; } .sw-bars i:nth-child(4) { animation-delay: 120ms; }
+.sw-bars i:nth-child(5) { animation-delay: 160ms; } .sw-bars i:nth-child(6) { animation-delay: 200ms; } .sw-bars i:nth-child(7) { animation-delay: 240ms; }
+.app .sidebar .side-week:hover .sw-bars i:not(.z):not(.today) { background: color-mix(in srgb, var(--fg) 32%, transparent); }
+@keyframes sw-grow { from { transform: scaleY(0); } }
+.sw-foot { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--fg-3); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+.sw-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--line-3); flex: none; }
+/* short windows keep the list; the card returns when there is room */
+@media (max-height: 620px) { .app .sidebar .side-week { display: none; } }
+
+/* ================= footer ================= */
+.app .sidebar .side-foot .foot-set .sic { width: 18px; height: 18px; color: var(--fg-3); transition: transform .5s var(--ease-out), color var(--t2) var(--ease); }
+.app .sidebar .side-foot .foot-set:hover .sic { color: var(--fg-2); transform: rotate(60deg); }
+
+/* ================= light themes ================= */
+:root[data-mode=light] .sidebar .sic-f { opacity: .08; }
+:root[data-mode=light] .sidebar .side-link.cur .sic-f { opacity: .18; }
+:root[data-mode=light] .app .sidebar .side-week { background: var(--bg-raise); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgb(0 0 0 / .04); }
+
+/* ================= Graphite: monochrome, as that theme asks ================= */
+:root[data-theme=graphite] .mb-mark { background: linear-gradient(150deg, #3A3A3C, #161617); }
+:root[data-theme=graphite] .sidebar .sn-ic { background: var(--fg); color: var(--bg); }
+:root[data-theme=graphite] .app .sidebar .side-new .sn-ic svg { color: var(--bg); }
+:root[data-theme=graphite] .app .sidebar .side-link.cur .sic { color: var(--fg); }
+:root[data-theme=graphite] .ptile, :root[data-theme=graphite] .proj:has(.s-row.cur) > .proj-head .ptile { background: color-mix(in srgb, var(--fg) 16%, transparent); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); text-shadow: none; }
+:root[data-theme=graphite] .sw-bars i.today { background: var(--fg-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sw-bars i { animation: none; }
+  .sidebar .side-new:hover .sn-ic, .app .sidebar .side-foot .foot-set:hover .sic { transform: none; }
+  .mb-brand:hover .mb-mark::after { transition: none; }
+}
+@media (forced-colors: active) { .mb-mark, .sidebar .sn-ic, .ptile { forced-color-adjust: none; } .sw-bars i { background: CanvasText; } }
+
+/* ================= provider tiles (js/brands.js brandTile) =================
+   A provider as an app icon: its mark on its brand colour, a soft top light and a hairline so a black or white
+   tile still has an edge on any theme. */
+.btile { display: grid; place-items: center; flex: none; width: var(--bt); height: var(--bt); border: 0; border-radius: calc(var(--bt) * .26);
+  background: var(--bt-bg); color: var(--bt-fg, #0B0B0C);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), inset 0 0 0 1px rgb(255 255 255 / .08), 0 0 0 1px color-mix(in srgb, var(--fg) 9%, transparent), 0 1px 2px rgb(0 0 0 / .22); }
+.btile.light { box-shadow: inset 0 -1px 0 rgb(0 0 0 / .06), 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent), 0 1px 2px rgb(0 0 0 / .18); }
+.btile.plain { background: var(--bg-raise-2); color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+.btile svg { display: block; }
+/* the model picker's provider rail: tiles sit flat until the rail button is hovered or current */
+.mp-pv .btile { --bt: 24px; opacity: .82; transition: opacity var(--t2) var(--ease), transform var(--t2) var(--ease-out); }
+.mp-pv:hover .btile, .mp-pv.on .btile { opacity: 1; }
+.mp-pv.on .btile { transform: scale(1.06); }
+.mp-pv.dim .btile { opacity: .3; filter: grayscale(1); }
+:root[data-theme=graphite] .btile:not(.plain) { filter: grayscale(1); }
+@media (forced-colors: active) { .btile { forced-color-adjust: none; } }
+
+/* ================= Connect (js/connect.js) ================= */
+.modal.connect-dlg { width: min(640px, 100%); height: min(720px, calc(100vh - 48px)); }
+.connect-dlg > .modal-b { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.cn-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; flex: none; padding: 0 20px 14px; border-bottom: 1px solid var(--line); }
+.cn-sub { margin: 0; color: var(--fg-3); font-size: 13px; }
+.cn-seg button[aria-selected=true] { background: var(--bg-active); color: var(--fg); }
+.cn-pane { flex: 1 1 auto; min-height: 0; padding: 14px 20px 20px; overflow: auto; }
+.cn-pane .pv-tools { position: sticky; top: -14px; z-index: 1; margin: -14px -20px 10px; padding: 14px 20px 10px; background: var(--bg-modal); }
+.cn-pane .set-note:first-child { margin-top: 0; }
+/* the model picker's way to Connect */
+.mp-pv.mp-add { color: var(--fg-3); border: 1px dashed var(--line-3); }
+.mp-pv.mp-add:hover { color: var(--fg); border-color: var(--fg-3); border-style: solid; }
+.mp-empty p { margin: 0; }
+.pv-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pv-via { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg-2); font-size: 11px; font-weight: 500; }

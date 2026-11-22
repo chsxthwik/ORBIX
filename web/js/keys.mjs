@@ -22,6 +22,7 @@ export const ACTIONS = [
   { id: 'prevPanelTab', group: 'Side panel', label: 'Previous side panel tab', keys: ['Ctrl+Shift+,'] },
   { id: 'shortcuts', group: 'General', label: 'Keyboard shortcuts', keys: ['Ctrl+/'] },
   { id: 'settings', group: 'General', label: 'Open settings', keys: ['Ctrl+,'] },
+  { id: 'connect', group: 'General', label: 'Connect a provider or agent', keys: ['Ctrl+Shift+M'] },
   { id: 'focusInput', group: 'Conversation', label: 'Focus the message box', keys: ['Ctrl+L'] },
   { id: 'find', group: 'Conversation', label: 'Find in the conversation', keys: ['Ctrl+F'] },
   { id: 'outline', group: 'Conversation', label: 'Jump to one of your messages', keys: ['Ctrl+Shift+O'] },

@@ -3,10 +3,27 @@
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from './files.mjs';
 
 /** Parse a fetch() body stream of server-sent events into {event, data} objects. */
-export async function* parseSSE(body, signal) {
+// A stream that sends nothing at all for this long is treated as a lost connection, so a turn never hangs on a
+// provider that stopped answering: the error is retryable, so the request is tried again (or, after part of the
+// reply, the turn starts over once). Providers keep a slow reply alive with reasoning text or ping events.
+export const STALL_MS = 5 * 60000;
+
+export async function* parseSSE(body, signal, stallMs = STALL_MS) {
   const dec = new TextDecoder();
   let buf = '';
   const reader = body.getReader();
+  let stalled = false;
+  const read = () => {
+    let timer;
+    const quiet = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        stalled = true;
+        reject(new Error(`no data from the provider for ${stallMs >= 60000 ? `${Math.round(stallMs / 60000)} minutes` : `${Math.round(stallMs / 1000)} seconds`}`));
+      }, stallMs);
+      timer.unref?.();
+    });
+    return Promise.race([reader.read(), quiet]).finally(() => clearTimeout(timer));
+  };
   const block = (raw) => {
     let event = 'message';
     const data = [];
@@ -20,7 +37,7 @@ export async function* parseSSE(body, signal) {
   try {
     for (;;) {
       if (signal?.aborted) return;
-      const { value, done } = await reader.read();
+      const { value, done } = await read();
       if (done) break;
       buf += dec.decode(value, { stream: true });
       let i;
@@ -35,6 +52,7 @@ export async function* parseSSE(body, signal) {
     const last = block(buf + dec.decode());
     if (last) yield last;
   } finally {
+    if (stalled) reader.cancel().catch(() => {});
     try {
       reader.releaseLock();
     } catch {}

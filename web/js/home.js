@@ -9,7 +9,7 @@ import { Composer, dropZone } from './composer.js';
 import { api } from './api.js';
 import { S, openTab, sendPrompt, setThinking, tabForSession, engineReady, savePrefs, groupSessions, on, emit, setActive } from './store.js';
 import { popMenu, modelPicker, isApproval, thinkingLevels } from './dialogs.js';
-import { brandMark } from './brands.js';
+import { brandTile } from './brands.js';
 import { taskButtons, projectTasks } from './workspace.js';
 import { branchToggle } from './review.js';
 
@@ -456,7 +456,7 @@ const PV_SUB = { anthropic: 'Claude models', chatgpt: 'Your ChatGPT plan or an A
 const PV_HOW = { anthropic: 'API key', chatgpt: 'Sign in', google: 'API key', xai: 'Sign in', openrouter: 'Sign in', ollama: 'No key', lmstudio: 'No key' };
 const PV_NAME = { chatgpt: 'OpenAI' };
 function focusProvider(H, id) {
-  H.settings('engine');
+  H.connect();
   const t0 = Date.now();
   const sel = `.pv-card[data-ids~="${CSS.escape(id)}"]`;
   const tick = () => {
@@ -475,14 +475,14 @@ function connectDeck(H) {
   const all = S.engine?.providers || [];
   const on = (p) => p.configured || (p.id === 'chatgpt' && all.some((q) => q.id === 'openai' && q.configured));
   const rows = all.filter((p) => p.id in PV_SUB).map((p) => h('li', null, h('button', { class: 'cx-row' + (on(p) ? ' on' : ''), type: 'button', title: `Connect ${PV_NAME[p.id] || p.name}`, onclick: () => focusProvider(H, p.id) },
-    h('span', { class: 'cx-ic', 'aria-hidden': 'true' }, brandMark(p.id, 18)),
+    brandTile(p.id, 30, 'cx-ic'),
     h('span', { class: 'cx-n' }, PV_NAME[p.id] || p.name),
     h('span', { class: 'cx-s' }, PV_SUB[p.id]),
     h('span', { class: 'cx-how' }, on(p) ? 'Connected' : PV_HOW[p.id]))));
   return h('section', { class: 'home-connect', 'aria-label': 'Connect a model' },
     rows.length ? h('ul', { class: 'cx-list' }, ...rows) : h('p', { class: 'home-none' }, 'Choose a provider in Settings to connect your first model.'),
     h('div', { class: 'connect-foot' },
-      h('span', { class: 'connect-acts' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => H.settings('engine') }, 'All providers'), h('button', { class: 'btn ghost sm', type: 'button', onclick: H.diagnostics }, 'Check my setup')),
+      h('span', { class: 'connect-acts' }, h('button', { class: 'btn ghost sm', type: 'button', onclick: () => H.connect() }, 'All providers and agents'), h('button', { class: 'btn ghost sm', type: 'button', onclick: H.diagnostics }, 'Check my setup')),
       h('p', { class: 'setup-note' }, 'Keys are stored encrypted on this PC.')));
 }
 

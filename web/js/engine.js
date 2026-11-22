@@ -3,7 +3,7 @@ import { h, icon, toast, replace, spinner, skeleton, errorState, onEnter } from 
 import { api } from './api.js';
 import { loadEngine } from './store.js';
 import { confirmDialog } from './dialogs.js';
-import { brandMark } from './brands.js';
+import { brandTile } from './brands.js';
 
 /** Open a link in the default browser. */
 export const openLink = (url) => api.post('/api/open-url', { url }).catch((e) => toast(e.message, 'error'));
@@ -27,6 +27,8 @@ const WAY = {
   opencode: ['Zen', 'Claude, GPT, Gemini and open models, paid as you go.'],
   'opencode-go': ['Go plan', 'Open models on your OpenCode Go subscription. Paste your Go API key to connect.'],
 };
+// How a connected way got in, as a small tag beside the name: a sign-in, a key, or a server on this PC.
+const viaOf = (p, fam) => (fam ? WAY[p.id][0] : p.via === 'oauth' ? 'Signed in' : p.local ? 'On this PC' : p.editableUrl ? 'Server' : 'API key');
 const familyOf = (id) => Object.keys(FAMILY).find((f) => FAMILY[f].members.includes(id)) || id;
 // Connected, with the model count of the ways that work; a sign-in the provider ended asks for a new one instead.
 const statusOf = (ps) => {
@@ -221,8 +223,8 @@ export async function renderEngineSettings(root) {
       : connectForm(lead));
     return h('div', { class: `pv-card${configured ? ' on' : ''}${open ? ' open' : ''}`, dataset: { id, ids: members.map((p) => p.id).join(' ') } },
       h('button', { class: 'pv-head', type: 'button', 'aria-expanded': String(open), onclick: toggleOpen },
-        h('span', { class: 'pv-ic', 'aria-hidden': 'true' }, brandMark(lead.id, 20)),
-        h('span', { class: 'pv-main' }, h('strong', { class: 'pv-name' }, fam?.name || lead.name), h('span', { class: 'pv-sub ell' }, fam?.note || lead.note || '')),
+        brandTile(lead.id, 34, 'pv-ic'),
+        h('span', { class: 'pv-main' }, h('strong', { class: 'pv-name' }, fam?.name || lead.name, ...members.filter((p) => p.configured && !p.signInError).map((p) => h('span', { class: 'pv-via' }, viaOf(p, fam)))), h('span', { class: 'pv-sub ell' }, fam?.note || lead.note || '')),
         status,
         icon(open ? 'chevron-down' : 'chevron-right', 14, 'pv-chev')),
       open ? h('div', { class: 'pv-body' }, ...body()) : null);

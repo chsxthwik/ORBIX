@@ -278,10 +278,11 @@ try {
   assert(await page.eval(`return !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track, .session-inner > .tl') && getComputedStyle(document.querySelector('.mb-brand .wm-dot')).animationName === 'none'`), 'no loose calls, no dotted rail, no idle logo animation');
   await page.fill('#session textarea', 'Keep this as the second message.');
   await page.key('Enter', { keyCode: 13, code: 'Enter' });
-  await page.until(`document.querySelectorAll('.turn-map .turn-mark').length === 2 && document.querySelector('.turn-mark:last-child')?.hasAttribute('aria-current')`, 'compact message markers track the current message');
-  await page.mouse('.turn-mark:first-child');
-  await page.until(`document.querySelector('.tin .msg.user')?.classList.contains('tl-flash')`, 'a compact marker jumps to its message');
-  assert(await page.eval(`return document.querySelector('.turn-map').getBoundingClientRect().height <= 250`), 'the turn map is a short stack, not a full-height rail');
+  await page.until(`document.querySelectorAll('.turn-map .turn-mark.you').length === 2 && document.querySelectorAll('.turn-map .turn-mark.agent').length >= 1 && document.querySelector('.turn-mark[aria-current]') && document.querySelector('.turn-mark.seen')`, 'the timeline has a dot per message and lights the ones on screen');
+  assert(await page.eval(`const d = [...document.querySelectorAll('.turn-mark')]; return d.every((b) => /^(Your message|Reply) \\d+ of \\d+/.test(b.getAttribute('aria-label'))) && d.filter((b) => b.tabIndex === 0).length === 1`), 'every dot is labelled, and the strip is one tab stop');
+  await page.mouse('.turn-mark.you');
+  await page.until(`document.querySelector('.tin .msg.user')?.classList.contains('tl-flash') && document.querySelector('.tm-tip.on')`, 'a dot shows its first line and jumps to its message');
+  assert(await page.eval(`return document.querySelector('.turn-map').getBoundingClientRect().height <= 250`), 'the timeline is a short stack, not a full-height rail');
   say('conversation e2e: tools after an initial answer');
   if (DESKTOP) {
     // The built-in browser shows a web page in the Windows app (a <webview> with its own session).

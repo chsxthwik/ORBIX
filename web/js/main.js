@@ -1,7 +1,9 @@
 // ORBIX front-end bootstrap: layout, sidebar, keyboard, and routing of events to views. The window chrome (menu row,
 // toolbar, history) is drawn by shell.js with the actions defined here.
 import './desktop.js';
-import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, lsGet, lsSet, fmtElapsed, projTile, dotGrid } from './dom.js';
+import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, lsGet, lsSet, fmtElapsed, projTile, dotGrid, fmtTokens } from './dom.js';
+import { sideIcon } from './side-icons.js';
+import { openConnect } from './connect.js';
 import { api, rpc, connectEvents } from './api.js';
 import { brandMark } from './brands.js';
 import { moveToMachine, onMachine, backToThisPc } from './machines.js';
@@ -30,6 +32,8 @@ import { refreshAutomations } from './automations.js';
 import { selectPluginsTab } from './customize.js';
 import { HUB_LINKS } from './hub-nav.js';
 import { initRuns, openHub, closeHub, isHub, hubView, draw as drawHub, onRunEvent, reviewCount, workingCount } from './runs.js';
+
+let week = null, weekAt = 0; // the sidebar's This week card (see loadWeek)
 
 // No layout animation until the saved layout has been applied (boot() removes this).
 document.documentElement.classList.add('still');
@@ -440,10 +444,45 @@ function sidebarSig() {
     S.workspaces.map((w) => [w.id, w.path, w.name]),
     (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name),
     S.update ? [S.update.state, S.update.version, S.update.percent] : null,
+    week ? week.days.map((d) => d.input + d.output + d.cacheRead + d.cacheWrite + d.prompts * 7 + d.workMs) : null,
   ]);
 }
 
+// ---- This week: a small card above Settings with the week's tokens per day, your messages and agent time ----
+// From GET /api/analytics (the server caches each conversation file's sums, so this is cheap); read again every
+// five minutes while the sidebar redraws, and opened in full in Settings → Analytics.
+function loadWeek() {
+  if (Date.now() - weekAt < 5 * 60000) return;
+  weekAt = Date.now();
+  api.get('/api/analytics?range=7').then((d) => {
+    week = d?.days?.length ? d : null;
+    drawSidebar();
+  }, () => {});
+}
+const weekTime = (ms) => (ms >= 3600000 ? `${(ms / 3600000).toFixed(1)} h` : ms >= 60000 ? `${Math.round(ms / 60000)} min` : `${Math.max(1, Math.round(ms / 1000))} s`);
+function weekCard() {
+  if (!week) return null;
+  const tok = (d) => d.input + d.output + d.cacheRead + d.cacheWrite;
+  const total = week.days.reduce((n, d) => n + tok(d), 0);
+  const msgs = week.days.reduce((n, d) => n + d.prompts, 0);
+  const work = week.days.reduce((n, d) => n + d.workMs, 0);
+  if (!total && !msgs) return null; // nothing this week yet: the space stays calm
+  const max = Math.max(1, ...week.days.map(tok));
+  const bars = week.days.map((d, i) => {
+    const day = new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
+    const b = h('i', { class: `${tok(d) ? '' : 'z'}${i === week.days.length - 1 ? ' today' : ''}`.trim(), title: `${day}: ${tok(d).toLocaleString()} tokens, ${d.prompts} message${d.prompts === 1 ? '' : 's'}` });
+    b.style.setProperty('--v', `${tok(d) ? Math.max(10, (tok(d) / max) * 100) : 0}%`);
+    return b;
+  });
+  const label = `This week: ${total.toLocaleString()} tokens, ${msgs} messages, ${work ? weekTime(work) : 'no'} agent time. Open Analytics.`;
+  return h('button', { class: 'side-week', type: 'button', title: 'Open Analytics', 'aria-label': label, onclick: () => settingsDialog('usage') },
+    h('span', { class: 'sw-top' }, h('span', { class: 'sw-k' }, 'This week'), h('span', { class: 'sw-v num' }, total ? fmtTokens(total) : '0'), h('span', { class: 'sw-u' }, 'tokens')),
+    h('span', { class: 'sw-bars', 'aria-hidden': 'true' }, bars),
+    h('span', { class: 'sw-foot num' }, h('span', null, `${msgs} message${msgs === 1 ? '' : 's'}`), h('span', { class: 'sw-sep', 'aria-hidden': 'true' }), h('span', null, work ? `${weekTime(work)} agent time` : 'No agent time')));
+}
+
 function drawSidebar() {
+  loadWeek();
   const sig = sidebarSig();
   if (sig === sideSig && sideEl.querySelector('.side-scroll')) return;
   sideSig = sig;
@@ -509,16 +548,16 @@ function drawSidebar() {
     if (filterOpen) sideEl.querySelector('.side-search input')?.focus();
   };
   sideEl.append(
-    h('button', { class: 'side-new' + (S.active || isHub() ? '' : ' cur'), type: 'button', title: 'New conversation (Ctrl+N)', 'aria-current': S.active || isHub() ? null : 'page', onclick: () => newSession() }, icon('plus', 14), h('span', null, 'New conversation')),
+    h('button', { class: 'side-new' + (S.active || isHub() ? '' : ' cur'), type: 'button', title: 'New conversation (Ctrl+N)', 'aria-current': S.active || isHub() ? null : 'page', onclick: () => newSession() }, h('span', { class: 'sn-ic' }, icon('plus', 13)), h('span', null, 'New conversation'), h('kbd', { class: 'side-kbd' }, firstKey(S.ui.keys, 'new') || 'Ctrl+N')),
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
-      h('button', { class: 'side-link side-search-btn', type: 'button', title: `Search conversations (${firstKey(S.ui.keys, 'search') || 'Ctrl+K'})`, onclick: () => openSearch('conversations') }, icon('search', 15), h('span', null, 'Search'), h('kbd', { class: 'side-kbd' }, firstKey(S.ui.keys, 'search') || 'Ctrl+K')),
-      HUB_LINKS.map(({ view, label, icon: glyph, hint, key }) => {
+      h('button', { class: 'side-link side-search-btn', type: 'button', title: `Search conversations (${firstKey(S.ui.keys, 'search') || 'Ctrl+K'})`, onclick: () => openSearch('conversations') }, sideIcon('search'), h('span', null, 'Search'), h('kbd', { class: 'side-kbd' }, firstKey(S.ui.keys, 'search') || 'Ctrl+K')),
+      HUB_LINKS.map(({ view, label, hint, key }) => {
         const cur = hubView()?.view === view || (view === 'runs' && hubView()?.view === 'run');
         const shortcut = key && firstKey(S.ui.keys, key);
         const count = view === 'runs' ? workingCount() : view === 'review' ? reviewCount() : 0;
         const status = `${count} ${view === 'runs' ? 'working' : 'waiting for you'}`;
         return h('button', { class: `side-link${cur ? ' cur' : ''}`, type: 'button', title: shortcut ? `${hint} (${shortcut})` : hint, 'aria-current': cur ? 'page' : null, onclick: () => goHub(view) },
-          icon(glyph, 15), h('span', null, label), count ? h('span', { class: `side-count num${view === 'runs' ? ' quiet' : ''}`, title: status, 'aria-label': status }, count) : null);
+          sideIcon(view), h('span', null, label), count ? h('span', { class: `side-count num${view === 'runs' ? ' quiet' : ''}`, title: status, 'aria-label': status }, count) : shortcut ? h('kbd', { class: 'side-kbd' }, shortcut) : null);
       })),
     h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
@@ -537,8 +576,9 @@ function drawSidebar() {
           iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm'))),
       showFilter ? h('div', { class: 'side-search' }, icon('search', 14), search) : null,
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'No projects yet.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
+    weekCard() || '',
     h('div', { class: 'side-foot' },
-      h('button', { class: 'side-link foot-set', type: 'button', title: 'Settings (Ctrl+,)', onclick: () => settingsDialog() }, icon('cog', 15), h('span', null, 'Settings')),
+      h('button', { class: 'side-link foot-set', type: 'button', title: 'Settings (Ctrl+,)', onclick: () => settingsDialog() }, sideIcon('settings'), h('span', null, 'Settings')),
       footStatus()),
   );
   sideEl.querySelector('.side-scroll').scrollTop = scroll;
@@ -752,7 +792,7 @@ function goTo(loc) {
 }
 
 Object.assign(shell, {
-  newSession, openFolder, goHub, goTo, settings: (tab) => settingsDialog(tab), help: openHelp, shortcuts: () => settingsDialog('keys'), diagnostics: openDiagnostics,
+  newSession, openFolder, goHub, goTo, connect: () => openConnect(), settings: (tab) => settingsDialog(tab), help: openHelp, shortcuts: () => settingsDialog('keys'), diagnostics: openDiagnostics,
   manage: openCleanup, search: () => openSearch(), toggleSidebar, togglePanel, sideShown, panelShown, toggleTerminal, terminalShown, togglePanelMax, panelMax, toggleTheme, textSize, cycle,
   zen: () => toggleZen(), wide: toggleWide, hubView, workingCount, open: (id) => setActive(id), close: (t) => closeWithCheck(t), rename: (t) => renameTab(t),
   projectMenu: projectCrumbMenu,
@@ -783,6 +823,7 @@ document.addEventListener('click', (e) => {
 
 const homeHandlers = {
   search: openSearch,
+  connect: () => openConnect(),
   openFolder,
   openSession,
   settings: (tab) => settingsDialog(tab),
@@ -988,6 +1029,7 @@ function paletteItems() {
     { group: 'General', icon: 'plus', label: 'New conversation without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
     { group: 'General', icon: 'cog', label: 'Settings', key: firstKey(S.ui.keys, 'settings'), run: () => settingsDialog() },
+    { group: 'General', icon: 'plug', label: 'Connect a provider or agent…', key: firstKey(S.ui.keys, 'connect'), run: () => openConnect() },
     { group: 'General', icon: 'key', label: 'Providers', run: () => settingsDialog('engine') },
     { group: 'General', icon: 'trash', label: 'Manage conversations…', run: openCleanup },
     { group: 'General', icon: 'activity', label: 'Diagnostics', run: openDiagnostics },
@@ -1046,6 +1088,7 @@ const ACTION_RUN = {
   prevPanelTab: () => stepPanelTab(-1),
   shortcuts: () => settingsDialog('keys'),
   settings: () => settingsDialog(),
+  connect: () => openConnect(),
   focusInput: () => (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus()),
   find: () => viewOf(activeTab())?.bar.openFind(),
   outline: () => viewOf(activeTab())?.bar.openOutline(),

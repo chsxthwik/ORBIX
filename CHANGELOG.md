@@ -21,6 +21,7 @@ The unified open-source ADE: every coding agent and every model in one environme
 - **No personal details from Windows.** Home greets you only by a name you set yourself.
 
 **Workspace**
+- **Conversation timeline:** a dot per message at the left edge (yours hollow, replies filled, the ones on screen lit). Hover shows the first line, a click scrolls to it, Alt+↑/↓ jumps between your messages; one tab stop with arrow keys, hidden on narrow windows.
 - **Terminal** (<kbd>Ctrl</kbd>+<kbd>`</kbd>): real shells on a pseudo-terminal, several per project, two side by side. Your login shell in WSL and Linux, PowerShell for a Windows folder.
 - **Side panel tabs, like a browser's**, kept across restarts. **+** opens a page of every surface with its shortcut: Browser (or Incognito), Terminal, Files, Changes, Review, Tasks, Inspect, Device and Side question.
 - **Project menu:** where the project runs, **Open in** File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal, project scripts that run in the Terminal, and Initialize Git.
@@ -58,6 +59,10 @@ The unified open-source ADE: every coding agent and every model in one environme
 - **Graphite:** a quiet monochrome dark theme. Ink instead of Plasma for the accent, the mark and the current item; colour only for state (amber waits on you, blue marks the agent at work, red stops); your message as a pill and a softer message box.
 - **Editor palettes:** Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula and Gruvbox, from each project's published colours, for surfaces, text, status and code.
 - **Nebula scene:** slow clouds of colour and twinkling stars in deep space. It replaces Koi pond and Halftone dusk; those settings move to Catppuccin Latte and Nebula.
+- **Sidebar and brand:** the mark in a lit tile beside the wordmark; icons drawn for ORBIX (outline over a soft fill, the current page in the accent); a pill inside the current row; each project in its own colour; shortcuts on hover; a **This week** card with tokens per day, your messages and agent time that opens Analytics.
+- **Provider tiles:** every provider and agent as an app icon on its brand colour, in Providers, Agents, Home and the model picker.
+- **Connect** (Ctrl+Shift+M, the Workspace menu, the command palette or + in the model picker): providers and agent CLIs in one dialog, each connected in place, with how it is connected (API key, sign-in, on this PC) beside its name.
+- **No silent hangs:** a provider that sends nothing for 5 minutes counts as a lost connection, so the request is retried (or the turn starts over once) instead of waiting forever.
 
 **Website**
 - Rebuilt on the new identity: the agents ORBIX runs, three ways to connect a model, the four permission levels, Windows and Cloud, responsive screenshots and strict security headers.
