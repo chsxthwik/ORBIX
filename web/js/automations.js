@@ -2,15 +2,22 @@
 // project. The page lists them with their next and last run, and has a form to add or change one.
 import { h, icon, replace, toast, baseName, timeAgo, errorState, skeleton, onEnter } from './dom.js';
 import { api } from './api.js';
-import { S, emit, groupSessions } from './store.js';
+import { S, emit } from './store.js';
 import { btn, confirmDialog, toggle, modal } from './dialogs.js';
 import { parseSchedule } from './schedule.mjs';
+import { hubProjects } from './hub-projects.js';
 
 let items = null;
 let error = '';
 let loading = false;
 let form = null; // the automation being added or changed: { id?, name, prompt, project, schedule, enabled }
 let host = null;
+let running = new Set();
+
+const TEMPLATES = [
+  { name: 'Morning project brief', prompt: 'Summarize recent local changes in this project and list open TODOs. Do not edit anything.', schedule: { every: 'weekday', hour: 9, minute: 0 } },
+  { name: 'Weekly release notes', prompt: 'Draft release notes from the local Git history this week. Do not publish or edit anything.', schedule: { every: 'week', day: 5, hour: 15, minute: 0 } },
+];
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const EVERY = [['minutes', 'Every few minutes'], ['hour', 'Every hour'], ['day', 'Every day'], ['weekday', 'Weekdays'], ['week', 'Every week'], ['once', 'Once']];
@@ -22,6 +29,7 @@ const localInput = (ts) => {
 };
 
 async function load() {
+  if (loading) return;
   loading = true;
   try {
     items = (await api.get('/api/automations')).items;
@@ -46,12 +54,9 @@ function when(ts) {
   return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
 }
 
-const projects = () => {
-  const seen = new Map();
-  for (const g of groupSessions()) if (g.path) seen.set(g.path, g.name);
-  for (const w of S.workspaces || []) seen.set(w.path, w.name || baseName(w.path));
-  return [...seen.entries()];
-};
+function withProject(value) {
+  return { enabled: true, ...value, project: hubProjects()[0]?.[0] || '' };
+}
 
 async function save(data) {
   try {
@@ -61,16 +66,17 @@ async function save(data) {
   } catch (e) {
     toast(e.message, 'error');
   }
-  drawAutomations(host);
+  if (host?.isConnected) drawAutomations(host);
 }
 
 function editor() {
   const f = form;
   const s = f.schedule || { every: 'day', hour: 9, minute: 0 };
-  const list = projects();
+  const list = new Map(hubProjects());
+  if (f.project && !list.has(f.project)) list.set(f.project, baseName(f.project));
   const name = h('input', { type: 'text', value: f.name || '', placeholder: 'Name (optional)', 'aria-label': 'Name', maxlength: 80 });
   const prompt = h('textarea', { rows: 4, placeholder: 'What should it do? For example: run the tests and tell me what fails, with a fix for each.', 'aria-label': 'What it should do' }, f.prompt || '');
-  const project = h('select', { 'aria-label': 'Project' }, list.length ? list.map(([p, n]) => h('option', { value: p, selected: p === f.project }, `${n} · ${p}`)) : h('option', { value: '' }, 'Open a project folder first'));
+  const project = h('select', { 'aria-label': 'Project' }, list.size ? [...list].map(([p, n]) => h('option', { value: p, selected: p === f.project }, n)) : h('option', { value: '' }, 'Open a project folder first'));
   const every = h('select', { 'aria-label': 'How often' }, EVERY.map(([v, l]) => h('option', { value: v, selected: v === s.every }, l)));
   const day = h('select', { 'aria-label': 'Day' }, DAYS.map((d, i) => h('option', { value: String(i), selected: i === (s.day ?? 1) }, d)));
   const time = h('input', { type: 'time', value: `${String(s.hour ?? 9).padStart(2, '0')}:${String(s.minute ?? 0).padStart(2, '0')}`, 'aria-label': 'Time' });
@@ -109,39 +115,51 @@ function editor() {
 }
 
 function row(a) {
-  const status = a.running ? h('span', { class: 'run-pill live' }, h('span', { class: 'dot run' }), 'Running') : a.lastStatus?.startsWith('failed') ? h('span', { class: 'run-pill err', title: a.lastStatus }, 'Last run failed') : null;
+  const working = a.starting || a.running || running.has(a.id);
+  const failure = a.lastStatus?.startsWith('failed: ') ? a.lastStatus.slice(8) : '';
+  const status = working ? h('span', { class: 'run-pill live' }, h('span', { class: 'dot run' }), a.running ? 'Running' : 'Starting…') : failure ? h('span', { class: 'run-pill err' }, 'Couldn’t start') : null;
   const enabled = toggle(a.enabled, async (v) => {
     try {
       items = (await api.post('/api/automations', { ...a, enabled: v })).items;
     } catch (e) {
       toast(e.message, 'error');
     }
-    drawAutomations(host);
+    if (host?.isConnected) drawAutomations(host);
   }, a.enabled ? 'Turn off' : 'Turn on');
-  const open = a.running && S.tabs.has(a.lastProc) ? btn('Open', () => emit('open-tab', a.lastProc), 'sm') : null;
+  const open = S.tabs.has(a.lastProc) ? btn('Open latest', () => emit('open-tab', a.lastProc), 'sm') : null;
+  const run = btn('Run now', async () => {
+    if (running.has(a.id)) return;
+    running.add(a.id);
+    if (host?.isConnected) drawAutomations(host);
+    try {
+      const result = await api.post('/api/automations/run', { id: a.id });
+      items = result.items;
+      const failure = result.item?.lastStatus;
+      toast(failure?.startsWith('failed: ') ? failure.slice(8) : 'Started a new conversation.', failure?.startsWith('failed: ') ? 'error' : 'ok', 3500);
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      running.delete(a.id);
+      if (host?.isConnected) drawAutomations(host);
+    }
+  }, 'sm');
+  run.disabled = working;
   return h('article', { class: 'au-item' + (a.enabled ? '' : ' off') },
     h('div', { class: 'au-main' },
       h('div', { class: 'au-title' }, icon('clock', 15), h('strong', { class: 'ell', title: a.name }, a.name), status),
       h('div', { class: 'au-meta' }, h('span', null, a.when), h('span', null, icon('folder', 12), baseName(a.project)), a.enabled && a.nextAt ? h('span', null, `Next: ${when(a.nextAt)}`) : h('span', null, 'Off'), a.lastRun ? h('span', { title: a.lastStatus }, `Last: ${timeAgo(a.lastRun)}${/^\d/.test(timeAgo(a.lastRun)) ? ' ago' : ''}`) : null),
-      a.prompt.trim() !== a.name.trim() ? h('p', { class: 'au-prompt' }, a.prompt) : null),
+      a.prompt.trim() !== a.name.trim() ? h('p', { class: 'au-prompt' }, a.prompt) : null,
+      failure && !working ? h('p', { class: 'warn-text small' }, failure) : null),
     h('div', { class: 'au-side' },
       enabled,
       h('div', { class: 'au-acts' },
         open,
-        btn('Run now', async () => {
-          try {
-            items = (await api.post('/api/automations/run', { id: a.id })).items;
-            toast('Started. It opens as a new conversation.', 'ok', 2200);
-          } catch (e) {
-            toast(e.message, 'error');
-          }
-          drawAutomations(host);
-        }, 'sm'),
+        run,
         btn('Edit', () => ((form = { ...a }), drawAutomations(host)), 'sm'),
         btn('Delete', async () => {
           if (!(await confirmDialog('Delete loop', `Delete “${a.name}”? Conversations it already started stay.`, { ok: 'Delete', danger: true }))) return;
           items = (await api.post('/api/automations/delete', { id: a.id }).catch((e) => (toast(e.message, 'error'), { items }))).items;
-          drawAutomations(host);
+          if (host?.isConnected) drawAutomations(host);
         }, 'sm danger'))));
 }
 
@@ -152,7 +170,7 @@ function createWithPrompt(root) {
     const text = ta.value.trim();
     if (!text) return ta.focus();
     const { schedule, prompt, found } = parseSchedule(text);
-    form = { enabled: true, project: projects()[0]?.[0] || '', prompt: prompt || text, schedule };
+    form = withProject({ prompt: prompt || text, schedule });
     m.close();
     drawAutomations(root);
     toast(found ? 'Check the schedule and the task, then add it.' : 'No time was found, so it runs every day at 09:00. Change it below.', found ? 'ok' : 'info', 3500);
@@ -179,7 +197,10 @@ export function drawAutomations(root) {
         h('h1', null, 'Loops'),
         form ? null : h('div', { class: 'au-head-acts' },
           h('button', { class: 'btn sm au-ai', type: 'button', onclick: () => createWithPrompt(root) }, icon('bolt', 13), 'Create with Prompt'),
-          h('button', { class: 'btn sm au-new', type: 'button', 'aria-label': 'New loop', onclick: () => ((form = { enabled: true, project: projects()[0]?.[0] || '' }), drawAutomations(root)) }, icon('plus', 13), 'New'))),
+          h('button', { class: 'btn sm au-new', type: 'button', 'aria-label': 'New loop', onclick: () => ((form = withProject()), drawAutomations(root)) }, icon('plus', 13), 'New'))),
+      !form ? h('div', { class: 'au-acts', role: 'group', 'aria-label': 'Loop templates' },
+        h('span', { class: 'muted small' }, 'Templates'),
+        TEMPLATES.map((t) => btn(t.name, () => ((form = withProject(t)), drawAutomations(root)), 'sm'))) : null,
       ask ? h('p', { class: 'au-note' }, icon('shield', 13), 'Unless permissions are Full access, a loop’s run waits for your OK on commands. Review lists what it waits for.') : null,
       form ? editor() : null,
       error ? errorState(error, { retry: () => ((error = ''), load()) }) : !items ? skeleton(3) : !items.length && !form ? h('div', { class: 'empty' }, icon('clock', 22), h('b', null, 'No loops yet'), h('span', null, 'Send a prompt on a schedule or once, like a morning summary of yesterday’s changes or a check every 30 minutes. Each run opens as a new conversation in its project.')) : h('div', { class: 'au-list' }, items.map(row))));
@@ -188,4 +209,9 @@ export function drawAutomations(root) {
 /** Refresh the list (another window changed it, or a run started or ended). */
 export function refreshAutomations() {
   if (host?.isConnected) load();
+}
+
+export function leaveAutomations() {
+  host = null;
+  form = null;
 }

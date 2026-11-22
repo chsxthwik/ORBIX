@@ -4,6 +4,7 @@ import { h, toast, timeAgo, baseName, clear } from './dom.js';
 import { api } from './api.js';
 import { loadSessions, closeTab, tabForSession } from './store.js';
 import { modal, btn, confirmDialog } from './dialogs.js';
+import { askBeforeDelete } from './prefs-extra.js';
 
 const DAY = 86400000;
 const fmtSize = (n) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
@@ -33,7 +34,7 @@ async function deleteConversations(list) {
 
 export async function confirmDeleteConversation(s) {
   const versions = s.chain?.length > 1 ? `\n\nAll ${s.chain.length} saved versions will be deleted.` : '';
-  const ok = await confirmDialog('Delete conversation', `Delete “${s.title}”? You can restore it from Settings → Conversations for 30 days.${versions}`, { ok: 'Delete', danger: true });
+  const ok = !askBeforeDelete() || await confirmDialog('Delete conversation', `Delete “${s.title}”? You can restore it from Settings → Conversations for 30 days.${versions}`, { ok: 'Delete', danger: true });
   if (!ok) return false;
   try {
     await deleteConversations([s]);

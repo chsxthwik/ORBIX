@@ -483,7 +483,7 @@ async function scenes(page, project) {
 
   // Plugins: the marketplace of MCP servers.
   await page.eval("(await import('/js/runs.js')).openHub('customizations'); await new Promise((r) => setTimeout(r, 300));");
-  await page.until("document.querySelector('#runs .cz-hero')", 'the marketplace');
+  await page.until("document.querySelector('#runs .cz-sec')", 'the marketplace');
   await page.capture('customizations', { dsf: 4 / 3, webp: true });
 }
 

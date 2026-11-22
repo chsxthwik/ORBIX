@@ -9,6 +9,7 @@ import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, 
 import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval, approvalLabel, thinkingLevels, thinkingName } from './dialogs.js';
 import { asciiSpin } from './ascii.js';
+import { fmtMsgTime } from './prefs-extra.js';
 import { viewFile, reviewChanges, askSide } from './panels.js';
 import { runInTerminal } from './terminal.js';
 import { conversationToMarkdown } from './exporter.js';
@@ -256,11 +257,11 @@ const ago = (ts) => {
   const s = Math.max(0, (Date.now() - ts) / 1000);
   return s < 45 ? 'now' : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : clock(ts);
 };
-const msgTime = (ts) => h('time', { class: 'msg-time', dataset: { ts: String(ts) }, datetime: new Date(ts).toISOString(), title: new Date(ts).toLocaleString() }, ago(ts));
+const msgTime = (ts) => h('time', { class: 'msg-time', dataset: { ts: String(ts) }, datetime: new Date(ts).toISOString(), title: new Date(ts).toLocaleString() }, fmtMsgTime(ts, ago));
 setInterval(() => {
   if (document.hidden) return;
   for (const el of document.querySelectorAll('#session time.msg-time[data-ts]')) {
-    const text = ago(Number(el.dataset.ts));
+    const text = fmtMsgTime(Number(el.dataset.ts), ago);
     if (el.textContent !== text) el.textContent = text;
   }
 }, 30000);
@@ -443,7 +444,7 @@ export class TabView {
       this.modelBtn.title = provider ? `${model} · ${provider}` : 'Choose a model';
       this.modelBtn.replaceChildren(...modelLabel(m));
     }
-    this.effort.update(dead ? [] : levels, lvl);
+    this.effort.update(dead ? [] : levels, lvl, { model, def: m?.thinking?.default });
     this.permBtn.update(dead);
     const hasPlan = !!st && 'planMode' in st;
     this.planBtn.hidden = dead || !hasPlan;

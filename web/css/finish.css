@@ -3,7 +3,7 @@
    theme follows. */
 
 /* ---- Dark: no highlight edge, flat shadows ---- */
-:root:not([data-mode=light]):not([data-theme=midnight]):not([data-scene]) { --hi: transparent;
+:root:not([data-mode=light]):is([data-theme=dark], :not([data-theme])) { --hi: transparent;
   --shadow-1: none;
   --shadow-2: 0 12px 32px -16px rgba(0,0,0,.8);
   --shadow-sheet: none;

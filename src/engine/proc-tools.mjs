@@ -4,7 +4,7 @@ import path from 'node:path';
 import { clip } from '../util.mjs';
 import { invalidArgsText } from './tools.mjs';
 import { isTrustedCommand, trustableCommand } from './store.mjs';
-import { destructiveReason, siteVerdict, readOnlyCommand } from './policy.mjs';
+import { destructiveReason, catastrophicReason, siteVerdict, readOnlyCommand } from './policy.mjs';
 
 // File tools whose path is checked against the project folder before they run.
 const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
@@ -245,6 +245,10 @@ export class ToolRuns {
         // Asked after the PreToolUse hooks, so a hook can stop a call before you see it.
         gate: async () => {
           if (call.name === 'web_fetch' && siteVerdict(args.url, this.config.data.network) === 'deny') return { text: 'Blocked by the user\'s network rules (Settings → Preferences → Network access rules). Do not retry this site.', isError: true, details: { url: String(args.url ?? ''), blocked: true } };
+          if (call.name === 'bash' && this.config.data.commandGuard !== false) {
+            const why = catastrophicReason(args?.command);
+            if (why) return { text: `Blocked by Command Guard: this command ${why}. It is never run, with or without approval. Find another way, or ask the user to do it themselves.`, isError: true };
+          }
           if (!this._mustAsk(call, args)) return undefined;
           const denied = await this._approve(call, args);
           t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you

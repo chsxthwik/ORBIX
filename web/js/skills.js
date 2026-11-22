@@ -3,39 +3,41 @@
 // when a task fits. This page lists the open project's skills and yours, and creates, edits and deletes them.
 import { h, icon, toast, replace, baseName, errorState, skeleton } from './dom.js';
 import { api } from './api.js';
-import { S, activeTab, groupSessions, emit } from './store.js';
+import { activeTab, emit } from './store.js';
 import { btn, confirmDialog } from './dialogs.js';
+import { homeProject } from './home.js';
+import { hubProjects } from './hub-projects.js';
 
 let host = null;
-let ws = '';
+let ws;
 let list = null;
 let error = '';
 let query = '';
 let form = null; // { original?, name, description, body, scope }
 
-const projects = () => {
-  const seen = new Map();
-  for (const g of groupSessions()) if (g.path) seen.set(g.path, g.name);
-  for (const w of S.workspaces || []) seen.set(w.path, w.name || baseName(w.path));
-  return [...seen.entries()];
-};
+let loadId = 0;
 
 async function load() {
+  const id = ++loadId;
   error = '';
   try {
-    const r = await api.get(`/api/skills${ws ? `?ws=${encodeURIComponent(ws)}` : ''}`);
+    const r = await api.get(`/api/skills?ws=${encodeURIComponent(ws)}`);
+    if (id !== loadId) return;
     list = r.skills;
-    if (!ws && r.ws) ws = r.ws;
   } catch (e) {
+    if (id !== loadId) return;
     error = e.message;
   }
   draw();
 }
 
 async function edit(k) {
+  const scope = ws;
+  const id = loadId;
   try {
-    const r = await api.get(`/api/skills/file?ws=${encodeURIComponent(ws)}&name=${encodeURIComponent(k.name)}`);
-    form = { original: k.name, name: k.name, description: r.description, body: r.body.trim(), scope: k.scope };
+    const r = await api.get(`/api/skills/file?ws=${encodeURIComponent(scope)}&name=${encodeURIComponent(k.name)}`);
+    if (id !== loadId) return;
+    form = { original: k.name, name: k.name, description: r.description, body: r.body.replace(/^\r?\n/, ''), scope: k.scope };
     draw();
   } catch (e) {
     toast(e.message, 'error');
@@ -43,9 +45,11 @@ async function edit(k) {
 }
 
 async function remove(k) {
+  const project = ws;
   if (!(await confirmDialog('Delete skill', `Delete “${k.name}”? Its folder moves to the ORBIX trash (data\\trash\\skills), so you can put it back.`, { ok: 'Delete', danger: true }))) return;
   try {
-    list = (await api.post('/api/skills/delete', { ws, name: k.name })).skills;
+    const result = await api.post('/api/skills/delete', { ws: project, name: k.name });
+    if (ws === project) list = result.skills;
     toast(`Deleted ${k.name}`, 'ok', 1800);
   } catch (e) {
     toast(e.message, 'error');
@@ -55,6 +59,7 @@ async function remove(k) {
 
 function editor() {
   const f = form;
+  const project = ws;
   const name = h('input', { type: 'text', value: f.name || '', placeholder: 'release-notes', 'aria-label': 'Name', maxlength: 64, spellcheck: 'false', disabled: f.original ? true : null });
   const desc = h('input', { type: 'text', value: f.description || '', placeholder: 'Use when writing release notes from the commits since the last tag', 'aria-label': 'When to use it', maxlength: 500 });
   const body = h('textarea', { rows: 12, placeholder: 'The steps the agent follows, in Markdown.', 'aria-label': 'Instructions' }, f.body || '');
@@ -63,8 +68,10 @@ function editor() {
     h('option', { value: 'user', selected: f.scope === 'user' || !ws }, 'Every project (yours)'));
   const save = async () => {
     try {
-      list = (await api.post('/api/skills/save', { ws, scope: scope.value, original: f.original, name: name.value, description: desc.value, body: body.value })).skills;
+      const result = await api.post('/api/skills/save', { ws: project, scope: scope.value, original: f.original, name: name.value, description: desc.value, body: body.value });
       toast(f.original ? 'Saved' : 'Skill added. The agent sees it from the next message.', 'ok', 2600);
+      if (form !== f) return;
+      list = result.skills;
       form = null;
       draw();
     } catch (e) {
@@ -89,16 +96,18 @@ function row(k) {
       h('div', { class: 'au-meta' }, h('span', { class: 'ell', title: k.path }, k.path))),
     h('div', { class: 'au-side' },
       h('div', { class: 'au-acts' },
-        btn('Use', () => (emit('insert', `/skill:${k.name} `), activeTab() ? null : toast('Open a conversation, then type /skill:' + k.name, 'info', 3000)), 'sm'),
+        ws ? btn('Use in new conversation', () => emit('use-skill', ws, k.name), 'sm') : null,
         btn('Edit', () => edit(k), 'sm'),
         btn('Delete', () => remove(k), 'sm danger'))));
 }
 
 function draw() {
   if (!host?.isConnected) return;
-  const projs = projects();
+  const projs = new Map(hubProjects());
+  if (ws && !projs.has(ws)) projs.set(ws, baseName(ws));
   const pick = h('select', { class: 'sk-proj', 'aria-label': 'Project', onchange: (e) => ((ws = e.target.value), (list = null), (form = null), draw(), load()) },
-    projs.length ? projs.map(([p, n]) => h('option', { value: p, selected: p === ws }, n)) : h('option', { value: '' }, 'No project open'));
+    h('option', { value: '', selected: !ws }, 'Personal skills only'),
+    [...projs].map(([p, n]) => h('option', { value: p, selected: p === ws }, n)));
   const search = h('input', { type: 'search', class: 'sk-q', placeholder: 'Search skills', 'aria-label': 'Search skills', value: query, spellcheck: 'false', autocomplete: 'off' });
   search.addEventListener('input', () => {
     query = search.value;
@@ -127,11 +136,18 @@ function draw() {
 export function drawSkills(root) {
   const fresh = host !== root || !root.querySelector('.sk-list');
   host = root;
-  if (!ws) ws = activeTab()?.workspace || projects()[0]?.[0] || '';
+  ws ??= activeTab()?.workspace || homeProject() || hubProjects()[0]?.[0] || '';
   if (fresh) {
     list = null;
     load();
   }
   if (form && root.querySelector('.sk-form')) return; // a redraw while you edit keeps the form
   draw();
+}
+
+export function leaveSkills() {
+  if (!host) return;
+  ++loadId;
+  host = null;
+  form = null;
 }

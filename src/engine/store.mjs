@@ -240,6 +240,28 @@ export class EngineConfig {
   addTrusted(command) {
     this.setTrusted([...(this.data.trusted || []), command]);
   }
+  /** Settings → Preferences → Git: commits and pull requests carry no AI co-author or "generated with" lines. */
+  /** Settings → Instructions → Conversation names: how the fast model names a new conversation ('' = built in). */
+  setTitlePrompt(text) {
+    this.data.titlePrompt = String(text ?? '').trim().slice(0, 4000);
+    this.save();
+  }
+  /** Settings → Agents: Command Guard (default on), Claude Code's own subagents off, the longest wait for a retry. */
+  setAgentOptions({ commandGuard, claudeNoSubagents, retryMaxWait }) {
+    if (commandGuard !== undefined) this.data.commandGuard = commandGuard !== false;
+    if (claudeNoSubagents !== undefined) this.data.claudeNoSubagents = claudeNoSubagents === true;
+    if (retryMaxWait !== undefined) this.data.retryMaxWait = [0, 60, 300, 900, 3600].includes(Number(retryMaxWait)) ? Number(retryMaxWait) : 60;
+    this.save();
+  }
+  /** Instructions added for matching models only: [{ match, text }], `match` a part of the model id. */
+  setModelRules(list) {
+    this.data.modelRules = (Array.isArray(list) ? list : []).map((r) => ({ match: String(r?.match || '').trim().slice(0, 80), text: String(r?.text || '').trim().slice(0, 8000) })).filter((r) => r.match && r.text).slice(0, 30);
+    this.save();
+  }
+  setNoCoAuthor(on) {
+    this.data.noCoAuthor = !!on;
+    this.save();
+  }
   setChecks({ verify, review }) {
     if (verify !== undefined) this.data.verify = VERIFY_MODES.includes(verify) ? verify : 'ask';
     if (review !== undefined) this.data.review = !!review;
@@ -312,6 +334,12 @@ export class EngineConfig {
     const s = this.data.search;
     return {
       approvals: this.data.approvals,
+      noCoAuthor: this.data.noCoAuthor === true,
+      commandGuard: this.data.commandGuard !== false,
+      claudeNoSubagents: this.data.claudeNoSubagents === true,
+      retryMaxWait: Number.isFinite(this.data.retryMaxWait) ? this.data.retryMaxWait : 60,
+      modelRules: this.data.modelRules || [],
+      titlePrompt: this.data.titlePrompt || '',
       trusted: this.data.trusted || [],
       network: this.data.network || { allow: [], deny: [] },
       verify: this.data.verify,

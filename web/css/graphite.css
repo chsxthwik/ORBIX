@@ -1,0 +1,97 @@
+/* Graphite: a quiet, monochrome dark theme. Loaded after shell.css and scoped to [data-theme=graphite], so no other
+   theme changes.
+   Tone: the interface steps back and the conversation leads.
+   - Colour is for state only: red stops, amber waits on you, blue marks the agent at work. The accent is ink, not a
+     hue, so the current item, focus and "Plan" read in light grey rather than pink.
+   - Weight goes down: rows and labels at 400–500, section heads in sentence case, never uppercase.
+   - Shape goes round: your message is a pill, the message box a soft card, the current row a filled chip (no rail).
+   - Depth comes from three greys (window, sheet, raised) and hairlines; no glows, no coloured borders. */
+
+/* ================= tokens ================= */
+:root[data-theme=graphite] {
+  color-scheme: dark;
+  --pa: #E6E6E6;
+  --chrome: #0B0B0B; --bg-side: #0B0B0B; --menubar: #0B0B0B;
+  --bg: #121212; --bg-raise: #1A1A1A; --bg-raise-2: #222222; --bg-modal: #171717; --bg-inset: #0E0E0E; --bg-field: #181818;
+  --bg-hover: rgba(255,255,255,.045); --bg-active: rgba(255,255,255,.085);
+  --bubble: #242424; --bubble-line: transparent;
+  --line: rgba(255,255,255,.07); --line-2: rgba(255,255,255,.11); --line-3: rgba(255,255,255,.19); --hi: rgba(255,255,255,.03);
+  --fg: #E8E8E8; --fg-2: #A6A6A6; --fg-3: #7E7E7E;
+  /* Ink as the accent: focus rings, the current item and selection stay neutral. */
+  --accent: #E6E6E6; --accent-solid: #E6E6E6; --on-accent: #0B0B0B;
+  --accent-soft: rgba(255,255,255,.08); --accent-line: rgba(255,255,255,.32);
+  --brand: #E6E6E6;
+  /* State colours: the only hues on screen. */
+  --live: #8AB4F8; --live-line: rgba(138,180,248,.40);
+  --ok: #81C995; --ok-soft: rgba(129,201,149,.10); --ok-line: rgba(129,201,149,.32);
+  --warn: #F0B35A; --warn-soft: rgba(240,179,90,.10); --warn-line: rgba(240,179,90,.45);
+  --err: #F27474; --err-soft: rgba(242,116,116,.11); --err-line: rgba(242,116,116,.40);
+  --code-ink: #9CDCFE;
+  --shadow-sheet: 0 0 0 1px rgba(0,0,0,.4);
+  --scrim: rgba(0,0,0,.6);
+  /* Code: the cool editor palette (cyan types, soft blue functions). */
+  --t-kw: #C586C0; --t-str: #CE9178; --t-num: #B5CEA8; --t-com: #6A9955; --t-fn: #DCDCAA; --t-type: #4EC9B0; --t-prop: #9CDCFE; --t-var: #9CDCFE; --t-tag: #569CD6; --t-attr: #9CDCFE;
+}
+
+/* ================= frame ================= */
+/* The menu row sits on the window, not on a lighter strip. */
+:root[data-theme=graphite] .menubar { background: var(--chrome); }
+:root[data-theme=graphite] .mb-it { color: var(--fg-3); }
+:root[data-theme=graphite] .mb-it:hover, :root[data-theme=graphite] .mb-it.open { color: var(--fg); }
+:root[data-theme=graphite] .crumb { color: var(--fg-3); }
+:root[data-theme=graphite] .crumb.cur { color: var(--fg-2); font-weight: 400; }
+
+/* ================= sidebar ================= */
+:root[data-theme=graphite] .app .sidebar .side-new { font-weight: 450; background: var(--bg-raise); box-shadow: inset 0 0 0 1px var(--line); }
+:root[data-theme=graphite] .app .sidebar .side-new svg { color: var(--fg-2); }
+:root[data-theme=graphite] .sidebar .side-link { color: var(--fg-2); }
+:root[data-theme=graphite] .sidebar .side-link.cur { color: var(--fg); font-weight: 450; background: var(--bg-active); }
+/* The current row is a filled chip; the coloured rail goes. */
+:root[data-theme=graphite] .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .side-new.cur)::before { display: none; }
+:root[data-theme=graphite] .sidebar .s-row.cur > .s-btn { background: var(--bg-active); color: var(--fg); font-weight: 450; }
+:root[data-theme=graphite] .sidebar .s-btn { color: var(--fg-2); }
+:root[data-theme=graphite] .sidebar .proj-btn { font-weight: 400; color: var(--fg-2); }
+/* Section heads in sentence case. */
+:root[data-theme=graphite] .sidebar .side-h { font: 450 12.5px/1 var(--font); letter-spacing: 0; text-transform: none; color: var(--fg-3); }
+:root[data-theme=graphite] .sidebar .s-when { color: var(--fg-3); }
+/* What waits on you is amber (the Review count, "Needs you"); the agent at work is blue. */
+:root[data-theme=graphite] .sidebar .side-count { background: var(--warn-soft); color: var(--warn); }
+:root[data-theme=graphite] .dgrid { color: var(--live); }
+:root[data-theme=graphite] .run-st.you { color: var(--warn); }
+:root[data-theme=graphite] .run-pill.you { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
+:root[data-theme=graphite] .run-decision.you { background: var(--warn-soft); border-bottom-color: var(--warn-line); }
+:root[data-theme=graphite] :is(.rstep-row.you, .rstep-row.gate, .rstep-row.ask) .rstep-ic { border-color: var(--warn-line); color: var(--warn); }
+
+/* ================= conversation ================= */
+/* Your message: a pill. */
+:root[data-theme=graphite] .bubble { padding: 9px 16px; border-radius: 20px; background: var(--bubble); color: var(--fg); }
+:root[data-theme=graphite] .msg-time { color: var(--fg-3); }
+:root[data-theme=graphite] .work-h { color: var(--fg-3); }
+/* Code: an inset card with a quiet label row. */
+:root[data-theme=graphite] .session .md pre { border-color: var(--line-2); border-radius: 10px; background: var(--bg-inset); }
+:root[data-theme=graphite] .code-head { background: transparent; color: var(--fg-3); }
+:root[data-theme=graphite] .md code.pathref { color: var(--fg); text-decoration-color: var(--line-3); }
+:root[data-theme=graphite] .md blockquote { border-left-color: var(--line-3); }
+
+/* ================= message box ================= */
+:root[data-theme=graphite] .composer { border-color: var(--line-2); border-radius: 18px; background: var(--bg-field); box-shadow: 0 8px 28px -18px rgba(0,0,0,.9); }
+:root[data-theme=graphite] .composer:hover { border-color: var(--line-3); }
+:root[data-theme=graphite] .composer:focus-within { border-color: var(--line-3); }
+/* Working: a blue hairline, the only colour while the agent runs. */
+:root[data-theme=graphite] .composer.busy, :root[data-theme=graphite] .composer.busy:focus-within { border-color: color-mix(in srgb, var(--live) 34%, var(--line-2)); }
+:root[data-theme=graphite] .composer.shell { border-color: var(--line-3); }
+:root[data-theme=graphite] .c-mode { color: var(--fg-2); }
+:root[data-theme=graphite] .c-row .cbtn { color: var(--fg-3); }
+:root[data-theme=graphite] .c-row .cbtn:hover:not(:disabled), :root[data-theme=graphite] .c-row .cbtn.on { color: var(--fg); }
+:root[data-theme=graphite] :is(.cbtn.plan-pick.on, .c-row .cbtn.plan.on) { background: var(--bg-active); }
+:root[data-theme=graphite] :is(.cbtn.plan-pick.on, .c-row .cbtn.plan.on) svg { color: var(--fg); }
+/* Send stays ink on hover; Stop stays red. */
+:root[data-theme=graphite] .send:not(.stop):not(:disabled):hover { background: #FFFFFF; color: #0B0B0B; }
+
+/* ================= model picker ================= */
+:root[data-theme=graphite] .mp-pv.on::after { background: var(--fg-2); }
+:root[data-theme=graphite] :is(.mp-pv.mp-default.cur, .mp-star.on) { color: var(--fg); }
+
+@media (prefers-contrast: more) {
+  :root[data-theme=graphite] { --line: rgba(255,255,255,.22); --line-2: rgba(255,255,255,.34); --line-3: rgba(255,255,255,.55); --fg-2: #D2D2D2; --fg-3: #BDBDBD; }
+}

@@ -693,7 +693,7 @@ async function openDiff(t, f) {
   P.diff = { file: f, loading: true };
   draw();
   try {
-    const { diff } = await api.get(`/api/git/diff?ws=${encodeURIComponent(t.workspace)}&file=${encodeURIComponent(f.path)}${f.untracked ? '&untracked=1' : ''}`);
+    const { diff } = await api.get(`/api/git/diff?ws=${encodeURIComponent(t.workspace)}&file=${encodeURIComponent(f.path)}${f.untracked ? '&untracked=1' : ''}${S.ui.diffIgnoreWs === true ? '&w=1' : ''}`);
     P.diff = { file: f, text: diff.text };
   } catch (e) {
     P.diff = { file: f, error: e.message };
@@ -715,7 +715,7 @@ function drawDiff(t) {
 /** Tasks: the agent's task list, then the helper agents it started for research. */
 // ---------------------------------------------------------------- Context
 /**
- * What the conversation holds, as in OpenCode's Context tab: the session, provider and model, the context window and
+ * What the conversation holds: the session, provider and model, the context window and
  * how full it is, tokens by kind, messages, cost, when it started and was last active, and the system prompt the
  * next turn sends (ORBIX's own agent; an agent CLI keeps its own).
  */

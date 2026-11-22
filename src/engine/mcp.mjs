@@ -62,11 +62,14 @@ function validateServer(name, cfg) {
   return out;
 }
 
-function saveUserServer(name, cfg, oldName) {
+function saveUserServer(name, cfg, oldName, createOnly) {
   const clean = validateServer(name, cfg);
   const file = userConfigPath();
   const j = readJson(file, {}) || {};
   j.mcpServers = j.mcpServers && typeof j.mcpServers === 'object' ? j.mcpServers : {};
+  if ((createOnly || (oldName && oldName !== name)) && Object.hasOwn(j.mcpServers, name)) {
+    throw Object.assign(new Error(`A server named ${name} already exists`), { status: 409 });
+  }
   if (oldName && oldName !== name) delete j.mcpServers[oldName];
   j.mcpServers[name] = clean;
   writeJson(file, j);
@@ -662,8 +665,9 @@ export function mcpRoutes(server) {
     },
     'POST /api/mcp/save': async ({ body }) => {
       try {
-        saveUserServer(String(body.name || '').trim(), body.config, body.oldName ? String(body.oldName) : null);
+        saveUserServer(String(body.name || '').trim(), body.config, body.oldName ? String(body.oldName) : null, body.createOnly === true);
       } catch (e) {
+        if (e.status === 409) throw e;
         throw bad(e.message);
       }
       return {};

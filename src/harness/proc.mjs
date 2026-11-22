@@ -7,7 +7,7 @@ import { clip, makeTitle, uid } from '../util.mjs';
 import { createSession, appendEntry, closeSession, loadSession, repairTail } from '../engine/store.mjs';
 import { promptImages, promptAttachments, readMentions } from '../engine/context.mjs';
 import { createTools } from '../engine/tools.mjs';
-import { destructiveReason, readOnlyCommand } from '../engine/policy.mjs';
+import { destructiveReason, catastrophicReason, readOnlyCommand } from '../engine/policy.mjs';
 import { writeExport } from '../engine/export.mjs';
 import { zeroUsage } from '../engine/proc-usage.mjs';
 import { ClaudeDriver } from './claude.mjs';
@@ -91,7 +91,7 @@ export class HarnessProc extends EventEmitter {
     const approvals = this.config.data.approvals;
     const cwd = this.workspace;
     let d;
-    if (a.kind === 'claude') d = new ClaudeDriver({ backend: this.backend, bin: (await this.registry.argv(a))[0], cwd, approvals });
+    if (a.kind === 'claude') d = new ClaudeDriver({ backend: this.backend, bin: (await this.registry.argv(a))[0], cwd, approvals, noCoAuthor: this.config.data.noCoAuthor === true, noSubagents: this.config.data.claudeNoSubagents === true });
     else if (a.kind === 'codex') d = new CodexDriver({ backend: this.backend, bin: (await this.registry.argv(a))[0], cwd, approvals });
     else {
       // OpenCode asks through ACP only for what its config says "ask": commands always (ORBIX decides, Full access included,
@@ -381,6 +381,11 @@ export class HarnessProc extends EventEmitter {
   async _approve({ name, arguments: args = {}, raw }) {
     const mode = this.config.data.approvals;
     const command = name === 'bash' ? String(args.command || '') : '';
+    // Command Guard: a command that wrecks the computer or an account is denied without asking.
+    if (command && this.config.data.commandGuard !== false && catastrophicReason(command)) {
+      this._emit({ type: 'notice', level: 'warn', message: `Command Guard blocked ${this.agent.name}: ${clip(command, 160)} (${catastrophicReason(command)}).` });
+      return 'deny';
+    }
     const risky = command && destructiveReason(command);
     const key = `${name}:${raw || ''}`;
     if (!risky) {

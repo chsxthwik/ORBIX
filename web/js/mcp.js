@@ -1,8 +1,8 @@
 // Settings → "Tools & MCP": the agent's tools, and the MCP servers it can start.
 // Your servers live in the app's data/mcp.json; a project can add its own in .mcp.json (shown read-only here).
-import { h, toast, replace, spinner, skeleton, errorState } from './dom.js';
+import { h, toast, replace, spinner, errorState } from './dom.js';
 import { api } from './api.js';
-import { activeTab } from './store.js';
+import { activeTab, emit } from './store.js';
 import { btn, confirmDialog } from './dialogs.js';
 import { renderSearchSettings, renderHooksSettings } from './toolset.js';
 
@@ -16,7 +16,7 @@ const BUILTIN = [
   ['bash', 'Run shell commands in the project.', true],
 ];
 
-const EXAMPLE = { command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '.'], env: {} };
+const EXAMPLE = { command: '', args: [], env: {} };
 
 const summary = (cfg) => (cfg?.url ? cfg.url : [cfg?.command, ...(cfg?.args || [])].filter(Boolean).join(' '));
 
@@ -41,7 +41,7 @@ async function runTest(name, config, out, ws) {
   }
 }
 
-function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) {
+export function editMcpServer(root, { name = '', config = EXAMPLE, isNew = true, ws = '' } = {}, done) {
   const nameIn = h('input', { type: 'text', value: name, placeholder: 'Name, for example filesystem', spellcheck: 'false', 'aria-label': 'Server name' });
   const ta = h('textarea', { class: 'mono mcp-json', rows: 9, spellcheck: 'false', 'aria-label': 'Server config (JSON)' });
   ta.value = JSON.stringify(config, null, 2);
@@ -54,12 +54,15 @@ function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) 
     }
   };
   const save = btn('Save', async () => {
+    save.disabled = true;
     try {
-      await api.post('/api/mcp/save', { name: nameIn.value.trim(), config: parse(), oldName: isNew ? null : name });
+      await api.post('/api/mcp/save', { name: nameIn.value.trim(), config: parse(), oldName: isNew ? null : name, createOnly: isNew });
       toast('Saved. Open conversations use it from their next message.', 'ok', 3000);
       done(true);
     } catch (e) {
       toast(e.message, 'error', 7000);
+    } finally {
+      save.disabled = false;
     }
   }, 'primary');
   const test = btn('Test', async () => {
@@ -70,7 +73,7 @@ function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) 
       return replace(out, errorState(e.message));
     }
     test.disabled = true;
-    await runTest(nameIn.value.trim() || 'test', cfg, out, activeTab()?.workspace);
+    await runTest(nameIn.value.trim() || 'test', cfg, out, ws);
     test.disabled = false;
   });
   replace(
@@ -87,21 +90,7 @@ function editor(root, { name = '', config = EXAMPLE, isNew = true } = {}, done) 
   setTimeout(() => (isNew ? nameIn : ta).focus(), 0);
 }
 
-export async function renderMcpSettings(root) {
-  replace(root, skeleton(5, 'pad'));
-  const ws = activeTab()?.workspace || '';
-  let data;
-  try {
-    data = await api.get(`/api/mcp${ws ? `?ws=${encodeURIComponent(ws)}` : ''}`);
-  } catch (e) {
-    return replace(root, errorState(e.message, { title: 'Couldn’t load your tools.', retry: () => renderMcpSettings(root) }));
-  }
-  const edit = h('div');
-  const searchBox = h('div');
-  const hooksBox = h('div');
-  const reload = () => renderMcpSettings(root);
-
-  const card = (s, editable) => {
+export function mcpServerCard(s, ws, edit, reload) {
     const out = h('div', { class: 'mcp-out' });
     const testBtn = btn('Test', async () => {
       testBtn.disabled = true;
@@ -109,8 +98,20 @@ export async function renderMcpSettings(root) {
       testBtn.disabled = false;
     });
     const actions = [testBtn];
-    if (editable) {
-      actions.push(btn('Edit', () => editor(edit, { name: s.name, config: s.config, isNew: false }, (saved) => (saved ? reload() : replace(edit)))));
+    if (s.scope === 'user') {
+      actions.push(btn(s.config.disabled ? 'Enable' : 'Disable', async (e) => {
+        const button = e.currentTarget;
+        button.disabled = true;
+        try {
+          await api.post('/api/mcp/save', { name: s.name, oldName: s.name, config: { ...s.config, disabled: !s.config.disabled } });
+          await reload();
+        } catch (err) {
+          toast(err.message, 'error');
+        } finally {
+          button.disabled = false;
+        }
+      }));
+      actions.push(btn('Edit', () => editMcpServer(edit, { name: s.name, config: s.config, isNew: false, ws }, (saved) => (replace(edit), saved && reload()))));
       actions.push(btn('Remove', async () => {
         if (!(await confirmDialog('Remove MCP server', `Remove "${s.name}"? Open conversations stop using it with their next message.`, { ok: 'Remove', danger: true }))) return;
         try {
@@ -129,30 +130,22 @@ export async function renderMcpSettings(root) {
       h('div', { class: 'card-f' }, actions),
       out,
     );
-  };
+}
 
-  const user = data.servers || [];
-  const proj = data.project;
+export function renderMcpSettings(root, _show, dialog) {
+  const ws = activeTab()?.workspace || '';
+  const searchBox = h('div');
+  const hooksBox = h('div');
   replace(
     root,
-    h('p', { class: 'set-note' }, 'MCP servers add tools such as databases, browsers or issue trackers. They run while a conversation is open.'),
+    h('h4', { class: 'set-sub' }, 'MCP servers'),
+    btn('Open Plugins', () => (dialog.close(), emit('open-plugins', 'installed')), 'sm'),
     h('h4', { class: 'set-sub' }, 'Built-in tools'),
     h('div', { class: 'mcp-builtin' }, BUILTIN.map(([n, d, asks]) => h('div', { class: 'mcp-tool' }, h('code', null, n), h('span', { class: `tag${asks ? ' warn' : ''}` }, asks ? 'Asks first' : 'No approval'), h('span', { class: 'muted' }, d)))),
-    h('div', { class: 'mcp-head' }, h('h4', { class: 'set-sub' }, 'Your MCP servers'), btn('Add server', () => editor(edit, {}, (saved) => (saved ? reload() : replace(edit))), 'primary sm')),
-    h('code', { class: 'mcp-cmd ell muted', title: data.file }, data.file),
-    edit,
-    user.length ? h('div', { class: 'cards' }, user.map((s) => card(s, true))) : h('p', { class: 'muted small' }, 'None yet.'),
-    proj
-      ? [
-          h('h4', { class: 'set-sub' }, 'This project'),
-          h('p', { class: 'muted small', title: proj.file }, proj.exists ? `From ${proj.file}. Edit that file to change them. Each one starts only after you allow it once.` : `No .mcp.json in this project. Add one at ${proj.file} to share servers with everyone who works on it.`),
-          proj.servers.length ? h('div', { class: 'cards' }, proj.servers.map((s) => card(s, false))) : null,
-        ]
-      : h('p', { class: 'muted small' }, 'Open a conversation to see the servers its project defines in .mcp.json.'),
     searchBox,
     hooksBox,
-    h('h4', { class: 'set-sub' }, 'Skills and commands'),
-    h('p', { class: 'muted small' }, 'Skills are folders that contain a SKILL.md file. Put them in a project’s .agents/skills, .claude/skills or .omp/skills folder, or in the app’s data/skills folder. Custom slash commands are Markdown files in .claude/commands or .omp/commands (or data/commands). In a command file, $ARGUMENTS is replaced with whatever you type after the command. Type / in a session to see them all.'),
+    h('h4', { class: 'set-sub' }, 'Slash commands'),
+    h('p', { class: 'muted small' }, 'Custom slash commands are Markdown files in .claude/commands or .omp/commands (or data/commands). In a command file, $ARGUMENTS is replaced with whatever you type after the command. Type / in a session to see them all.'),
   );
   renderSearchSettings(searchBox);
   renderHooksSettings(hooksBox, ws);

@@ -166,6 +166,7 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `shell.js`, `controls.js` | the window chrome (menu row, toolbar with back/forward, the project tile and breadcrumbs, the context meter, the sidebar's preview card) and the message box's "+", model button, reasoning menu and permission chip |
 | `context.js` | the toolbar's Context menu: where the project runs, MCP servers, skills and rule files, each in a submenu (`cascade()` in dialogs.js) |
 | `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
+| `web/css/themes.css` | the editor palettes (Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula, Gruvbox): surfaces, ink, status and syntax colours, and their Settings previews |
 | `updates.js` | update status: the pill at the top right of the menu row, and Settings → About |
 | `store.js` | client state and the reducer that turns session events into UI state |
 | `api.js` | HTTP calls and the SSE connection |
@@ -176,6 +177,8 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `terminal.js` | the side panel's Terminal tab: xterm.js (`web/vendor/xterm`, loaded on first use) over `/api/pty/*`; several terminals per project, split; xterm's style tags are mirrored into a constructed stylesheet so the CSP needs no inline styles |
 | `project.js` | the project popover: environment, Open in (`/api/project/open`), project scripts (run in the Terminal), Initialize Git (`/api/git/init`) |
 | `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings (the whole window under the menu row; `settingsSearchItems` feeds Ctrl+K) |
+| `settings-controls.js`, `prefs-extra.js` | shared Settings controls (`group`, `pick`, `seg`); the extra preferences (fonts, wrap, diff colours, confirmations, keep awake, agent options), applied in `applyExtraPrefs` |
+| `analytics.js` | Settings → Analytics: tokens per day by kind, agent time, models and the weekday × hour grid, from `GET /api/analytics` (`src/analytics.mjs`, cached per session file) |
 | `keys.mjs` | the shortcuts you can change: actions, default keys, `comboOf(event)`, your changes in `prefs.keys` |
 | `browser.js` | where links open, the Browser tab's addresses and history; `electron/browser.mjs` is the Windows app's browser session |
 | `brands.js` | provider logo marks, drawn inline |
@@ -187,6 +190,7 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `run-inspector.js`, `run-summary.mjs` | the side panel's Inspect tab: the session's tool activity |
 | `customize.js`, `catalog.mjs` | the Plugins page (Marketplace and Installed); the marketplace's MCP servers and the exact config each one saves |
 | `skills.js` | the Skills page: the project's skills and yours; add, edit, delete (to the trash) |
+| `hub-nav.js`, `hub-projects.js` | the page links shared by the sidebar, View menu and command palette; the projects list those pages use |
 | `automations.js`, `schedule.mjs` | the Loops page; Create with Prompt, which turns one sentence into a schedule and a task with plain rules (no model) |
 | `ratings.js` | your 👍 and 👎 per model, counted on this PC only (`localStorage`), listed in Settings → Models → Your ratings |
 | `workspace.js`, `exporter.js` | task suggestions, and a conversation as Markdown |

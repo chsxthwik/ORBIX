@@ -116,7 +116,9 @@ export async function status(backend, ws) {
   return { repo: true, ...parseStatus(r.stdout.toString('utf8')) };
 }
 
-export async function diff(backend, ws, file, { untracked = false } = {}) {
+/** `ignoreWs`: leave out changes that are only spaces (git diff -w). */
+export async function diff(backend, ws, file, { untracked = false, ignoreWs = false } = {}) {
+  const w = ignoreWs ? ['-w'] : [];
   const MAX = 1.5 * 1024 * 1024;
   if (untracked) {
     const root = path.resolve(backend.hostPath(ws));
@@ -133,8 +135,8 @@ export async function diff(backend, ws, file, { untracked = false } = {}) {
     if (lines[lines.length - 1] === '') lines.pop();
     return { text: `--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n` + lines.map((l) => '+' + l).join('\n') + '\n' };
   }
-  let r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '-U3', 'HEAD', '--', file], { maxBytes: MAX });
-  if (r.code !== 0) r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '-U3', '--cached', '--', file], { maxBytes: MAX });
+  let r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '-U3', ...w, 'HEAD', '--', file], { maxBytes: MAX });
+  if (r.code !== 0) r = await git(backend, ws, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '-U3', ...w, '--cached', '--', file], { maxBytes: MAX });
   if (r.code !== 0) throw new Error(r.stderr.toString('utf8').trim() || 'git diff failed');
   return { text: r.stdout.toString('utf8') };
 }

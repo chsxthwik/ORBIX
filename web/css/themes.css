@@ -1,0 +1,154 @@
+/* The palettes developers rate highest, as full ORBIX themes: Tokyo Night, Catppuccin (Mocha, Latte), Rosé Pine
+   (main, Dawn), Nord, Dracula and Gruvbox. Colours come from each project's published palette; where an official ink
+   is too faint for body text (a comment grey used as secondary text), a step of the same palette that reads is used.
+   Each theme sets surfaces, ink, the accent, status colours and syntax colours; layout and size come from the rest.
+   Loaded after shell.css, so these win. */
+
+/* ---- Tokyo Night (night) ---- */
+:root[data-theme=tokyo] {
+  color-scheme: dark; --pa: #7AA2F7;
+  --chrome: #16161E; --bg-side: #16161E; --menubar: #16161E; --bg: #1A1B26; --bg-raise: #1F2335; --bg-raise-2: #292E42; --bg-modal: #1F2335; --bg-inset: #16161E; --bg-field: #16161E;
+  --bg-hover: rgba(192,202,245,.05); --bg-active: rgba(192,202,245,.09); --bubble: #24283B; --bubble-line: transparent; --hi: transparent;
+  --line: rgba(192,202,245,.08); --line-2: rgba(192,202,245,.13); --line-3: rgba(192,202,245,.22);
+  --fg: #C0CAF5; --fg-2: #A9B1D6; --fg-3: #737AA2;
+  --accent: #7AA2F7; --accent-solid: #7AA2F7; --on-accent: #16161E; --accent-soft: rgba(122,162,247,.13); --accent-line: rgba(122,162,247,.45);
+  --live: #7DCFFF; --live-line: rgba(125,207,255,.42);
+  --ok: #9ECE6A; --ok-soft: rgba(158,206,106,.1); --ok-line: rgba(158,206,106,.32);
+  --warn: #E0AF68; --warn-soft: rgba(224,175,104,.1); --warn-line: rgba(224,175,104,.45);
+  --err: #F7768E; --err-soft: rgba(247,118,142,.1); --err-line: rgba(247,118,142,.4);
+  --add-bg: rgba(158,206,106,.1); --del-bg: rgba(247,118,142,.1); --code-ink: #E0AF68; --scrim: rgba(10,10,16,.7);
+  --t-kw: #BB9AF7; --t-str: #9ECE6A; --t-num: #FF9E64; --t-com: #565F89; --t-fn: #7AA2F7; --t-type: #2AC3DE; --t-prop: #73DACA; --t-var: #C0CAF5; --t-tag: #F7768E; --t-attr: #BB9AF7;
+}
+
+/* ---- Catppuccin Mocha ---- */
+:root[data-theme=mocha] {
+  color-scheme: dark; --pa: #CBA6F7;
+  --chrome: #11111B; --bg-side: #11111B; --menubar: #11111B; --bg: #1E1E2E; --bg-raise: #24243A; --bg-raise-2: #313244; --bg-modal: #181825; --bg-inset: #181825; --bg-field: #181825;
+  --bg-hover: rgba(205,214,244,.05); --bg-active: rgba(205,214,244,.09); --bubble: #313244; --bubble-line: transparent; --hi: transparent;
+  --line: rgba(205,214,244,.08); --line-2: rgba(205,214,244,.13); --line-3: rgba(205,214,244,.22);
+  --fg: #CDD6F4; --fg-2: #BAC2DE; --fg-3: #9399B2;
+  --accent: #CBA6F7; --accent-solid: #CBA6F7; --on-accent: #11111B; --accent-soft: rgba(203,166,247,.13); --accent-line: rgba(203,166,247,.45);
+  --live: #94E2D5; --live-line: rgba(148,226,213,.42);
+  --ok: #A6E3A1; --ok-soft: rgba(166,227,161,.1); --ok-line: rgba(166,227,161,.32);
+  --warn: #F9E2AF; --warn-soft: rgba(249,226,175,.1); --warn-line: rgba(249,226,175,.45);
+  --err: #F38BA8; --err-soft: rgba(243,139,168,.1); --err-line: rgba(243,139,168,.4);
+  --add-bg: rgba(166,227,161,.1); --del-bg: rgba(243,139,168,.1); --code-ink: #FAB387; --scrim: rgba(10,10,18,.7);
+  --t-kw: #CBA6F7; --t-str: #A6E3A1; --t-num: #FAB387; --t-com: #9399B2; --t-fn: #89B4FA; --t-type: #F9E2AF; --t-prop: #B4BEFE; --t-var: #CDD6F4; --t-tag: #89B4FA; --t-attr: #F9E2AF;
+}
+
+/* ---- Rosé Pine (main) ---- */
+:root[data-theme=rosepine] {
+  color-scheme: dark; --pa: #C4A7E7;
+  --chrome: #131120; --bg-side: #131120; --menubar: #131120; --bg: #191724; --bg-raise: #1F1D2E; --bg-raise-2: #26233A; --bg-modal: #1F1D2E; --bg-inset: #131120; --bg-field: #131120;
+  --bg-hover: rgba(224,222,244,.05); --bg-active: rgba(224,222,244,.09); --bubble: #26233A; --bubble-line: transparent; --hi: transparent;
+  --line: rgba(224,222,244,.08); --line-2: rgba(224,222,244,.13); --line-3: rgba(224,222,244,.22);
+  --fg: #E0DEF4; --fg-2: #908CAA; --fg-3: #7D7898;
+  --accent: #C4A7E7; --accent-solid: #C4A7E7; --on-accent: #191724; --accent-soft: rgba(196,167,231,.13); --accent-line: rgba(196,167,231,.45);
+  --live: #9CCFD8; --live-line: rgba(156,207,216,.42);
+  --ok: #9CCFD8; --ok-soft: rgba(156,207,216,.1); --ok-line: rgba(156,207,216,.32);
+  --warn: #F6C177; --warn-soft: rgba(246,193,119,.1); --warn-line: rgba(246,193,119,.45);
+  --err: #EB6F92; --err-soft: rgba(235,111,146,.1); --err-line: rgba(235,111,146,.4);
+  --add-bg: rgba(156,207,216,.1); --del-bg: rgba(235,111,146,.1); --code-ink: #EBBCBA; --scrim: rgba(8,7,14,.7);
+  --t-kw: #C4A7E7; --t-str: #F6C177; --t-num: #EB6F92; --t-com: #6E6A86; --t-fn: #EBBCBA; --t-type: #9CCFD8; --t-prop: #9CCFD8; --t-var: #E0DEF4; --t-tag: #9CCFD8; --t-attr: #C4A7E7;
+}
+
+/* ---- Nord ---- */
+:root[data-theme=nord] {
+  color-scheme: dark; --pa: #88C0D0;
+  --chrome: #242933; --bg-side: #242933; --menubar: #242933; --bg: #2E3440; --bg-raise: #3B4252; --bg-raise-2: #434C5E; --bg-modal: #3B4252; --bg-inset: #272C36; --bg-field: #272C36;
+  --bg-hover: rgba(216,222,233,.06); --bg-active: rgba(216,222,233,.1); --bubble: #3B4252; --bubble-line: transparent; --hi: transparent;
+  --line: rgba(216,222,233,.09); --line-2: rgba(216,222,233,.14); --line-3: rgba(216,222,233,.24);
+  --fg: #ECEFF4; --fg-2: #D8DEE9; --fg-3: #A3ABBB;
+  --accent: #88C0D0; --accent-solid: #88C0D0; --on-accent: #2E3440; --accent-soft: rgba(136,192,208,.14); --accent-line: rgba(136,192,208,.45);
+  --live: #8FBCBB; --live-line: rgba(143,188,187,.42);
+  --ok: #A3BE8C; --ok-soft: rgba(163,190,140,.12); --ok-line: rgba(163,190,140,.34);
+  --warn: #EBCB8B; --warn-soft: rgba(235,203,139,.12); --warn-line: rgba(235,203,139,.45);
+  --err: #BF616A; --err-soft: rgba(191,97,106,.14); --err-line: rgba(191,97,106,.45);
+  --add-bg: rgba(163,190,140,.12); --del-bg: rgba(191,97,106,.14); --code-ink: #EBCB8B; --scrim: rgba(20,23,30,.7);
+  --t-kw: #81A1C1; --t-str: #A3BE8C; --t-num: #B48EAD; --t-com: #7B88A1; --t-fn: #88C0D0; --t-type: #8FBCBB; --t-prop: #D8DEE9; --t-var: #D8DEE9; --t-tag: #81A1C1; --t-attr: #8FBCBB;
+}
+
+/* ---- Dracula ---- */
+:root[data-theme=dracula] {
+  color-scheme: dark; --pa: #BD93F9;
+  --chrome: #191A21; --bg-side: #21222C; --menubar: #191A21; --bg: #282A36; --bg-raise: #343746; --bg-raise-2: #44475A; --bg-modal: #21222C; --bg-inset: #21222C; --bg-field: #21222C;
+  --bg-hover: rgba(248,248,242,.05); --bg-active: rgba(248,248,242,.09); --bubble: #44475A; --bubble-line: transparent; --hi: transparent;
+  --line: rgba(248,248,242,.08); --line-2: rgba(248,248,242,.13); --line-3: rgba(248,248,242,.22);
+  --fg: #F8F8F2; --fg-2: #C9CAD6; --fg-3: #8D98C7;
+  --accent: #BD93F9; --accent-solid: #BD93F9; --on-accent: #191A21; --accent-soft: rgba(189,147,249,.14); --accent-line: rgba(189,147,249,.45);
+  --live: #FF79C6; --live-line: rgba(255,121,198,.42);
+  --ok: #50FA7B; --ok-soft: rgba(80,250,123,.1); --ok-line: rgba(80,250,123,.32);
+  --warn: #FFB86C; --warn-soft: rgba(255,184,108,.1); --warn-line: rgba(255,184,108,.45);
+  --err: #FF5555; --err-soft: rgba(255,85,85,.11); --err-line: rgba(255,85,85,.4);
+  --add-bg: rgba(80,250,123,.1); --del-bg: rgba(255,85,85,.1); --code-ink: #F1FA8C; --scrim: rgba(12,12,16,.7);
+  --t-kw: #FF79C6; --t-str: #F1FA8C; --t-num: #BD93F9; --t-com: #6272A4; --t-fn: #50FA7B; --t-type: #8BE9FD; --t-prop: #66D9EF; --t-var: #F8F8F2; --t-tag: #FF79C6; --t-attr: #50FA7B;
+}
+
+/* ---- Gruvbox (dark, hard) ---- */
+:root[data-theme=gruvbox] {
+  color-scheme: dark; --pa: #FE8019;
+  --chrome: #1D2021; --bg-side: #1D2021; --menubar: #1D2021; --bg: #282828; --bg-raise: #32302F; --bg-raise-2: #3C3836; --bg-modal: #32302F; --bg-inset: #1D2021; --bg-field: #1D2021;
+  --bg-hover: rgba(235,219,178,.05); --bg-active: rgba(235,219,178,.09); --bubble: #3C3836; --bubble-line: transparent; --hi: transparent;
+  --line: rgba(235,219,178,.08); --line-2: rgba(235,219,178,.13); --line-3: rgba(235,219,178,.22);
+  --fg: #EBDBB2; --fg-2: #D5C4A1; --fg-3: #A89984;
+  --accent: #FE8019; --accent-solid: #FE8019; --on-accent: #1D2021; --accent-soft: rgba(254,128,25,.13); --accent-line: rgba(254,128,25,.45);
+  --live: #8EC07C; --live-line: rgba(142,192,124,.42);
+  --ok: #B8BB26; --ok-soft: rgba(184,187,38,.1); --ok-line: rgba(184,187,38,.32);
+  --warn: #FABD2F; --warn-soft: rgba(250,189,47,.1); --warn-line: rgba(250,189,47,.45);
+  --err: #FB4934; --err-soft: rgba(251,73,52,.1); --err-line: rgba(251,73,52,.4);
+  --add-bg: rgba(184,187,38,.1); --del-bg: rgba(251,73,52,.1); --code-ink: #FABD2F; --scrim: rgba(12,12,12,.7);
+  --t-kw: #FB4934; --t-str: #B8BB26; --t-num: #D3869B; --t-com: #928374; --t-fn: #FABD2F; --t-type: #8EC07C; --t-prop: #83A598; --t-var: #83A598; --t-tag: #8EC07C; --t-attr: #FABD2F;
+}
+
+/* ---- Catppuccin Latte (light) ---- */
+:root[data-theme=latte] {
+  color-scheme: light; --pa: #8839EF;
+  --chrome: #DCE0E8; --bg-side: #E6E9EF; --menubar: #DCE0E8; --bg: #EFF1F5; --bg-raise: #F8F9FB; --bg-raise-2: #E6E9EF; --bg-modal: #F8F9FB; --bg-inset: #E6E9EF; --bg-field: #F8F9FB;
+  --bg-hover: rgba(76,79,105,.06); --bg-active: rgba(76,79,105,.1); --bubble: #E6E9EF; --bubble-line: #DCE0E8; --hi: rgba(255,255,255,.8);
+  --line: #D3D7E1; --line-2: #BCC0CC; --line-3: #9CA0B0;
+  --fg: #4C4F69; --fg-2: #5C5F77; --fg-3: #6C6F85;
+  --accent: #8839EF; --accent-solid: #8839EF; --on-accent: #FFFFFF; --accent-soft: rgba(136,57,239,.1); --accent-line: rgba(136,57,239,.4);
+  --live: #179299; --live-line: rgba(23,146,153,.4);
+  --ok: #40A02B; --ok-soft: rgba(64,160,43,.1); --ok-line: rgba(64,160,43,.35);
+  --warn: #B35F00; --warn-soft: rgba(223,142,29,.12); --warn-line: rgba(223,142,29,.45);
+  --err: #D20F39; --err-soft: rgba(210,15,57,.08); --err-line: rgba(210,15,57,.35);
+  --add-bg: rgba(64,160,43,.1); --del-bg: rgba(210,15,57,.08); --code-ink: #FE640B; --scrim: rgba(76,79,105,.3);
+  --t-kw: #8839EF; --t-str: #40A02B; --t-num: #FE640B; --t-com: #7C7F93; --t-fn: #1E66F5; --t-type: #DF8E1D; --t-prop: #7287FD; --t-var: #4C4F69; --t-tag: #1E66F5; --t-attr: #DF8E1D;
+}
+
+/* ---- Rosé Pine Dawn (light) ---- */
+:root[data-theme=dawn] {
+  color-scheme: light; --pa: #907AA9;
+  --chrome: #F2E9E1; --bg-side: #F2E9E1; --menubar: #F2E9E1; --bg: #FAF4ED; --bg-raise: #FFFAF3; --bg-raise-2: #F4EDE8; --bg-modal: #FFFAF3; --bg-inset: #F4EDE8; --bg-field: #FFFAF3;
+  --bg-hover: rgba(87,82,121,.06); --bg-active: rgba(87,82,121,.1); --bubble: #F2E9E1; --bubble-line: #DFDAD9; --hi: rgba(255,255,255,.8);
+  --line: #E4DDD8; --line-2: #DFDAD9; --line-3: #CECACD;
+  --fg: #575279; --fg-2: #6E6A86; --fg-3: #797593;
+  --accent: #286983; --accent-solid: #286983; --on-accent: #FFFAF3; --accent-soft: rgba(40,105,131,.1); --accent-line: rgba(40,105,131,.4);
+  --live: #907AA9; --live-line: rgba(144,122,169,.4);
+  --ok: #286983; --ok-soft: rgba(40,105,131,.1); --ok-line: rgba(40,105,131,.35);
+  --warn: #B26A16; --warn-soft: rgba(234,157,52,.14); --warn-line: rgba(234,157,52,.5);
+  --err: #B4637A; --err-soft: rgba(180,99,122,.1); --err-line: rgba(180,99,122,.4);
+  --add-bg: rgba(86,148,159,.12); --del-bg: rgba(180,99,122,.1); --code-ink: #D7827E; --scrim: rgba(87,82,121,.28);
+  --t-kw: #286983; --t-str: #EA9D34; --t-num: #B4637A; --t-com: #9893A5; --t-fn: #D7827E; --t-type: #56949F; --t-prop: #56949F; --t-var: #575279; --t-tag: #56949F; --t-attr: #907AA9;
+}
+
+/* Theme previews in Settings → Appearance: chrome, sheet, raised, line, ink, faint, bubble, accent. */
+.tp-tokyo { --tc: #16161E; --ts: #1A1B26; --tr: #1F2335; --tl: rgba(192,202,245,.12); --ti: rgba(192,202,245,.4); --tf: rgba(192,202,245,.16); --tu: #24283B; --ta: #7AA2F7; }
+.tp-mocha { --tc: #11111B; --ts: #1E1E2E; --tr: #24243A; --tl: rgba(205,214,244,.12); --ti: rgba(205,214,244,.4); --tf: rgba(205,214,244,.16); --tu: #313244; --ta: #CBA6F7; }
+.tp-rosepine { --tc: #131120; --ts: #191724; --tr: #1F1D2E; --tl: rgba(224,222,244,.12); --ti: rgba(224,222,244,.4); --tf: rgba(224,222,244,.16); --tu: #26233A; --ta: #EBBCBA; }
+.tp-nord { --tc: #242933; --ts: #2E3440; --tr: #3B4252; --tl: rgba(216,222,233,.14); --ti: rgba(236,239,244,.42); --tf: rgba(236,239,244,.18); --tu: #3B4252; --ta: #88C0D0; }
+.tp-dracula { --tc: #191A21; --ts: #282A36; --tr: #343746; --tl: rgba(248,248,242,.12); --ti: rgba(248,248,242,.42); --tf: rgba(248,248,242,.16); --tu: #44475A; --ta: #BD93F9; }
+.tp-gruvbox { --tc: #1D2021; --ts: #282828; --tr: #32302F; --tl: rgba(235,219,178,.12); --ti: rgba(235,219,178,.42); --tf: rgba(235,219,178,.16); --tu: #3C3836; --ta: #FE8019; }
+.tp-latte { --tc: #DCE0E8; --ts: #EFF1F5; --tr: #F8F9FB; --tl: #BCC0CC; --ti: rgba(76,79,105,.4); --tf: rgba(76,79,105,.14); --tu: #E6E9EF; --ta: #8839EF; }
+.tp-dawn { --tc: #F2E9E1; --ts: #FAF4ED; --tr: #FFFAF3; --tl: #DFDAD9; --ti: rgba(87,82,121,.4); --tf: rgba(87,82,121,.14); --tu: #F2E9E1; --ta: #D7827E; }
+
+/* The selected row and your messages take the palette's own ink, not the neutral Dark greys. */
+:root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox]) :is(.sidebar .s-row.cur .s-btn, .sidebar .side-link.cur, .settings-card .set-tab.cur) { background: var(--bg-active); color: var(--fg); }
+:root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox]) .bubble { color: var(--fg); }
+
+/* The next action wears the palette's accent, as in the scene themes. */
+:root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox], [data-theme=latte], [data-theme=dawn]) :is(.btn.primary, .send:not(.stop):not(:disabled)) { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
+:root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox], [data-theme=latte], [data-theme=dawn]) :is(.btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover) { background: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); border-color: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); }
+/* Changed words in a diff: a lighter wash on light palettes, so coloured code on it still reads. */
+:root:is([data-theme=latte], [data-theme=dawn]) mark.wd.add { background: color-mix(in srgb, var(--ok) 16%, transparent); }
+:root:is([data-theme=latte], [data-theme=dawn]) mark.wd.del { background: color-mix(in srgb, var(--err) 16%, transparent); }

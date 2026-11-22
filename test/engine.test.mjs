@@ -696,7 +696,7 @@ describe('webfetch: htmlToText', () => {
 
 // =====================================================================================================
 describe('providers: thinking levels and effort mapping', () => {
-  const { thinkingLevels, mapEffort, nearestEffort, thinkingStyle, defaultMaxTokens, LEVELS, presetById, PRESETS } = providers;
+  const { thinkingLevels, mapEffort, nearestEffort, thinkingStyle, defaultMaxTokens, withThinkingRoom, LEVELS, presetById, PRESETS } = providers;
 
   test('mapEffort without a list maps onto low/medium/high', () => {
     assert.equal(mapEffort('low'), 'low');
@@ -769,6 +769,14 @@ describe('providers: thinking levels and effort mapping', () => {
   test('thinkingLevels never throws on garbage', () => {
     assert.deepEqual(thinkingLevels(undefined, undefined), ['off']);
     assert.deepEqual(thinkingLevels(null, {}), ['off']);
+  });
+
+  test('withThinkingRoom: a reasoning turn gets more output, within the model limit and half the window', () => {
+    const base = defaultMaxTokens('anthropic', 'claude-opus-4-7');
+    assert.equal(withThinkingRoom('anthropic', 'anthropic', 'claude-opus-4-7', base, 'max'), base); // sized in buildBody
+    assert.equal(withThinkingRoom('openai', 'openai', 'gpt-4o', 16384, 'off'), 16384);
+    assert.equal(withThinkingRoom('openai', 'openai', 'gpt-4o', 16384, 'high'), 16384); // already the model's limit
+    assert.equal(withThinkingRoom('openai', 'openai', 'model-nobody-knows', 8192, 'max'), 8192);
   });
 
   test('defaultMaxTokens: catalog output limit capped at 32000, else 8192', () => {
@@ -923,7 +931,7 @@ describe('providers: clientFor end to end with a stubbed network', () => {
     assert.equal(c.url, 'https://api.openai.com/v1/chat/completions');
     assert.equal(c.init.headers.authorization, 'Bearer sk-1');
     const b = reqBody();
-    assert.equal(b.max_completion_tokens, 32000);
+    assert.equal(b.max_completion_tokens, 96000); // 32000 for the answer and 64000 of room for extra-high reasoning
     assert.equal(b.max_tokens, undefined);
     assert.equal(b.reasoning_effort, 'high');
     assert.equal(b.stream, true);

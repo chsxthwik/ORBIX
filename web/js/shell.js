@@ -12,6 +12,7 @@ import { gitState, showTab } from './panels.js';
 import { firstKey } from './keys.mjs';
 import { onMachine, backToThisPc } from './machines.js';
 import { homeProject } from './home.js';
+import { HUB_LINKS } from './hub-nav.js';
 import { updatesSupported, checkForUpdates, updatePill } from './updates.js';
 
 /** The key of a shortcut as you set it (Settings → Shortcuts), for menus and hints. */
@@ -94,11 +95,7 @@ function menus() {
       { label: 'New conversation without saving it', run: () => H.newSession(undefined, { ephemeral: true }) },
       { label: 'Open project folder…', run: H.openFolder },
       '-',
-      { label: 'Runs', hint: K('runs'), run: () => H.goHub('runs') },
-      { label: 'Review', hint: K('review'), run: () => H.goHub('review') },
-      { label: 'Plugins', run: () => H.goHub('customizations') },
-      { label: 'Skills', run: () => H.goHub('skills') },
-      { label: 'Loops', run: () => H.goHub('automations') },
+      ...HUB_LINKS.map(({ label, view, key }) => ({ label, hint: key ? K(key) : undefined, run: () => H.goHub(view) })),
       { label: 'Search everything', hint: K('search'), run: () => H.search() },
       '-',
       { label: 'Manage conversations…', run: H.manage },
@@ -168,7 +165,7 @@ function crumbs(t, hub) {
       branch ? h('button', { class: 'crumb-br', type: 'button', title: n ? `Branch ${branch} · ${n} changed file${n === 1 ? '' : 's'}` : `Branch ${branch}`, onclick: () => showTab(t.worktree ? 'review' : 'changes') }, icon('branch', 12), h('span', { class: 'ell' }, h('bdi', null, branch)), n ? h('b', { class: 'num' }, n) : null) : null,
     ];
   }
-  if (hub) return [h('span', { class: 'crumb cur static' }, { review: 'Review', automations: 'Loops', customizations: 'Plugins', skills: 'Skills' }[hub.view] || 'Runs')];
+  if (hub) return [h('span', { class: 'crumb cur static' }, HUB_LINKS.find(({ view }) => view === hub.view)?.label || 'Runs')];
   const ws = homeProject();
   return [ws ? h('span', { class: 'crumb crumb-proj static', title: ws }, projTile(baseName(ws), 18), h('bdi', null, baseName(ws))) : null, ws ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/') : null, h('span', { class: 'crumb cur static' }, 'New conversation')].filter(Boolean);
 }

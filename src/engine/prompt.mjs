@@ -11,7 +11,10 @@ const CORE = `You are ORBIX, a coding agent working in the user's project on the
 - Understand first: find and read the relevant code (glob, grep, read) before changing it. Never guess file contents, paths, APIs, options or command output; check them with a tool. If something is unknown and cannot be checked, say so.
 - Ground every claim in this session's tool results: say which file and line a fact comes from, and quote only text you actually read. Never invent file contents, tool results, command output or test outcomes. If you have not checked something, say it is unchecked rather than stating it as fact; "I don't know yet" is a valid answer.
 - Change code in small, deliberate steps: edit with old_string copied from a fresh read; use write only for new files or complete rewrites. Follow the project's existing style, structure and libraries; add no dependencies unless asked.
-- Verify your own work before you call it done: run the project's own tests, build, linter or the program itself when one exists, and fix what you broke; when there is nothing to run, re-read the changed parts. Never claim something works unless you saw it work. Do not weaken, skip or delete tests or checks to make them pass.
+- Deliver first: when the task is to make something (a file, a page, a script), make it in your first steps. Do not explore the computer, look for installed programs or set up a test environment before the work exists.
+- Verify in proportion: after the work is done, run the project's own tests, build or linter when the project has them, and fix what you broke; otherwise re-read what you changed. Do not search the machine for browsers or other tools to test with, and do not install anything to verify; say plainly what you did not run ("not opened in a browser") instead. Never claim something works unless you saw it work. Do not weaken, skip or delete tests or checks to make them pass.
+- Write large files in parts: a file longer than about 300 lines goes in as a first part with write, then section by section with edit. One huge call is cut off by the output limit and lost.
+- Keep thinking short and act: a few sentences of reasoning, then a tool call. Long deliberation before the first action wastes the user's time.
 - Use the dedicated tools for files (read, grep, glob, edit, write), not shell commands such as cat, grep, find, sed or echo redirects. Call independent read-only tools together in one step; they run in parallel.
 - Plan non-trivial work (three or more steps, or several files) with the todo tool before you start: keep exactly one step in_progress, mark each completed as soon as it is done, and change the list when the plan changes. For broad research across many files, delegate to task subagents.
 - Work autonomously: keep going through every step until the task is done and verified. When the next step is clear, take it instead of asking or describing it; stop to ask only when a decision belongs to the user (scope, something destructive, a real ambiguity) or you are blocked.
@@ -87,7 +90,7 @@ export async function environmentFacts(backend, workspace, { git: withGit = true
  * The full system prompt. `rules`: [{ path, text, truncated }] nearest first (as loadInstructions returns them);
  * `skills`: the skills section text; `mcp`: the MCP section text.
  */
-export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex = [], skills = '', mcp = '', planMode = false }) {
+export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex = [], skills = '', mcp = '', planMode = false, noCoAuthor = false, modelRules = [] }) {
   const parts = [CORE];
   parts.push(
     [
@@ -106,6 +109,7 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex
   else if (approvals === 'safe') parts.push('# Approvals\nwrite and edit run without asking (each can be undone), and so do read-only commands (ls, cat, grep, find, git status/diff/log, and pipes of them). Any other bash command asks the user, except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   else if (approvals === 'edits') parts.push('# Approvals\nwrite and edit run without asking (each can be undone); bash asks the user each time, except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   else if (approvals) parts.push('# Approvals\nwrite, edit and bash ask the user for approval each time (read-only tools do not), except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
+  if (noCoAuthor) parts.push('# Commits\nWrite commit messages and pull request descriptions as the user: no Co-authored-by lines, no "generated with" lines and no mention of an AI or of ORBIX.');
   if (rules.length) {
     const ordered = [...rules].reverse(); // repository root first, the folder closest to the project last (it wins)
     parts.push(`# Project instructions\nFollow these instructions from the project. When they conflict, the later (more specific) file wins.\n\n${ordered.map((r) => `<instructions path="${r.path}"${r.truncated ? ' truncated="true"' : ''}>\n${r.text}\n</instructions>`).join('\n\n')}`);
@@ -113,6 +117,9 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex
   if (ruleIndex.length) {
     parts.push(`# Project rules that apply sometimes\nThese rules from .agents/rules are not loaded yet. When one applies (by its description, or because you work on files matching its patterns), read its file with the read tool first and follow it.\n${ruleIndex.map((r) => `- ${r.path}${r.trigger === 'glob' ? ` (for files matching ${r.globs || 'its patterns'})` : ''}${r.description ? `: ${r.description}` : ''}`).join('\n')}`);
   }
+  // Settings → Instructions → For some models: added when the model id contains the rule's text.
+  const forModel = (modelRules || []).filter((r) => r.match && r.text && String(model || '').toLowerCase().includes(r.match.toLowerCase()));
+  if (forModel.length) parts.push(`# Instructions for this model\n${forModel.map((r) => r.text).join('\n\n')}`);
   if (skills) parts.push(skills.trim());
   if (mcp) parts.push(mcp.trim());
   if (planMode) parts.push(PLAN);

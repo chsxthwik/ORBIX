@@ -4,7 +4,7 @@
 // Conversations and projects are in the sidebar. Before a model or a project is connected, Home offers setup.
 import { addContext, permissionChip, modelLabel, effortChip } from './controls.js';
 import { runInTerminal } from './terminal.js';
-import { h, icon, iconBtn, replace, baseName, toast, heroMark } from './dom.js';
+import { h, icon, iconBtn, replace, baseName, toast, heroMark, timeAgo } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api } from './api.js';
 import { S, openTab, sendPrompt, setThinking, tabForSession, engineReady, savePrefs, groupSessions, on, emit, setActive } from './store.js';
@@ -107,11 +107,12 @@ function shell(root) {
   const deckSlot = h('div', { class: 'home-deck' });
   const under = h('div', { class: 'home-under' });
   const statusSlot = h('div', { class: 'home-status-slot' });
+  const recentSlot = h('div', { class: 'home-recent-slot' });
   const mark = heroMark(72);
   const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, mark.el), h('header', { class: 'home-head' }, title, sub));
-  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, deckSlot, under);
+  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, deckSlot, under, recentSlot);
   const wrap = h('div', { class: 'home' }, hero, dock);
-  W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot, mark };
+  W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot, recentSlot, mark };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -192,7 +193,7 @@ export function drawHome(root, H) {
   const { comp, row } = box;
   if (box.el.parentNode !== w.deckSlot) w.deckSlot.replaceChildren(box.el);
 
-  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, !!draft.branch, w.statusRepo, agentOk, S.engine?.approvals, homeModel(), S.ui.homeThinking, projects.map(p => [p.path, p.name])]);
+  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, !!draft.branch, w.statusRepo, agentOk, S.engine?.approvals, homeModel(), S.ui.homeThinking, S.ui.effortDisplay, projects.map(p => [p.path, p.name])]);
   if (box.controlsSig !== controlsSig) {
     box.controlsSig = controlsSig;
     const projBtn = h('button', { class: 'hb-btn proj-pick' + (g ? '' : ' need'), type: 'button', title: g ? g.path : 'Choose a project folder', 'aria-haspopup': 'menu' }, icon('folder', 13), h('span', { class: 'ell' }, g ? g.name : 'Choose a folder'), icon('chevron-down', 11, 'cbtn-chev'));
@@ -208,8 +209,9 @@ export function drawHome(root, H) {
     // The reasoning level for the new conversation, when the chosen model has levels (its default until you pick).
     const effort = effortChip((level) => (savePrefs({ homeThinking: level }), redraw()));
     const lv = m && levelsOf(m);
-    if (lv || !m) effort.update(lv || [], S.ui.homeThinking || '');
-    else if (engineReady()) loadLevels(m).then((x) => effort.update(x, S.ui.homeThinking || '')).catch(() => {});
+    const meta = () => ({ model: m?.name || m?.id, def: modelRows?.find((x) => x.provider === m?.provider && x.id === m?.id)?.thinking?.default });
+    if (lv || !m) effort.update(lv || [], S.ui.homeThinking || '', meta());
+    else if (engineReady()) loadLevels(m).then((x) => effort.update(x, S.ui.homeThinking || '', meta())).catch(() => {});
     modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
       anchor: modelBtn,
       load: loadHomeModels,
@@ -283,6 +285,7 @@ export function drawHome(root, H) {
     row.replaceChildren(addContext(comp), modelBtn, effort.el, modes, unsaved, h('span', { class: 'grow' }), apprBtn, go);
   }
   drawSuggestions(w, comp, g);
+  drawRecent(w, g, H);
   // The side panel on Home works for the chosen project: tell it when that changes.
   if (panelFor !== draft.project) {
     panelFor = draft.project;
@@ -292,6 +295,27 @@ export function drawHome(root, H) {
   if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
   });
+}
+
+/** The chosen project's latest conversations, by day: Today, Yesterday, Earlier (eight at most). */
+function drawRecent(w, g, H) {
+  const list = (g?.sessions || []).filter((s) => !(S.ui.archived || []).includes(s.path)).sort((a, b) => b.mtime - a.mtime).slice(0, 8);
+  if (!list.length) return replace(w.recentSlot);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const day = (ms) => (ms >= start.getTime() ? 'Today' : ms >= start.getTime() - 86400000 ? 'Yesterday' : 'Earlier');
+  const groups = [];
+  for (const s of list) {
+    const k = day(s.mtime);
+    if (groups.at(-1)?.[0] !== k) groups.push([k, []]);
+    groups.at(-1)[1].push(s);
+  }
+  replace(w.recentSlot, h('section', { class: 'home-recent', 'aria-label': `Recent in ${g.name}` },
+    groups.map(([k, rows]) => h('div', { class: 'hr-group' },
+      h('div', { class: 'hr-h' }, k),
+      rows.map((s) => h('button', { class: 'hr-row', type: 'button', title: s.preview || s.title, onclick: () => H.openSession(s) },
+        h('span', { class: 'ell grow' }, s.title),
+        h('span', { class: 'hr-when num' }, timeAgo(s.mtime))))))));
 }
 
 /**

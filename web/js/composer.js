@@ -392,7 +392,7 @@ export class Composer {
     const tk = this.token();
     if (!tk) return this.closePopup();
     if (tk.kind === 'slash') {
-      const cmds = this.o.commands() || [];
+      const cmds = (this.o.commands() || []).filter((c) => S.ui.skillsInSlash !== false || !String(c.name).startsWith('skill:'));
       const scored = [];
       for (const c of cmds) {
         let best = fuzzy(tk.q, c.name);

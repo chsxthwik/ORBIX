@@ -79,7 +79,6 @@ export const CATALOG = [
   },
 ];
 
-export const FEATURED = 'playwright';
 export const CATEGORIES = ['Browser and web', 'Docs and thinking', 'Code and data', 'Design and business'];
 
 /** The config to save for an entry, or throws with the field that is missing. */

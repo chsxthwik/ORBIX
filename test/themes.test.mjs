@@ -38,3 +38,13 @@ test('Settings offers every theme', () => {
   const settings = read('js/settings.js');
   for (const t of Object.keys(app)) assert.match(settings, new RegExp(`\\['${t}', '`), `${t} is not offered in Settings`);
 });
+
+test('Graphite has its own palette, a preview, and loads after the shell and the palettes', () => {
+  const html = read('index.html');
+  const at = html.indexOf('/css/graphite.css');
+  assert.ok(at > html.indexOf('/css/shell.css') && at > html.indexOf('/css/themes.css'), 'graphite.css must load after shell.css and themes.css');
+  assert.match(read('css/graphite.css'), /:root\[data-theme=graphite\] \{/, 'graphite has no palette');
+  // The shell's Dark palette applies to Dark only, never on top of Graphite's.
+  assert.match(read('css/shell.css'), /:root:not\(\[data-mode=light\]\):is\(\[data-theme=dark\], :not\(\[data-theme\]\)\) \{/, 'the shell Dark palette is not scoped to Dark');
+  assert.match(read('css/app.css'), /\.tp-graphite \{/, 'graphite has no preview');
+});

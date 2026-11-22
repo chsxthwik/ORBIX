@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
   setZoom: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, Number(factor) || 1))),
   // Settings → About: keep the PC awake while agents work, keep running in the tray, Windows' notification settings.
   system: {
-    keepAwake: (on) => ipcRenderer.send('orbix:keep-awake', on === true),
+    keepAwake: (kind) => ipcRenderer.send('orbix:keep-awake', kind === 'screen' || kind === 'work' ? kind : kind === true ? 'work' : ''),
     tray: (on) => ipcRenderer.send('orbix:tray', on === true),
     openNotifications: () => ipcRenderer.send('orbix:open-system', 'notifications'),
   },

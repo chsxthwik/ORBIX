@@ -24,7 +24,23 @@ The unified open-source ADE: every coding agent and every model in one environme
 - **Terminal** (<kbd>Ctrl</kbd>+<kbd>`</kbd>): real shells on a pseudo-terminal, several per project, two side by side. Your login shell in WSL and Linux, PowerShell for a Windows folder.
 - **Side panel tabs, like a browser's**, kept across restarts. **+** opens a page of every surface with its shortcut: Browser (or Incognito), Terminal, Files, Changes, Review, Tasks, Inspect, Device and Side question.
 - **Project menu:** where the project runs, **Open in** File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal, project scripts that run in the Terminal, and Initialize Git.
-- **Context meter** in the toolbar: tokens used, the numbers on click, and **Compact now**.
+- **Context** in the toolbar: a ring with the tokens in use opens the **Context** tab (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>): session, provider, model, context limit and fill, tokens by kind (input, output, cache read and write), your messages and replies, tool calls, cost, when it started and was last active, **Compact now**, and the system prompt the next turn sends. Beside it, the **Context menu**: where the project runs, then its MCP servers, skills and rule files, each opening to the side.
+- **Replies say how they were made:** "Claude Opus 5.5 Medium · 5s · 103.5 tok/s" (the model and its reasoning, the turn's time, the writing speed; the first-token latency in the tooltip). Each turn's fold shows what ran ("Read 2 files · Ran 1 command") without pointing at it.
+- **A working session** shows a small dot grid in its sidebar row, light running round it like an orbit.
+- **Command Guard** (Settings → Agents, on by default): commands that wreck a computer or an account are never run, approved or not: deleting a whole home folder, drive or the root, wiping or formatting a disk, a fork bomb, deleting a hosted repository. It covers ORBIX's agent and the commands Claude Code, Codex and ACP agents ask to run.
+- **Claude Code subagents** can be turned off (its Task tool is hidden), and **Longest automatic wait** sets how long a busy or rate-limited provider may make ORBIX wait before it retries by itself (it was fixed at 1 minute).
+- **Instructions for some models** (Settings → Instructions): extra instructions added when the model id contains a given text.
+- **Hold Ctrl** for a moment: every control with a shortcut shows its keys beside it.
+- **Conversations as tabs** (Settings → Appearance → Layout): the open conversations in a row of tabs under the toolbar.
+- **Home** lists the chosen project's latest conversations by day (Today, Yesterday, Earlier).
+- **Reasoning slider:** the reasoning level opens a slider over a live dot field (brighter and busier the higher the level), from Off to the model's highest, with its default marked and what each level costs in a line below. Arrow keys, Home and End work on it.
+- **Analytics** (Settings): tokens per day by kind (all, written, read, from cache) over 7, 30 or 90 days, your messages, agent time, streak and busiest day, the models used, and when in the week you prompt, with a tooltip on every mark and every day as a table. Read from the conversations saved on this PC.
+- **Keep awake** has three modes: off, while agents work (and 10 minutes after), or always with the screen on.
+- **Conversation names:** how a new conversation is named can be rewritten in Settings → Instructions; empty restores the built-in naming.
+- **When something fails:** a notification when a turn ends on an error, instead of "finished".
+- Settings shows Esc beside Back and / beside Search, and / jumps to the search.
+- **More settings:** in-app notifications (a note when another conversation finishes or needs you), the sidebar's Running section on or off, skills in the slash menu, message box and terminal font size, font smoothing, the reasoning level as a name or bars, confirmations for archiving, unpinning and killing a terminal, **Ignore whitespace** in diffs, and **No AI credit in commits** (no Co-authored-by or "generated with" lines, for ORBIX's agent and Claude Code).
+- **Room to read:** a 14px interface and 15px conversation, 32–36px rows, larger icons and Settings pages, section heads in small capitals, a Plasma rail on the current item, and slower, weightier motion.
 - **Model picker** over the message box: providers in a rail (Starred and Recent first), models with <kbd>Ctrl</kbd>+<kbd>1…9</kbd>, and each model's reasoning levels beside it.
 - **Message box:** **+** adds images, files, commands (`/`), context (`@`) and shell commands (`!`, run in the project's Terminal). The model reads **Provider / Model**; the reasoning level is its own menu.
 - **Sidebar:** New conversation, Search, Plugins, Skills, Loops, Runs and Review.
@@ -39,6 +55,8 @@ The unified open-source ADE: every coding agent and every model in one environme
 - **Home hero made of light:** about 1,300 particles spiral into the mark, swap into the X and respond to the pointer. Still under reduced motion.
 - **One motion rhythm** (140/220/320/460 ms on a soft ease-out) and one set of controls: 32px buttons and fields with 8px corners and a clear focus ring.
 - **Google Sans Flex** for the interface, **Geist Mono** for code.
+- **Editor palettes:** Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula and Gruvbox, from each project's published colours, for surfaces, text, status and code.
+- **Nebula scene:** slow clouds of colour and twinkling stars in deep space. It replaces Koi pond and Halftone dusk; those settings move to Catppuccin Latte and Nebula.
 
 **Website**
 - Rebuilt on the new identity: the agents ORBIX runs, three ways to connect a model, the four permission levels, Windows and Cloud, responsive screenshots and strict security headers.

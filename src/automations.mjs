@@ -74,6 +74,7 @@ export class Automations {
     this.file = path.join(dir, 'automations.json');
     this.start = start;
     this.alive = alive || (() => false);
+    this.starting = new Set();
     this.now = now;
     this.list = (readJson(this.file, []) || []).filter((a) => a && a.id && a.prompt);
     // Times missed while ORBIX was closed are skipped: each enabled automation waits for its next time from now.
@@ -100,7 +101,7 @@ export class Automations {
   }
 
   view() {
-    return this.list.map((a) => ({ ...a, when: describeSchedule(a.schedule), nextAt: a.enabled ? a.nextAt : null, running: !!(a.lastProc && this.alive(a.lastProc)) }));
+    return this.list.map((a) => ({ ...a, when: describeSchedule(a.schedule), nextAt: a.enabled ? a.nextAt : null, starting: this.starting.has(a.id), running: !!(a.lastProc && this.alive(a.lastProc)) }));
   }
 
   /** Create (no id) or change one. */
@@ -137,10 +138,11 @@ export class Automations {
   async run(id, why = 'manual') {
     const a = this.list.find((x) => x.id === id);
     if (!a) throw Object.assign(new Error('That loop no longer exists'), { status: 404 });
-    if (a.lastProc && this.alive(a.lastProc)) {
+    if (this.starting.has(id) || (a.lastProc && this.alive(a.lastProc))) {
       if (why === 'manual') throw Object.assign(new Error('Its last run is still working'), { status: 409 });
       return null;
     }
+    this.starting.add(id);
     a.lastRun = this.now();
     try {
       a.lastProc = await this.start(a);
@@ -148,8 +150,10 @@ export class Automations {
     } catch (e) {
       a.lastProc = '';
       a.lastStatus = `failed: ${clip(String(e.message || e), 200)}`;
+    } finally {
+      this.starting.delete(id);
+      this.save();
     }
-    this.save();
     return a;
   }
 
@@ -162,6 +166,7 @@ export class Automations {
       if (a.schedule.every === 'once') {
         a.enabled = false; // done: it stays in the list, off, with its last run
         a.nextAt = null;
+        this.save();
       }
       await this.run(a.id, 'schedule');
     }

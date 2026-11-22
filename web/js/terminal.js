@@ -6,6 +6,8 @@ import { api } from './api.js';
 import { activeTab, on } from './store.js';
 import { homeProject } from './home.js';
 import { showTab, panelTab } from './panels.js';
+import { confirmDialog } from './dialogs.js';
+import { termFontSize, askBeforeKillTerminal } from './prefs-extra.js';
 
 let dock = null; // { el, head, tabs, panes, split, kill }
 let XT = null;
@@ -100,7 +102,7 @@ async function attach(view) {
   const { Terminal, FitAddon } = await loadXterm();
   if (byId.has(view.id)) return byId.get(view.id);
   const xt = new Terminal({
-    fontFamily: css('--mono', 'Consolas, monospace'), fontSize: 12.5, lineHeight: 1.25, letterSpacing: 0,
+    fontFamily: css('--mono', 'Consolas, monospace'), fontSize: termFontSize(), lineHeight: 1.25, letterSpacing: 0,
     cursorBlink: true, cursorStyle: 'bar', cursorWidth: 2, scrollback: 8000, allowTransparency: false,
     convertEol: false, smoothScrollDuration: 0, theme: theme(), minimumContrastRatio: 1, drawBoldTextInBrightColors: false,
     documentOverride: docShim,
@@ -280,6 +282,8 @@ export function mountTerminal({ close }) {
   });
   on('prefs', (p) => {
     if (p && ('theme' in p || 'mode' in p)) requestAnimationFrame(() => byId.forEach((t) => (t.xt.options.theme = theme())));
+    // Settings → Appearance → Terminal font size: open terminals follow, and fit their new columns.
+    if (p && 'termFontSize' in p) (byId.forEach((t) => (t.xt.options.fontSize = termFontSize())), requestAnimationFrame(fitAll));
   });
   new MutationObserver(() => byId.forEach((t) => (t.xt.options.theme = theme()))).observe(document.documentElement, { attributes: true, attributeFilter: ['data-mode', 'data-theme'] });
 }
@@ -293,9 +297,11 @@ function build() {
     if (s.split && s.list.length < 2) await openNew(project());
     draw();
   }, 'sm td-split');
-  const kill = iconBtn('trash', 'Kill terminal', () => {
+  const kill = iconBtn('trash', 'Kill terminal', async () => {
     const t = byId.get(byWs.get(project())?.cur);
-    if (t) closeTerm(t);
+    if (!t) return;
+    if (askBeforeKillTerminal() && !(await confirmDialog('Kill terminal', 'Kill this terminal? Anything still running in it stops.', { ok: 'Kill terminal', danger: true }))) return;
+    closeTerm(t);
   }, 'sm');
   const head = h('div', { class: 'p-bar td-head' }, icon('terminal', 14), tabs, h('span', { class: 'grow' }), split, iconBtn('plus', 'New terminal', () => newTerm(), 'sm'), kill);
   const panes = h('div', { class: 'td-panes' });

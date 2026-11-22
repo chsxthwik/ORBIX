@@ -18,6 +18,7 @@ import { projectPopover } from './project.js';
 import { actionFor, comboOf, firstKey } from './keys.mjs';
 import { browserPrefs, desktopBrowser, canShowInside } from './browser.js';
 import { settingsSearchItems, openFeedback } from './settings.js';
+import { applyExtraPrefs, keepAwakeMode, askBeforeClose, askBeforeArchive, askBeforeUnpin, showRunningSection } from './prefs-extra.js';
 import { H as shell, drawMenubar, drawToolbar, tickToolbar, navRecord, navGo, bindHoverCards, updatedLabel } from './shell.js';
 import { folderPicker, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { onBoard, boardState } from './review.js';
@@ -26,6 +27,8 @@ import { toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
 import { initBackdrop, SCENES } from './backdrop.js';
 import { refreshAutomations } from './automations.js';
+import { selectPluginsTab } from './customize.js';
+import { HUB_LINKS } from './hub-nav.js';
 import { initRuns, openHub, closeHub, isHub, hubView, draw as drawHub, onRunEvent, reviewCount, workingCount } from './runs.js';
 
 // No layout animation until the saved layout has been applied (boot() removes this).
@@ -33,6 +36,7 @@ document.documentElement.classList.add('still');
 const views = new Map();
 const sideEl = $('#sidebar');
 const topEl = $('#topbar');
+const stripEl = $('#tabstrip');
 const menuEl = $('#menubar');
 const mainEl = $('.main');
 const sessEl = $('#session');
@@ -53,12 +57,9 @@ const narrowPanel = matchMedia('(max-width: 1100px)');
 const overlay = { side: false, panel: false };
 
 // Every theme belongs to a mode (dark or light); the mode drives color-scheme and anything that only needs to know which.
-const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light', orbix: 'dark', sunset: 'dark', koi: 'light', aurora: 'dark', dusk: 'dark' };
-/** The Windows app's interface size: a chosen factor, or on Auto one that fits the screen (larger on wide screens). */
-function interfaceScale(v, screenWidth = window.orbixDesktop?.screenWidth || 0) {
-  if (typeof v === 'number' && v >= 0.5 && v <= 2) return v;
-  return screenWidth >= 3000 ? 1.25 : screenWidth >= 2300 ? 1.15 : 1;
-}
+const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light', graphite: 'dark', tokyo: 'dark', mocha: 'dark', rosepine: 'dark', nord: 'dark', dracula: 'dark', gruvbox: 'dark', latte: 'light', dawn: 'light', orbix: 'dark', sunset: 'dark', nebula: 'dark', aurora: 'dark' };
+/** Retired themes and what they became. */
+const THEME_ALIAS = { koi: 'latte', dusk: 'nebula' };
 // The sidebar can be dragged between these widths (double-click the edge to reset).
 const SIDE_MIN = 200, SIDE_MAX = 440, SIDE_W = 240;
 
@@ -110,8 +111,9 @@ function applyLook(u, root) {
 function applyPrefs() {
   const u = S.ui;
   const root = document.documentElement;
-  window.orbixDesktop?.setZoom(interfaceScale(u.uiScale));
-  const name = THEMES[u.theme] ? u.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; // 'system' or unknown
+  window.orbixDesktop?.setZoom(typeof u.uiScale === 'number' && Number.isFinite(u.uiScale) && u.uiScale >= 0.5 && u.uiScale <= 2 ? u.uiScale : 1);
+  const want = THEME_ALIAS[u.theme] || u.theme;
+  const name = THEMES[want] ? want : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; // 'system' or unknown
   root.dataset.theme = name;
   root.dataset.mode = THEMES[name];
   if (SCENES.includes(name)) root.dataset.scene = name;
@@ -119,6 +121,7 @@ function applyPrefs() {
   lsSet('look', { theme: name });
   root.style.setProperty('--fs', (u.fontSize || 14) + 'px');
   applyLook(u, root);
+  applyExtraPrefs(u, root);
   root.classList.toggle('compact', u.density === 'compact');
   root.dataset.density = u.density === 'compact' ? 'compact' : 'comfortable';
   root.style.setProperty('--side-w', Math.min(SIDE_MAX, Math.max(SIDE_MIN, u.sidebarW || SIDE_W)) + 'px');
@@ -300,14 +303,16 @@ const working = (t) => !!t && dotState(t) === 'run';
 const pinned = () => (Array.isArray(S.ui.pinned) ? S.ui.pinned : []);
 /** Archived conversations: kept on disk, left out of the sidebar until you show them (the filter menu). */
 const archived = () => (Array.isArray(S.ui.archived) ? S.ui.archived : []);
-function toggleArchive(s) {
+async function toggleArchive(s) {
   const list = archived();
   const on = list.includes(s.path);
+  if (!on && askBeforeArchive() && !(await confirmDialog('Archive conversation', `Archive “${s.title}”? It leaves the sidebar; the filter beside Projects shows archived conversations.`, { ok: 'Archive' }))) return;
   savePrefs({ archived: on ? list.filter((p) => p !== s.path) : [s.path, ...list].slice(0, 500), ...(on ? {} : { pinned: pinned().filter((p) => p !== s.path) }) });
   if (!on) toast('Archived. Show it again from the filter menu beside Projects.', 'info', 2600);
 }
-function togglePin(s) {
+async function togglePin(s) {
   const list = pinned();
+  if (list.includes(s.path) && askBeforeUnpin() && !(await confirmDialog('Unpin conversation', `Unpin “${s.title}”?`, { ok: 'Unpin' }))) return;
   savePrefs({ pinned: list.includes(s.path) ? list.filter((p) => p !== s.path) : [s.path, ...list].slice(0, 20) });
 }
 
@@ -428,7 +433,7 @@ function listKeys(e) {
 let sideSig = '';
 function sidebarSig() {
   return JSON.stringify([
-    searchTerm, filterOpen, [...collapsed], [...expanded], pinned(), archived(), S.ui.sortProjects || '', S.ui.showArchived === true, S.active, Math.floor(Date.now() / 60000),
+    searchTerm, filterOpen, [...collapsed], [...expanded], pinned(), archived(), S.ui.sortProjects || '', S.ui.showArchived === true, showRunningSection(), S.active, Math.floor(Date.now() / 60000),
     hubView()?.view || '', reviewCount(), workingCount(),
     S.sessions.map((s) => [s.path, s.mtime, s.title]),
     [...S.tabs.values()].map((t) => [t.id, t.name, t.workspace, !!t.streaming, !!t.dead, !!t.unread, t.dialogs.some(isApproval), t.resume || '', t.state?.sessionId || '', t.worktree?.branch || '', t.worktree?.state || '']),
@@ -468,7 +473,8 @@ function drawSidebar() {
     const open = !!term || !collapsed.has(g.key);
     const all = !!term || expanded.has(g.key);
     const shown = open ? sess.slice(0, term ? 50 : all ? 300 : SHOWN) : [];
-    const live = [...S.tabs.values()].filter((t) => !t.dead && t.streaming && keyPath(t.worktree?.source || t.workspace || '') === g.key).length;
+    // Working, not waiting for you: a conversation that needs your OK shows in Running, not as work in progress.
+    const live = [...S.tabs.values()].filter((t) => !t.dead && t.streaming && !t.dialogs.some(isApproval) && keyPath(t.worktree?.source || t.workspace || '') === g.key).length;
     const toggle = () => {
       collapsed.has(g.key) ? collapsed.delete(g.key) : collapsed.add(g.key);
       lsSet('collapsed', [...collapsed]);
@@ -506,11 +512,14 @@ function drawSidebar() {
     h('button', { class: 'side-new' + (S.active || isHub() ? '' : ' cur'), type: 'button', title: 'New conversation (Ctrl+N)', 'aria-current': S.active || isHub() ? null : 'page', onclick: () => newSession() }, icon('plus', 14), h('span', null, 'New conversation')),
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
       h('button', { class: 'side-link side-search-btn', type: 'button', title: `Search conversations (${firstKey(S.ui.keys, 'search') || 'Ctrl+K'})`, onclick: () => openSearch('conversations') }, icon('search', 15), h('span', null, 'Search'), h('kbd', { class: 'side-kbd' }, firstKey(S.ui.keys, 'search') || 'Ctrl+K')),
-      h('button', { class: 'side-link' + (hubView()?.view === 'customizations' ? ' cur' : ''), type: 'button', title: 'MCP servers to add from a marketplace, and the ones in use', 'aria-current': hubView()?.view === 'customizations' ? 'page' : null, onclick: () => goHub('customizations') }, icon('puzzle', 15), h('span', null, 'Plugins')),
-      h('button', { class: 'side-link' + (hubView()?.view === 'skills' ? ' cur' : ''), type: 'button', title: 'Instructions the agent follows for a kind of task', 'aria-current': hubView()?.view === 'skills' ? 'page' : null, onclick: () => goHub('skills') }, icon('bolt', 15), h('span', null, 'Skills')),
-      h('button', { class: 'side-link' + (hubView()?.view === 'automations' ? ' cur' : ''), type: 'button', title: 'Prompts ORBIX sends by itself, on a schedule or once', 'aria-current': hubView()?.view === 'automations' ? 'page' : null, onclick: () => goHub('automations') }, icon('infinity', 15), h('span', null, 'Loops')),
-      ((v) => h('button', { class: 'side-link' + (v === 'runs' || v === 'run' ? ' cur' : ''), type: 'button', title: 'Every run across projects (Ctrl+2)', 'aria-current': v === 'runs' || v === 'run' ? 'page' : null, onclick: () => goHub('runs') }, icon('activity', 15), h('span', null, 'Runs'), workingCount() ? h('span', { class: 'side-count quiet num', title: `${workingCount()} working` }, workingCount()) : null))(hubView()?.view),
-      h('button', { class: 'side-link' + (hubView()?.view === 'review' ? ' cur' : ''), type: 'button', title: 'What waits for you (Ctrl+3)', 'aria-current': hubView()?.view === 'review' ? 'page' : null, onclick: () => goHub('review') }, icon('shield', 15), h('span', null, 'Review'), reviewCount() ? h('span', { class: 'side-count num', title: `${reviewCount()} waiting for you`, 'aria-label': `${reviewCount()} waiting for you` }, reviewCount()) : null)),
+      HUB_LINKS.map(({ view, label, icon: glyph, hint, key }) => {
+        const cur = hubView()?.view === view || (view === 'runs' && hubView()?.view === 'run');
+        const shortcut = key && firstKey(S.ui.keys, key);
+        const count = view === 'runs' ? workingCount() : view === 'review' ? reviewCount() : 0;
+        const status = `${count} ${view === 'runs' ? 'working' : 'waiting for you'}`;
+        return h('button', { class: `side-link${cur ? ' cur' : ''}`, type: 'button', title: shortcut ? `${hint} (${shortcut})` : hint, 'aria-current': cur ? 'page' : null, onclick: () => goHub(view) },
+          icon(glyph, 15), h('span', null, label), count ? h('span', { class: `side-count num${view === 'runs' ? ' quiet' : ''}`, title: status, 'aria-label': status }, count) : null);
+      })),
     h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
       pinnedList(term),
@@ -549,7 +558,7 @@ function drawSidebar() {
  */
 function runningList() {
   const live = [...S.tabs.values()].filter(onBoard);
-  if (!live.length) return null;
+  if (!live.length || !showRunningSection()) return null;
   return h('div', { class: 'run-sec' },
     h('div', { class: 'side-h' }, h('span', null, 'Running')),
     live.map((t) => {
@@ -684,7 +693,7 @@ async function openSaved(s) {
 }
 
 async function closeWithCheck(t) {
-  if (t.streaming && !(await confirmDialog('Close conversation', 'The agent is still working. Stop it and close this conversation?', { ok: 'Stop and close', danger: true }))) return;
+  if (t.streaming && askBeforeClose() && !(await confirmDialog('Close conversation', 'The agent is still working. Stop it and close this conversation?', { ok: 'Stop and close', danger: true }))) return;
   closeTab(t.id);
 }
 
@@ -781,6 +790,29 @@ const homeHandlers = {
   diagnostics: openDiagnostics,
 };
 const drawWelcome = () => drawHome(homeEl, homeHandlers);
+
+/**
+ * Settings → Appearance → Conversations as tabs: the open conversations in a row under the toolbar, like a browser's
+ * tabs. A working one shows the dot grid, one that needs you a dot; × or a middle click closes it.
+ */
+let stripSig = '';
+function drawTabStrip() {
+  const on = S.ui.topTabs === true && S.tabs.size > 0;
+  const sig = on ? JSON.stringify([S.active, [...S.tabs.values()].map((t) => [t.id, t.name, !!t.streaming, !!t.dead, t.dialogs.some(isApproval), !!t.unread])]) : '';
+  if (sig === stripSig) return;
+  stripSig = sig;
+  stripEl.hidden = !on;
+  if (!on) return stripEl.replaceChildren();
+  stripEl.replaceChildren(...[...S.tabs.values()].map((t) => {
+    const cur = t.id === S.active;
+    const wait = t.dialogs.some(isApproval);
+    const mark = t.streaming && !t.dead && !wait ? dotGrid() : h('span', { class: `dot ${t.dead ? 'dead' : wait ? 'warn' : t.unread ? 'unread' : 'idle'}` });
+    return h('div', { class: 'ts-tab' + (cur ? ' cur' : ''), role: 'presentation' },
+      h('button', { class: 'ts-btn', type: 'button', role: 'tab', 'aria-selected': String(cur), title: t.name, onclick: () => setActive(t.id), onauxclick: (e) => e.button === 1 && (e.preventDefault(), closeWithCheck(t)) }, mark, h('span', { class: 'ell' }, t.name)),
+      iconBtn('x', `Close ${t.name}`, () => closeWithCheck(t), 'sm ts-x'));
+  }), iconBtn('plus', 'New conversation', () => newSession(), 'sm ts-new'));
+}
+for (const event of ['tabs', 'active', 'tab:status', 'tab:state', 'tab:dialog', 'prefs']) on(event, () => drawTabStrip());
 function viewFor(tab) {
   let v = views.get(tab.id);
   if (!v) {
@@ -874,8 +906,8 @@ on('prefs', (patch = {}) => {
   drawSidebar();
   drawTop();
   const t = activeTab();
-  if (t && 'showThinking' in patch) views.get(t.id)?.renderAll();
-  if (t && ('whileBusy' in patch || 'sendKey' in patch)) views.get(t.id)?.updateComposer();
+  if (t && ('showThinking' in patch || 'timeFormat' in patch)) views.get(t.id)?.renderAll();
+  if (t && ('whileBusy' in patch || 'sendKey' in patch || 'effortDisplay' in patch)) views.get(t.id)?.updateComposer();
 });
 const viewOf = (tab) => views.get(tab.id);
 // Focus mode only makes sense on a conversation: going Home leaves it.
@@ -909,6 +941,7 @@ on('tab:status', (tab) => {
 });
 on('tab:editor', (tab) => viewOf(tab)?.setText(tab.draft));
 on('tab:dialog', (tab) => {
+  if (tab === activeTab()) drawTop(); // "Needs your OK" in the toolbar the moment an approval arrives, not "Working"
   syncTitle();
   viewOf(tab)?.updateApproval();
   if (tab === activeTab()) syncExtDialogs(tab);
@@ -925,6 +958,10 @@ on('insert', (text) => {
   } else if (!t && !isHub()) insertHome(text);
 });
 on('settings', (tab) => settingsDialog(tab));
+on('open-plugins', (tab) => {
+  selectPluginsTab(tab);
+  goHub('customizations');
+});
 on('run:open', () => showTab('run'));
 on('run:file', (tab, path) => { if (tab === activeTab()) viewFile(tab, path); });
 on('run:reveal', (tab, id) => {
@@ -937,17 +974,17 @@ on('run:reveal', (tab, id) => {
   else toast('This tool is not available in the loaded transcript.', 'info');
 });
 on('home', (project) => newSession(project));
+on('use-skill', (project, name) => {
+  newSession(project);
+  insertHome(`/skill:${name} `);
+});
 
 function paletteItems() {
   const t = activeTab();
   const dark = document.documentElement.dataset.mode === 'dark';
   const items = [
     { group: 'General', icon: 'plus', label: 'New conversation', key: firstKey(S.ui.keys, 'new'), run: () => newSession() },
-    { group: 'General', icon: 'activity', label: 'Runs', key: firstKey(S.ui.keys, 'runs'), run: () => goHub('runs') },
-    { group: 'General', icon: 'shield', label: 'Review: what waits for you', key: firstKey(S.ui.keys, 'review'), run: () => goHub('review') },
-    { group: 'General', icon: 'infinity', label: 'Loops: prompts on a schedule', run: () => goHub('automations') },
-    { group: 'General', icon: 'puzzle', label: 'Plugins: MCP servers and rules', run: () => goHub('customizations') },
-    { group: 'General', icon: 'bolt', label: 'Skills', run: () => goHub('skills') },
+    ...HUB_LINKS.map(({ view, label, icon, hint, key }) => ({ group: 'General', icon, label, hint, key: key ? firstKey(S.ui.keys, key) : undefined, run: () => goHub(view) })),
     { group: 'General', icon: 'plus', label: 'New conversation without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
     { group: 'General', icon: 'cog', label: 'Settings', key: firstKey(S.ui.keys, 'settings'), run: () => settingsDialog() },
@@ -1045,6 +1082,39 @@ const canRun = (a, e) => {
   if ((a.id === 'prevMine' || a.id === 'nextMine') && !viewOf(activeTab())?.timeline) return false;
   return true;
 };
+
+// Hold Ctrl for a moment: every control that has a shortcut shows its keys beside it; any other key or letting go
+// hides them (so a quick Ctrl+K never flashes them).
+const KEY_SPOTS = [
+  ['#sidebar .side-new', 'new'], ['#sidebar .side-search-btn', 'search'], ['#sidebar .foot-set', 'settings'],
+  ['#topbar .tb-side', 'sidebar'], ['#topbar .tb-panel', 'panel'], ['#topbar .tb-search', 'search'],
+  [['#sidebar .side-link', 'Runs'], 'runs'], [['#sidebar .side-link', 'Review'], 'review'], [['#sidebar .side-link', 'Loops'], 'automations'],
+  ['.ptabs .ptab[aria-label="Terminal"]', 'terminal'], ['.ptabs .ptab[aria-label="Browser"]', 'surfBrowser'], ['.ptabs .ptab[aria-label="Files"]', 'surfFiles'], ['.ptabs .ptab[aria-label="Changes"]', 'surfChanges'], ['.ptabs .ptab[aria-label="Context"]', 'surfContext'],
+];
+let keyHintTimer = 0;
+const hideKeyHints = () => {
+  clearTimeout(keyHintTimer);
+  if (!document.documentElement.classList.contains('show-keys')) return;
+  document.documentElement.classList.remove('show-keys');
+  for (const el of document.querySelectorAll('[data-kbd]')) el.removeAttribute('data-kbd');
+};
+const showKeyHints = () => {
+  for (const [sel, id] of KEY_SPOTS) {
+    const key = firstKey(S.ui.keys, id);
+    if (!key) continue;
+    const els = Array.isArray(sel) ? [...document.querySelectorAll(sel[0])].filter((x) => x.textContent.trim().startsWith(sel[1])) : [...document.querySelectorAll(sel)];
+    for (const el of els) if (el.getClientRects().length) el.setAttribute('data-kbd', key.replace(/\+/g, ' + '));
+  }
+  document.documentElement.classList.add('show-keys');
+};
+addEventListener('keydown', (e) => {
+  if (e.key === 'Control' && !e.repeat && !e.altKey && !e.shiftKey) {
+    clearTimeout(keyHintTimer);
+    keyHintTimer = setTimeout(showKeyHints, 600);
+  } else if (e.key !== 'Control') hideKeyHints();
+}, true);
+addEventListener('keyup', (e) => e.key === 'Control' && hideKeyHints(), true);
+for (const ev of ['blur', 'pointerdown']) addEventListener(ev, hideKeyHints, true);
 
 addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
@@ -1146,12 +1216,18 @@ async function boot() {
   if (sys) {
     let tray = null;
     let awake = null;
+    let lastWork = 0;
+    // Settings → About → Keep awake: off, while agents work (and 10 minutes after), or always with the screen on.
     const syncSystem = () => {
       if ((S.ui.tray === true) !== tray) sys.tray((tray = S.ui.tray === true));
-      const want = S.ui.preventSleep === true && ([...S.tabs.values()].some((t) => t.streaming && !t.dead) || workingCount() > 0);
+      const mode = keepAwakeMode();
+      const busy = [...S.tabs.values()].some((t) => t.streaming && !t.dead) || workingCount() > 0;
+      if (busy) lastWork = Date.now();
+      const want = mode === 'always' ? 'screen' : mode === 'work' && (busy || Date.now() - lastWork < 10 * 60000) ? 'work' : '';
       if (want !== awake) sys.keepAwake((awake = want));
     };
     for (const event of ['prefs', 'tabs', 'tab:state', 'tab:status', 'runs']) on(event, syncSystem);
+    setInterval(syncSystem, 60000); // the 10 minutes after work end even when nothing else happens
     syncSystem();
   }
   // The Windows app's built-in browser: where downloads go, and a note when one is saved.

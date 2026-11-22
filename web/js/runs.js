@@ -3,8 +3,8 @@
 //   Review  one queue of everything that waits for you: approvals, plans, finished changes, interrupted runs
 //   a run   its timeline (each step links to its output, diff or document), the plan, the changes, the test log
 //           and the walkthrough, with comments, feedback and the decision that is yours to make
-import { drawAutomations } from './automations.js';
-import { drawSkills } from './skills.js';
+import { drawAutomations, leaveAutomations } from './automations.js';
+import { drawSkills, leaveSkills } from './skills.js';
 import { drawCustomizations, leaveCustomizations } from './customize.js';
 import { h, icon, iconBtn, replace, toast, timeAgo, baseName, spinner, skeleton, errorState, fmtDuration, debounce } from './dom.js';
 import { api } from './api.js';
@@ -103,6 +103,9 @@ export function closeHub(quiet) {
   if (!hub) return;
   hub = null;
   detail = null;
+  leaveCustomizations();
+  leaveAutomations();
+  leaveSkills();
   if (!quiet) emit('hub');
 }
 
@@ -296,21 +299,38 @@ function runRow(r) {
     r.asks?.length ? h('span', { class: 'run-pill you' }, 'Needs approval') : pill(r.status));
 }
 
+let runQuery = '';
 function drawRuns() {
-  const all = [...runs.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  const all = allRuns();
   const group = (title, list, empty) => (list.length || empty ? h('section', { class: 'run-group' }, h('h2', null, title, list.length ? h('span', { class: 'num muted' }, list.length) : null), list.length ? list.map(runRow) : h('p', { class: 'muted small' }, empty)) : null);
-  const active = all.filter((r) => WORKING.has(r.status));
-  const waiting = all.filter((r) => !WORKING.has(r.status) && !FINAL.has(r.status));
-  const done = all.filter((r) => FINAL.has(r.status));
+  const list = h('div', { class: 'run-list' });
+  const update = () => {
+    const q = runQuery.trim().toLowerCase();
+    const hits = all.filter((r) => [r.title, r.project, r.worktree?.branch, STATUS[r.status]?.label].some((v) => v?.toLowerCase().includes(q)));
+    replace(list, hits.length ? [
+      group('Working now', hits.filter((r) => WORKING.has(r.status))),
+      group('Waiting for you', hits.filter((r) => !WORKING.has(r.status) && !FINAL.has(r.status))),
+      group('Finished', hits.filter((r) => FINAL.has(r.status))),
+    ] : h('p', { class: 'muted small', role: 'status' }, 'No runs match your search.'));
+  };
+  const search = h('input', { type: 'search', class: 'cz-q', placeholder: 'Search by task, project, branch or status', 'aria-label': 'Search runs', value: runQuery, oninput: (e) => {
+    runQuery = e.target.value;
+    update();
+  } });
+  const restoreSearch = document.activeElement?.getAttribute('aria-label') === 'Search runs';
+  const caret = restoreSearch ? document.activeElement.selectionStart : null;
+  update();
   replace(el(),
     h('div', { class: 'hub' },
       h('header', { class: 'hub-head' }, h('h1', null, 'Runs'), h('p', { class: 'muted' }, 'A run takes one task from its description to changes you have reviewed. Each works in its own git worktree, so several can run side by side.')),
       newRunBox(),
       loadError ? errorState(loadError, { retry: refresh }) : !loaded ? skeleton(4) : !all.length ? h('div', { class: 'empty' }, icon('activity', 22), h('span', null, 'No runs yet. Describe a task above to start one.')) : [
-        group('Working now', active),
-        group('Waiting for you', waiting),
-        group('Finished', done.slice(0, 60)),
+        h('label', { class: 'cz-search' }, icon('search', 14), search), list,
       ]));
+  if (restoreSearch && search.isConnected) {
+    search.focus({ preventScroll: true });
+    if (caret != null) search.setSelectionRange(caret, caret);
+  }
 }
 
 const QUEUE = {
@@ -348,7 +368,7 @@ function drawReview() {
             it.kind === 'ask' ? askCard(r, it.ask) : null,
             it.kind === 'failed' && r.error ? h('p', { class: 'rq-err prewrap' }, r.error) : null,
             it.kind === 'interrupted' && r.interrupted?.pending?.some((p) => p.sideEffect) ? h('p', { class: 'muted small' }, `In flight when it stopped: ${r.interrupted.pending.filter((p) => p.sideEffect).map((p) => `${p.name} ${p.detail}`).join('; ')}`) : null,
-            it.kind === 'ask' ? null : h('div', { class: 'rq-acts' }, it.kind === 'question' ? btn('Open and answer', () => openHub('run', r.id), 'primary sm') : decisionButtons(r, { compact: true }), btn('Open', () => openHub('run', r.id), 'ghost sm')));
+            it.kind === 'ask' || it.kind === 'question' ? null : h('div', { class: 'rq-acts' }, decisionButtons(r, { compact: true })));
         }))));
 }
 
@@ -739,6 +759,9 @@ const drawSoon = debounce(() => hub && hub.view !== 'run' && draw(), 80);
 export function draw() {
   const root = el();
   if (!root || !hub) return;
+  if (hub.view !== 'customizations') leaveCustomizations();
+  if (hub.view !== 'automations') leaveAutomations();
+  if (hub.view !== 'skills') leaveSkills();
   if (hub.view === 'run') {
     if (!detail || detail.id !== hub.id) detail = new RunDetail(hub.id);
     if (root.firstChild !== detail.root) replace(root, detail.root);
@@ -749,7 +772,6 @@ export function draw() {
   const typed = root.querySelector('.run-new textarea');
   const keep = typed ? { v: typed.value, f: document.activeElement === typed, s: typed.selectionStart } : null;
   if (hub.view === 'customizations') return drawCustomizations(root);
-  leaveCustomizations();
   if (hub.view === 'automations') return drawAutomations(root);
   if (hub.view === 'skills') return drawSkills(root);
   if (hub.view === 'review') drawReview();

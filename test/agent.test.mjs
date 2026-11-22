@@ -568,11 +568,17 @@ describe('system prompt', () => {
     assert.match(p, /Do not weaken, skip or delete tests/);
     assert.match(p, /Long tool output is cut in the middle at a "\[… omitted …\]" marker/);
   });
+  test('no AI credit in commits: the prompt says so only when the setting is on', () => {
+    assert.doesNotMatch(prompt.buildSystemPrompt({ env, approvals: null }), /# Commits/);
+    assert.match(prompt.buildSystemPrompt({ env, approvals: null, noCoAuthor: true }), /# Commits\n.*no Co-authored-by lines/);
+  });
   test('the core prompt drives planning with todo, self-verification, autonomy and a closing walkthrough', () => {
     const p = prompt.buildSystemPrompt({ env, approvals: null });
     assert.match(p, /Plan non-trivial work .* with the todo tool before you start: keep exactly one step in_progress/);
-    assert.match(p, /Verify your own work before you call it done: run the project's own tests, build/);
-    assert.match(p, /re-read the changed parts/);
+    assert.match(p, /Deliver first: when the task is to make something/);
+    assert.match(p, /Verify in proportion: after the work is done, run the project's own tests, build/);
+    assert.match(p, /Do not search the machine for browsers or other tools to test with/);
+    assert.match(p, /otherwise re-read what you changed/);
     assert.match(p, /Work autonomously: keep going through every step until the task is done and verified\. When the next step is clear, take it/);
     assert.match(p, /end with a short walkthrough: what changed and where \(path:line\), how you verified it/);
     assert.match(p, /Do what was asked, completely, and no more/);
@@ -736,6 +742,14 @@ describe('agent loop end to end (mock provider)', () => {
     await send(p, 'run it');
     assert.match(p.messages.filter((m) => m.role === 'toolResult').at(-1).content[0].text, /\x1b\[32m/);
     assert.doesNotMatch(lastBody().messages.at(-1).content[0].content, /\x1b/);
+  });
+
+  test('max_tokens with nothing written (cut off while thinking) tells the model to act, not to continue', async () => {
+    const p = await make();
+    script = [sseResponse(turn({ stop: 'max_tokens' })), sseResponse(turn({ text: 'Done.' }))];
+    const end = await send(p, 'make the page');
+    assert.equal(end.status, 'completed');
+    assert.match(lastBody().messages.at(-1).content.at(-1).text, /while thinking, before writing anything.*Act now/);
   });
 
   test('max_tokens on a text reply continues automatically once', async () => {

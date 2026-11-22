@@ -43,6 +43,35 @@ const RULES = [
   [/(^|[\s;&|(])(DROP\s+(DATABASE|TABLE|SCHEMA)|TRUNCATE\s+TABLE)\b/i, 'deletes database data'],
 ];
 
+// Command Guard (Settings → Agents): commands that wreck a computer or an account. These are never run, approved or
+// not: deleting a whole home folder or drive, wiping or formatting a disk, a fork bomb, deleting a hosted repository.
+const ROOTS = String.raw`(\/|~|~\/|\$HOME\/?|\$\{HOME\}\/?|\/home\/?[^\s/]*\/?|\/Users\/?[^\s/]*\/?|[a-zA-Z]:\\?|[a-zA-Z]:\/|%USERPROFILE%\\?|\$env:USERPROFILE\\?)(\*|\.\*)?`;
+const CATASTROPHIC = [
+  [new RegExp(String.raw`(^|[\s;&|(])rm\s+(-[a-zA-Z-]+\s+)*-[a-zA-Z]*[rR][a-zA-Z]*\s+(-[a-zA-Z-]+\s+)*(--no-preserve-root\s+)?["']?${ROOTS}["']?(\s|$|;|&|\|)`), 'deletes a whole home folder, drive or the root'],
+  [new RegExp(String.raw`\bRemove-Item\b[^|;&]*\s["']?${ROOTS}["']?(\s|$)[^|;&]*-Recurse|\bRemove-Item\b[^|;&]*-Recurse[^|;&]*\s["']?${ROOTS}["']?(\s|$|;)`, 'i'), 'deletes a whole home folder or drive'],
+  [new RegExp(String.raw`(^|[\s;&|(])(rmdir|rd)\s+\/s\s+(\/q\s+)?["']?${ROOTS}["']?(\s|$)`, 'i'), 'deletes a whole drive or home folder'],
+  [/(^|[\s;&|(])(mkfs(\.\w+)?|wipefs)\b/, 'formats or wipes a disk'],
+  [/(^|[\s;&|(])dd\s+[^|;&]*\bof=\/dev\/(sd|nvme|hd|vd|xvd|disk|mmcblk)/, 'overwrites a whole disk'],
+  [/(^|[\s;&|(])format(\.com)?\s+[a-z]:/i, 'formats a drive'],
+  [/(^|[\s;&|(])diskpart\b|\b(Clear-Disk|Format-Volume|Initialize-Disk)\b/i, 'erases or repartitions a disk'],
+  [/:\s*\(\s*\)\s*\{[^}]*:\s*\|\s*:\s*&[^}]*\}\s*;?\s*:/, 'is a fork bomb'],
+  [/\bgh\s+repo\s+delete\b/, 'deletes a hosted repository'],
+];
+
+/** Why Command Guard blocks `command`, or '' when it does not (also inside `bash -c "…"` and the like). */
+export function catastrophicReason(command, depth = 0) {
+  const raw = String(command || '');
+  if (!raw.trim()) return '';
+  for (const [re, why] of CATASTROPHIC) if (re.test(raw)) return why;
+  if (depth < 3) {
+    for (const m of raw.matchAll(WRAPPER)) {
+      const inner = catastrophicReason(m[1].slice(1, -1).replace(/\\(["\\])/g, '$1'), depth + 1);
+      if (inner) return inner;
+    }
+  }
+  return '';
+}
+
 const QUOTED = /"(?:[^"\\]|\\.)*"|'[^']*'/g;
 // Programs that run their quoted argument as a command: that text is checked as a command too.
 const WRAPPER = /(?:^|[\s;&|(])(?:(?:ba|z|da|k)?sh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh|wsl(?:\.exe)?|eval|xargs|watch|time|nohup|env)\b[^|;&"']*("(?:[^"\\]|\\.)*"|'[^']*')/gi;

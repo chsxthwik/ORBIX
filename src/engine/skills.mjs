@@ -6,10 +6,11 @@ import { DATA_DIR } from '../store.mjs';
 import { cachedText } from './files.mjs';
 
 const PROJECT_SKILL_DIRS = ['.agents/skills', '.claude/skills', '.omp/skills'];
+const FRONTMATTER = /^﻿?---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 /** Minimal frontmatter parser: `key: value` lines between --- fences (quotes stripped, folded `>`/`|` values joined). */
 export function parseFrontmatter(text) {
-  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  const m = FRONTMATTER.exec(text);
   if (!m) return { meta: {}, body: text };
   const meta = {};
   let key = null;
@@ -78,6 +79,25 @@ function skillText({ name, description, body }) {
   return `---\nname: ${skillSlug(name)}\ndescription: ${one(description)}\n---\n\n${String(body || '').trim()}\n`;
 }
 
+/** Change only the fields the editor exposes, leaving other frontmatter untouched. */
+export function editSkillText(text, { name, description, body }) {
+  const m = FRONTMATTER.exec(text);
+  if (!m) return skillText({ name, description, body });
+  const nl = m[0].includes('\r\n') ? '\r\n' : '\n';
+  const value = String(description).replace(/\s+/g, ' ').trim();
+  const lines = m[1].split(/\r?\n/);
+  const idx = lines.findIndex((line) => /^description:/i.test(line));
+  if (idx < 0) lines.push(`description: ${value}`);
+  else {
+    let end = idx + 1;
+    while (end < lines.length && /^\s+\S/.test(lines[end]) && !/^\s*#/.test(lines[end])) end++;
+    lines.splice(idx, end - idx, `description: ${value}`);
+  }
+  const bom = text.startsWith('\uFEFF') ? '\uFEFF' : '';
+  const instructions = String(body).replace(/\r?\n/g, nl);
+  return `${bom}---${nl}${lines.join(nl)}${nl}---${nl}${nl}${instructions}${instructions.endsWith(nl) ? '' : nl}`;
+}
+
 /**
  * Write a skill: a new one in the project (`.agents/skills/<name>/SKILL.md`) or for you in every project
  * (`<data>/skills/<name>/SKILL.md`), or over an existing one's own file (`hostPath`). Returns the file written.
@@ -92,10 +112,20 @@ export async function saveSkill({ hostRoot, scope, name, description, body, host
   if (!file) {
     const base = scope === 'user' ? path.join(DATA_DIR, 'skills') : path.join(hostRoot, '.agents', 'skills');
     file = path.join(base, slug, 'SKILL.md');
-    if (fs.existsSync(file)) throw Object.assign(new Error(`A skill named ${slug} is already there`), { status: 409 });
   }
   await fs.promises.mkdir(path.dirname(file), { recursive: true });
-  await fs.promises.writeFile(file, skillText({ name: slug, description, body }));
+  const fields = { name: slug, description, body };
+  if (hostPath) {
+    const original = await fs.promises.readFile(file, 'utf8');
+    await fs.promises.writeFile(file, editSkillText(original, fields));
+  } else {
+    try {
+      await fs.promises.writeFile(file, skillText(fields), { flag: 'wx' });
+    } catch (e) {
+      if (e.code === 'EEXIST') throw Object.assign(new Error(`A skill named ${slug} is already there`), { status: 409 });
+      throw e;
+    }
+  }
   return file;
 }
 

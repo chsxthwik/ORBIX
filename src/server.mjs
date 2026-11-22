@@ -25,6 +25,7 @@ import * as pkce from './engine/oauth-pkce.mjs';
 import { webSearch } from './engine/websearch.mjs';
 import { detectCheck } from './engine/verify.mjs';
 import { userInstructionsPath, projectRules } from './engine/context.mjs';
+import { analytics } from './analytics.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
 import { collect as collectDiagnostics } from './diagnostics.mjs';
 import * as fsapi from './fsapi.mjs';
@@ -174,7 +175,7 @@ export class AppServer {
       start: (a) => this.startAutomation(a),
       alive: (id) => {
         const p = this.procs.get(id);
-        return !!p && (p.streaming || p.pendingAsk?.size > 0);
+        return !!p && (p.streaming || p.pendingAsk?.size > 0 || p.openUi?.size > 0);
       },
     });
     this.routes = this.buildRoutes();
@@ -772,6 +773,10 @@ export class AppServer {
           for (const p of this.procs.values()) p.driver?.setMode?.(this.engineCfg.data.approvals)?.catch?.(() => {});
         }
         if (body.trusted !== undefined) this.engineCfg.setTrusted(body.trusted);
+        if (body.noCoAuthor !== undefined) this.engineCfg.setNoCoAuthor(body.noCoAuthor);
+        if (body.titlePrompt !== undefined) this.engineCfg.setTitlePrompt(body.titlePrompt);
+        if (body.commandGuard !== undefined || body.claudeNoSubagents !== undefined || body.retryMaxWait !== undefined) this.engineCfg.setAgentOptions(body);
+        if (body.modelRules !== undefined) this.engineCfg.setModelRules(body.modelRules);
         if (body.network !== undefined) this.engineCfg.setNetwork(body.network || {});
         if (body.verify !== undefined || body.review !== undefined) this.engineCfg.setChecks({ verify: body.verify, review: body.review });
         return { engine: this.engineView() };
@@ -986,8 +991,10 @@ export class AppServer {
       // A project's instruction and rule files, for its page in Settings.
       'GET /api/project/rules': async ({ q }) => projectRules(this.backend, wsPath(q)),
       // Skills the agent can use: the project's (.agents/skills, .claude/skills, .omp/skills) and your own, for Customizations.
+      // Settings → Analytics: tokens, models, prompts and agent time over the last 7, 30 or 90 days.
+      'GET /api/analytics': async ({ q }) => analytics(q.range),
       'GET /api/skills': async ({ q }) => {
-        const ws = q.ws || this.store.data.workspaces?.[0]?.path || '';
+        const ws = q.ws ?? this.store.data.workspaces?.[0]?.path ?? '';
         const skills = await this.skillsOf(ws);
         return { ws, skills: skills.map(({ hostPath, ...s }) => s) };
       },
@@ -1017,8 +1024,8 @@ export class AppServer {
       'POST /api/automations': async ({ body }) => ({ item: this.automations.upsert(body), items: this.automations.view() }),
       'POST /api/automations/delete': async ({ body }) => ({ removed: this.automations.remove(String(body.id || '')), items: this.automations.view() }),
       'POST /api/automations/run': async ({ body }) => {
-        await this.automations.run(String(body.id || ''));
-        return { items: this.automations.view() };
+        const item = await this.automations.run(String(body.id || ''));
+        return { item, items: this.automations.view() };
       },
 
       'POST /api/proc/start': async ({ body }) => {
@@ -1126,7 +1133,7 @@ export class AppServer {
       },
 
       'GET /api/git/status': async ({ q }) => ({ git: await gitapi.status(this.backend, wsPath(q)) }),
-      'GET /api/git/diff': async ({ q }) => ({ diff: await gitapi.diff(this.backend, wsPath(q), q.file, { untracked: q.untracked === '1' }) }),
+      'GET /api/git/diff': async ({ q }) => ({ diff: await gitapi.diff(this.backend, wsPath(q), q.file, { untracked: q.untracked === '1', ignoreWs: q.w === '1' }) }),
       'POST /api/git/stage': async ({ body }) => (await gitapi.stage(this.backend, wsPath(body), body.paths), {}),
       'POST /api/git/unstage': async ({ body }) => (await gitapi.unstage(this.backend, wsPath(body), body.paths), {}),
       'POST /api/git/discard': async ({ body }) => (await gitapi.discard(this.backend, wsPath(body), { tracked: body.tracked, untracked: body.untracked }), {}),

@@ -3,6 +3,7 @@
 // choose); a plain web browser can only show pages on this computer inside ORBIX. Visited addresses feed the address
 // bar's suggestions and can be cleared.
 import { S, savePrefs } from './store.js';
+import { searchUrl } from './prefs-extra.js';
 
 /** { openLinks: 'external' | 'builtin', downloads: folder or '' (= the Downloads folder) }. */
 export const browserPrefs = () => ({ openLinks: 'external', downloads: '', ...(S.ui.browser || {}) });
@@ -39,7 +40,7 @@ export function addressToUrl(raw) {
   if (/^(localhost|127\.0\.0\.1)([:/]|$)/i.test(v)) return `http://${v}`;
   if (/^https?:\/\//i.test(v)) return v;
   if (/^[^\s/]+\.[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(v)) return `https://${v}`;
-  return `https://duckduckgo.com/?q=${encodeURIComponent(v)}`;
+  return searchUrl(v);
 }
 
 /** Remember a visited address (newest first, at most 100) for the address bar's suggestions. */

@@ -91,6 +91,18 @@ except Exception:
     sys.exit(0)
 `;
 const HELPER_ARG = `import base64;exec(base64.b64decode('${Buffer.from(HELPER).toString('base64')}'))`;
+/**
+ * End a shell for good: close its input (PowerShell reading commands from stdin, and the pty helper, exit on their
+ * own), kill its process tree, and let go of its pipes so a closing ORBIX never waits on it.
+ */
+function end(child) {
+  try {
+    child.stdin?.end();
+  } catch {}
+  killTree(child);
+  for (const s of [child.stdout, child.stderr]) s?.destroy();
+  child.unref?.();
+}
 const clampSize = (n, lo, hi, d) => (Number.isFinite(+n) ? Math.max(lo, Math.min(hi, Math.round(+n))) : d);
 
 export class Ptys {
@@ -212,7 +224,7 @@ export class Ptys {
     const t = this.get(id);
     const old = t.child;
     t.child = null;
-    if (old) killTree(old);
+    if (old) end(old);
     this._out(t, '^C\r\n');
     this._spawn(t);
     return {};
@@ -224,7 +236,7 @@ export class Ptys {
     const c = t.child;
     t.child = null;
     clearTimeout(t.flush);
-    if (c) killTree(c);
+    if (c) end(c);
     this.byId.delete(t.id);
     return {};
   }

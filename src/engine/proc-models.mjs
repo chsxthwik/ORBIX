@@ -132,7 +132,7 @@ export class ModelChoice {
     const key = await this.config.getKey(this.provider);
     if (!key && !providerInfo.keyOptional) throw new Error(`No API key is saved for ${providerInfo.name}. Open Settings → Providers.`);
     const client = providers.clientFor(providerInfo.type);
-    const base = { apiKey: key, baseUrl: this.config.baseUrl(this.provider), model: this.model, providerId: this.provider, maxTokens: this._maxTokens() };
+    const base = { apiKey: key, baseUrl: this.config.baseUrl(this.provider), model: this.model, providerId: this.provider, maxTokens: this._maxTokens(), retryMaxWait: this.config.data.retryMaxWait };
     const thinking = this.thinkingLevel !== 'off' ? this.thinkingLevel : undefined;
     const args = (a) => ({ ...base, thinking, ...a });
     const main = { client, args, stream: this._signedIn(client, args, this.provider), provider: this.provider, model: this.model, info: this.meta?.info || null, contextWindow: this.meta?.contextWindow, thinking };

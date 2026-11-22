@@ -1,13 +1,21 @@
 // Tells you when the agent finishes or needs you: a Windows notification, a taskbar flash in the app, and a short
 // sound, each switchable in Settings → Notifications. By default only while ORBIX is in the background.
-import { S, on } from './store.js';
+import { S, on, emit } from './store.js';
+import { toast } from './dom.js';
 
 const was = new Map(); // tab id -> was streaming
 const started = new Map(); // tab id -> when the current turn began
 let asked = false;
 
 /** The notification settings, with their defaults. */
-export const notifyPrefs = () => ({ done: true, input: true, onlyAway: true, sound: true, flash: true, volume: 0.8, ...(S.ui.notify || {}) });
+export const notifyPrefs = () => ({ done: true, input: true, errors: true, onlyAway: true, inApp: false, sound: true, flash: true, volume: 0.8, ...(S.ui.notify || {}) });
+
+/** In-app notifications: a toast when another conversation (not the one you are looking at) finishes or needs you. */
+function inApp(tab, text) {
+  if (!notifyPrefs().inApp || away() || S.active === tab.id) return;
+  toast(text, 'info', 5000);
+  emit('chrome');
+}
 
 /** A soft two-note chime, made on the spot (no sound file). `volume` 0 to 1 (Settings → Notifications → Volume). */
 export function chime(volume = notifyPrefs().volume) {
@@ -68,10 +76,22 @@ export function initNotify() {
     if (before && !tab.streaming) {
       const secs = Math.round((Date.now() - (started.get(tab.id) || Date.now())) / 1000);
       started.delete(tab.id);
-      if (!tab.dead && notifyPrefs().done) attention('Agent finished', secs >= 5 ? `${tab.name} · worked ${took(secs)}` : tab.name);
+      // A turn that ended on an error says so (Settings → Notifications → When something fails), not "finished".
+      const last = (tab.messages || []).findLast((m) => m.role === 'assistant');
+      if (!tab.dead && last?.stopReason === 'error') {
+        if (notifyPrefs().errors) {
+          const why = String(last.errorMessage || 'The request failed.').slice(0, 140);
+          attention('The agent stopped with an error', `${tab.name}: ${why}`);
+          inApp(tab, `Failed: ${tab.name}`);
+        }
+      } else if (!tab.dead && notifyPrefs().done) {
+        attention('Agent finished', secs >= 5 ? `${tab.name} · worked ${took(secs)}` : tab.name);
+        inApp(tab, `Finished: ${tab.name}`);
+      }
     }
   });
   on('tab:dialog', (tab) => {
     if (tab.dialogs.length && notifyPrefs().input) attention('The agent needs your input', tab.dialogs[0].title || tab.name);
+    if (tab.dialogs.length && notifyPrefs().input) inApp(tab, `Needs you: ${tab.name}`);
   });
 }

@@ -1,34 +1,40 @@
 // Plugins (sidebar → Plugins): a page with Marketplace and Installed and one search box. Marketplace adds well-known
 // MCP servers with one click (catalog.mjs has their exact configs); Installed lists what the agent can use in the open
-// project: MCP servers, and the instruction and rule files. Skills have their own page (skills.js).
+// project: MCP servers. Skills and rules are managed on their own pages.
 import { h, icon, replace, toast, baseName, skeleton, errorState, onEnter } from './dom.js';
 import { api } from './api.js';
-import { S, emit, activeTab } from './store.js';
-import { modal, btn, confirmDialog, folderPicker, popMenu } from './dialogs.js';
+import { activeTab } from './store.js';
+import { modal, btn, folderPicker } from './dialogs.js';
 import { homeProject } from './home.js';
-import { CATALOG, CATEGORIES, FEATURED, configFor } from './catalog.mjs';
+import { CATALOG, CATEGORIES, configFor } from './catalog.mjs';
+import { editMcpServer, mcpServerCard } from './mcp.js';
+import { hubProjects } from './hub-projects.js';
 
 let tab = 'market';
 let query = '';
 let page = null; // the mounted page, so a redraw of the hub keeps the search box and its caret
-let data = null; // { servers, rules } or { error }
+let data = null;
+let ws;
+let request = 0;
 
-const project = () => activeTab()?.workspace || homeProject() || S.workspaces?.[0]?.path || '';
+const project = () => ws ?? (activeTab()?.workspace || homeProject() || hubProjects()[0]?.[0] || '');
 
 async function load() {
-  const ws = project();
-  const q = ws ? `?ws=${encodeURIComponent(ws)}` : '';
+  const id = ++request;
+  const path = project();
+  let next;
   try {
-    const [mcp, rules] = await Promise.all([api.get(`/api/mcp${q}`), ws ? api.get(`/api/project/rules${q}`).catch(() => null) : null]);
-    data = { ws, servers: [...mcp.servers, ...(mcp.project?.servers || [])], rules };
+    next = await api.get(`/api/mcp${path ? `?ws=${encodeURIComponent(path)}` : ''}`);
   } catch (e) {
-    data = { error: e.message };
+    next = { error: e.message };
   }
+  if (id !== request) return;
+  data = next;
   render();
 }
 
-const installed = (id) => !!data?.servers?.some((s) => s.name === id);
-const match = (...texts) => !query || texts.join(' ').toLowerCase().includes(query.toLowerCase());
+const installed = (id) => data?.servers?.some((s) => s.name === id) || data?.project?.servers?.some((s) => s.name === id);
+const match = (...texts) => texts.join(' ').toLowerCase().includes(query.trim().toLowerCase());
 /** A coloured monogram tile (no remote logos: the page loads nothing from outside). */
 const tile = (e, size = 36) => {
   const el = h('span', { class: 'cz-tile', 'aria-hidden': 'true' }, e.mono);
@@ -36,18 +42,12 @@ const tile = (e, size = 36) => {
   el.style.setProperty('--s', `${size}px`);
   return el;
 };
-const plainTile = (size) => {
-  const el = h('span', { class: 'cz-tile plain', 'aria-hidden': 'true' }, icon('plug', 14));
-  el.style.setProperty('--s', `${size}px`);
-  return el;
-};
-
 /** Add a catalog entry: ask for its fields (a token, a folder) when it has any, then save it as a user server. */
 async function add(e) {
   const save = async (values) => {
     const config = configFor(e, values);
-    await api.post('/api/mcp/save', { name: e.id, config });
-    toast(`${e.name} added. It starts with the next message you send.`, 'ok', 3500);
+    await api.post('/api/mcp/save', { name: e.id, config, createOnly: true });
+    toast(`${e.name} added. Test it from Installed.`, 'ok', 3500);
     await load();
   };
   if (!e.fields?.length) return save({}).catch((err) => toast(err.message, 'error'));
@@ -61,12 +61,17 @@ async function add(e) {
     }, 'sm') : null;
     return h('label', { class: 'cz-f' }, h('span', null, f.label), h('span', { class: 'cz-f-row' }, input, pick), f.hint ? h('small', null, f.hint) : null);
   });
+  let saving = false;
   const go = async () => {
+    if (saving) return;
+    saving = true;
     try {
       await save(Object.fromEntries(Object.entries(inputs).map(([k, el]) => [k, el.value])));
       m.close();
     } catch (err) {
       toast(err.message, 'error');
+    } finally {
+      saving = false;
     }
   };
   const m = modal({
@@ -77,94 +82,85 @@ async function add(e) {
   for (const el of Object.values(inputs)) onEnter(el, go);
 }
 
-function addButton(e, big = false) {
-  if (installed(e.id)) return h('span', { class: 'cz-added' + (big ? ' big' : ''), title: `${e.name} is installed` }, icon('check', 13), big ? 'Added' : null);
-  return big ? btn('Add', () => add(e), 'primary sm cz-add-big') : h('button', { class: 'cz-add', type: 'button', title: `Add ${e.name}`, 'aria-label': `Add ${e.name}`, onclick: () => add(e) }, icon('plus', 15));
+function addButton(e) {
+  if (installed(e.id)) return h('span', { class: 'cz-added', title: `${e.name} is configured` }, icon('check', 13), 'Added');
+  const b = btn('Add', () => add(e), 'sm');
+  b.setAttribute('aria-label', `Add ${e.name}`);
+  b.disabled = !data || !!data.error;
+  return b;
 }
 
 function market() {
-  const f = CATALOG.find((e) => e.id === FEATURED);
-  const hero = !query ? h('section', { class: 'cz-hero' },
-    h('div', { class: 'cz-hero-art', 'aria-hidden': 'true' }, CATALOG.slice(0, 7).map((e, i) => h('span', { class: `cz-float f${i}` }, tile(e, 44)))),
-    h('div', { class: 'cz-hero-t' }, h('small', null, 'Featured'), h('h2', null, f.name), h('p', null, f.blurb), h('div', { class: 'cz-hero-acts' }, addButton(f, true)))) : null;
   const sections = CATEGORIES.map((c) => {
     const items = CATALOG.filter((e) => e.cat === c && match(e.name, e.blurb, e.cat));
     if (!items.length) return null;
     return h('section', { class: 'cz-sec' }, h('h3', null, c),
       h('div', { class: 'cz-grid' }, items.map((e) => h('div', { class: 'cz-item' }, tile(e), h('div', { class: 'cz-item-t' }, h('b', null, e.name), h('span', { class: 'ell2' }, e.blurb)), addButton(e)))));
   }).filter(Boolean);
-  return [hero, ...(sections.length ? sections : [h('p', { class: 'cz-none' }, 'Nothing in the marketplace matches.')]),
-    h('p', { class: 'cz-note' }, 'Servers run on this PC with your permissions. Ones started with npx need Node.js where ORBIX runs commands (Windows or WSL). Their tools ask before they act, unless the server marks them read-only.')];
+  return [
+    h('p', { class: 'cz-note' }, 'Built-in catalog of MCP server configurations. Add a server, then test it in Installed. Only add software and servers you trust.'),
+    data?.error ? errorState(data.error, { title: 'Couldn’t check installed servers', retry: load }) : !data ? h('p', { class: 'muted small', role: 'status' }, 'Checking installed servers…') : null,
+    sections.length ? sections : h('p', { class: 'cz-none', role: 'status' }, 'No plugins match your search.')];
 }
 
 function installedView() {
   if (!data) return skeleton(4);
-  if (data.error) return errorState(data.error, { retry: () => ((data = null), render(), load()) });
-  const head = (title, n, extra = null) => h('h3', { class: 'cz-h' }, title, h('span', { class: 'cz-n num' }, n), h('span', { class: 'grow' }), extra);
-  const servers = data.servers.filter((s) => match(s.name, JSON.stringify(s.config)));
-  const what = (c) => (c.url ? c.url : [c.command, ...(c.args || [])].join(' '));
-  // The states a server reports (src/engine/mcp.mjs): running, starting, error, stopped, not started.
-  const stat = (s) => (s.config?.disabled ? h('span', { class: 'cz-st' }, 'Off')
-    : s.status === 'running' ? h('span', { class: 'cz-st ok' }, `${s.tools?.length || 0} tools`)
-    : s.status === 'error' ? h('span', { class: 'cz-st err', title: s.error || '' }, 'Failed')
-    : s.status === 'starting' ? h('span', { class: 'cz-st' }, 'Starting')
-    : h('span', { class: 'cz-st' }, 'Starts with the next message'));
-  const more = (s, el) => popMenu(el, [
-    { icon: 'activity', label: 'Test it now', run: async () => {
-      try {
-        const { result } = await api.post('/api/mcp/test', { name: s.name, config: s.config, ws: data.ws });
-        toast(`${s.name}: ${result.tools?.length ?? 0} tools`, 'ok', 3000);
-      } catch (e) {
-        toast(`${s.name}: ${e.message}`, 'error', 7000);
-      }
-    } },
-    { icon: 'cog', label: 'Edit in Settings', run: () => emit('settings', 'tools') },
-    s.scope === 'user' ? { icon: 'trash', label: 'Remove', danger: true, run: async () => {
-      if (!(await confirmDialog('Remove MCP server', `Remove ${s.name}? Conversations that are open keep it until they restart.`, { ok: 'Remove', danger: true }))) return;
-      await api.post('/api/mcp/remove', { name: s.name }).catch((e) => toast(e.message, 'error'));
-      load();
-    } } : null,
-  ].filter(Boolean));
-  const rules = [...(data.rules?.instructions || []).map((f) => ({ name: baseName(f.path), path: f.path, tag: 'Instructions', d: f.path })), ...(data.rules?.rules || []).map((r) => ({ name: r.name, path: r.path, tag: { always_on: 'Always', model_decision: 'When relevant', glob: 'Matching files', manual: 'On @mention' }[r.trigger], d: r.description || r.globs || '' }))].filter((r) => match(r.name, r.d));
-  const reveal = (p) => api.post('/api/fs/reveal', { path: p }).catch((e) => toast(e.message, 'error'));
+  if (data.error) return errorState(data.error, { retry: load });
+  const edit = h('div');
+  const group = (title, servers, add, empty) => {
+    const shown = servers.filter((s) => match(s.name));
+    return h('section', { class: 'cz-sec' },
+      h('h3', null, title, h('span', { class: 'cz-n num' }, servers.length), h('span', { class: 'grow' }), add),
+      add ? edit : null,
+      shown.length ? h('div', { class: 'cards' }, shown.map((s) => mcpServerCard(s, project(), edit, load))) :
+        h('p', { class: 'cz-none' }, servers.length ? 'No servers match your search.' : empty));
+  };
+  const add = btn('Add custom server', () => editMcpServer(edit, { ws: project() }, (saved) => (replace(edit), saved && load())), 'primary sm');
   return [
-    h('section', { class: 'cz-sec' }, head('MCP servers', servers.length, h('button', { class: 'link', type: 'button', onclick: () => emit('settings', 'tools') }, 'Add your own')),
-      servers.length ? h('div', { class: 'cz-list' }, servers.map((s) => {
-        const e = CATALOG.find((x) => x.id === s.name);
-        const dots = h('button', { class: 'ibtn sm cz-more', type: 'button', 'aria-label': `More for ${s.name}` }, icon('more-v', 15));
-        dots.addEventListener('click', () => more(s, dots));
-        return h('div', { class: 'cz-row' }, e ? tile(e, 28) : plainTile(28), h('div', { class: 'cz-row-t' }, h('b', null, s.name, h('span', { class: 'tag' }, s.scope === 'project' ? 'Project' : 'Yours')), h('span', { class: 'ell' }, what(s.config))), stat(s), dots);
-      })) : h('p', { class: 'cz-none' }, query ? 'No MCP server matches.' : 'None yet. Add one from the Marketplace.')),
-    h('section', { class: 'cz-sec' }, head('Rules', rules.length),
-      rules.length ? h('div', { class: 'cz-lines' }, rules.map((r) => h('button', { class: 'cz-line', type: 'button', title: r.path, onclick: () => reveal(r.path) }, h('b', null, r.name), h('span', { class: 'tag' }, r.tag), h('span', { class: 'ell' }, r.d)))) : h('p', { class: 'cz-none' }, data.ws ? 'No rules in this project. /init writes an AGENTS.md; Markdown files in .agents/rules add more.' : 'Open a project to see its rules.')),
-  ];
+    group('Your servers', data.servers, add, 'Nothing installed yet. Add a custom server or browse the Marketplace.'),
+    data.project ? group('Project servers', data.project.servers, null, 'No servers in this project’s .mcp.json.') : null];
 }
 
 function render() {
   if (!page?.isConnected) return;
   replace(page.querySelector('.cz-body'), tab === 'market' ? market() : installedView());
-  for (const b of page.querySelectorAll('.cz-tabs button')) b.setAttribute('aria-selected', String(b.dataset.t === tab));
-  const ws = data?.ws;
-  page.querySelector('.cz-for').textContent = tab === 'installed' && ws ? `In ${baseName(ws)}` : '';
+  for (const b of page.querySelectorAll('.cz-tabs button')) b.setAttribute('aria-pressed', String(b.dataset.t === tab));
+}
+
+export function selectPluginsTab(value) {
+  tab = value === 'installed' ? 'installed' : 'market';
+  render();
 }
 
 /** Draw the page into the hub's section (`root`). A redraw of the hub keeps the page as it is. */
 export function drawCustomizations(root) {
   if (page && root.contains(page)) return;
+  ws ??= project();
+  data = null;
+  const projects = new Map(hubProjects());
+  if (ws && !projects.has(ws)) projects.set(ws, baseName(ws));
+  const scope = h('select', { class: 'sk-proj', 'aria-label': 'Plugin project', onchange: (e) => {
+    ws = e.target.value;
+    data = null;
+    render();
+    load();
+  } }, h('option', { value: '', selected: !ws }, 'No project'), [...projects].map(([p, name]) => h('option', { value: p, selected: p === ws }, name)));
   const search = h('input', { type: 'search', class: 'cz-q', placeholder: 'Search plugins…', 'aria-label': 'Search plugins', value: query, spellcheck: 'false', autocomplete: 'off' });
   search.addEventListener('input', () => ((query = search.value), render()));
-  const tabs = h('div', { class: 'cz-tabs', role: 'tablist' }, [['market', 'Marketplace'], ['installed', 'Installed']].map(([t, l]) => h('button', { type: 'button', role: 'tab', 'data-t': t, 'aria-selected': String(t === tab), onclick: () => ((tab = t), render()) }, l)));
+  const tabs = h('div', { class: 'cz-tabs', role: 'group', 'aria-label': 'Plugin view' }, [['market', 'Marketplace'], ['installed', 'Installed']].map(([t, l]) => h('button', { type: 'button', 'data-t': t, onclick: () => selectPluginsTab(t) }, l)));
   page = h('div', { class: 'hub cz' },
-    h('header', { class: 'cz-head' }, h('h1', null, 'Plugins'), h('span', { class: 'cz-for muted small' }), h('span', { class: 'grow' }), tabs),
-    h('div', { class: 'cz-search' }, icon('search', 14), search),
+    h('header', { class: 'cz-head' }, h('h1', null, 'Plugins'), h('span', { class: 'grow' }), scope, tabs),
+    h('label', { class: 'cz-search' }, icon('search', 14), search),
     h('div', { class: 'cz-body' }));
   replace(root, page);
   render();
-  data = null;
   load();
 }
 
 /** Forget the mounted page (the hub shows another view), so the next visit loads fresh. */
 export function leaveCustomizations() {
+  if (!page) return;
+  request++;
   page = null;
+  ws = undefined;
 }

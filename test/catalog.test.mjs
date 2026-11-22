@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CATALOG, CATEGORIES, FEATURED, configFor } from '../web/js/catalog.mjs';
+import { CATALOG, CATEGORIES, configFor } from '../web/js/catalog.mjs';
 
 test('every marketplace entry builds a config ORBIX can save', () => {
   const ids = new Set();
@@ -21,5 +21,5 @@ test('every marketplace entry builds a config ORBIX can save', () => {
     }
     if (e.fields?.length) assert.throws(() => configFor(e, {}), /is needed/);
   }
-  assert.ok(ids.has(FEATURED));
+  assert.ok(ids.size > 0);
 });

@@ -47,19 +47,154 @@ export function modelLabel(m) {
  * The reasoning level as its own small menu ("Medium ⌄"), for a model that has levels. `onPick(level)` applies one;
  * `update(levels, level)` redraws it (no levels: hidden).
  */
+const LEVEL_NOTE = {
+  off: 'No reasoning: the fastest replies.',
+  none: 'No reasoning: the fastest replies.',
+  minimal: 'A quick look before it answers.',
+  low: 'Light reasoning for simple tasks.',
+  medium: 'Balanced: the usual choice.',
+  high: 'Deeper reasoning for hard problems. Slower.',
+  xhigh: 'Very deep reasoning. Slower, and more tokens.',
+  max: 'The longest thinking: slowest, and the most tokens.',
+  ultra: 'The longest thinking: slowest, and the most tokens.',
+};
+
+/**
+ * The dot field behind the reasoning slider: a grid of dots up to the thumb, lit by slow drifting waves, brighter
+ * and busier the higher the level. Drawn only while the panel is open; reduced motion draws one still frame.
+ */
+function dotField(canvas, getFill) {
+  const ctx = canvas.getContext('2d');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('no-motion');
+  const color = getComputedStyle(canvas).color || '#ff2e7e';
+  let raf = 0;
+  const t0 = performance.now();
+  const frame = (now) => {
+    const dpr = devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const hgt = canvas.clientHeight;
+    if (canvas.width !== Math.round(w * dpr)) canvas.width = Math.round(w * dpr);
+    if (canvas.height !== Math.round(hgt * dpr)) canvas.height = Math.round(hgt * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, hgt);
+    ctx.fillStyle = color;
+    const { x: fillTo, energy } = getFill();
+    const t = (now - t0) / 1000;
+    const step = 3.5;
+    for (let x = 2; x < w; x += step) {
+      const inFill = x <= fillTo;
+      for (let y = 2; y < hgt; y += step) {
+        // Two slow waves crossing, a third one faster as the level rises.
+        const wave = Math.sin(x * 0.045 - t * (0.8 + energy)) + Math.sin(y * 0.22 + x * 0.018 + t * 0.6) + Math.sin((x + y) * 0.03 - t * 1.7 * energy);
+        const b = Math.max(0, Math.min(1, 0.5 + wave / 4));
+        const a = inFill ? 0.3 + b * (0.5 + energy * 0.2) : 0.06 + b * 0.06;
+        const sz = inFill ? (b > 0.78 ? 2.4 : 1.8) : 1.2;
+        ctx.globalAlpha = Math.min(1, a);
+        ctx.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+      }
+    }
+    ctx.globalAlpha = 1;
+    if (!still) raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  return () => cancelAnimationFrame(raf);
+}
+
+/**
+ * The reasoning level as its own control ("Medium ⌄"), for a model that has levels. It opens a slider over a live dot
+ * field: Off on the left, the model's highest level on the right, the default marked. `onPick(level)` applies one;
+ * `update(levels, level, { model, def })` redraws the chip (no levels: hidden).
+ */
 export function effortChip(onPick) {
   let levels = [];
   let level = '';
-  const btn = h('button', { class: 'cbtn c-effort', type: 'button', 'aria-haspopup': 'menu', hidden: true, onclick: () => popMenu(btn, [{ header: 'Reasoning' }, ...levels.map((l) => ({ label: thinkingName(l), sel: l === level, run: () => onPick(l) }))], { minWidth: 170 }) });
-  const update = (lv, at) => {
+  let info = {};
+  const btn = h('button', { class: 'cbtn c-effort', type: 'button', 'aria-haspopup': 'dialog', hidden: true, onclick: () => open() });
+  const open = () => {
+    if (!levels.length) return;
+    if (document.querySelector('.rs-pop:not(.leaving)')) return document.querySelector('.rs-pop')._close();
+    let at = Math.max(0, levels.indexOf(level || info.def || levels[0]));
+    const last = levels.length - 1;
+    const name = h('b', { class: 'rs-name' });
+    const note = h('p', { class: 'rs-note' });
+    const field = h('canvas', { class: 'rs-field', 'aria-hidden': 'true' });
+    const thumb = h('span', { class: 'rs-thumb', 'aria-hidden': 'true' });
+    const track = h('div', { class: 'rs-track', role: 'slider', tabindex: '0', 'aria-label': 'Reasoning level', 'aria-valuemin': '0', 'aria-valuemax': String(last) }, field, thumb);
+    const ticks = h('div', { class: 'rs-ticks' }, levels.map((l, i) => {
+      const b = h('button', { type: 'button', class: 'rs-tick', onclick: () => (set(i), commit()) }, thinkingName(l), l === info.def ? h('small', null, ' · default') : null);
+      b.style.setProperty('--x', last ? `${(i / last) * 100}%` : '50%');
+      return b;
+    }));
+    const pos = () => (last ? at / last : 0.5);
+    const paint = () => {
+      const l = levels[at];
+      name.textContent = thinkingName(l);
+      note.textContent = LEVEL_NOTE[l] || '';
+      track.setAttribute('aria-valuenow', String(at));
+      track.setAttribute('aria-valuetext', thinkingName(l));
+      thumb.style.left = `calc(20px + (100% - 40px) * ${pos().toFixed(4)})`;
+      for (const [i, t] of [...ticks.children].entries()) t.classList.toggle('on', i === at);
+    };
+    const set = (i) => {
+      at = Math.max(0, Math.min(last, i));
+      paint();
+    };
+    const commit = () => {
+      if (levels[at] !== level) onPick(levels[at]);
+    };
+    const fromX = (cx) => {
+      const r = track.getBoundingClientRect();
+      set(Math.round(((cx - r.left - 20) / Math.max(1, r.width - 40)) * last));
+    };
+    track.addEventListener('pointerdown', (e) => {
+      track.setPointerCapture(e.pointerId);
+      track.classList.add('drag');
+      fromX(e.clientX);
+    });
+    track.addEventListener('pointermove', (e) => track.hasPointerCapture(e.pointerId) && fromX(e.clientX));
+    track.addEventListener('pointerup', (e) => {
+      track.releasePointerCapture(e.pointerId);
+      track.classList.remove('drag');
+      commit();
+    });
+    track.addEventListener('keydown', (e) => {
+      const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+      if (d) return e.preventDefault(), set(at + d), commit();
+      if (e.key === 'Home' || e.key === 'End') return e.preventDefault(), set(e.key === 'Home' ? 0 : last), commit();
+    });
+    const pop = popover(btn, [
+      h('div', { class: 'rs-head' }, h('span', { class: 'rs-dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')), name),
+      info.model ? h('div', { class: 'rs-model ell' }, info.model) : null,
+      track, ticks, note,
+    ].filter(Boolean), { align: 'start', cls: 'rs-pop', label: 'Reasoning' });
+    paint();
+    const stop = dotField(field, () => ({ x: 20 + pos() * (field.clientWidth - 40), energy: last ? at / last : 0.5 }));
+    new MutationObserver((_, mo) => {
+      if (pop.el.isConnected && !pop.el.classList.contains('leaving')) return;
+      mo.disconnect();
+      stop();
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    track.focus({ preventScroll: true });
+  };
+  const update = (lv, at, meta = {}) => {
     levels = lv || [];
     level = at || '';
+    info = meta || {};
     btn.hidden = !levels.length;
     if (!levels.length) return;
     // No level chosen yet (Home): the model's own default.
     const name = level ? thinkingName(level) : 'Default';
     btn.title = `Reasoning: ${name}`;
-    btn.replaceChildren(h('span', null, name), icon('chevron-down', 12, 'cbtn-chev'));
+    // Settings → Appearance → Reasoning level: the name, or bars that fill up with the level.
+    const real = levels.filter((l) => l !== 'off');
+    const pos = real.indexOf(level);
+    const bars = S.ui.effortDisplay === 'bars' && level ? h('span', { class: 'c-bars', 'aria-hidden': 'true' }, real.map((_, i) => {
+      const b = h('i', { class: i <= pos ? 'on' : '' });
+      b.style.height = `${4 + Math.round((8 * (i + 1)) / real.length)}px`;
+      return b;
+    })) : null;
+    btn.setAttribute('aria-label', `Reasoning: ${name}`);
+    btn.replaceChildren(...[bars || h('span', null, name), icon('chevron-down', 12, 'cbtn-chev')]);
   };
   return { el: btn, update };
 }

@@ -74,3 +74,18 @@ test('loops: every N minutes and once', async () => {
   assert.equal(nextRun({ every: 'once', at }, at + 1), null);
   assert.match(describeSchedule({ every: 'once', at }), /^Once, .* at 12:00$/);
 });
+
+test('a pending start cannot launch twice and a failed start is recorded', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-auto-start-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  let fail;
+  const loops = new Automations({ dir, start: () => new Promise((_resolve, reject) => { fail = reject; }) });
+  const a = loops.upsert({ prompt: 'List project tasks', project: 'C:\\shop', schedule: { every: 'day' } });
+  const pending = loops.run(a.id);
+  assert.equal(loops.view()[0].starting, true);
+  await assert.rejects(loops.run(a.id), /still working/);
+  fail(new Error('No model connected'));
+  assert.equal((await pending).lastStatus, 'failed: No model connected');
+  assert.equal(loops.view()[0].starting, false);
+  assert.equal(new Automations({ dir }).view()[0].lastStatus, 'failed: No model connected');
+});

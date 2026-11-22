@@ -42,11 +42,15 @@ function goalPrompt(g) {
 }
 const MID_STREAM_RETRY_MS = 1500;
 const CONTINUE_TEXT = 'Your previous reply was cut off by the output token limit. Continue exactly where it stopped, without repeating what you already wrote.';
+// Cut off while still thinking, with nothing written and no tool called: "continue where you stopped" has nothing to
+// continue, and the model would think the limit away again.
+const ACT_TEXT = 'You reached the output token limit while thinking, before writing anything or calling a tool. Do not plan further. Act now: make the next tool call, or give the answer. For a large file, write its first part with write and add the rest with edit, a section per call.';
+const MAX_CONTINUES = 3;
 /** Optional protocol features this engine supports (the UI shows the matching actions). */
 const FEATURES = ['regenerate', 'edit_message', 'attachments', 'prompt_status', 'branch'];
 const GOAL_ROUNDS = 6;
 const SIDE_SYSTEM = 'You answer a side question about a coding conversation, without tools and without continuing its task. Answer from the conversation shown, briefly and exactly; say plainly when the conversation does not contain the answer.';
-const TITLE_SYSTEM = 'You name chat sessions. Reply with only a title of 2 to 6 words saying what the user wants done in the message below (the task, not a file, folder or project name): no quotes, no trailing punctuation, same language as the message.';
+export const TITLE_SYSTEM = 'You name chat sessions. Reply with only a title of 2 to 6 words saying what the user wants done in the message below (the task, not a file, folder or project name): no quotes, no trailing punctuation, same language as the message.';
 
 const SMALL_TALK = new Set(['hi', 'hello', 'hey', 'hiya', 'yo', 'sup', 'howdy', 'hola', 'greetings', 'good', 'morning', 'afternoon', 'evening', 'day', 'there', 'thanks', 'thank', 'you', 'thx', 'ok', 'okay', 'cool', 'nice', 'great', 'bye', 'how', 'are', 'u', 'r', 'doing', 'whats', "what's", 'up']);
 
@@ -521,7 +525,7 @@ export class AgentProc extends EventEmitter {
   async _loop(conn) {
     const run = this.run;
     const system = await this._system();
-    const once = { compactions: 0, overflow: false, empty: false, midStream: false, continued: false, stop: false };
+    const once = { compactions: 0, overflow: false, empty: false, midStream: false, continues: 0, stop: false };
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       await this._drainSteer();
       if (this.abortCtl.signal.aborted) break;
@@ -578,9 +582,10 @@ export class AgentProc extends EventEmitter {
       }
       if (!calls.length) {
         end();
-        if (asst.stopReason === 'length' && !once.continued) {
-          once.continued = true;
-          this._add({ role: 'custom', customType: 'continue', forModel: true, display: true, content: [{ type: 'text', text: CONTINUE_TEXT }], timestamp: Date.now() });
+        // Cut off by the output limit: carry on (a few times per run), with what to do when nothing was written yet.
+        if (asst.stopReason === 'length' && once.continues < MAX_CONTINUES) {
+          once.continues++;
+          this._add({ role: 'custom', customType: 'continue', forModel: true, display: true, content: [{ type: 'text', text: hasAnswer(asst) ? CONTINUE_TEXT : ACT_TEXT }], timestamp: Date.now() });
           continue;
         }
         if (!hasAnswer(asst)) {
@@ -661,7 +666,7 @@ export class AgentProc extends EventEmitter {
     const model = this.model ? `${this.provider ? this.provider + '/' : ''}${this.model}` : '';
     if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules, ruleIndex }), tools);
     // A run has its own phase instructions; the generic plan-mode text would contradict them.
-    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, ruleIndex, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo });
+    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, ruleIndex, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo, noCoAuthor: this.config.data.noCoAuthor === true, modelRules: this.config.data.modelRules || [] });
     return this.runInfo ? `${base}\n\n${runPrompt({ phase: this.runInfo.phase(), branch: this.worktree?.branch, baseBranch: this.worktree?.baseBranch })}` : base;
   }
 
@@ -973,7 +978,7 @@ export class AgentProc extends EventEmitter {
     if (!this._roleSpec('fast')) return;
     const conn = await this._roleConnSafe('fast');
     if (!conn) return;
-    const msg = await collectTurn(conn.stream({ system: TITLE_SYSTEM, messages: [{ role: 'user', content: [{ type: 'text', text: clip(String(text), 1500) }], timestamp: Date.now() }], tools: [], signal: AbortSignal.timeout(20000), maxTokens: 200, thinking: undefined }));
+    const msg = await collectTurn(conn.stream({ system: (this.config.data.titlePrompt || '').trim() || TITLE_SYSTEM, messages: [{ role: 'user', content: [{ type: 'text', text: clip(String(text), 1500) }], timestamp: Date.now() }], tools: [], signal: AbortSignal.timeout(20000), maxTokens: 200, thinking: undefined }));
     this._addUsage(msg.usage, this._costOf(msg.usage, conn.info));
     // A reply cut off (a reasoning model can spend the budget thinking) or failed is not a title.
     if (msg.stopReason !== 'stop') return;

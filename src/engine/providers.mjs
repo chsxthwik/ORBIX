@@ -136,6 +136,18 @@ export function defaultMaxTokens(providerId, modelId) {
   return out ? Math.min(out, 32000) : 8192;
 }
 
+// Reasoning is billed against the same output limit as the answer on OpenAI-style APIs: at a high level the thinking
+// alone used to fill the limit, and the reply was cut off before a word of it. So a reasoning turn gets this much
+// more, within the model's own output limit and half its context window. (Anthropic sizes its budget in buildBody.)
+const THINK_ROOM = { minimal: 4000, low: 8000, medium: 16000, high: 32000, xhigh: 64000, max: 64000 };
+export function withThinkingRoom(type, providerId, modelId, maxTokens, thinking) {
+  if (type === 'anthropic' || !THINK_ROOM[thinking]) return maxTokens;
+  const m = modelRecord(providerId, modelId);
+  if (!m?.maxOutput || m.maxOutput <= maxTokens) return maxTokens;
+  const half = m.contextWindow ? Math.floor(m.contextWindow / 2) : Infinity;
+  return Math.max(maxTokens, Math.min(m.maxOutput, maxTokens + THINK_ROOM[thinking], half));
+}
+
 const sleep = (ms, signal) =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason || new Error('Aborted'));
@@ -155,8 +167,13 @@ const MAX_ATTEMPTS = 4;
 /** How long a model list may take before the provider is reported as not answering. */
 export const LIST_TIMEOUT = 20000;
 
-/** Wrap a stream factory: retry network errors, 408/429/5xx/529 until content has been yielded (then the error is tagged midStream). */
-export async function* withRetries(make, signal) {
+/**
+ * Wrap a stream factory: retry network errors, 408/429/5xx/529 until content has been yielded (then the error is tagged
+ * midStream). A provider that asks for a pause longer than `maxWaitMs` (Settings → Agents → Longest automatic wait)
+ * is reported instead of waited for.
+ */
+const maxWait = (a) => (Number.isFinite(a.retryMaxWait) ? a.retryMaxWait * 1000 : 60000);
+export async function* withRetries(make, signal, maxWaitMs = 60000) {
   for (let attempt = 1; ; attempt++) {
     let yielded = false;
     try {
@@ -170,7 +187,7 @@ export async function* withRetries(make, signal) {
       if (signal?.aborted || yielded || !e?.retryable || attempt >= MAX_ATTEMPTS) throw e;
       let delayMs = Math.min(30000, 1000 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 400);
       if (Number.isFinite(e.retryAfterMs) && e.retryAfterMs >= 0) {
-        if (e.retryAfterMs > 60000) throw e; // the provider asks for a long pause: tell the user instead of hanging
+        if (e.retryAfterMs > maxWaitMs) throw e; // the provider asks for a longer pause: tell the user instead of hanging
         delayMs = Math.max(250, e.retryAfterMs);
       }
       yield { type: 'retry', attempt: attempt + 1, delayMs, reason: e.message };
@@ -224,11 +241,11 @@ export function clientFor(type) {
       const style = thinkingStyle(providerId, a.model);
       const maxOutput = modelRecord(providerId, a.model)?.maxOutput || null;
       const effort = thinking === 'off' ? null : style.kind === 'effort' ? nearestEffort(thinking, style.efforts) : thinking;
-      const args = { ...a, providerId, maxTokens, thinking, style, effort, maxOutput };
-      if (type === 'anthropic') return withRetries(() => anthropic.streamTurn({ ...args, messages: anthropic.toAnthropicMessages(a.messages) }), a.signal);
+      const args = { ...a, providerId, maxTokens: withThinkingRoom(type, providerId, a.model, maxTokens, thinking), thinking, style, effort, maxOutput };
+      if (type === 'anthropic') return withRetries(() => anthropic.streamTurn({ ...args, messages: anthropic.toAnthropicMessages(a.messages) }), a.signal, maxWait(a));
       const interleaved = type === 'chatgpt' ? null : modelRecord(providerId, a.model)?.interleaved || null;
       const turn = (x) => (type === 'chatgpt' ? chatgpt.streamTurn(x) : openai.streamTurn({ ...x, interleaved }));
-      return effortGuard(args, (x) => withRetries(() => turn(x), a.signal));
+      return effortGuard(args, (x) => withRetries(() => turn(x), a.signal, maxWait(a)));
     },
   };
 }

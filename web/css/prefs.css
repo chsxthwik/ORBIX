@@ -1,0 +1,33 @@
+/* Extra preferences (web/js/prefs-extra.js sets the classes and variables on <html>). */
+
+/* Code font size: code blocks, file previews, attached files and diffs. */
+html[data-code-fs] pre.code,
+html[data-code-fs] .session .md .codeblock > pre,
+html[data-code-fs] .codeview,
+html[data-code-fs] .b-file > pre,
+html[data-code-fs] pre.out,
+html[data-code-fs] .dl { font-size: var(--code-fs) !important; }
+
+/* Message box font size, and font smoothing off (the system's own text rendering). */
+html[data-prompt-fs] .composer .c-ta { font-size: var(--prompt-fs) !important; }
+html.no-smooth body { -webkit-font-smoothing: auto; text-rendering: auto; }
+
+/* The reasoning level as bars. */
+.c-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.c-bars i { width: 3px; border-radius: 1px; background: var(--line-3); transition: background-color var(--t2) var(--ease); }
+.c-bars i.on { background: var(--fg); }
+
+/* Word wrap: long lines wrap instead of scrolling sideways. */
+html.wrap-code pre.code,
+html.wrap-code .session .md .codeblock > pre,
+html.wrap-code .b-file > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Diff colours for red-green colour blindness: blue for additions, orange for deletions. */
+html[data-diff=blue-orange] { --add-bg: rgba(77,150,255,.13); --del-bg: rgba(255,153,51,.13); --diff-add: #6CB0FF; --diff-del: #FFA552; }
+html[data-diff=blue-orange][data-mode=light] { --add-bg: rgba(20,100,210,.1); --del-bg: rgba(200,100,0,.1); --diff-add: #1458B8; --diff-del: #A85400; }
+html[data-diff=blue-orange] .dl.add .sg, html[data-diff=blue-orange] .dl.add .ln { color: var(--diff-add); }
+html[data-diff=blue-orange] .dl.del .sg, html[data-diff=blue-orange] .dl.del .ln { color: var(--diff-del); }
+
+/* Animations off: the same as Windows' reduce-motion setting. */
+html.no-motion *, html.no-motion *::before, html.no-motion *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; transition-delay: 0ms !important; scroll-behavior: auto !important; }
+html.no-motion .spin::before { animation-duration: 1.6s !important; animation-iteration-count: infinite !important; }

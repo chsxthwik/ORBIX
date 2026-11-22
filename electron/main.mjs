@@ -30,7 +30,9 @@ const originOf = (u) => {
   }
 };
 
-app.setAppUserModelId('com.comx.orbix'); // groups the taskbar icon and notifications under ORBIX
+// Groups the taskbar icon and notifications under ORBIX. A development run (`electron .`) gets its own id: sharing the
+// installed app's let Windows show electron.exe's icon (the Electron atom) for the installed ORBIX too.
+app.setAppUserModelId(app.isPackaged ? 'com.comx.orbix' : 'com.comx.orbix.dev');
 // One ORBIX per Windows account: a second start only brings the open window forward (it never starts an engine).
 const primary = app.requestSingleInstanceLock();
 if (!primary) app.quit();
@@ -160,7 +162,7 @@ ipcMain.handle('orbix:machine:home', () => {
   return true;
 });
 
-// The page tells the window its theme, so the window buttons match it (light, dark, midnight, frost).
+// The page tells the window its theme, so the window buttons match it (light, dark, midnight, frost, graphite).
 ipcMain.on('orbix:titlebar', (e, { bg, fg }) => {
   const w = BrowserWindow.fromWebContents(e.sender);
   if (!w || typeof bg !== 'string' || typeof fg !== 'string') return;
@@ -190,10 +192,16 @@ const showWin = () => {
   win.focus();
 };
 const fromWin = (e) => e.sender === win?.webContents;
-ipcMain.on('orbix:keep-awake', (e, on) => {
+// Keep awake: 'work' keeps the PC from sleeping (the screen may still turn off), 'screen' keeps the screen on too,
+// '' lets it sleep. Closing the lid or choosing Sleep still sleeps the computer.
+let awakeKind = '';
+ipcMain.on('orbix:keep-awake', (e, kind) => {
   if (!fromWin(e)) return;
-  if (on && awake == null) awake = powerSaveBlocker.start('prevent-app-suspension');
-  else if (!on && awake != null) (powerSaveBlocker.stop(awake), (awake = null));
+  const want = kind === 'screen' ? 'screen' : kind === 'work' || kind === true ? 'work' : '';
+  if (want === awakeKind) return;
+  if (awake != null) (powerSaveBlocker.stop(awake), (awake = null));
+  if (want) awake = powerSaveBlocker.start(want === 'screen' ? 'prevent-display-sleep' : 'prevent-app-suspension');
+  awakeKind = want;
 });
 ipcMain.on('orbix:tray', (e, on) => {
   if (!fromWin(e)) return;

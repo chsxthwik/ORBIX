@@ -18,12 +18,14 @@ export const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MODE = { ask: 'default', edits: 'acceptEdits', safe: 'acceptEdits', auto: 'acceptEdits' };
 
 export class ClaudeDriver extends EventEmitter {
-  constructor({ backend, bin, cwd, approvals }) {
+  constructor({ backend, bin, cwd, approvals, noCoAuthor = false, noSubagents = false }) {
     super();
     this.backend = backend;
     this.bin = bin;
     this.cwd = cwd;
     this.approvals = approvals;
+    this.noCoAuthor = noCoAuthor;
+    this.noSubagents = noSubagents; // Settings → Agents: Claude Code's own helper agents (the Task tool) off
     this.lp = null;
     this.ctl = new Map(); // control request id → resolve
     this.seq = 0;
@@ -39,7 +41,10 @@ export class ClaudeDriver extends EventEmitter {
   /** Start (or resume `resume`, a Claude session id) and wait until Claude Code says it is ready. */
   async start({ model, resume, effort }) {
     this.nativeId = resume || crypto.randomUUID();
-    const argv = [this.bin, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-prompt-tool', 'stdio', '--permission-mode', MODE[this.approvals] || 'default', '--disallowedTools', 'AskUserQuestion'];
+    const argv = [this.bin, '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--permission-prompt-tool', 'stdio', '--permission-mode', MODE[this.approvals] || 'default', '--disallowedTools', ['AskUserQuestion', ...(this.noSubagents ? ['Task', 'Agent'] : [])].join(',')];
+    // Settings → Preferences → Git: Claude Code's own settings turn its commit and PR credit lines off (both the
+    // current `attribution` and the older `includeCoAuthoredBy`).
+    if (this.noCoAuthor) argv.push('--settings', JSON.stringify({ includeCoAuthoredBy: false, attribution: { commit: '', pr: '' } }));
     if (model) argv.push('--model', model);
     if (resume) argv.push('--resume', resume);
     else argv.push('--session-id', this.nativeId);

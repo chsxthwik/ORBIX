@@ -65,6 +65,7 @@ It starts ORBIX as a service on `127.0.0.1:47821` and prints the address and tok
 | **Loops** | Prompts on a schedule, or once at a set time. "Every weekday at 9am, run the tests" sets one up. |
 | **Terminal** | Real shells (<kbd>Ctrl</kbd>+<kbd>&#96;</kbd>) in WSL, Linux or PowerShell, beside the conversation. |
 | **Plugins and Skills** | Add MCP servers in one click, and write skills the agent can use. |
+| **Context and Analytics** | The side panel's Context tab shows how full the model's window is, tokens, cost and the system prompt. Settings → Analytics shows tokens per day, agent time, models used and when you prompt. |
 
 <table>
 <tr>
@@ -76,12 +77,12 @@ It starts ORBIX as a service on `127.0.0.1:47821` and prints the address and tok
 <td align="center"><b>Review</b> · every decision that waits for you</td>
 </tr>
 <tr>
-<td><img src="docs/img/shots/home.png" alt="Home: the ORBIX mark, a greeting and the message box"></td>
+<td><img src="docs/img/shots/home.png" alt="Home: the ORBIX mark, a greeting, the message box and recent conversations"></td>
 <td><img src="docs/img/shots/theme-orbix.png" alt="The ORBIX scene theme behind a conversation"></td>
 </tr>
 <tr>
 <td align="center"><b>Home</b> · start from a project</td>
-<td align="center"><b>Themes</b> · Dark, Light, Midnight, Frost and five scenes</td>
+<td align="center"><b>Themes</b> · Dark, Light, Midnight, Frost, eight editor palettes and four scenes</td>
 </tr>
 </table>
 
@@ -97,6 +98,8 @@ The permission chip in the message box sets how far agents may go without asking
 | **Full access** | Run, undoable | Run |
 
 At every level, destructive commands (recursive delete, push, publish, history rewrite) ask first, and MCP servers from a project's own config start only after you approve them. Files outside the project ask at every level except Full access.
+
+**Command Guard** (on by default, Settings → Agents) never runs a command that would wipe a disk, a drive or a home folder, or delete a hosted repository, even when approved.
 
 ## Agents
 

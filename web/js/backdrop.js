@@ -1,12 +1,12 @@
 // Scene themes: a living picture behind the workspace sheet. Each scene theme (see SCENES) paints a still layer once
-// per size, then animates a few things on top: a planet's ring, a neon grid, koi, an aurora, a halftone sun. While an
+// per size, then animates a few things on top: a planet's ring, a neon grid, drifting nebula clouds, an aurora. While an
 // agent works, the scene moves a little faster; when a turn finishes cleanly, fireworks go up at the sides.
 // A soft veil of the sheet colour sits over the reading column, so text always reads first.
 // Runs at 30 frames a second in front (about 10 behind other windows), stops while the window is hidden, and is one
 // still frame under reduced motion or when Settings → Appearance → Animate scenes is off.
 import { S, on } from './store.js';
 
-export const SCENES = ['orbix', 'sunset', 'koi', 'aurora', 'dusk'];
+export const SCENES = ['orbix', 'sunset', 'nebula', 'aurora'];
 
 const root = document.documentElement;
 const still = matchMedia('(prefers-reduced-motion: reduce)');
@@ -277,115 +277,6 @@ function sunsetScene() {
   };
 }
 
-// ---------------------------------------------------------------- Koi: pixel koi turning slowly in a light pond
-
-function koiScene() {
-  const C = 10; // mosaic cell
-  let fish = [], ripples = [], nextRipple = 2, t = 0, pads = [];
-  const O = '#F2643A', R = '#E2402A', Wh = '#FFFFFF', Y = '#F7B53B', K = '#2E2B33';
-  const PATTERNS = [
-    { body: [O, O, Wh, O, O, Wh, Wh, O, Wh, Wh], fin: '#F7A07F', tail: '#F7A07F' },
-    { body: [Wh, R, R, Wh, Wh, R, Wh, Wh, R, Wh], fin: '#F4C9BE', tail: '#F4C9BE' },
-    { body: [Y, Y, Y, Wh, Y, Y, Wh, Y, Y, Wh], fin: '#F9D58C', tail: '#F9D58C' },
-    { body: [K, Wh, O, K, Wh, Wh, O, K, Wh, Wh], fin: '#C9C4D0', tail: '#C9C4D0' },
-    { body: [O, Wh, Wh, O, Wh, O, Wh, Wh, O, Wh], fin: '#F7A07F', tail: '#F7A07F' },
-  ];
-  const WIDTH = [2, 3, 4, 4, 4, 3, 3, 2, 2, 1];
-  const pos = (f, tt) => [f.cx + f.ax * Math.sin(f.w * tt + f.ph), f.cy + f.ay * Math.sin(2 * (f.w * tt + f.ph))];
-  const snap = (v) => Math.round(v / C) * C;
-  function cell(g, x, y, col) {
-    g.fillStyle = col;
-    g.fillRect(snap(x), snap(y), C - 1, C - 1);
-  }
-  function drawFish(g, f, shadow) {
-    const segs = [];
-    for (let k = 0; k < WIDTH.length + 1; k++) segs.push(pos(f, t - k * f.gap));
-    for (let k = 0; k < WIDTH.length; k++) {
-      const [x, y] = segs[k];
-      const [ax, ay] = segs[Math.max(0, k - 1)], [bx, by] = segs[k + 1];
-      let dx = ax - bx, dy = ay - by;
-      const l = Math.hypot(dx, dy) || 1;
-      dx /= l; dy /= l;
-      const nx = -dy, ny = dx, w = WIDTH[k];
-      const col = shadow || f.pat.body[k];
-      for (let j = 0; j < w; j++) {
-        const o = (j - (w - 1) / 2) * C;
-        cell(g, x + nx * o + (shadow ? 5 : 0), y + ny * o + (shadow ? 7 : 0), col);
-      }
-      if (k === 2) for (const side of [-1, 1]) cell(g, x + nx * side * C * 2.5 - dx * C * 0.5 + (shadow ? 5 : 0), y + ny * side * C * 2.5 - dy * C * 0.5 + (shadow ? 7 : 0), shadow || f.pat.fin);
-      if (k === WIDTH.length - 1) for (const side of [-1, 1]) cell(g, x - dx * C + nx * side * C + (shadow ? 5 : 0), y - dy * C + ny * side * C + (shadow ? 7 : 0), shadow || f.pat.tail);
-    }
-  }
-  function pad(g, x, y, r, notch, flower) {
-    for (let i = -r; i <= r; i++)
-      for (let j = -r; j <= r; j++) {
-        const d = Math.hypot(i, j);
-        if (d > r + 0.3) continue;
-        const a = Math.atan2(j, i);
-        if (d > 0.8 && Math.abs(((a - notch + Math.PI) % TAU) - Math.PI) < 0.35) continue;
-        g.fillStyle = d > r - 1 ? '#3E9A55' : (i + j) % 3 === 0 ? '#79C77E' : '#6BBE72';
-        g.fillRect(x + i * C, y + j * C, C - 1, C - 1);
-      }
-    if (flower)
-      for (const [i, j, c] of [[0, -1, '#FF8FB1'], [-1, 0, '#FF8FB1'], [1, 0, '#FF8FB1'], [0, 1, '#FF8FB1'], [0, 0, '#FFE07A'], [-1, -1, '#FFC2D4'], [1, -1, '#FFC2D4']])
-        (g.fillStyle = c), g.fillRect(x + (i + 1) * C, y + (j - 1) * C, C - 1, C - 1);
-  }
-  return {
-    sparks: ['#F2643A', '#0F8C82', '#F7B53B', '#E8452C'],
-    setup() {
-      const r = rng(5);
-      fish = PATTERNS.map((pat, i) => ({
-        pat,
-        cx: W * [0.2, 0.8, 0.45, 0.72, 0.15][i], cy: H * [0.35, 0.7, 0.85, 0.2, 0.75][i],
-        ax: W * (0.12 + r() * 0.1), ay: H * (0.1 + r() * 0.08),
-        w: 0.11 + r() * 0.06, ph: r() * TAU, gap: 0,
-      }));
-      for (const f of fish) f.gap = (C * 1.05) / Math.max(30, f.ax * f.w);
-      // Lily pads float in the open water beside the reading column, never under its text.
-      const side = Math.max(0, (W - Math.min(W, column())) / 2);
-      pads = [[0, 0.2, 4, 0.6, true], [1, 0.3, 5, 2.4, false], [1, 0.84, 5, 4, true], [0, 0.82, 3, 1.2, false], [1, 0.58, 3, 5, false], [0, 0.5, 2, 2, false]]
-        .map(([edge, y, r, n, fl], i) => [edge ? W - side / 2 + ((i % 2) - 0.5) * side * 0.3 : side / 2 + ((i % 2) - 0.5) * side * 0.3, y, r, n, fl]);
-    },
-    paint(g) {
-      const water = g.createLinearGradient(0, 0, W, H);
-      water.addColorStop(0, '#E2F7F3');
-      water.addColorStop(0.55, '#BFEAE6');
-      water.addColorStop(1, '#94D8D8');
-      g.fillStyle = water;
-      g.fillRect(0, 0, W, H);
-      const r = rng(9);
-      for (let i = 0; i < 7; i++) {
-        const x = r() * W, y = r() * H, rr = 80 + r() * 160;
-        const c = g.createRadialGradient(x, y, 0, x, y, rr);
-        c.addColorStop(0, 'rgba(255,255,255,.35)');
-        c.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = c;
-        g.fillRect(x - rr, y - rr, rr * 2, rr * 2);
-      }
-    },
-    frame(g, dt, fast) {
-      t += dt * (fast ? 2 : 1);
-      if (T > nextRipple) {
-        ripples.push({ x: Math.random() * W, y: Math.random() * H, t0: T });
-        nextRipple = T + 1.6 + Math.random() * 2.4;
-      }
-      g.strokeStyle = '#FFFFFF';
-      g.lineWidth = 1.2;
-      ripples = ripples.filter((rp) => {
-        const k = (T - rp.t0) / 3;
-        if (k >= 1) return false;
-        g.globalAlpha = (1 - k) * 0.7;
-        g.beginPath(); g.ellipse(rp.x, rp.y, 8 + k * 70, (8 + k * 70) * 0.55, 0, 0, TAU); g.stroke();
-        return true;
-      });
-      g.globalAlpha = 1;
-      for (const f of fish) drawFish(g, f, 'rgba(10,80,90,.13)');
-      for (const f of fish) drawFish(g, f);
-      for (const [x, y, r, n, fl] of pads) pad(g, snap(x), snap(y * H), r, n, fl);
-    },
-  };
-}
-
 // ---------------------------------------------------------------- Aurora: curtains of light over a pine ridge
 
 function auroraScene() {
@@ -460,70 +351,87 @@ function auroraScene() {
   };
 }
 
-// ---------------------------------------------------------------- Dusk: a halftone sun breathing in warm dots
+// ---------------------------------------------------------------- Nebula: slow clouds of colour in deep space
 
-function duskScene() {
-  let dots = [], Rs, cx, cy;
-  const BANDS = ['#FFD36E', '#FFB054', '#FF8A4C', '#FF6A45', '#F24F5C', '#DE3D74', '#C2348A'];
+function nebulaScene() {
+  let clouds = [], twinkle = [], sprites = [], comet = comets();
+  // violet, magenta, blue, teal: soft glows that drift and breathe, drawn with additive light
+  const COLS = [[139, 92, 246], [236, 72, 153], [59, 130, 246], [45, 212, 191]];
   return {
-    sparks: ['#FFD36E', '#FF6A45', '#DE3D74', '#FFFFFF'],
+    sparks: ['#A78BFA', '#F472B6', '#60A5FA', '#FFFFFF'],
     setup() {
-      Rs = clamp(Math.min(W, H) * 0.42, 170, 400);
-      cx = W - Rs * 0.5;
-      cy = H - Rs * 0.4;
-      const gap = 12;
-      dots = BANDS.map(() => []);
-      for (let y = cy - Rs * 1.3; y < Math.min(H + gap, cy + Rs * 1.3); y += gap)
-        for (let x = cx - Rs * 1.3; x < Math.min(W + gap, cx + Rs * 1.3); x += gap) {
-          const d = Math.hypot(x - cx, y - cy);
-          if (d > Rs * 1.25) continue;
-          const band = clamp(Math.floor(((y - (cy - Rs)) / (2 * Rs)) * BANDS.length), 0, BANDS.length - 1);
-          dots[band].push(x, y, d);
-        }
+      sprites = COLS.map(([r, g2, b]) => {
+        const c = offscreen();
+        c.width = c.height = 256;
+        const g = c.getContext('2d');
+        const rg = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+        rg.addColorStop(0, `rgba(${r},${g2},${b},.55)`);
+        rg.addColorStop(0.35, `rgba(${r},${g2},${b},.22)`);
+        rg.addColorStop(0.7, `rgba(${r},${g2},${b},.06)`);
+        rg.addColorStop(1, `rgba(${r},${g2},${b},0)`);
+        g.fillStyle = rg;
+        g.fillRect(0, 0, 256, 256);
+        return c;
+      });
+      const r = rng(29), S0 = Math.max(W, H);
+      // most of the colour lives toward the right and the corners, away from the reading column
+      const spots = [[0.86, 0.18, 0], [0.97, 0.62, 1], [0.72, 0.92, 2], [0.08, 0.86, 3], [0.04, 0.12, 2], [0.62, 0.05, 1], [0.9, 0.42, 3]];
+      clouds = spots.map(([x, y, c]) => ({ x, y, c, s: S0 * (0.38 + r() * 0.3), ax: 0.02 + r() * 0.03, ay: 0.02 + r() * 0.03, f: 0.04 + r() * 0.05, ph: r() * TAU, a: 0.7 + r() * 0.3 }));
+      const q = rng(41);
+      twinkle = Array.from({ length: Math.round(clamp((W * H) / 22000, 24, 90)) }, () => ({ x: q() * W, y: q() * H, s: q() < 0.25 ? 1.8 : 1.2, f: 0.6 + q() * 1.6, ph: q() * TAU, hue: q() < 0.3 ? '#C7D2FE' : q() < 0.5 ? '#FBCFE8' : '#FFFFFF' }));
     },
     paint(g) {
-      const sky = g.createLinearGradient(0, 0, 0, H);
-      sky.addColorStop(0, '#100D12');
-      sky.addColorStop(1, '#1B1218');
+      const sky = g.createLinearGradient(0, 0, W, H);
+      sky.addColorStop(0, '#06060F');
+      sky.addColorStop(0.55, '#0A0818');
+      sky.addColorStop(1, '#0B0A1C');
       g.fillStyle = sky;
       g.fillRect(0, 0, W, H);
-      const glow = g.createRadialGradient(cx, cy, Rs * 0.3, cx, cy, Rs * 1.9);
-      glow.addColorStop(0, 'rgba(255,110,70,.16)');
-      glow.addColorStop(1, 'rgba(255,110,70,0)');
-      g.fillStyle = glow;
+      starField(g, Math.round((W * H) / 3200), 0, H, '#E8E6FF', 7, 0.4);
+      starField(g, Math.round((W * H) / 26000), 0, H, '#FFFFFF', 19, 0.7);
+      // a fine grain, so the gradients never band
+      const n = offscreen();
+      n.width = n.height = 96;
+      const ng = n.getContext('2d'), img = ng.createImageData(96, 96), r = rng(5);
+      for (let i = 0; i < img.data.length; i += 4) {
+        const v = 255 * r();
+        img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+        img.data[i + 3] = 10;
+      }
+      ng.putImageData(img, 0, 0);
+      g.fillStyle = g.createPattern(n, 'repeat');
       g.fillRect(0, 0, W, H);
-      // a fading dot screen in the far corner, for depth
-      g.fillStyle = '#F2C7A0';
-      for (let y = 6; y < H * 0.4; y += 14)
-        for (let x = 6; x < W * 0.3; x += 14) {
-          const f = 1 - Math.hypot(x / (W * 0.3), y / (H * 0.4));
-          if (f <= 0) continue;
-          g.globalAlpha = 0.09 * f;
-          g.beginPath(); g.arc(x, y, 2.4 * f + 0.4, 0, TAU); g.fill();
-        }
-      g.globalAlpha = 1;
     },
     frame(g, dt, fast) {
-      const sp = fast ? 3 : 1.1;
-      BANDS.forEach((col, b) => {
-        const a = dots[b];
-        g.fillStyle = col;
-        g.beginPath();
-        for (let i = 0; i < a.length; i += 3) {
-          const d = a[i + 2];
-          const core = d < Rs ? 1 - (d / Rs) * 0.55 : Math.max(0, 1 - (d - Rs) / (Rs * 0.25)) * 0.35;
-          const r = 5.2 * core * (0.78 + 0.22 * Math.sin(d * 0.03 - T * sp));
-          if (r < 0.4) continue;
-          g.moveTo(a[i] + r, a[i + 1]);
-          g.arc(a[i], a[i + 1], r, 0, TAU);
+      const k = fast ? 2.4 : 1;
+      g.globalCompositeOperation = 'lighter';
+      for (const c of clouds) {
+        c.ph += dt * c.f * k;
+        const x = W * (c.x + c.ax * Math.sin(c.ph)), y = H * (c.y + c.ay * Math.cos(c.ph * 0.8));
+        const s = c.s * (0.92 + 0.08 * Math.sin(c.ph * 1.7));
+        g.globalAlpha = c.a * (0.8 + 0.2 * Math.sin(c.ph * 1.3 + 1));
+        g.drawImage(sprites[c.c], x - s / 2, y - s / 2, s, s);
+      }
+      g.globalCompositeOperation = 'source-over';
+      for (const t of twinkle) {
+        const a = Math.pow(0.5 + 0.5 * Math.sin(T * t.f * k + t.ph), 3);
+        if (a < 0.05) continue;
+        g.globalAlpha = a * 0.9;
+        g.fillStyle = t.hue;
+        g.fillRect(t.x - t.s / 2, t.y - t.s / 2, t.s, t.s);
+        if (t.s > 1.5 && a > 0.6) {
+          g.globalAlpha = (a - 0.6) * 0.8;
+          g.fillRect(t.x - 4, t.y - 0.5, 8, 1);
+          g.fillRect(t.x - 0.5, t.y - 4, 1, 8);
         }
-        g.fill();
-      });
+      }
+      g.globalAlpha = 1;
+      comet(g, '#E8E6FF');
     },
   };
 }
 
-const MAKERS = { orbix: orbixScene, sunset: sunsetScene, koi: koiScene, aurora: auroraScene, dusk: duskScene };
+const MAKERS = { orbix: orbixScene, sunset: sunsetScene, nebula: nebulaScene, aurora: auroraScene };
 
 // ---------------------------------------------------------------- fireworks
 // Fireworks get their own layer over the whole window (above dialogs, under menus and toasts), drawn only while some

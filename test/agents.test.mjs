@@ -106,8 +106,12 @@ describe('a conversation on an ACP agent', () => {
     assert.equal(await p._approve({ name: 'bash', arguments: { command: 'npm test' } }), 'allow');
     let asked = '';
     p.on('event', (ev) => ev.type === 'extension_ui_request' && ev.method === 'select' && ((asked = ev.title), p.send({ type: 'extension_ui_response', id: ev.id, value: 'Deny' })));
-    assert.equal(await p._approve({ name: 'bash', arguments: { command: 'rm -rf /' } }), 'deny');
+    assert.equal(await p._approve({ name: 'bash', arguments: { command: 'rm -rf build' } }), 'deny');
     assert.match(asked, /Careful/);
+    // Command Guard: a command that wrecks the computer is denied without a question.
+    asked = '';
+    assert.equal(await p._approve({ name: 'bash', arguments: { command: 'rm -rf /' } }), 'deny');
+    assert.equal(asked, '');
   });
 
   test('reopening resumes the agent session without showing its replay twice', async () => {
