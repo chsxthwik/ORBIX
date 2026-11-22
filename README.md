@@ -6,16 +6,14 @@
   <img alt="ORBIX" src="docs/img/logo-light.svg" width="279" height="60">
 </picture>
 
-### Every Coding Agent - Your PC or Your Cloud.
+### The unified open-source ADE.
 
-An agentic development environment for Windows: its own agent with any model, plus Claude Code, Codex,<br>
-OpenCode and any ACP agent on the plans you already pay for. Every agent asks before it acts.<br>
-Run it on your PC, or on a Linux machine you own that keeps working while your laptop sleeps.
+Every coding agent. Every model. One environment that asks before it acts.
 
-[![Latest release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=4D6B00&labelColor=151514)](https://github.com/chsxthwik/ORBIX/releases/latest)
+[![Release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=4D6B00&labelColor=151514)](https://github.com/chsxthwik/ORBIX/releases/latest)
 [![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=151514)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-4D6B00?style=flat-square&labelColor=151514)](#install)
-[![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-4D6B00?style=flat-square&labelColor=151514)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4D6B00?style=flat-square&labelColor=151514)](LICENSE)
 
 **[Download for Windows](https://github.com/chsxthwik/ORBIX/releases/latest)** · [Website](https://orbix-agent.vercel.app) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Security](SECURITY.md)
 
@@ -23,17 +21,19 @@ Run it on your PC, or on a Linux machine you own that keeps working while your l
 
 <br>
 
-<img src="docs/img/shots/done.png" alt="ORBIX: the menu row and toolbar, the sidebar of projects and conversations, a finished reply whose steps fold into one Worked for line, the changed file with Review and Undo all, and the side panel on the right.">
+<img src="docs/img/shots/done.png" alt="ORBIX: the sidebar of projects and conversations, a finished reply whose steps fold into one Worked for line, and the changed file with Review and Undo all.">
 
-<sub>Screenshots come from the real app on a sample project with a scripted local model; the tools in them really ran.</sub>
+<sub>Every screenshot is the real app on a sample project; every tool in it really ran.</sub>
 
-## Why ORBIX
+## ORBIX 4
 
-- **You stay in control.** Reading is free; edits and commands follow the permission chip in the message box: **Supervised**, **Auto edits**, **Guarded** or **Full access**. Destructive commands (recursive delete, push, publish, history rewrite) ask every time, in every mode.
-- **Nothing is final until you say so.** Every file edit can be undone, one at a time or a whole reply at once. Runs work in their own git worktree and only reach your branch when you apply them.
-- **Any model, any agent.** 17 providers and any OpenAI-compatible server, including your ChatGPT plan without an API key, or a model on your own PC. Or run the conversation on **Claude Code**, **Codex**, **OpenCode** or any **ACP agent**, with its own login and plan: ORBIX shows its steps and answers its permission questions with the same approval cards.
-- **Local or cloud.** **ORBIX Cloud** is the same server on a Linux machine you own. Open it from Settings → Machines, and move a conversation there with its project (git history and uncommitted changes included). It keeps working with your PC off.
-- **Built for Windows.** Commands run in WSL or in native Windows (`cmd.exe` or PowerShell), with paths translated between the two. A real installer, no admin rights, automatic updates.
+ORBIX is an agentic development environment (ADE): one place where AI agents plan, write, run and review code, and where a human decides what ships. Run the ORBIX agent on any of 17 providers or a model on your own machine, or drive Claude Code, Codex, OpenCode and any ACP agent on the plans you already pay for. One permission model, one review queue and one undo cover them all.
+
+- **Human in command.** Reading is free. Edits and commands follow the permission chip: **Supervised**, **Auto edits**, **Guarded** or **Full access**. Destructive commands (recursive delete, push, publish, history rewrite) ask every time, at every level.
+- **Nothing is final until you say so.** Every file edit can be undone, one at a time or a whole reply at once. Runs work in their own git worktree and reach your branch only when you apply them.
+- **Every model, every agent.** 17 providers and any OpenAI-compatible server, including a ChatGPT plan without an API key, or a model on your own PC. External agents keep their own login and plan; ORBIX shows their steps and answers their permission requests with the same approval cards.
+- **Your PC or your machine.** **ORBIX Cloud** is the same engine on a Linux machine you own. Move a conversation there with its project, git history and uncommitted changes, and it keeps working with your PC off.
+- **Open by design.** MIT licensed, no account, no telemetry, no hosted middleman. Your keys go only to their own provider.
 
 ## Install
 
@@ -117,18 +117,15 @@ It installs ORBIX into `~/.orbix-app`, runs `node src/headless.mjs` as a systemd
 
 | Part | What it does |
 | --- | --- |
-| **Menu row and toolbar** | ORBIX, Workspace, View and Window menus. Back and forward (<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) across conversations, Runs and Review; search everything (<kbd>Ctrl</kbd>+<kbd>K</kbd>); where you are, with the conversation's state, running time and branch. |
-| **Sidebar** | New conversation, Search, Plugins, Skills, Loops, Runs and Review; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
-| **Side panel** | The button at the top right or <kbd>Ctrl</kbd>+<kbd>J</kbd>, on Home too. Its tabs are the surfaces you opened, like a browser's: × or <kbd>Delete</kbd> closes one, **+** opens a **New tab** page listing every surface with its shortcut (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+ R Review, B Browser, N Incognito browser, T Terminal, P Open file, F Files, D Changes, K Tasks, I Inspect, M Device at phone size, S Side question). **Terminal** is a real shell on a pseudo-terminal in WSL and Linux (PowerShell for a Windows folder). Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** starts on the web apps running on this computer; in the Windows app it is a real browser with its own session (any site, back and forward, downloads), in a web browser it shows only this computer's pages. **Side question** answers a quick question about the conversation while the agent keeps working. |
-| **Terminal** | <kbd>Ctrl</kbd>+<kbd>`</kbd> or the side panel's Terminal tab: real shells, several per project and two at once. In WSL and Linux your own login shell on a real pty (prompt, colours, vim, htop); PowerShell for a Windows folder. |
-| **Project menu** | The project's name in the toolbar or ⋯ in the sidebar: where it runs (Windows, or the WSL distribution and user), **Open in** File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal, **project scripts** that run in the Terminal, and **Initialize Git**. |
-| **Loops** | Prompts ORBIX starts by itself every few minutes, every hour, every day, on weekdays or every week, or once at a set time, each as a new conversation in its project. **Create with Prompt** turns one sentence ("every weekday at 9am, run the tests") into the schedule and the task. Run now, turn on or off, edit. In Supervised a run waits for your OK in Review. |
-| **Plugins** | Marketplace and Installed, with one search box. The marketplace adds well-known MCP servers in one click (Playwright, Chrome DevTools, Context7, GitHub, Supabase, Figma, Notion, Stripe and more); Installed lists your MCP servers, skills and the project's rules. |
-| **Skills** | Every skill the agent can use in the open project and yours in every project: add one (name, when to use it, instructions) as a `SKILL.md` in `.agents/skills` or in your data folder, edit it, or delete it (it moves to the trash). |
-| **Home** | The ORBIX mark and a greeting; suggestions and the message box at the bottom, with the project and the project-folder or separate-branch choice on a strip on top of the box. |
-| **Settings** | The whole window under the menu row (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> or **Back to app** returns; **Search** at the top of the page list, or <kbd>Ctrl</kbd>+<kbd>K</kbd>, finds any setting). **Preferences** (permissions, Steer or Queue, the send key, checks, your name), **Appearance**, **Notifications**, **Shortcuts**; **Providers**, **Models**, **Agents**, **Tools & MCP**, **Instructions**, **Checks**; **Projects**, **Worktrees**, **Conversations**, **Machines**, **Browser**; **About** (updates, WSL, the tray, prevent sleep, data folder, help). **Help & feedback** is at the top right of every page. |
-| **Message box** | <kbd>+</kbd> adds images and files, a command (<kbd>/</kbd>), context (<kbd>@</kbd>) or a shell command (<kbd>!</kbd>, run in the project's Terminal); the model as **Provider / Model** and its reasoning level as its own menu; Plan; the permission chip. |
-| **Conversation** | A centred column; the steps of a turn fold into one "Worked for…" line above the answer. Readable Markdown with code blocks and tables; under each reply copy, 👍, 👎 (answer again, use another model, or report a problem) and retry. Ratings are counted per model on this PC only. <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> between your messages, find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). The side panel stays closed until you open it. |
+| **Sidebar** | New conversation, Search (<kbd>Ctrl</kbd>+<kbd>K</kbd>), Plugins, Skills, Loops, Runs and Review; what is running; pinned conversations; your projects. A conversation shows a state only when it has one: working, needs you, unread. |
+| **Side panel** | <kbd>Ctrl</kbd>+<kbd>J</kbd>. Tabs like a browser's, with a **New tab** page that lists every surface and its shortcut: Review, Browser, Terminal, Files, Changes, Tasks, Inspect, Device and Side question. **Changes** stages, unstages, discards and commits. **Browser** is a real browser with its own session in the Windows app. **Side question** answers about the conversation while the agent keeps working. |
+| **Terminal** | <kbd>Ctrl</kbd>+<kbd>`</kbd>: real shells on a pseudo-terminal, several per project and two side by side. Your login shell in WSL and Linux (prompt, colours, vim, htop); PowerShell for a Windows folder. |
+| **Project menu** | Where the project runs (Windows, or the WSL distribution and user), **Open in** File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal, **project scripts** that run in the Terminal, and **Initialize Git**. |
+| **Loops** | Prompts that start by themselves every few minutes, hourly, daily, on weekdays, weekly or once, each as a new conversation. **Create with Prompt** turns one sentence ("every weekday at 9am, run the tests") into the schedule and the task. In Supervised a loop waits for your OK in Review. |
+| **Plugins and Skills** | A marketplace of MCP servers added in one click (Playwright, Chrome DevTools, Context7, GitHub, Supabase, Figma, Notion, Stripe and more), and every installed server, skill and project rule. Skills are `SKILL.md` files you add, edit or delete from the page. |
+| **Message box** | <kbd>+</kbd> adds images and files, a command (<kbd>/</kbd>), context (<kbd>@</kbd>) or a shell command (<kbd>!</kbd>); the model and its reasoning level; Plan; the permission chip. |
+| **Conversation** | A centred column; a turn's steps fold into one "Worked for…" line. Markdown with code and tables; copy, 👍, 👎 and retry under each reply. Find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), jump between your messages (<kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). |
+| **Settings** | <kbd>Ctrl</kbd>+<kbd>,</kbd>, searchable. Preferences, Appearance, Notifications, Shortcuts; Providers, Models, Agents, Tools & MCP, Instructions, Checks; Projects, Worktrees, Conversations, Machines, Browser; About. |
 
 ## Models
 
@@ -264,7 +261,7 @@ Node.js 22 or newer.
 ```bash
 npm install        # Electron and the installer builder
 npm start          # run the app from source (data stays in ./data)
-npm test           # about 880 tests: no network, no API keys
+npm test           # about 890 tests: no network, no API keys
 npm run e2e        # a run and a conversation driven through the real interface (needs Edge, Chrome or Brave)
 node e2e/cloud.mjs # ORBIX Cloud: two headless servers, a conversation moved between them (Linux or WSL)
 npm run dist       # build the installer into dist/
@@ -285,6 +282,6 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-[FSL-1.1-MIT](LICENSE): free to use, read, modify and distribute for any purpose except a competing product; each release becomes MIT two years after its date. Third-party notices are in [NOTICE.md](NOTICE.md). Provider logos are trademarks of their owners and only identify each provider.
+[MIT](LICENSE). Third-party notices are in [NOTICE.md](NOTICE.md). Provider logos are trademarks of their owners and only identify each provider.
 
-<div align="center"><sub>Developed by COM-X Corporation.</sub></div>
+<div align="center"><sub>Created by QUANTUM · Developed by COM-X Innovations, Inc.</sub></div>

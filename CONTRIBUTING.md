@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping. The project is small on purpose: no bundler, no framework, and one runtime npm dependency (electron-updater, for app updates). Electron and electron-builder are the development dependencies; they make the Windows app.
+ORBIX is built in the open, and every contribution moves it forward. The codebase is small on purpose: no bundler, no framework, and one runtime npm dependency (electron-updater, for app updates). Electron and electron-builder are the development dependencies; they make the Windows app.
 
 ## Layout
 
@@ -30,11 +30,11 @@ Thanks for helping. The project is small on purpose: no bundler, no framework, a
 
 ## Review
 
-GitHub Actions runs `npm test` on Windows with Node 22 and 24 for every push to `main` and every pull request (`.github/workflows/test.yml`). Run it yourself first. `.github/CODEOWNERS` asks the maintainer to review every change.
+GitHub Actions runs `npm test` on Windows with Node 22 and 24 for every push to `main` and every pull request (`.github/workflows/test.yml`). Run it yourself first. The maintainer reviews every change.
 
 ## License of contributions
 
-ORBIX is licensed under FSL-1.1-MIT (see `LICENSE`). By sending a pull request you agree that your contribution is licensed under the same terms and that the maintainer may also offer it under other licenses, including commercial ones.
+ORBIX is MIT licensed (see `LICENSE`). By sending a pull request you agree that your contribution is licensed under the same terms.
 
 ## Releasing (maintainer)
 

@@ -1,4 +1,4 @@
-/* ORBIX website. Tokens and rules: docs/WEBSITE-DESIGN.md. The near-black frame and Plasma of the app, the )( mark, Google Sans
+/* ORBIX website. The near-black frame and Plasma of the app, the )( mark, Google Sans
    Flex for reading and Geist Mono for anything a terminal would print. No inline styles anywhere: the CSP allows only
    this file. Without JavaScript, or with reduced motion, the page is complete and still. */
 @font-face { font-family: 'Google Sans Flex'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('../fonts/google-sans-flex-latin-wght-normal.woff2') format('woff2'); }

@@ -1,7 +1,7 @@
 {
   "name": "ORBIX",
   "short_name": "ORBIX",
-  "description": "Every coding agent, in one Windows app.",
+  "description": "The unified open-source ADE.",
   "start_url": "/",
   "display": "browser",
   "background_color": "#0B0B0B",

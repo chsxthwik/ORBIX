@@ -24,7 +24,7 @@ ORBIX starts AI agents that can run commands and edit files, so nothing outside 
 
 ## Reporting a vulnerability
 
-Please report privately (do not open a public issue) by contacting the maintainers through the repository's security-advisory feature. Include steps to reproduce. We aim to acknowledge reports within a few days.
+Report privately through GitHub's private vulnerability reporting (Security → Report a vulnerability on the repository), not as a public issue. Include steps to reproduce. We aim to acknowledge reports within a few days.
 
 ## Scope notes
 

@@ -1116,11 +1116,11 @@ function tabApplication(el, show) {
     group('Help', null,
       go('How ORBIX works', 'Connecting a model, approvals, undo and project rules.', () => openHelp()),
       go('Check my setup', 'Data folder, WSL and model, and what to fix.', () => openDiagnostics())),
-    h('section', { class: 'about-maker', 'aria-label': 'Made by COM-X Corporation' },
+    h('section', { class: 'about-maker', 'aria-label': 'Developed by COM-X Innovations, Inc.' },
       mark.el,
       h('div', { class: 'about-maker-t' },
         h('span', { class: 'about-by' }, 'Developed by'),
-        h('strong', null, 'COM-X Corporation'),
+        h('strong', null, 'COM-X Innovations, Inc.'),
         h('button', { class: 'link', type: 'button', title: COMX_URL, onclick: () => openLink(COMX_URL) }, 'Visit COM-X', icon('external', 12)))),
     h('nav', { class: 'about-links', 'aria-label': 'ORBIX links' }, extLink('Website', SITE_URL), extLink('GitHub', REPO_URL), extLink('Release notes', RELEASES_URL), extLink('License', LICENSE_URL)),
     group(null, null,
@@ -1129,6 +1129,6 @@ function tabApplication(el, show) {
           await api.post('/api/quit').catch(() => {});
         }
       }, 'sm danger'), 'Stops every running conversation and closes the window. A downloaded update installs now.')),
-    h('p', { class: 'about-legal' }, '© 2026 QUANTUM. Licensed under FSL-1.1-MIT: free to use, and each release becomes MIT two years after it ships. Google Sans Flex and Geist Mono are used under the SIL Open Font License.'));
+    h('p', { class: 'about-legal' }, '© 2026 QUANTUM, COM-X Innovations, Inc. Open source under the MIT License. Google Sans Flex and Geist Mono are used under the SIL Open Font License.'));
   return () => cleanups.forEach((cleanup) => cleanup());
 }
