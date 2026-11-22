@@ -100,7 +100,7 @@ describe('a conversation on an ACP agent', () => {
     await p.stop(500);
   });
 
-  test('Turbo allows without asking; a destructive command still asks', async () => {
+  test('Full access allows without asking; a destructive command still asks', async () => {
     const turbo = { data: { ...config.data, approvals: 'auto' } };
     const p = new HarnessProc({ id: 'p3', backend, workspace: ws, config: turbo, agent, registry, noSession: true });
     assert.equal(await p._approve({ name: 'bash', arguments: { command: 'npm test' } }), 'allow');

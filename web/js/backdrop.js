@@ -92,7 +92,7 @@ function orbixScene() {
   const FLAT = 0.27; // how open the ring is: 0 edge-on, 1 face-on
   const D = 4.2, F = 3.6;
   return {
-    sparks: ['#D4FF4F', '#E4E2FF', '#9C8BFF', '#FFFFFF'],
+    sparks: ['#FF2E7E', '#E4E2FF', '#9C8BFF', '#FFFFFF'],
     setup() {
       R = clamp(Math.min(W, H) * 0.25, 100, 250);
       Rp = (R * F) / D;
@@ -162,7 +162,7 @@ function orbixScene() {
         if (px < -2 || py < -2 || px > W + 2 || py > H + 2) continue;
         const q = (lit ? 2.2 : p.ring ? 1.6 : 1.5) * Math.min(1.4, s);
         g.globalAlpha = al;
-        g.fillStyle = lit ? '#D4FF4F' : '#E4E2FF';
+        g.fillStyle = lit ? '#FF2E7E' : '#E4E2FF';
         g.fillRect(px - q / 2, py - q / 2, q, q);
       }
       g.globalAlpha = 1;
@@ -738,7 +738,7 @@ function stop() {
 /** Fireworks at the sides of the window, in the scene's colours (or the theme's accent outside a scene). */
 function celebrate(force) {
   if (still.matches || document.hidden || (!force && (!live || !animated()))) return;
-  const palette = live ? scene.sparks : [css('--accent', '#D4FF4F'), css('--fg', '#FFFFFF'), css('--live', '#7CC4FF')];
+  const palette = live ? scene.sparks : [css('--accent', '#FF2E7E'), css('--fg', '#FFFFFF'), css('--live', '#7CC4FF')];
   for (let i = 0; i < 3; i++) setTimeout(() => launch(palette), i * 380);
 }
 

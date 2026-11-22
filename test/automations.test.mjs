@@ -61,3 +61,16 @@ describe('the automation list', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
+
+test('loops: every N minutes and once', async () => {
+  const { cleanSchedule, nextRun, describeSchedule } = await import('../src/automations.mjs');
+  const t0 = new Date(2026, 10, 21, 10, 0, 30).getTime();
+  assert.equal(nextRun({ every: 'minutes', interval: 15 }, t0), new Date(2026, 10, 21, 10, 15).getTime());
+  assert.equal(describeSchedule({ every: 'minutes', interval: 15 }), 'Every 15 minutes');
+  assert.equal(describeSchedule({ every: 'minutes', interval: 120 }), 'Every 2 hours');
+  assert.throws(() => cleanSchedule({ every: 'minutes', interval: 2 }), /5 to 1440/);
+  const at = new Date(2026, 10, 21, 12, 0).getTime();
+  assert.equal(nextRun({ every: 'once', at }, t0), at);
+  assert.equal(nextRun({ every: 'once', at }, at + 1), null);
+  assert.match(describeSchedule({ every: 'once', at }), /^Once, .* at 12:00$/);
+});

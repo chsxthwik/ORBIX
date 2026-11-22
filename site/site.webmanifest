@@ -1,10 +1,11 @@
 {
   "name": "ORBIX",
   "short_name": "ORBIX",
+  "description": "Every coding agent, in one Windows app.",
   "start_url": "/",
   "display": "browser",
-  "background_color": "#0A0B0D",
-  "theme_color": "#0A0B0D",
+  "background_color": "#0B0B0B",
+  "theme_color": "#0B0B0B",
   "icons": [
     {
       "src": "/assets/img/icon-192.png",
@@ -15,6 +16,12 @@
       "src": "/assets/img/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "/assets/img/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

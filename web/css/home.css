@@ -52,77 +52,6 @@
 
 /* ---- the task box ---- */
 .home-deck { width: 100%; text-align: left; }
-.home .home-composer {
-  gap: 0;
-  padding: 0;
-  border: 1px solid var(--line-2);
-  background: var(--bg-raise);
-  box-shadow: none;
-  transition: border-color var(--t2) var(--ease);
-}
-.home .home-composer.busy, .home .home-composer.busy:focus-within { border-color: var(--live-line); }
-.home .home-composer .c-ta {
-  min-height: clamp(92px, 6.5cqw, 128px);
-  max-height: min(340px, 42vh);
-  padding: 20px 22px 6px;
-  font-size: 16px;
-  line-height: 1.6;
-}
-.home .home-composer .c-ta::placeholder { color: var(--fg-3); }
-.home .home-composer .attach { padding: 0 18px; }
-.home .home-composer .c-row {
-  flex-wrap: nowrap;
-  gap: 4px;
-  min-height: 0;
-  margin: 0;
-  padding: 8px 10px 10px 12px;
-  border: 0;
-}
-.home .home-composer .c-row > .grow { flex: 1 1 0; min-width: 8px; }
-.home .home-composer .c-row .cbtn { padding: 0 10px; }
-.home .home-composer .c-row > .ibtn { width: 32px; height: 32px; margin: 0; border-radius: 10px; }
-
-/* Build or Plan: a two-way switch. */
-.home .task-modes {
-  display: inline-flex;
-  flex: none;
-  gap: 2px;
-  margin-right: 6px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: var(--bg-inset);
-}
-.home .task-mode {
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 12px;
-  border-radius: 8px;
-  color: var(--fg-3);
-  font-size: 13px;
-  font-weight: 500;
-  transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease), box-shadow var(--t1) var(--ease);
-}
-.home .task-mode:hover { color: var(--fg); }
-.home .task-mode[aria-checked=true] { background: var(--bg-raise-2); color: var(--fg); box-shadow: var(--shadow-1), inset 0 1px 0 var(--hi); }
-.home .task-mode:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-/* Start: the one solid accent on the page. */
-.home .send.start {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: auto;
-  height: 34px;
-  min-height: 34px;
-  padding: 0 18px;
-  border-radius: 11px;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -.005em;
-}
 
 /* ---- suggestions ---- */
 .home-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 2px 10px; margin-top: 6px; text-align: left; }
@@ -131,7 +60,7 @@
 .home-status-summary { flex: none; border-inline-start: 1px solid var(--line-2); padding-inline-start: 8px; color: var(--fg-3); }
 .home-status .ibtn[aria-disabled=true] { opacity: .55; cursor: wait; }
 /* The suggestions under the box are styled in shell.css (.ws-recipe). */
-.home-under { width: 100%; margin-top: 16px; }
+.home-under { width: 100%; }
 
 /* ---- what to do first ---- */
 .home-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
@@ -140,8 +69,8 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  min-height: 52px;
-  padding: 8px 10px 8px 14px;
+  min-height: 46px;
+  padding: 8px 12px 8px 14px;
   border: 1px solid var(--line-2);
   border-radius: 14px;
   background: var(--bg-raise);
@@ -149,7 +78,11 @@
   font-weight: 500;
 }
 .home-step .ell { flex: 1; }
-.home-step .btn { flex: none; }
+.home-step.act { padding: 0; }
+.home-step-b { display: flex; align-items: center; gap: 10px; width: 100%; min-height: inherit; padding: 8px 12px 8px 14px; border-radius: inherit; color: var(--fg); font: inherit; text-align: left; transition: background-color var(--t1) var(--ease); }
+.home-step-b:hover { background: var(--bg-hover); }
+.home-step-b > svg { flex: none; color: var(--fg-3); transition: transform var(--t1) var(--ease), color var(--t1) var(--ease); }
+.home-step-b:hover > svg { color: var(--fg); transform: translateX(2px); }
 .home-step-n { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--bg-active); color: var(--fg-2); font-size: 12px; font-weight: 600; }
 .home-step.done { border-color: transparent; background: transparent; color: var(--fg-3); font-weight: 400; }
 .home-step.done .home-step-n { background: var(--ok-soft); color: var(--ok); }
@@ -177,19 +110,8 @@
 /* ---- sizes ---- */
 @container ws (max-width: 600px) {
   .home-steps { grid-template-columns: minmax(0, 1fr); }
-  .home .home-composer .c-row { flex-wrap: wrap; row-gap: 6px; }
-  .home .home-composer .c-row > .grow { flex-basis: 100%; height: 0; }
-  .home .task-modes { margin-left: auto; }
-  .home .home-composer .c-row .cbtn { max-width: 170px; }
   .cx-s { display: none; }
 }
-@media (max-width: 640px) {
-  .home .send.start { padding: 0 16px; }
-}
-@media (pointer: coarse) {
-  .home .task-mode { height: 40px; }
-}
 @media (forced-colors: active) {
-  .home .home-composer, .home .task-modes, .home-alert, .cx-list, .cx-how, .home-step { border-color: ButtonText; }
-  .home .task-mode[aria-checked=true] { outline: 2px solid Highlight; }
+  .home .home-composer, .home-alert, .cx-list, .cx-how, .home-step { border-color: ButtonText; }
 }

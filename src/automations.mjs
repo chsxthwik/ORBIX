@@ -1,13 +1,13 @@
-// Automations: a prompt that ORBIX sends by itself on a schedule (every hour, every day, on weekdays, every week),
-// in a project, as a new conversation. They run while ORBIX is open; a time missed while it was closed is skipped,
-// not caught up. Each run is an ordinary conversation, so approvals work as usual: in Ask first it waits for you in
+// Loops (stored as automations): a prompt that ORBIX sends by itself on a schedule (every few minutes, every hour,
+// every day, on weekdays, every week, or once at a set time), in a project, as a new conversation. They run while ORBIX is open; a time missed while it was closed is skipped,
+// not caught up. Each run is an ordinary conversation, so approvals work as usual: in Supervised it waits for you in
 // Review. Stored in data/automations.json.
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './store.mjs';
 import { readJson, writeJson, uid, clip } from './util.mjs';
 
-const EVERY = ['hour', 'day', 'weekday', 'week'];
+const EVERY = ['minutes', 'hour', 'day', 'weekday', 'week', 'once'];
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TICK_MS = 30000;
 
@@ -15,6 +15,16 @@ const TICK_MS = 30000;
 export function cleanSchedule(s = {}) {
   const every = EVERY.includes(s.every) ? s.every : null;
   if (!every) throw Object.assign(new Error('Choose how often it runs'), { status: 400 });
+  if (every === 'minutes') {
+    const n = Number(s.interval);
+    if (!Number.isInteger(n) || n < 5 || n > 1440) throw Object.assign(new Error('Run it every 5 to 1440 minutes'), { status: 400 });
+    return { every, interval: n };
+  }
+  if (every === 'once') {
+    const at = Number(s.at);
+    if (!Number.isFinite(at) || at <= 0) throw Object.assign(new Error('Choose the date and time it runs'), { status: 400 });
+    return { every, at: Math.floor(at / 60000) * 60000 };
+  }
   const minute = Number.isInteger(s.minute) && s.minute >= 0 && s.minute < 60 ? s.minute : 0;
   if (every === 'hour') return { every, minute };
   const hour = Number.isInteger(s.hour) && s.hour >= 0 && s.hour < 24 ? s.hour : 9;
@@ -25,6 +35,8 @@ export function cleanSchedule(s = {}) {
 /** The first time strictly after `after` (ms) that the schedule fires, in local time. */
 export function nextRun(schedule, after) {
   const s = cleanSchedule(schedule);
+  if (s.every === 'minutes') return Math.floor(after / 60000) * 60000 + s.interval * 60000;
+  if (s.every === 'once') return s.at > after ? s.at : null;
   const d = new Date(after);
   d.setSeconds(0, 0);
   if (s.every === 'hour') {
@@ -44,6 +56,11 @@ export function nextRun(schedule, after) {
 /** "Every day at 09:00", "Weekdays at 18:30", "Every Monday at 09:00", "Every hour at :15". */
 export function describeSchedule(schedule) {
   const s = cleanSchedule(schedule);
+  if (s.every === 'minutes') return s.interval % 60 === 0 ? `Every ${s.interval / 60 === 1 ? 'hour' : `${s.interval / 60} hours`}` : `Every ${s.interval} minutes`;
+  if (s.every === 'once') {
+    const d = new Date(s.at);
+    return `Once, ${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} at ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
   const hm = `${String(s.hour ?? 0).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
   if (s.every === 'hour') return `Every hour at :${String(s.minute).padStart(2, '0')}`;
   if (s.every === 'day') return `Every day at ${hm}`;
@@ -60,7 +77,10 @@ export class Automations {
     this.now = now;
     this.list = (readJson(this.file, []) || []).filter((a) => a && a.id && a.prompt);
     // Times missed while ORBIX was closed are skipped: each enabled automation waits for its next time from now.
-    for (const a of this.list) a.nextAt = a.enabled ? nextRun(a.schedule, this.now()) : null;
+    for (const a of this.list) {
+      a.nextAt = a.enabled ? nextRun(a.schedule, this.now()) : null;
+      if (a.enabled && a.schedule?.every === 'once' && !a.nextAt) a.enabled = false; // its time passed while ORBIX was closed
+    }
     this.timer = null;
   }
 
@@ -92,9 +112,10 @@ export class Automations {
     if (prompt.length > 8000) throw Object.assign(new Error('Keep the task under 8,000 characters'), { status: 400 });
     if (!project) throw Object.assign(new Error('Choose a project'), { status: 400 });
     const schedule = cleanSchedule(input.schedule);
+    if (schedule.every === 'once' && input.enabled !== false && schedule.at <= this.now()) throw Object.assign(new Error('Choose a time in the future'), { status: 400 });
     const model = typeof input.model === 'string' && /^[\w.-]+\/.+/.test(input.model) ? input.model : '';
     let a = input.id ? this.list.find((x) => x.id === input.id) : null;
-    if (input.id && !a) throw Object.assign(new Error('That automation no longer exists'), { status: 404 });
+    if (input.id && !a) throw Object.assign(new Error('That loop no longer exists'), { status: 404 });
     if (!a) {
       a = { id: uid('au'), createdAt: this.now(), lastRun: null, lastStatus: '', lastProc: '' };
       this.list.push(a);
@@ -115,7 +136,7 @@ export class Automations {
   /** Run one now (Run now, or its time came). A run still working is not started twice. */
   async run(id, why = 'manual') {
     const a = this.list.find((x) => x.id === id);
-    if (!a) throw Object.assign(new Error('That automation no longer exists'), { status: 404 });
+    if (!a) throw Object.assign(new Error('That loop no longer exists'), { status: 404 });
     if (a.lastProc && this.alive(a.lastProc)) {
       if (why === 'manual') throw Object.assign(new Error('Its last run is still working'), { status: 409 });
       return null;
@@ -138,6 +159,10 @@ export class Automations {
     for (const a of [...this.list]) {
       if (!a.enabled || !a.nextAt || t < a.nextAt) continue;
       a.nextAt = nextRun(a.schedule, t);
+      if (a.schedule.every === 'once') {
+        a.enabled = false; // done: it stays in the list, off, with its last run
+        a.nextAt = null;
+      }
       await this.run(a.id, 'schedule');
     }
   }

@@ -135,11 +135,22 @@ export class Composer {
     this.ta = h('textarea', { class: 'c-ta', rows: 1, placeholder: o.placeholder || '', 'aria-label': o.label || 'Message', spellcheck: 'true', 'aria-autocomplete': 'list', 'aria-controls': this.popup.id, 'aria-expanded': 'false' });
     this.ta.value = this.state.draft || '';
     this.fileIn = h('input', { type: 'file', multiple: true, hidden: true, tabindex: '-1', onchange: (e) => (this.addFiles([...e.target.files]), (e.target.value = '')) });
-    this.el = h('div', { class: `composer ${o.cls || ''}`.trim() }, this.popup, this.attachEl, this.ta, this.fileIn);
+    // A line that starts with ! is a shell command: the box says so, and its owner runs it in the Terminal.
+    this.modeEl = h('div', { class: 'c-mode', 'aria-hidden': 'true' }, icon('terminal', 12), h('b', null, 'Shell command'), h('span', null, 'runs in the project’s Terminal · Enter'));
+    this.el = h('div', { class: `composer ${o.cls || ''}`.trim() }, this.popup, this.attachEl, this.modeEl, this.ta, this.fileIn);
     // Chromium sizes the box to its text (field-sizing: content, max-height in CSS); older engines use JS.
     this.autoSize = !CSS.supports('field-sizing', 'content');
     this.wire();
     this.drawAttach();
+    this.syncMode();
+  }
+
+  /** Shell mode follows the first character of the text. */
+  syncMode() {
+    const shell = this.ta.value.startsWith('!');
+    if (shell === this.shell) return;
+    this.shell = shell;
+    this.el.classList.toggle('shell', shell);
   }
 
   get value() {
@@ -149,6 +160,7 @@ export class Composer {
   set value(v) {
     this.ta.value = v;
     this.state.draft = v;
+    this.syncMode();
     this.fit();
     this.closePopup();
     this.o.onChange?.();
@@ -202,6 +214,7 @@ export class Composer {
     const ta = this.ta;
     ta.addEventListener('input', () => {
       this.state.draft = ta.value;
+      this.syncMode();
       if (this.histIdx >= 0 && ta.value !== this.histShown) this.histIdx = -1;
       this.fit();
       this.updatePopup();
@@ -325,7 +338,7 @@ export class Composer {
       if (e.key === 'Escape') return e.preventDefault(), e.stopPropagation(), this.closePopup();
     }
     if (e.key === 'Enter' && !e.shiftKey) {
-      // Settings → General → Send messages with Ctrl+Enter: a plain Enter is a new line (Alt+Enter still queues).
+      // Settings → Preferences → Send messages with Ctrl+Enter: a plain Enter is a new line (Alt+Enter still queues).
       if (S.ui?.sendKey === 'ctrl' && !e.ctrlKey && !e.metaKey && !e.altKey) return;
       e.preventDefault();
       this.o.onSubmit(e.altKey);
@@ -361,6 +374,7 @@ export class Composer {
   setQuiet(v) {
     this.ta.value = v;
     this.state.draft = v;
+    this.syncMode();
     this.fit();
     this.o.onChange?.();
   }

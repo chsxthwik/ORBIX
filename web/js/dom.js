@@ -64,6 +64,8 @@ const P = {
   cog: 'M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.8l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.8v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   search: 'm21 21-4.3-4.3M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z',
   refresh: 'M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5',
+  play: 'M7 4v16l13-8Z',
+  code: 'm16 18 6-6-6-6M8 6l-6 6 6 6',
   copy: 'M9 9h11a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1ZM5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1',
   wrench: 'M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9Z',
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
@@ -71,6 +73,9 @@ const P = {
   users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
   paperclip: 'm21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5',
   'panel-left': 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 3v18',
+  columns: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM12 3v18',
+  maximize: 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
+  minimize: 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7',
   'panel-right': 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM15 3v18',
   trash: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
   pencil: 'M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z',
@@ -81,8 +86,9 @@ const P = {
   'arrow-left': 'M19 12H5M12 19l-7-7 7-7',
   'arrow-right': 'M5 12h14M12 5l7 7-7 7',
   'more-v': 'M12 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM12 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z',
-  overview: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM8 8h8M8 12h8M8 16h5',
   clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 6v6l4 2',
+  star: 'M12 2.8l2.8 5.7 6.3.9-4.6 4.4 1.1 6.3L12 17.1l-5.6 3 1.1-6.3L2.9 9.4l6.3-.9Z',
+  sparkle: 'M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9ZM19 3v4M17 5h4',
   archive: 'M3 4h18v4H3zM5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4',
   bell: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
   sliders: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
@@ -92,17 +98,24 @@ const P = {
   alert: 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0ZM12 9v4M12 17h.01',
   info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM12 16v-4M12 8h.01',
   bolt: 'M13 2 3 14h9l-1 8 10-12h-9Z',
+  infinity: 'M12 12c-2-2.7-4-4-6-4a4 4 0 0 0 0 8c2 0 4-1.3 6-4Zm0 0c2 2.7 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.3-6 4Z',
   brain: 'M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18ZM12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18ZM12 5v13',
   globe: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z',
   cloud: 'M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z',
   server: 'M4 3h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM4 13h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1ZM7 7h.01M7 17h.01',
+  smartphone: 'M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2ZM12 18h.01',
+  incognito: 'M2 11h20M5 11l2-7h10l2 7M7 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM17 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM10 15h4',
   laptop: 'M4 5h16a1 1 0 0 1 1 1v10H3V6a1 1 0 0 1 1-1ZM1 19h22',
   eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
   layers: 'm12 2 10 5-10 5L2 7ZM2 17l10 5 10-5M2 12l10 5 10-5',
   monitor: 'M3 4h18v12H3zM8 20h8M12 16v4',
   at: 'M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   circle: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z',
+  gauge: 'M12 14l4-4M3.34 19a10 10 0 1 1 17.32 0',
   'folder-plus': 'M12 10v6M9 13h6M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z',
+  lock: 'M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2ZM7 11V7a5 5 0 0 1 10 0v4',
+  'shield-check': 'M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.7 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1ZM9 12l2 2 4-4',
+  'shield-off': 'M2 2l20 20M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.7 9a1 1 0 0 0 .7 0 13 13 0 0 0 4-2.4M9.3 3.6c.6-.4 1.3-.8 1.9-1.3a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1v7a9 9 0 0 1-.3 2.5',
   shield: 'M20 13c0 5-3.5 7.5-7.7 9a1 1 0 0 1-.7 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.2-2.7a1.2 1.2 0 0 1 1.6 0C14.5 3.8 17 5 19 5a1 1 0 0 1 1 1Z',
   map: 'M14.1 6.3 9.9 4.2a2 2 0 0 0-1.8 0L3.6 6.4A1 1 0 0 0 3 7.3v12.2a.5.5 0 0 0 .7.4l4.4-2.2a2 2 0 0 1 1.8 0l4.2 2.1a2 2 0 0 0 1.8 0l4.5-2.2a1 1 0 0 0 .6-.9V4.5a.5.5 0 0 0-.7-.4l-4.4 2.2a2 2 0 0 1-1.8 0ZM15 6.8v14M9 3.2v14',
   cpu: 'M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM9 9h6v6H9Z',
@@ -140,56 +153,371 @@ export function icon(name, size = 16, cls = '') {
 const svgEl = (tag, attrs, ...kids) => {
   const el = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs)) if (v != null) el.setAttribute(k, v);
-  el.append(...kids);
+  el.append(...kids.filter((k) => k != null && k !== false));
   return el;
 };
 
-// The mark, in the app's two signals: a ring (the O) in the text colour, a tilted teal orbit (the agent) and one orange
-// node (you). Drawn in currentColor plus the two signal tokens, so it follows the theme. Small sizes get heavier strokes.
-// The mark: a planet, an orbit tilted -24deg that passes behind it and in front of it, and the node at the orbit's
-// near end. The far half is masked out where it crosses the planet, so the ring reads as a ring, not a crossing.
-// While an agent works the node travels the orbit (.lg-node has an offset-path; see .agent-busy in app.css).
-const ORBIT_FRONT = 'M21.87 7.61A10.8 4.1 -24 0 1 2.13 16.39';
-const ORBIT_BACK = 'M2.13 16.39A10.8 4.1 -24 0 1 21.87 7.61';
-// The full orbit, starting at the near (front) end, for the comet trail. Its far half is hidden only where it passes
-// behind the planet (mask: the planet disc clipped to the half-plane above the orbit's major axis).
-const ORBIT_FULL = ORBIT_FRONT + 'A10.8 4.1 -24 0 1 21.87 7.61';
-let logoN = 0;
+// The ORBIX mark (logo kit v2): an O split along one elliptical orbit whose halves swap sides and become `)(`, the X
+// in ORBIX. Drawn as the two halves of the O; at rest they sit swapped (the X). One colour, currentColor (Bone on
+// dark, Obsidian on light); Plasma only while an agent works.
+const HALF_L = 'M0 50C0 22.39 22.39 0 50 0C50.12 0 50.23 0 50.35 0V18C50.23 18 50.12 18 50 18C32.33 18 18 32.33 18 50C18 67.67 32.33 82 50 82C50.12 82 50.23 82 50.35 82V100C50.23 100 50.12 100 50 100C22.39 100 0 77.61 0 50Z';
+const HALF_R = 'M49.65 100V82C49.77 82 49.88 82 50 82C67.67 82 82 67.67 82 50C82 32.33 67.67 18 50 18C49.88 18 49.77 18 49.65 18V0C49.77 0 49.88 0 50 0C77.61 0 100 22.39 100 50C100 77.61 77.61 100 50 100C49.88 100 49.77 100 49.65 100Z';
+const WORDMARK = 'M227.77 0H245.77V50.65C254.89 42.77 266.77 38 279.77 38C308.49 38 331.77 61.28 331.77 90C331.77 118.72 308.49 142 279.77 142C266.77 142 254.89 137.23 245.77 129.35V140H227.77ZM0 90C0 61.28 23.28 38 52 38C80.72 38 104 61.28 104 90C104 118.72 80.72 142 52 142C23.28 142 0 118.72 0 90ZM382.77 142V124C401.55 124 416.77 108.78 416.77 90C416.77 71.22 401.55 56 382.77 56V38C403.35 38 421.14 49.96 429.57 67.31C438 49.96 455.79 38 476.37 38V56C457.59 56 442.37 71.22 442.37 90C442.37 108.78 457.59 124 476.37 124V142C455.79 142 438 130.04 429.57 112.69C421.14 130.04 403.35 142 382.77 142ZM245.77 90C245.77 108.78 260.99 124 279.77 124C298.55 124 313.77 108.78 313.77 90C313.77 71.22 298.55 56 279.77 56C260.99 56 245.77 71.22 245.77 90ZM18 90C18 108.78 33.22 124 52 124C70.78 124 86 108.78 86 90C86 71.22 70.78 56 52 56C33.22 56 18 71.22 18 90ZM122 40H140V50.65C149.12 42.77 161 38 174 38C188.36 38 201.36 43.82 210.77 53.23L198.04 65.96C191.89 59.81 183.39 56 174 56C155.22 56 140 71.22 140 90V140H122ZM350.77 40H368.77V140H350.77Z';
+
 /**
- * The ORBIX mark, drawn for its size. Three levels of detail so it reads at every size:
- *   tiny  (<= 16 px)  heavy strokes, no far side of the orbit: a ring, a stroke and a dot that survive 14 px.
- *   small (<= 28 px)  the full mark in flat colour (sidebar, bylines).
- *   large (>  28 px)  a lit planet (sphere shading, an equatorial band, a rim light), the ring lit from the top left,
- *                     the orbit brightening toward the node, and a highlight on the node.
- * The viewBox has a 1-unit margin so the node never touches the edge at any size; set the size with CSS (width) or
- * the `size` argument. `alive` adds the idle motion (a slow orbit with a comet trail); while an agent works
- * (.agent-busy / .msg.live) the node and trail speed up.
+ * The mark. `alive`: the halves swap O ↔ X on the brand's 2.8 s loop while an agent works (.agent-busy), and
+ * `loop` keeps swapping always (the loader). Under reduced motion it holds the X.
  */
-export function logo(size = 20, { alive = false } = {}) {
-  const tier = size <= 16 ? 'tiny' : size <= 28 ? 'small' : 'large';
-  const id = `lgm${++logoN}`;
-  const sw = tier === 'tiny' ? 2.3 : tier === 'small' ? 1.7 : 1.0; // orbit stroke
-  const gap = tier === 'large' ? 0.5 : 0.7; // clear space between the ring and the planet, on each side
-  const url = (x) => `url(#${id}${x})`;
-  const box = { maskUnits: 'userSpaceOnUse', x: -2, y: -2, width: 28, height: 28 };
-  const white = () => svgEl('rect', { x: -2, y: -2, width: 28, height: 28, fill: '#fff' });
-  const defs = svgEl('defs', {},
-    // The near half of the orbit cuts a clean gap through the planet.
-    svgEl('mask', { id: `${id}g`, ...box }, white(), svgEl('path', { d: ORBIT_FRONT, fill: 'none', stroke: '#000', 'stroke-width': sw + gap * 2 })),
-    // The far half stops short of the planet.
-    svgEl('mask', { id: `${id}b`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7 + gap, fill: '#000' })),
-    // The node and its trail slip behind the planet on the far side only.
-    svgEl('clipPath', { id: `${id}h` }, svgEl('polygon', { points: '-2,-2 26,-2 26,5.77 -2,18.23' })),
-    svgEl('mask', { id: `${id}t`, ...box }, white(), svgEl('circle', { cx: 12, cy: 12, r: 7 + gap, fill: '#000', 'clip-path': url('h') })));
-  return svgEl('svg', { class: `logo ${tier}` + (alive ? ' alive' : ''), viewBox: '-1 -1 26 26', width: size, height: size, fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
-    defs,
-    svgEl('path', { class: 'lg-orbit lg-back', d: ORBIT_BACK, mask: url('b'), 'stroke-width': sw }),
-    svgEl('circle', { class: 'lg-planet', cx: 12, cy: 12, r: 7, mask: url('g') }),
-    svgEl('path', { class: 'lg-orbit lg-front', d: ORBIT_FRONT, 'stroke-width': sw }),
-    svgEl('path', { class: 'lg-trail', d: ORBIT_FULL, pathLength: 100, mask: url('t'), 'stroke-width': sw + 0.5 }),
-    // The mask sits on a group without a transform; the inner group carries the offset-path and moves.
-    svgEl('g', { mask: url('t') },
-      svgEl('g', { class: 'lg-node' }, svgEl('circle', { class: 'lg-dot', cx: 0, cy: 0, r: tier === 'tiny' ? 2.8 : tier === 'small' ? 2.3 : 1.7 }))));
+export function logo(size = 20, { alive = false, loop = false } = {}) {
+  return svgEl('svg', { class: 'logo' + (alive ? ' alive' : '') + (loop ? ' loop' : ''), viewBox: '0 0 100 100', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' },
+    svgEl('path', { class: 'lg-h lg-l', fill: 'currentColor', d: HALF_L }),
+    svgEl('path', { class: 'lg-h lg-r', fill: 'currentColor', d: HALF_R }));
+}
+
+/** The wordmark: "orbix" whose x is the mark; the i's dot is Plasma. `height` in px. */
+export function wordmark(height = 13) {
+  return svgEl('svg', { class: 'wordmark', viewBox: '0 0 476.37 142', height, width: Math.round((height * 476.37) / 142), role: 'img', 'aria-label': 'ORBIX', focusable: 'false' },
+    svgEl('path', { fill: 'currentColor', d: WORDMARK }),
+    svgEl('path', { class: 'wm-dot', d: 'M350.77 0H368.77V18H350.77V0Z' }));
+}
+
+/** The mark in its tile: the app icon's shape, and the only way the mark sits beside the name. */
+export function logoTile(size = 44) {
+  return h('span', { class: 'logo-tile', style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' }, logo(size));
+}
+
+// ================= The hero: the mark, made of light =================
+// Home and an empty conversation. The mark is sampled into particles (one per ~1.3 px of its two halves). They come
+// in as a flat Plasma galaxy that spirals into the O, the halves swap along the brand's arc (the far one smaller and
+// dimmer) into the X, and the mark snaps with a shock ring. Then it is matter: the pointer parts it, a click scatters
+// it and springs pull it back; a Plasma sheen sweeps across every 7 s (2.4 s while an agent works). At rest the exact
+// vector mark is drawn over the particles, so it stays crisp, and the loop sleeps until the next sweep or the pointer
+// comes near: no frames are drawn while nothing moves, and none while it is off screen or the window is hidden.
+// Reduced motion draws the still X.
+const ease3 = (t) => 1 - (1 - t) ** 3;
+const easeIO = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
+function toRGB(s, fb) {
+  s = (s || '').trim();
+  let m = /^#([0-9a-f]{6})$/i.exec(s);
+  if (m) { const n = parseInt(m[1], 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+  m = /^#([0-9a-f]{3})$/i.exec(s);
+  if (m) return [...m[1]].map((c) => parseInt(c + c, 16));
+  m = /rgba?\(([^)]+)\)/.exec(s);
+  if (m) { const p = m[1].split(/[\s,/]+/).map(Number); if (p.length >= 3 && p.every((v, i) => i > 2 || Number.isFinite(v))) return p.slice(0, 3); }
+  return fb;
+}
+
+const INTRO_GATHER = 1300, INTRO_SPREAD = 450, SWAP_AT = 1950, SWAP_MS = 850, SWEEP_MS = 1100;
+
+/** The large mark for Home and an empty conversation. `size` is the mark's height in px; the canvas is 3× as wide. */
+export function heroMark(size = 72) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext && canvas.getContext('2d');
+  if (!ctx || typeof Path2D !== 'function') return { el: logo(size), destroy() {} };
+  canvas.className = 'hero-mark';
+  canvas.setAttribute('aria-hidden', 'true');
+  canvas.style.setProperty('--hw', Math.round(size * 3) + 'px');
+  const root = document.documentElement;
+  const rm = matchMedia('(prefers-reduced-motion: reduce)');
+  const motionOff = () => rm.matches || root.classList.contains('sr') || root.dataset.motion === 'off';
+
+  // Sample the halves of the O in mark units (0…100); the X puts the left half 45 to the right and the right half 45
+  // to the left.
+  const halves = [new Path2D(HALF_L), new Path2D(HALF_R)];
+  const su = (Math.max(1.25, size / 56) * 100) / size;
+  const pts = [];
+  for (let s = 0; s < 2; s++) for (let y = su / 2; y < 100; y += su) for (let x = su / 2; x < 100; x += su) if (ctx.isPointInPath(halves[s], x, y)) pts.push(s, x, y);
+  const N = pts.length / 3;
+  const F = () => new Float32Array(N);
+  const side = new Uint8Array(N), hx = F(), hy = F(), tx = F(), ty = F(), x = F(), y = F(), vx = F(), vy = F(), heat = F(), al = F(), rh = F(), ah = F(), r0 = F(), spin = F(), delay = F(), dsp = F();
+  for (let i = 0; i < N; i++) {
+    side[i] = pts[3 * i]; hx[i] = pts[3 * i + 1]; hy[i] = pts[3 * i + 2];
+    tx[i] = hx[i] + (side[i] ? -45 : 45); ty[i] = hy[i];
+    rh[i] = Math.hypot(hx[i] - 50, hy[i] - 50); ah[i] = Math.atan2(hy[i] - 50, hx[i] - 50);
+    r0[i] = 70 + Math.random() * 80; spin[i] = 2.6 + Math.random() * 2.2; delay[i] = Math.random() ** 1.5 * INTRO_SPREAD;
+    x[i] = tx[i]; y[i] = ty[i]; al[i] = 1;
+  }
+  // Particles are drawn in buckets of colour (6 steps Bone → Plasma) × alpha (4 steps), so a frame sets ~20 styles.
+  const HQ = 6, AQ = 5, lists = Array.from({ length: HQ * AQ }, () => new Uint16Array(N)), counts = new Uint16Array(HQ * AQ);
+  let styles = [], markRGB = [244, 244, 240], plasma = [255, 46, 126], dark = true, markFill = '#F4F4F0';
+  function setColors() {
+    const cs = getComputedStyle(root);
+    markRGB = toRGB(cs.getPropertyValue('--mark'), markRGB);
+    plasma = toRGB(cs.getPropertyValue('--plasma'), plasma);
+    dark = (0.2126 * markRGB[0] + 0.7152 * markRGB[1] + 0.0722 * markRGB[2]) / 255 > 0.5;
+    markFill = `rgb(${markRGB.join(',')})`;
+    styles = [];
+    for (let q = 0; q < HQ; q++) for (let a = 0; a < AQ; a++) {
+      const t = q / (HQ - 1), c = markRGB.map((v, j) => Math.round(v + (plasma[j] - v) * t));
+      styles.push(`rgba(${c.join(',')},${a / (AQ - 1)})`);
+    }
+  }
+
+  let cw = 0, ch = 0, dpr = 1, raf = 0, timer = 0, last = 0, clock = 0, phase = 0, solid = 0, glow = 0, settled = false;
+  let visible = false, stopped = false, still = motionOff(), busy = root.classList.contains('agent-busy');
+  let nextSweep = 0, sweepT0 = -1, ptr = null, rect = null;
+  const rings = [];
+  const toUnits = (cx, cy) => { const k = rect.width / 300; return { x: (cx - rect.left - rect.width / 2) / k + 50, y: (cy - rect.top - rect.height / 2) / k + 50 }; };
+
+  function toStill() {
+    phase = 1; solid = 1; glow = 0.55; rings.length = 0;
+    for (let i = 0; i < N; i++) { x[i] = tx[i]; y[i] = ty[i]; vx[i] = vy[i] = heat[i] = dsp[i] = 0; al[i] = 1; }
+  }
+
+  function intro() {
+    const t = clock;
+    for (let i = 0; i < N; i++) {
+      let px, py, a = 1, h = 0;
+      if (t < SWAP_AT) {
+        // A flat galaxy spiralling in: radius and spin unwind, the disc tilts up into the mark's plane.
+        const e = clamp01((t - delay[i]) / INTRO_GATHER), ee = ease3(e);
+        const r = rh[i] + (r0[i] - rh[i]) * (1 - ee), an = ah[i] + spin[i] * (1 - ee), sn = Math.sin(an);
+        px = 50 + r * Math.cos(an); py = 50 + r * sn * (0.3 + 0.7 * ee);
+        a = Math.min(1, e * 2.2) * (1 - 0.5 * (1 - ee) * (sn < 0 ? -sn : 0));
+        h = (1 - ee) ** 1.5 * 0.95;
+      } else {
+        // O → X along the brand's arc: the right half dips behind (smaller, dimmer), the left passes in front.
+        const u = easeIO(clamp01((t - SWAP_AT) / SWAP_MS)), b = Math.sin(Math.PI * u);
+        const L = side[i] === 0, c0 = L ? 25.2 : 74.8, sc = L ? 1 + 0.04 * b : 1 - 0.1 * b;
+        px = c0 + (hx[i] - c0) * sc + (L ? 45 : -45) * u; py = 50 + (hy[i] - 50) * sc + (L ? 7.65 : -7.65) * b;
+        if (!L) a = 1 - 0.45 * b;
+        h = 0.3 * b;
+      }
+      x[i] = px; y[i] = py; al[i] = a; heat[i] = h;
+    }
+    glow = Math.min(1, t / SWAP_AT) * 0.55;
+    if (t >= SWAP_AT + SWAP_MS) {
+      // The snap: everything lands, gets a small outward kick and wobbles in; a shock ring leaves the centre.
+      phase = 1;
+      for (let i = 0; i < N; i++) {
+        x[i] = tx[i]; y[i] = ty[i]; al[i] = 1;
+        const dx = tx[i] - 50, dy = ty[i] - 50, d = Math.hypot(dx, dy) || 1;
+        vx[i] = (dx / d) * 0.9; vy[i] = (dy / d) * 0.9;
+      }
+      rings.push({ x: 50, y: 50, t: 0, dur: 900, r0: 30, r1: 140 }, { x: 50, y: 50, t: -140, dur: 900, r0: 20, r1: 105 });
+      glow = 1.6;
+      nextSweep = clock + 3200;
+    }
+  }
+
+  function live(f, pu) {
+    let sweepPos = null;
+    if (sweepT0 < 0 && clock >= nextSweep) sweepT0 = clock;
+    if (sweepT0 >= 0) {
+      const p = (clock - sweepT0) / SWEEP_MS;
+      if (p >= 1) { sweepT0 = -1; nextSweep = clock + (busy ? 2400 : 7000); } else sweepPos = -25 + 190 * easeIO(p);
+    }
+    const damp = Math.pow(0.86, f), K = 0.05 * f, R = 30, R2 = R * R, cool = Math.pow(0.93, f);
+    let maxV = 0, maxD = 0, maxH = 0;
+    for (let i = 0; i < N; i++) {
+      let ax = (tx[i] - x[i]) * K, ay = (ty[i] - y[i]) * K;
+      if (pu) {
+        const dx = x[i] - pu.x, dy = y[i] - pu.y, d2 = dx * dx + dy * dy;
+        if (d2 < R2 && d2 > 1e-4) { const d = Math.sqrt(d2), g = 1 - d / R, fo = g * g * 1.8 * f; ax += (dx / d) * fo; ay += (dy / d) * fo; }
+      }
+      vx[i] = (vx[i] + ax) * damp; vy[i] = (vy[i] + ay) * damp;
+      x[i] += vx[i] * f; y[i] += vy[i] * f;
+      const sp = Math.abs(vx[i]) + Math.abs(vy[i]), d = Math.abs(x[i] - tx[i]) + Math.abs(y[i] - ty[i]);
+      let h = Math.max(heat[i] * cool, Math.min(1, sp * 0.45));
+      if (sweepPos !== null) { const g = 1 - Math.abs(x[i] + 0.45 * y[i] - sweepPos) / 12; if (g > 0) h = Math.max(h, g * 0.85); }
+      heat[i] = h; dsp[i] = d;
+      if (sp > maxV) maxV = sp; if (d > maxD) maxD = d; if (h > maxH) maxH = h;
+    }
+    const target = maxD < 0.12 ? 1 : 0;
+    solid = clamp01(solid + (target - solid) * (target ? 0.08 : 0.35) * f);
+    if (target && solid > 0.995) solid = 1;
+    const base = busy ? 0.8 : 0.55;
+    glow += (base - glow) * Math.min(1, 0.04 * f);
+    for (let j = rings.length - 1; j >= 0; j--) if ((rings[j].t += f * 16.667) >= rings[j].dur) rings.splice(j, 1);
+    settled = !pu && sweepPos === null && !rings.length && maxV < 0.003 && maxD < 0.03 && maxH < 0.02 && solid === 1 && Math.abs(glow - base) < 0.01;
+    if (settled) { glow = base; for (let i = 0; i < N; i++) { x[i] = tx[i]; y[i] = ty[i]; vx[i] = vy[i] = heat[i] = dsp[i] = 0; } }
+  }
+
+  function draw() {
+    if (!cw || !ch) return;
+    const k = cw / 300, ox = cw / 2 - 50 * k, oy = ch / 2 - 50 * k, P = plasma.join(',');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, cw, ch);
+    if (dark && glow > 0.01) {
+      const g = ctx.createRadialGradient(cw / 2, ch / 2, 0, cw / 2, ch / 2, 95 * k);
+      g.addColorStop(0, `rgba(${P},${Math.min(0.2, 0.085 * glow)})`);
+      g.addColorStop(1, `rgba(${P},0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, cw, ch);
+    }
+    ctx.lineWidth = 1.2;
+    for (const r of rings) {
+      if (r.t < 0) continue;
+      const p = r.t / r.dur, rad = (r.r0 + (r.r1 - r.r0) * ease3(p)) * k;
+      ctx.strokeStyle = `rgba(${P},${0.6 * (1 - p) ** 2})`;
+      ctx.beginPath();
+      ctx.ellipse(ox + r.x * k, oy + r.y * k, rad, rad * 0.36, -0.17, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (solid > 0) {
+      ctx.save();
+      ctx.globalAlpha = solid;
+      ctx.fillStyle = markFill;
+      ctx.translate(ox, oy); ctx.scale(k, k);
+      ctx.translate(45, 0); ctx.fill(halves[0]);
+      ctx.translate(-90, 0); ctx.fill(halves[1]);
+      ctx.restore();
+    }
+    counts.fill(0);
+    for (let i = 0; i < N; i++) {
+      const h = heat[i];
+      let a = al[i];
+      if (solid > 0 && h < 0.04 && dsp[i] < 0.25) a *= 1 - solid; // the vector mark already shows a resting particle
+      const aq = Math.min(AQ - 1, Math.round(a * (AQ - 1)));
+      if (!aq) continue;
+      const b = Math.min(HQ - 1, Math.round(h * (HQ - 1))) * AQ + aq;
+      lists[b][counts[b]++] = i;
+    }
+    const ds = su * k * 1.12, hs = ds / 2;
+    for (let b = 0; b < HQ * AQ; b++) {
+      const n = counts[b], L = lists[b];
+      if (!n) continue;
+      ctx.fillStyle = styles[b];
+      for (let j = 0; j < n; j++) { const i = L[j]; ctx.fillRect(ox + x[i] * k - hs, oy + y[i] * k - hs, ds, ds); }
+    }
+    if (dark) {
+      // Bloom on the hottest particles.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = `rgb(${P})`;
+      const bs = ds * 2.8, bh = bs / 2;
+      for (let q = 3; q < HQ; q++) for (let aq = 2; aq < AQ; aq++) {
+        const b = q * AQ + aq, L = lists[b];
+        for (let j = 0; j < counts[b]; j++) { const i = L[j]; ctx.fillRect(ox + x[i] * k - bh, oy + y[i] * k - bh, bs, bs); }
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  const alive = () => !stopped && visible && !document.hidden && canvas.isConnected;
+  function frame(now) {
+    raf = 0;
+    if (!alive()) return;
+    if (motionOff()) { still = true; toStill(); draw(); return; }
+    // Physics steps at most 50 ms; the clock keeps real time once the mark is live, so a sleep still ends in a sweep.
+    const raw = last ? now - last : 16.667, dt = Math.min(50, raw), f = dt / 16.667;
+    last = now;
+    clock += phase === 1 ? raw : dt;
+    rect = canvas.getBoundingClientRect();
+    let pu = null;
+    if (ptr && rect.width) {
+      const u = toUnits(ptr.x, ptr.y);
+      if (u.x > -40 && u.x < 140 && u.y > -40 && u.y < 140) pu = u;
+    }
+    settled = false;
+    if (phase === 0) intro(); else live(f, pu);
+    draw();
+    if (phase === 1 && settled) timer = setTimeout(wake, Math.max(50, nextSweep - clock));
+    else raf = requestAnimationFrame(frame);
+  }
+  function wake() {
+    if (raf || stopped) return;
+    if (still) { draw(); return; }
+    clearTimeout(timer); timer = 0;
+    raf = requestAnimationFrame(frame);
+  }
+
+  // The pointer wakes the mark when it comes near; it parts the particles while over it, a press scatters them.
+  const near = (cx, cy) => {
+    const r = canvas.getBoundingClientRect();
+    return r.width && cx > r.left - 40 && cx < r.right + 40 && cy > r.top - 40 && cy < r.bottom + 40;
+  };
+  const onMove = (e) => {
+    if (still || phase === 0) return;
+    if (e.pointerType === 'touch') return;
+    if (!near(e.clientX, e.clientY)) { if (ptr) { ptr = null; wake(); } return; }
+    ptr = { x: e.clientX, y: e.clientY };
+    wake();
+  };
+  const onLeave = () => { if (ptr) { ptr = null; wake(); } };
+  const onDown = (e) => {
+    if (still || phase === 0 || e.button > 0) return;
+    rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const p = toUnits(e.clientX, e.clientY);
+    // Only a press on the mark itself (its X spans 5…95 across, 0…100 down).
+    if (p.x < 2 || p.x > 98 || p.y < -2 || p.y > 102) return;
+    for (let i = 0; i < N; i++) {
+      const dx = x[i] - p.x, dy = y[i] - p.y, d = Math.hypot(dx, dy) || 1, s = 7 / (1 + d / 22);
+      vx[i] += (dx / d) * s + (Math.random() - 0.5) * 1.2; vy[i] += (dy / d) * s + (Math.random() - 0.5) * 1.2;
+      heat[i] = 1;
+    }
+    rings.push({ x: p.x, y: p.y, t: 0, dur: 800, r0: 6, r1: 90 });
+    glow = 1.8;
+    wake();
+  };
+
+  setColors();
+  if (still) toStill();
+  const ro = new ResizeObserver(() => {
+    const r = canvas.getBoundingClientRect();
+    cw = r.width; ch = r.height; dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(cw * dpr)); canvas.height = Math.max(1, Math.round(ch * dpr));
+    draw();
+    wake();
+  });
+  ro.observe(canvas);
+  const io = new IntersectionObserver((es) => { visible = es[es.length - 1].isIntersecting; if (visible) wake(); });
+  io.observe(canvas);
+  const mo = new MutationObserver(() => {
+    const b = root.classList.contains('agent-busy');
+    if (b && !busy) nextSweep = Math.min(nextSweep, clock + 300);
+    busy = b;
+    setColors();
+    if (motionOff() && !still) { still = true; toStill(); }
+    draw();
+    wake();
+  });
+  mo.observe(root, { attributes: true, attributeFilter: ['class', 'style', 'data-mode', 'data-scene', 'data-theme', 'data-motion'] });
+  const onVis = () => { if (!document.hidden) { last = 0; wake(); } };
+  document.addEventListener('visibilitychange', onVis);
+  window.addEventListener('pointermove', onMove, { passive: true });
+  window.addEventListener('pointerdown', onDown, { passive: true });
+  document.documentElement.addEventListener('pointerleave', onLeave);
+  window.addEventListener('blur', onLeave);
+  return {
+    el: canvas,
+    destroy() {
+      stopped = true;
+      cancelAnimationFrame(raf); clearTimeout(timer); raf = timer = 0;
+      ro.disconnect(); io.disconnect(); mo.disconnect();
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', onDown);
+      document.documentElement.removeEventListener('pointerleave', onLeave);
+      window.removeEventListener('blur', onLeave);
+    },
+  };
+}
+
+/**
+ * A working session's mark: a 3×3 grid of dots where light runs round the ring, an orbit in pixels (the sidebar's
+ * running rows). Reduced motion shows it still.
+ */
+const RING = [0, 1, 2, 7, -1, 3, 6, 5, 4]; // each cell's place on the ring, clockwise from the top left (-1: the centre)
+export function dotGrid(cls = '') {
+  return h('span', { class: `dgrid ${cls}`.trim(), role: 'img', 'aria-label': 'Working' }, RING.map((r) => {
+    const d = h('i', r < 0 ? { class: 'c' } : null);
+    if (r >= 0) d.style.setProperty('--r', r);
+    return d;
+  }));
+}
+
+/** A project's letter tile: the first letter or digit of its name on a quiet square (the sidebar, the toolbar). */
+export function projTile(name, size = 18, cls = '') {
+  const ch = (String(name || '').match(/[\p{L}\p{N}]/u)?.[0] || '·').toUpperCase();
+  const el = h('span', { class: `ptile ${cls}`.trim(), 'aria-hidden': 'true' }, ch);
+  el.style.setProperty('--s', `${size}px`);
+  return el;
 }
 
 export function iconBtn(name, title, onclick, cls = '') {

@@ -1,44 +1,72 @@
-// Side panel: Overview, Inspect, Review, Files, Changes (git), Tasks, Agents, Side question, Terminal and Browser.
-import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce, errorState } from './dom.js';
-import { asciiArt } from './ascii.js';
+// Side panel: Review (a branch session), Changes (git), Files, Terminal, Browser, Tasks (with helper agents), Inspect
+// and Side question. It works for the open conversation, and on Home for the project chosen there (Changes, Files,
+// Terminal and Browser, which need no conversation).
+import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce, errorState, fmtTokens, fmtCost } from './dom.js';
+import { asciiSpin } from './ascii.js';
 import { api, rpc } from './api.js';
-import { S, activeTab, emit, on, savePrefs } from './store.js';
+import { S, activeTab, emit, on, savePrefs, sendPrompt } from './store.js';
+import { homeProject } from './home.js';
 import { codeView, renderUnifiedDiff, todoList, agentRow } from './tools.js';
 import { langFor } from './highlight.js';
-import { ansiFragment } from './ansi.js';
 import { runInspector } from './run-inspector.js';
 import { coalesce } from './coalesce.mjs';
 import { drawReview, loadReview, reviewCount } from './review.js';
 import { workingRuns } from './runs.js';
 import { renderMarkdown } from './markdown.js';
-import { asciiSpin } from './ascii.js';
 import { openLink } from './engine.js';
 import { desktopBrowser, canShowInside, addressToUrl, rememberVisit } from './browser.js';
+import { btn } from './dialogs.js';
+import { drawTerminal } from './terminal.js';
+import { effectiveKeys } from './keys.mjs';
 
-const P = { tab: 'home', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
+const P = { tab: 'changes', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
 let body;
 let tabsEl;
 let inspector = null;
 
-const ALL_TABS = [['home', 'Overview', 'overview'], ['run', 'Inspect', 'activity'], ['review', 'Review', 'check'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Tasks', 'list'], ['agents', 'Agents', 'users'], ['ask', 'Side question', 'message'], ['console', 'Terminal', 'terminal'], ['browser', 'Browser', 'globe']];
-// Review is there for a session on its own branch only.
-let TABS = ALL_TABS.filter(([k]) => k !== 'review');
+const ALL_TABS = [['review', 'Review', 'check'], ['changes', 'Changes', 'branch'], ['files', 'Files', 'folder'], ['console', 'Terminal', 'terminal'], ['browser', 'Browser', 'globe'], ['todos', 'Tasks', 'list'], ['run', 'Inspect', 'activity'], ['ask', 'Side question', 'message'], ['context', 'Context', 'gauge'], ['new', 'New tab', 'compass']];
+const HOME_TABS = new Set(['changes', 'files', 'console', 'browser', 'new']);
+const DEFAULT_OPEN = ['changes', 'files', 'console', 'browser'];
+// The panel's tabs are the surfaces you opened, in order, like a browser's (kept across restarts). "+" adds a New tab
+// page that lists every surface; picking one turns it into that surface. TABS: the open ones this view can show.
+let OPEN = [...DEFAULT_OPEN];
+let TABS = [];
+const known = (k) => ALL_TABS.some(([x]) => x === k);
+/** Review is there for a session on its own branch only; on Home, only the surfaces that need no conversation. */
+const allowed = (k, t) => (k !== 'review' || !!t?.worktree) && (!t?.home || HOME_TABS.has(k));
 function syncTabs(t) {
-  TABS = ALL_TABS.filter(([k]) => k !== 'review' || !!t?.worktree);
-  if (!TABS.some(([k]) => k === P.tab)) P.tab = 'changes';
+  TABS = OPEN.filter((k) => allowed(k, t)).map((k) => ALL_TABS.find(([x]) => x === k));
+  if (!TABS.length) TABS = [ALL_TABS.find(([x]) => x === 'new')];
+  if (!TABS.some(([k]) => k === P.tab)) P.tab = TABS[0][0];
+}
+const saveOpen = () => savePrefs({ panelTabs: OPEN.filter((k) => k !== 'new') });
+
+// What the panel is for: the open conversation, or on Home the project chosen there (one stable object per folder, so
+// its browser keeps its page while you switch away and back).
+const homeCtx = new Map();
+function cur() {
+  const t = activeTab();
+  if (t) return t;
+  const ws = homeProject();
+  if (!ws) return null;
+  if (!homeCtx.has(ws)) homeCtx.set(ws, { home: true, id: `home-${homeCtx.size}`, workspace: ws, todos: [], subagents: new Map() });
+  return homeCtx.get(ws);
 }
 
 export function mountPanel(el) {
   root = el;
-  if (ALL_TABS.some(([k]) => k === S.ui.rightTab)) P.tab = S.ui.rightTab;
+  if (Array.isArray(S.ui.panelTabs)) OPEN = [...new Set(S.ui.panelTabs.filter((k) => known(k) && k !== 'new'))];
+  P.tab = OPEN.includes(S.ui.rightTab) ? S.ui.rightTab : OPEN[0] || 'new';
+  if (!OPEN.length) OPEN = ['new'];
   tabsEl = h('div', { class: 'ptabs', role: 'tablist', 'aria-label': 'Side panel' });
   body = h('div', { class: 'pbody' });
   root.append(tabsEl, body);
-  on('active', () => resetFor(activeTab()));
+  on('active', () => resetFor(cur()));
+  on('home:project', () => !activeTab() && resetFor(cur()));
   // A link from a reply, with Settings → Browser → Open links in: Built-in browser.
   on('browse', (url) => {
-    const t = activeTab();
+    const t = cur();
     if (!t) return;
     const st = (t.browser ||= { url: '', view: null });
     if (st.view && window.orbixDesktop?.browser) st.view.loadURL(url).catch(() => {});
@@ -54,17 +82,18 @@ export function mountPanel(el) {
       P.tree.clear(); // the agent may have created or removed files
       if (P.tab === 'files' && !P.file) draw();
     }
-    if ((kind === 'todos' && P.tab === 'todos') || (kind === 'agents' && P.tab === 'agents') || (kind === 'review' && P.tab === 'review') || (P.tab === 'home' && kind !== 'git')) draw();
+    if (((kind === 'todos' || kind === 'agents') && P.tab === 'todos') || (kind === 'review' && P.tab === 'review')) draw();
     if ((kind === 'git' || kind === 'review') && tab.worktree && P.tab === 'review') loadReview(tab, reviewRedraw);
     drawTabs();
   });
   on('tab:state', (tab) => tab === activeTab() && drawTabs());
-  on('runs', () => P.tab === 'home' && activeTab() && draw());
-  on('panel:badges', () => P.tab === 'home' && activeTab() && body.querySelector('.ph') && homeCounts());
   const refreshRun = coalesce((tab) => { if (!document.hidden && tab === activeTab() && P.tab === 'run') inspector?.update(tab); });
+  // The Context tab follows the conversation's numbers (a few times a second at most).
+  const refreshCtx = coalesce((tab) => { if (!document.hidden && tab === activeTab() && P.tab === 'context') fillContext(tab); });
+  for (const event of ['tab:state', 'tab:status']) on(event, refreshCtx);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&P.tab==='run'&&activeTab())inspector?.update(activeTab());});
   for (const event of ['tab:tool','tab:state','tab:status','tab:messages']) on(event, refreshRun);
-  resetFor(activeTab());
+  resetFor(cur());
 }
 
 const reviewRedraw = () => {
@@ -82,99 +111,199 @@ function resetFor(tab) {
   drawTabs();
   draw();
   if (tab) loadGit(P.tab !== 'changes'); // the toolbar shows the branch, so load it for every tab
+  emit('panel:subject');
 }
+
+let focusTerm = false; // the Terminal takes the keyboard when you open its tab, not when the panel redraws
+/** The side panel's current tab. */
+export const panelTab = () => P.tab;
 
 /** Git status of the active project, once loaded (for the toolbar's branch). */
 export const gitState = (ws) => (ws && ws === P.ws ? P.git : null);
 
+/** Show surface `name`, opening its tab (next to the current one, or in place of a New tab) when it is not open. */
 export function showTab(name) {
+  const t = cur();
+  if (!known(name) || !allowed(name, t)) name = allowed('changes', t) ? 'changes' : 'new';
+  if (!OPEN.includes(name)) {
+    const i = OPEN.indexOf(P.tab);
+    if (P.tab === 'new' && i >= 0) OPEN.splice(i, 1, name);
+    else OPEN.splice(i >= 0 ? i + 1 : OPEN.length, 0, name);
+    fresh = name;
+    saveOpen();
+  } else if (P.tab === 'new' && name !== 'new') {
+    // A New tab turns into what you pick there; when that is already open, the New tab closes and it comes forward.
+    OPEN = OPEN.filter((k) => k !== 'new');
+    saveOpen();
+  }
+  syncTabs(t);
   P.tab = name;
   P.file = null;
   P.diff = null;
   drawTabs();
+  focusTerm = name === 'console';
   draw();
+  // The new surface settles in (once per switch, not on every refresh of its content).
+  body.classList.remove('enter');
+  void body.offsetWidth;
+  body.classList.add('enter');
   if (name === 'changes') loadGit();
   if (name === 'review' && activeTab()?.worktree) loadReview(activeTab(), reviewRedraw);
   savePrefs({ rightTab: name, rightPanel: true });
   emit('panel:open');
-  const field = { console: '.console-in input', ask: '.ask-in', browser: '.br-url' }[name];
+  focusTerm = false;
+  const field = { ask: '.ask-in', browser: '.br-url', new: '.nt-it:not(.off)' }[name];
   const input = field && body.querySelector(field);
   if (input) queueMicrotask(() => input.isConnected && input.focus({ preventScroll: true }));
 }
 
-/** The panel's tabs for a session and the counts on them (also shown on the Overview card). */
-export function panelInfo(t) {
+let fresh = ''; // the tab just opened, which grows in once
+
+/** "+": a New tab page next to the current tab (or the one already open). */
+function newPanelTab() {
+  if (!OPEN.includes('new')) {
+    const i = OPEN.indexOf(P.tab);
+    OPEN.splice(i >= 0 ? i + 1 : OPEN.length, 0, 'new');
+    fresh = 'new';
+  }
+  showTab('new');
+}
+
+/** Close tab `k`: the one beside it takes its place; the last one closed leaves a New tab. */
+function closePanelTab(k) {
+  const t = cur();
+  const shown = TABS.map(([x]) => x);
+  const at = shown.indexOf(k);
+  const wasCur = P.tab === k;
+  OPEN = OPEN.filter((x) => x !== k);
+  if (!OPEN.some((x) => allowed(x, t))) OPEN.push('new');
+  saveOpen();
+  if (!wasCur) return drawTabs();
   syncTabs(t);
-  const nChanges = P.git?.files?.length || 0;
+  const left = TABS.map(([x]) => x);
+  showTab(left[Math.min(at, left.length - 1)] || 'new');
+}
+
+/** The counts on the tabs: changed files, open tasks plus working helper agents (both under Tasks), files to review. */
+function badges(t) {
+  syncTabs(t);
   const nTodo = (t?.todos || []).flatMap((p) => p.tasks || []).filter((x) => x.status !== 'completed' && x.status !== 'abandoned').length;
   const nAg = [...(t?.subagents?.values() || [])].filter((a) => /running|started|pending/.test(a.progress?.status || a.status || '')).length;
-  return { tabs: TABS, badge: { changes: nChanges, todos: nTodo, agents: nAg, review: reviewCount(t) } };
+  return { changes: P.git?.files?.length || 0, todos: nTodo + nAg, review: reviewCount(t) };
 }
 
 /** The next (1) or previous (-1) side panel tab; opens the panel when it is closed. */
 export function stepPanelTab(dir) {
-  syncTabs(activeTab());
+  syncTabs(cur());
   const i = TABS.findIndex(([k]) => k === P.tab);
   showTab(TABS[(i + dir + TABS.length) % TABS.length][0]);
 }
 
+// ---------------------------------------------------------------- surfaces
+/**
+ * Everything the panel can show, with the shortcut that opens it from anywhere (Settings → Shortcuts changes them).
+ * The New tab page lists them; a surface that needs a conversation is dimmed with the reason.
+ */
+function surfaces(t) {
+  const conv = !!t && !t.home;
+  return [
+    { id: 'surfReview', icon: 'check', label: 'Review', off: !t?.worktree, why: 'For a conversation on its own branch', run: () => showTab('review') },
+    { id: 'surfBrowser', icon: 'globe', label: 'Browser', run: () => openBrowser(t, { incog: false, device: false }) },
+    { id: 'surfIncognito', icon: 'incognito', label: 'Incognito browser', note: 'Keeps nothing after ORBIX closes', run: () => openBrowser(t, { incog: true, device: false }) },
+    { id: 'terminal', icon: 'terminal', label: 'Terminal', run: () => showTab('console') },
+    { id: 'files', icon: 'search', label: 'Open file', off: !conv, why: 'Open a conversation first', run: () => emit('search', 'files') },
+    { id: 'surfFiles', icon: 'folder', label: 'Files', run: () => showTab('files') },
+    { id: 'surfChanges', icon: 'branch', label: 'Changes', run: () => showTab('changes') },
+    { id: 'surfTasks', icon: 'list', label: 'Tasks', off: !conv, why: 'Open a conversation first', run: () => showTab('todos') },
+    { id: 'inspector', icon: 'activity', label: 'Inspect', off: !conv, why: 'Open a conversation first', run: () => showTab('run') },
+    { id: 'surfDevice', icon: 'smartphone', label: 'Device', note: 'The page at phone size', run: () => openBrowser(t, { incog: !!t?.browser?.incog, device: true }) },
+    { id: 'sideQuestion', icon: 'message', label: 'Side question', off: !conv, why: 'Open a conversation first', run: () => showTab('ask') },
+    { id: 'surfContext', icon: 'gauge', label: 'Context', note: 'Tokens, cost and the system prompt', off: !conv, why: 'Open a conversation first', run: () => showTab('context') },
+  ];
+}
+
+/** Open surface `id` (a shortcut, or a row of the New tab page). */
+export function openSurface(id) {
+  const t = cur();
+  if (!t) return toast('Open a project first.', 'info', 2200);
+  const it = surfaces(t).find((x) => x.id === id);
+  if (!it) return;
+  if (it.off) return toast(`${it.label}: ${it.why}.`, 'info', 2400);
+  it.run();
+}
+
+/** The keys of a surface: its Ctrl+Alt one when it has one, else the first. */
+const surfaceKey = (id) => {
+  const ks = effectiveKeys(S.ui.keys)[id] || [];
+  return ks.find((k) => k.startsWith('Ctrl+Alt+')) || ks[0] || '';
+};
+
+/** Open the Browser surface in a mode; a different mode starts a fresh view (its own session). */
+function openBrowser(t, { incog, device }) {
+  const st = (t.browser ||= { url: '', view: null });
+  if (!!st.incog !== incog || incog) {
+    st.view = null; // a new <webview> on the other session; each Incognito view starts with a fresh one
+    if (incog) (st.url = ''), (st.incogN = (st.incogN || 0) + 1);
+  }
+  if (!!st.device !== device) st.view = null; // the phone's user agent is set when the view is made
+  st.incog = incog;
+  st.device = device;
+  if (P.tab === 'browser') draw();
+  showTab('browser');
+}
+
+/** The New tab page: every surface as a row with its shortcut. ↑ ↓ move, Enter opens. */
+function drawNew(t) {
+  const rows = surfaces(t).map((it, i) => {
+    const key = surfaceKey(it.id);
+    const b = h('button', { class: 'nt-it' + (it.off ? ' off' : ''), type: 'button', title: it.off ? it.why : it.note || null, 'aria-disabled': it.off ? 'true' : null, 'aria-keyshortcuts': key || null, onclick: () => (it.off ? toast(`${it.label}: ${it.why}.`, 'info', 2400) : it.run()) },
+      icon(it.icon, 15), h('span', { class: 'nt-l grow' }, it.label, it.note ? h('small', null, it.note) : null),
+      key ? h('span', { class: 'nt-k' }, key.split('+').map((k) => h('kbd', null, k === 'Ctrl' ? 'Ctrl' : k))) : null);
+    b.style.setProperty('--i', i);
+    return b;
+  });
+  const list = h('div', { class: 'nt-list', role: 'list', 'aria-label': 'Open a surface' }, rows);
+  list.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const all = rows.filter((x) => !x.classList.contains('off'));
+    const i = all.indexOf(document.activeElement);
+    all[(i + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length]?.focus();
+  });
+  body.append(h('div', { class: 'p-scroll nt-page' }, list));
+}
+
 function drawTabs() {
-  const t = activeTab();
-  const { badge } = panelInfo(t);
-  queueMicrotask(() => emit('panel:badges'));
-  replace(tabsEl, TABS.map(([k, l, ic], index) => h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), type: 'button', role: 'tab', 'aria-label':l, tabindex:P.tab===k?'0':'-1', 'aria-selected': String(P.tab === k), title: l, onclick: () => showTab(k), onkeydown:e=>{
-    let next;
-    if(e.key==='ArrowRight')next=(index+1)%TABS.length;
-    else if(e.key==='ArrowLeft')next=(index+TABS.length-1)%TABS.length;
-    else if(e.key==='Home')next=0;else if(e.key==='End')next=TABS.length-1;
-    if(next==null)return;e.preventDefault();showTab(TABS[next][0]);tabsEl.children[next]?.focus();
-  } }, icon(ic, 14), h('span', { class: 'lbl' }, l), badge[k] ? h('span', { class: 'badge num' }, badge[k]) : null)));
+  const t = cur();
+  const badge = badges(t);
+  const tabs = TABS.map(([k, l, ic], index) => {
+    const tab = h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), type: 'button', role: 'tab', 'aria-label': l, tabindex: P.tab === k ? '0' : '-1', 'aria-selected': String(P.tab === k), title: l, onclick: () => showTab(k), onauxclick: (e) => e.button === 1 && (e.preventDefault(), closePanelTab(k)), onkeydown: (e) => {
+      if (e.key === 'Delete') return e.preventDefault(), closePanelTab(k);
+      let next;
+      if (e.key === 'ArrowRight') next = (index + 1) % TABS.length;
+      else if (e.key === 'ArrowLeft') next = (index + TABS.length - 1) % TABS.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = TABS.length - 1;
+      if (next == null) return;
+      e.preventDefault();
+      showTab(TABS[next][0]);
+      tabsEl.querySelectorAll('.ptab')[next]?.focus();
+    } }, icon(ic, 14), h('span', { class: 'lbl ell' }, l), badge[k] ? h('span', { class: 'badge num' }, badge[k]) : null);
+    const x = h('button', { class: 'ptab-x', type: 'button', tabindex: '-1', title: `Close ${l} (Delete)`, 'aria-label': `Close ${l}`, onclick: () => closePanelTab(k) }, icon('x', 12));
+    return h('div', { class: 'ptab-w' + (P.tab === k ? ' cur' : '') + (fresh === k ? ' fresh' : '') }, tab, x);
+  });
+  fresh = '';
+  const plus = h('button', { class: 'ptab-new', type: 'button', title: 'New tab', 'aria-label': 'New tab', onclick: newPanelTab }, icon('plus', 14));
+  replace(tabsEl, tabs, plus);
 }
 
 function draw() {
-  const t = activeTab();
+  const t = cur();
   clear(body);
   inspector = null;
   if (!t) return;
   if (P.tab === 'run') { inspector = runInspector(t, () => showTab('changes')); body.append(inspector.el); return; }
-  ({ home: drawHome, ask: drawAsk, browser: drawBrowser, files: drawFiles, changes: drawChanges, todos: drawTodos, agents: drawAgents, console: drawConsole, review: (x) => drawReview(x, body, { redraw: reviewRedraw, viewFile }) })[P.tab](t);
-}
-
-/**
- * The panel's first page: find a file, the panel's tools with their counts, the helper agents of this conversation
- * and the runs working now. Everything else in the panel starts from here.
- */
-/** Refresh the counts on the home page in place (git status arrives after it is drawn). */
-function homeCounts() {
-  const { badge } = panelInfo(activeTab());
-  for (const el of body.querySelectorAll('.ph-it[data-k]')) {
-    const n = badge[el.dataset.k] || 0;
-    let c = el.querySelector('.ph-n');
-    if (!n) c?.remove();
-    else if (c) c.textContent = n;
-    else el.append(h('span', { class: 'ph-n num' }, n));
-  }
-}
-
-function drawHome(t) {
-  const { tabs, badge } = panelInfo(t);
-  const find = h('button', { class: 'ph-find', type: 'button', onclick: () => emit('search', 'files') }, icon('search', 14), h('span', { class: 'grow' }, `Find a file in ${baseName(t.workspace) || 'the project'}`), h('kbd', null, 'Ctrl+K'));
-  const ITEMS = { review: ['Review', 'check'], changes: ['Changes', 'branch'], files: ['Open file', 'file'], console: ['Terminal', 'terminal'], ask: ['Side question', 'message'], browser: ['Browser', 'globe'], todos: ['Tasks', 'list'], run: ['Inspect', 'activity'] };
-  const have = new Set(tabs.map(([k]) => k));
-  const items = ['review', 'changes', 'files', 'console', 'browser', 'ask', 'todos', 'run'].filter((k) => have.has(k)).map((k) => h('button', { class: 'ph-it', type: 'button', dataset: { k }, onclick: () => showTab(k) }, icon(ITEMS[k][1], 15), h('span', { class: 'grow' }, ITEMS[k][0]), badge[k] ? h('span', { class: 'ph-n num' }, badge[k]) : null));
-  const helpers = [...(t.subagents?.values() || [])];
-  const runs = workingRuns();
-  const section = (title, n, rows, more) => h('section', { class: 'ph-sec' }, h('h4', null, title, h('span', { class: 'ph-n num' }, n)), rows, more || null);
-  body.append(h('div', { class: 'p-scroll ph' },
-    find,
-    h('nav', { class: 'ph-list', 'aria-label': 'Panel' }, items),
-    helpers.length ? section('Subagents', helpers.length, helpers.slice(0, 5).map((a) => {
-      const p = a.progress || a;
-      const st = p.status || a.status || 'pending';
-      const live = /running|started|pending/.test(st);
-      return h('button', { class: 'ph-row', type: 'button', onclick: () => showTab('agents'), title: (p.assignment || p.task || '').toString().slice(0, 300) }, live ? h('span', { class: 'dot run' }) : icon(/fail|error/.test(st) ? 'x' : 'check', 13), h('span', { class: 'ell' }, (p.assignment || p.task || p.id || 'Helper').toString().split('\n')[0]));
-    }), helpers.length > 5 ? h('button', { class: 'ph-more', type: 'button', onclick: () => showTab('agents') }, 'See all') : null) : null,
-    runs.length ? section('Background runs', runs.length, runs.slice(0, 5).map((r) => h('button', { class: 'ph-row', type: 'button', onclick: () => emit('open-run', r.id) }, h('span', { class: 'dot run' }), h('span', { class: 'ell' }, r.title))), runs.length > 5 ? h('button', { class: 'ph-more', type: 'button', onclick: () => emit('open-run', null) }, 'See all') : null) : null));
+  ({ new: drawNew, context: drawContext, ask: drawAsk, browser: drawBrowser, files: drawFiles, changes: drawChanges, todos: drawTodos, console: (x) => drawTerminal(body, { focus: focusTerm }), review: (x) => drawReview(x, body, { redraw: reviewRedraw, viewFile }) })[P.tab](t);
 }
 
 /**
@@ -218,7 +347,7 @@ function drawAsk(t) {
       h('div', { class: 'ask-q' }, it.q),
       it.busy ? h('div', { class: 'pending' }, asciiSpin(), h('span', { class: 'pending-l' }, 'Thinking'))
         : it.err ? h('div', { class: 'ask-err' }, it.err)
-        : h('div', { class: 'ask-a' }, renderMarkdown(it.a), it.model ? h('div', { class: 'ask-m' }, it.model) : null))) : emptyState('users', 'Ask a quick question about this conversation, even while the agent works: what it changed, why, where something is. It answers without tools and does not add to the conversation. You can also type /btw in the message box.'));
+        : h('div', { class: 'ask-a' }, renderMarkdown(it.a), it.model ? h('div', { class: 'ask-m' }, it.model) : null))) : emptyState('message', 'Ask a quick question about this conversation, even while the agent works: what it changed, why, where something is. It answers without tools and does not add to the conversation. You can also type /btw in the message box.'));
   body.append(log, h('div', { class: 'ask-bar' }, box, iconBtn('send', 'Ask (Enter)', send, 'ask-go')));
   log.scrollTop = log.scrollHeight;
 }
@@ -229,9 +358,16 @@ function drawAsk(t) {
  * in a web browser it can show only this computer's pages, in a sandboxed frame. What it cannot show opens in your
  * own browser. Each conversation keeps its own page.
  */
+// A phone, for Device: its size and a mobile browser's user agent, so sites send their phone layout.
+const PHONE = { w: 393, h: 852, ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' };
+
 function drawBrowser(t) {
   const st = (t.browser ||= { url: '', view: null });
   const desk = desktopBrowser();
+  const modeChips = () => [
+    st.incog ? h('span', { class: 'br-chip incog', title: 'Incognito: no history, cookies or cache are kept after ORBIX closes' }, icon('incognito', 13), 'Incognito') : null,
+    iconBtn('smartphone', st.device ? 'Device: on (phone size). Click for full width' : 'Device: show the page at phone size', () => openBrowser(t, { incog: !!st.incog, device: !st.device }), 'sm br-dev' + (st.device ? ' on' : '')),
+  ];
   const sugg = h('datalist', { id: `br-hist-${t.id}` }, (S.ui.browserHistory || []).slice(0, 30).map((u) => h('option', { value: u })));
   const input = h('input', { class: 'br-url', type: 'text', value: st.url, placeholder: 'Search or enter a URL', 'aria-label': 'Address', spellcheck: false, autocomplete: 'off', list: sugg.id });
   const go = (raw) => {
@@ -241,7 +377,7 @@ function drawBrowser(t) {
       openLink(v);
       return toast('Opened in your browser. In a web browser, ORBIX shows only pages on this computer.', 'ok', 2600);
     }
-    rememberVisit(v);
+    if (!st.incog) rememberVisit(v);
     if (st.view && st.url && desk) {
       st.url = v;
       input.value = v;
@@ -256,15 +392,16 @@ function drawBrowser(t) {
   });
   input.addEventListener('focus', () => input.select());
   if (!st.url) {
-    body.append(h('div', { class: 'p-bar br-bar' }, input, iconBtn('refresh', 'Look again for running apps', () => draw(), 'sm')), sugg);
+    body.append(h('div', { class: 'p-bar br-bar' }, input, ...modeChips(), iconBtn('refresh', 'Look again for running apps', () => draw(), 'sm')), sugg);
+    if (st.incog) body.append(h('div', { class: 'br-note' }, icon('incognito', 14), h('span', null, 'Incognito. Pages you open here share no sign-ins with the default browser, and their history, cookies and cache are forgotten when ORBIX closes.')));
     const list = h('div', { class: 'p-scroll pad br-list' }, skeleton(3));
     body.append(list);
     api.get('/api/devservers').then(({ servers }) => {
       if (!list.isConnected) return;
       replace(list,
         servers.length ? h('h4', { class: 'br-h' }, 'Running on this computer') : null,
-        servers.length ? servers.map((s) => h('button', { class: 'ph-row br-row', type: 'button', title: s.url, onclick: () => go(s.url) }, h('span', { class: 'dot ok' }), h('span', { class: 'ell grow' }, s.title || `localhost:${s.port}`), h('span', { class: 'muted num' }, `:${s.port}`)))
-          : emptyState('files', `No web app is running on the usual ports (3000, 5173, 8000, 8080…). Start your dev server, or ask the agent to, then look again. ${desk ? 'You can also type any address or a search above.' : 'You can also type a port or a localhost address above.'}`));
+        servers.length ? servers.map((s) => h('button', { class: 'br-row', type: 'button', title: s.url, onclick: () => go(s.url) }, h('span', { class: 'dot ok' }), h('span', { class: 'ell grow' }, s.title || `localhost:${s.port}`), h('span', { class: 'muted num' }, `:${s.port}`)))
+          : emptyState('globe', `No web app is running on the usual ports (3000, 5173, 8000, 8080…). Start your dev server, or ask the agent to, then look again. ${desk ? 'You can also type any address or a search above.' : 'You can also type a port or a localhost address above.'}`));
     }, (e) => list.isConnected && replace(list, errorState(e.message, { retry: () => draw() })));
     return;
   }
@@ -277,19 +414,19 @@ function drawBrowser(t) {
   if (!desk) {
     // A web browser: this computer's pages in a sandboxed frame. The frame's own history is out of reach.
     const frame = h('iframe', { class: 'br-frame', src: st.url, title: `Preview of ${st.url}`, sandbox: 'allow-scripts allow-forms allow-same-origin allow-popups allow-modals', referrerpolicy: 'no-referrer' });
-    body.append(h('div', { class: 'p-bar br-bar' }, home, input, iconBtn('refresh', 'Reload', () => (frame.src = st.url), 'sm'), ext), sugg, h('div', { class: 'br-view' }, frame));
+    body.append(h('div', { class: 'p-bar br-bar' }, home, input, ...modeChips(), iconBtn('refresh', 'Reload', () => (frame.src = st.url), 'sm'), ext), sugg, h('div', { class: 'br-view' + (st.device ? ' device' : '') }, frame));
     return;
   }
   // The Windows app: a <webview> kept per conversation, so switching tabs does not lose the page.
   const back = iconBtn('arrow-left', 'Back', () => st.view?.canGoBack() && st.view.goBack(), 'sm');
   const fwd = iconBtn('arrow-right', 'Forward', () => st.view?.canGoForward() && st.view.goForward(), 'sm');
   const reload = iconBtn('refresh', 'Reload', () => (st.loading ? st.view?.stop() : st.view?.reload()), 'sm');
-  const bar = h('div', { class: 'p-bar br-bar' }, back, fwd, reload, input, home, ext);
+  const bar = h('div', { class: 'p-bar br-bar' }, back, fwd, reload, input, ...modeChips(), home, ext);
   const err = h('div', { class: 'br-err', hidden: true });
   const loading = h('div', { class: 'br-load', hidden: true });
   let wv = st.view;
   if (!wv) {
-    wv = h('webview', { class: 'br-frame', src: st.url, partition: 'persist:orbix-browser', allowpopups: '' });
+    wv = h('webview', { class: 'br-frame', src: st.url, partition: st.incog ? `orbix-incognito-${st.incogN || 1}` : 'persist:orbix-browser', allowpopups: '', useragent: st.device ? PHONE.ua : null });
     st.view = wv;
   }
   const sync = () => {
@@ -313,7 +450,7 @@ function drawBrowser(t) {
       st.url = e.url;
       const box = now();
       if (box && document.activeElement !== box) box.value = e.url;
-      rememberVisit(e.url);
+      if (!st.incog) rememberVisit(e.url);
       st.sync?.();
     };
     wv.addEventListener('did-navigate', nav);
@@ -331,11 +468,11 @@ function drawBrowser(t) {
     err.hidden = !st.error;
     err.textContent = st.error || '';
   };
-  body.append(bar, sugg, loading, err, h('div', { class: 'br-view' }, wv));
+  body.append(bar, sugg, loading, err, h('div', { class: 'br-view' + (st.device ? ' device' : '') }, wv));
   st.sync();
 }
 
-const emptyState = (kind, text) => h('div', { class: 'empty' }, asciiArt(kind), text);
+const emptyState = (ic, text) => h('div', { class: 'empty' }, h('span', { class: 'empty-ic', 'aria-hidden': 'true' }, icon(ic, 17)), text);
 
 const joinP = (a, b) => (/^[A-Za-z]:|^\\\\/.test(a) ? a.replace(/[\\/]+$/, '') + '\\' + b.replace(/\//g, '\\') : (a === '/' ? '' : a.replace(/\/+$/, '')) + '/' + b);
 
@@ -431,13 +568,13 @@ export async function reviewChanges(t, p) {
 }
 
 const gitSoon = debounce(() => {
-  const t = activeTab();
+  const t = cur();
   if (t && (P.tab === 'changes' || !P.git)) loadGit();
   else if (t) loadGit(true);
 }, 900);
 
 async function loadGit(quiet) {
-  const t = activeTab();
+  const t = cur();
   if (!t) return;
   const ws = t.workspace;
   P.busy = !quiet;
@@ -459,13 +596,25 @@ async function loadGit(quiet) {
 function drawChanges(t) {
   if (P.diff) return drawDiff(t);
   const g = P.git;
-  body.append(h('div', { class: 'p-bar' }, icon('branch', 14), h('span', { class: 'grow ell mono' }, g?.repo ? `${g.branch}${g.upstream ? ' → ' + g.upstream : ''}${g.ahead ? ` ↑${g.ahead}` : ''}${g.behind ? ` ↓${g.behind}` : ''}` : 'Changes'), iconBtn('refresh', 'Refresh', () => loadGit(), 'sm')));
+  body.append(h('div', { class: 'p-bar' }, icon(g?.repo ? 'branch' : 'folder', 14), h('span', { class: 'grow ell mono' }, g?.repo ? `${g.branch}${g.upstream ? ' → ' + g.upstream : ''}${g.ahead ? ` ↑${g.ahead}` : ''}${g.behind ? ` ↓${g.behind}` : ''}` : baseName(t.workspace)), iconBtn('refresh', 'Refresh', () => loadGit(), 'sm')));
   if (P.busy && !g) return body.append(skeleton(6, 'pad'));
   if (P.gitErr) return body.append(errorState(P.gitErr, { title: 'Couldn’t read the changes.', retry: () => loadGit() }));
   if (!g) return loadGit();
   if (g.gitMissing) return body.append(emptyState('branch', 'Git is not installed, so changes cannot be shown.'));
-  if (!g.repo) return body.append(emptyState('branch', 'This folder is not a git repository.'));
-  if (!g.files.length) return body.append(emptyState('check', 'No changes yet. The agent’s edits will appear here.'));
+  if (!g.repo) {
+    const init = btn('Initialize Git', async () => {
+      try {
+        await api.post('/api/git/init', { ws: t.workspace });
+        toast(`Initialized a Git repository in ${baseName(t.workspace)}`, 'ok', 2400);
+        emit('git:init', t.workspace);
+        await loadGit();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }, 'sm');
+    return body.append(h('div', { class: 'empty' }, h('span', { class: 'empty-ic', 'aria-hidden': 'true' }, icon('branch', 17)), h('b', null, 'Not a Git repository'), h('span', null, 'Initialize Git to track the agent’s changes here, review them and undo them.'), init));
+  }
+  if (!g.files.length) return body.append(emptyState('check', 'No changes yet.'));
   const list = h('div', { class: 'p-scroll' });
   const paths = (files) => files.flatMap((f) => (f.from ? [f.path, f.from] : [f.path]));
   const letter = (f) => (f.untracked ? 'U' : f.x !== ' ' ? f.x : f.y);
@@ -496,7 +645,7 @@ async function gitDo(t, what, extra) {
     toast(e.message, 'error', 6000);
     return null;
   } finally {
-    if (activeTab() === t) await loadGit(true);
+    if (cur() === t) await loadGit(true);
   }
 }
 
@@ -529,7 +678,7 @@ function commitBox(t, nStaged) {
       P.msg = '';
       toast(`Committed${r.commit?.hash ? ' ' + r.commit.hash : ''}`, 'ok', 3000);
     }
-    if (P.tab === 'changes' && !P.diff && activeTab() === t) draw();
+    if (P.tab === 'changes' && !P.diff && cur() === t) draw();
   };
   ta.addEventListener('input', sync);
   ta.addEventListener('keydown', (e) => {
@@ -563,48 +712,86 @@ function drawDiff(t) {
   else c.append(renderUnifiedDiff(d.text, d.file.path));
 }
 
+/** Tasks: the agent's task list, then the helper agents it started for research. */
+// ---------------------------------------------------------------- Context
+/**
+ * What the conversation holds, as in OpenCode's Context tab: the session, provider and model, the context window and
+ * how full it is, tokens by kind, messages, cost, when it started and was last active, and the system prompt the
+ * next turn sends (ORBIX's own agent; an agent CLI keeps its own).
+ */
+let ctxEl = null;
+function drawContext(t) {
+  ctxEl = { grid: h('dl', { class: 'ctx-grid' }), prompt: h('div', { class: 'ctx-prompt' }, skeleton(6, 'pad')), t };
+  const compact = btn('Compact now', () => sendPrompt(t, '/compact').catch((e) => toast(e.message, 'error')), 'sm');
+  const copy = btn('Copy system prompt', () => copyText(ctxEl?.promptText || '').then(() => toast('Copied', 'ok', 1200)), 'sm');
+  ctxEl.compact = compact;
+  ctxEl.copy = copy;
+  body.append(h('div', { class: 'p-scroll ctx-page' },
+    ctxEl.grid,
+    h('div', { class: 'ctx-acts' }, compact, copy),
+    h('h4', { class: 'ctx-h' }, 'System prompt'),
+    ctxEl.prompt));
+  fillContext(t);
+  rpc(t.id, { type: 'get_system_prompt' }).then((r) => {
+    if (!ctxEl || ctxEl.t !== t || !ctxEl.prompt.isConnected) return;
+    const text = r?.data?.text || '';
+    ctxEl.promptText = text;
+    ctxEl.copy.hidden = !text;
+    ctxEl.prompt.replaceChildren(text ? h('pre', { class: 'ctx-sys' }, text) : h('p', { class: 'muted small' }, `${r?.data?.owner || 'This agent'} builds its own system prompt; ORBIX does not see it.`));
+  }, (e) => ctxEl?.prompt.isConnected && ctxEl.prompt.replaceChildren(errorState(e.message, { title: 'Couldn’t read the system prompt.' })));
+}
+
+async function fillContext(t) {
+  if (!ctxEl || ctxEl.t !== t || !ctxEl.grid.isConnected) return;
+  let st = t.stats || {};
+  try {
+    st = (await rpc(t.id, { type: 'get_session_stats' }))?.data || st;
+  } catch {}
+  if (!ctxEl?.grid.isConnected) return;
+  const msgs = t.messages || [];
+  const cu = st.contextUsage || t.stats?.contextUsage;
+  const tk = st.tokens || {};
+  const m = t.model;
+  const pv = S.engine?.providers?.find((p) => p.id === m?.provider)?.name || m?.provider || '';
+  const times = msgs.map((x) => x.doneAt || x.timestamp).filter(Boolean);
+  const when = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—');
+  const n = (v) => (Number.isFinite(v) ? v.toLocaleString() : '—');
+  const reasoning = msgs.reduce((a, x) => a + (x.role === 'assistant' ? x.usage?.reasoning || 0 : 0), 0);
+  const rows = [
+    ['Session', t.name],
+    ['Messages', n(st.totalMessages ?? msgs.length)],
+    ['Provider', pv || '—'],
+    ['Model', m ? m.name || m.id : '—'],
+    ['Context limit', cu ? n(cu.contextWindow) : '—'],
+    ['In context now', cu ? `${n(cu.tokens)}${cu.estimated ? ' (estimated)' : ''}` : '—'],
+    ['Usage', cu ? `${cu.percent < 1 ? cu.percent.toFixed(1) : Math.round(cu.percent)}%` : '—'],
+    ['Total tokens', n(tk.total)],
+    ['Input tokens', n(tk.input)],
+    ['Output tokens', n(tk.output)],
+    reasoning ? ['Reasoning tokens', n(reasoning)] : null,
+    ['Cache tokens (read / write)', `${n(tk.cacheRead)} / ${n(tk.cacheWrite)}`],
+    ['Your messages', n(st.userMessages ?? msgs.filter((x) => x.role === 'user').length)],
+    ['Replies', n(st.assistantMessages ?? msgs.filter((x) => x.role === 'assistant').length)],
+    st.toolCalls != null ? ['Tool calls', n(st.toolCalls)] : null,
+    ['Total cost', st.cost != null ? fmtCost(st.cost) : 'Not reported'],
+    ['Started', when(times[0])],
+    ['Last activity', when(times[times.length - 1])],
+  ].filter(Boolean);
+  ctxEl.grid.replaceChildren(...rows.map(([k, v]) => h('div', { class: 'ctx-cell' }, h('dt', null, k), h('dd', { class: 'num' }, v))));
+  if (cu) {
+    const bar = h('div', { class: 'ctx-bar' + (cu.percent > 90 ? ' crit' : cu.percent > 70 ? ' hot' : '') }, h('i'));
+    bar.firstChild.style.setProperty('--p', `${Math.min(100, cu.percent).toFixed(1)}%`);
+    ctxEl.grid.append(h('div', { class: 'ctx-cell wide' }, h('dt', null, `Context window · ${fmtTokens(cu.tokens)} of ${fmtTokens(cu.contextWindow)}`), bar));
+  }
+  ctxEl.compact.disabled = !!t.streaming || !msgs.length;
+  ctxEl.compact.title = t.streaming ? 'Wait until the agent is done' : 'Summarize older turns now to free the context';
+}
+
 function drawTodos(t) {
   const total = (t.todos || []).flatMap((p) => p.tasks || []).length;
-  if (!total) return body.append(emptyState('list', 'The agent’s task list appears here while it works.'));
-  body.append(h('div', { class: 'p-scroll pad' }, todoList(t.todos)));
-}
-
-function drawAgents(t) {
-  const list = [...t.subagents.values()];
-  if (!list.length) return body.append(emptyState('users', 'Helper agents started for research appear here.'));
-  list.sort((a, b) => (b.progress?.durationMs ? 0 : 1) - (a.progress?.durationMs ? 0 : 1));
-  body.append(h('div', { class: 'p-scroll pad agents' }, list.map(agentRow)));
-}
-
-function drawConsole(t) {
-  const out = h('div', { class: 'console-out' });
-  const inp = h('input', { type: 'text', class: 'mono', placeholder: `Command in ${baseName(t.workspace)}`, 'aria-label': 'Shell command', spellcheck: 'false' });
-  const paint = () => {
-    replace(out, t.console.length ? t.console.map((c) => h('div', { class: 'con-entry' }, h('div', { class: 'cmdl' }, '$ ' + c.cmd, c.code ? h('span', { class: 'tool-exit num' }, `exit ${c.code}`) : null), h('pre', { class: c.code ? 'err' : null }, c.out == null ? '…' : ansiFragment(c.out)))) : emptyState('terminal', 'Run a shell command in the project folder. The output is added to the conversation.'));
-    out.scrollTop = out.scrollHeight;
-  };
-  inp.addEventListener('keydown', async (e) => {
-    if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229 || !inp.value.trim() || t.dead) return;
-    e.preventDefault();
-    const entry = { cmd: inp.value.trim(), out: null };
-    inp.value = '';
-    t.console.push(entry);
-    paint();
-    try {
-      const r = await rpc(t.id, { type: 'bash', command: entry.cmd });
-      entry.out = String(r.data?.output ?? '').replace(/\n?\[exit code -?\d+\]\s*$/, '') || '(no output)';
-      entry.code = r.data?.exitCode;
-    } catch (er) {
-      entry.out = er.message;
-      entry.code = 1;
-    }
-    if (P.tab === 'console' && activeTab() === t) {
-      if (out.isConnected) paint();
-      else body.querySelector('.console-out')?._paint?.();
-    }
-    emit('tab:panel', t, 'git');
-  });
-  body.append(out, h('div', { class: 'console-in' }, h('span', { class: 'prompt', 'aria-hidden': 'true' }, '$'), inp, iconBtn('stop', 'Stop the running command', () => rpc(t.id, { type: 'abort_bash' }).catch(() => {}), 'sm')));
-  out._paint = paint;
-  paint();
+  const helpers = [...(t.subagents?.values() || [])].sort((a, b) => (b.progress?.durationMs ? 0 : 1) - (a.progress?.durationMs ? 0 : 1));
+  if (!total && !helpers.length) return body.append(emptyState('list', 'The agent’s task list, and the helper agents it starts, appear here while it works.'));
+  body.append(h('div', { class: 'p-scroll pad' },
+    total ? todoList(t.todos) : null,
+    helpers.length ? h('section', { class: 'p-sec agents' }, h('h4', { class: 'p-sec-h' }, 'Helper agents', h('span', { class: 'num' }, String(helpers.length))), helpers.map(agentRow)) : null));
 }

@@ -7,7 +7,7 @@ import { clip, makeTitle, uid } from '../util.mjs';
 import { createSession, appendEntry, closeSession, loadSession, repairTail } from '../engine/store.mjs';
 import { promptImages, promptAttachments, readMentions } from '../engine/context.mjs';
 import { createTools } from '../engine/tools.mjs';
-import { destructiveReason } from '../engine/policy.mjs';
+import { destructiveReason, readOnlyCommand } from '../engine/policy.mjs';
 import { writeExport } from '../engine/export.mjs';
 import { zeroUsage } from '../engine/proc-usage.mjs';
 import { ClaudeDriver } from './claude.mjs';
@@ -94,8 +94,8 @@ export class HarnessProc extends EventEmitter {
     if (a.kind === 'claude') d = new ClaudeDriver({ backend: this.backend, bin: (await this.registry.argv(a))[0], cwd, approvals });
     else if (a.kind === 'codex') d = new CodexDriver({ backend: this.backend, bin: (await this.registry.argv(a))[0], cwd, approvals });
     else {
-      // OpenCode asks through ACP only for what its config says "ask": commands always (ORBIX decides, Turbo included,
-      // so a destructive one still asks), file edits unless Auto edits or Turbo allow them.
+      // OpenCode asks through ACP only for what its config says "ask": commands always (ORBIX decides, Full access included,
+      // so a destructive one still asks), file edits unless Auto edits or Full access allow them.
       const env = a.id === 'agent-opencode' ? { ...a.env, OPENCODE_CONFIG_CONTENT: JSON.stringify({ autoupdate: false, permission: { edit: approvals === 'ask' ? 'ask' : 'allow', bash: 'ask', webfetch: approvals === 'auto' ? 'allow' : 'ask' } }) } : a.env;
       d = new AcpDriver({ backend: this.backend, argv: await this.registry.argv(a), cwd, approvals, env, name: a.name });
     }
@@ -375,8 +375,8 @@ export class HarnessProc extends EventEmitter {
   }
 
   /**
-   * The agent wants to use a tool that needs permission. ORBIX's approval mode decides: Turbo allows (except a
-   * destructive command, which always asks), Auto edits allows file changes, "Allow for this session" is remembered.
+   * The agent wants to use a tool that needs permission. ORBIX's approval mode decides: Full access allows (except a
+   * destructive command, which always asks), Auto edits allows file changes, Guarded also read-only commands, "Allow for this session" is remembered.
    */
   async _approve({ name, arguments: args = {}, raw }) {
     const mode = this.config.data.approvals;
@@ -385,7 +385,8 @@ export class HarnessProc extends EventEmitter {
     const key = `${name}:${raw || ''}`;
     if (!risky) {
       if (mode === 'auto') return 'allow';
-      if (mode === 'edits' && EDITS.has(name)) return 'allow';
+      if ((mode === 'edits' || mode === 'safe') && EDITS.has(name)) return 'allow';
+      if (mode === 'safe' && command && readOnlyCommand(command)) return 'allow';
       if (this.allowAlways.has(key)) return 'allow';
     }
     const what = name === 'bash' ? `Run this command?  ${clip(command, 400)}` : EDITS.has(name) ? `${name === 'write' ? 'Write' : 'Change'} ${args.path ? args.path : 'files'}?` : `Allow ${raw || name}?  ${clip(JSON.stringify(args), 200)}`;
@@ -420,6 +421,9 @@ export class HarnessProc extends EventEmitter {
         return ok({ commands: this.cache.commands });
       case 'get_session_stats':
         return ok({ tokens: { input: this.usage.input, output: this.usage.output, cacheRead: this.usage.cacheRead, cacheWrite: this.usage.cacheWrite, total: this.usage.input + this.usage.output + this.usage.cacheRead + this.usage.cacheWrite }, cost: this.costKnown ? this.cost : undefined, messages: this.messages.length });
+      // An agent CLI builds its own system prompt; ORBIX never sees it.
+      case 'get_system_prompt':
+        return ok({ text: '', owner: this.agent.name });
       case 'get_subagents':
         return ok({ subagents: [] });
       case 'set_model': {

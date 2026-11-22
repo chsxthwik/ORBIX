@@ -30,7 +30,8 @@ let ok = false;
 try {
   if (DESKTOP) {
     page = await startDesktop(process.env.ORBIX_DESKTOP_EXE || path.join(ROOT, 'dist', 'win-unpacked', 'ORBIX.exe'), data, path.join(root, 'desktop'));
-    assert(await page.eval(`return !!window.orbixDesktop`), 'the Electron preload bridge');
+    await page.until(`!!window.orbixDesktop`, 'the Electron preload bridge', 20000);
+    assert(await page.eval(`return location.href.startsWith('orbix://app/') && !!window.orbixDesktop.engine`), 'the interface from orbix://app/ with the engine over IPC');
     say('desktop e2e: running the packaged ORBIX window');
   } else {
     orbix = await startOrbix(data, 47992);
@@ -38,10 +39,10 @@ try {
     await page.goto(orbix.url);
   }
   await page.until(`document.querySelector('#welcome textarea')`, 'Home');
-  assert(await page.eval(`return !performance.getEntriesByType('resource').some((e) => new URL(e.name).pathname === '/api/engine')`), 'boot gets provider status in the initial state response');
+  assert(await page.eval(`return !(await import('/js/api.js')).recentCalls.includes('/api/engine')`), 'boot gets provider status in the initial state response');
   await page.eval(`const trigger = document.querySelector('.home-model-pick'); trigger.focus(); trigger.click();`);
-  await page.until(`document.querySelector('.mp-list .list-h') && document.querySelector('.mp-list')?.textContent.includes('orbix-fixture')`, 'the Home provider and model');
-  assert(await page.eval(`return performance.getEntriesByType('resource').some((e) => new URL(e.name).pathname === '/api/engine/models') && !performance.getEntriesByType('resource').some((e) => new URL(e.name).pathname === '/api/proc/start')`), 'Home lists models directly and starts no temporary agent');
+  await page.until(`document.querySelector('.mp-rail .mp-pv') && document.querySelector('.mp-list')?.textContent.includes('orbix-fixture')`, 'the Home provider and model');
+  assert(await page.eval(`return (await import('/js/api.js')).recentCalls.includes('/api/engine/models') && !(await import('/js/api.js')).recentCalls.includes('/api/proc/start')`), 'Home lists models directly and starts no temporary agent');
   await page.until(`document.activeElement?.matches('.model-picker input[role=combobox]')`, 'model search receives focus');
   await page.press('ArrowDown', 40);
   assert(await page.eval(`
@@ -141,25 +142,26 @@ try {
   await page.eval(`document.querySelector('details.work > summary').click()`);
   await page.until(`document.querySelector('details.work').open && [...document.querySelectorAll('details.work .tool[data-id]')].every((x) => x.offsetParent)`, 'the steps shown');
   await shot('13-conversation-steps');
-  // The window chrome: the menu row, where you are in the toolbar, the Overview card, and back / forward.
-  const chrome = await page.eval(`return { menus: [...document.querySelectorAll('#menubar .mb-it')].map((b) => b.textContent), crumb: document.querySelector('#topbar .crumb.cur')?.textContent || '' };`);
+  // The window chrome: the menu row, where you are in the toolbar, the side-panel button, and back / forward.
+  const chrome = await page.eval(`return { menus: [...document.querySelectorAll('#menubar .mb-it')].map((b) => b.getAttribute('aria-label') || b.textContent), crumb: document.querySelector('#topbar .crumb.cur')?.textContent || '' };`);
   assert(chrome.menus.join(',') === 'ORBIX,Workspace,View,Window', `the menu row (${chrome.menus})`);
   assert(/explain sign-in/i.test(chrome.crumb), `the conversation in the toolbar (${chrome.crumb})`);
+  const was = await page.eval(`return document.querySelector('#app').classList.contains('no-panel')`);
   await page.eval(`document.querySelector('#topbar .tb-panel').click()`);
-  await page.until(`document.querySelector('.main > .overview .ov-it')`, 'the Overview card with the side panel closed');
-  await page.eval(`[...document.querySelectorAll('.overview .ov-it')].find((b) => b.textContent.startsWith('Files')).click()`);
-  await page.until(`!document.querySelector('#app').classList.contains('no-panel') && !document.querySelector('.main > .overview')`, 'Files opens the side panel and the card steps aside');
+  await page.until(`document.querySelector('#app').classList.contains('no-panel') === ${!was}`, 'the toolbar button toggles the side panel');
+  if (!was) await page.eval(`document.querySelector('#topbar .tb-panel').click()`);
+  await page.until(`!document.querySelector('#app').classList.contains('no-panel') && document.querySelectorAll('.ptabs .ptab').length >= 4`, 'the side panel open with its tabs');
   await page.key('2', { ctrl: true, keyCode: 50, code: 'Digit2' });
   await page.until(`!document.querySelector('#runs').hidden`, 'Runs');
   await page.eval(`document.querySelector('#topbar .tb-nav').click()`);
   await page.until(`!document.querySelector('#session').hidden && /explain sign-in/i.test(document.querySelector('#topbar .crumb.cur')?.textContent || '')`, 'Back returns to the conversation');
-  say('conversation e2e: menu row, toolbar, Overview and back');
-  // Rename through the dialog, as a person does it: the name's menu, Rename…, type, Enter. The name is kept exactly
+  say('conversation e2e: menu row, toolbar, side panel and back');
+  // Rename through the dialog, as a person does it: the conversation's ··· menu, Rename…, type, Enter. The name is kept exactly
   // as typed, in the toolbar and at once in the sidebar, and the Enter does nothing else (it used to also press the
   // button the focus went back to, which reopened the menu or opened the conversation a second time).
   const exact = 'Hey: fix *login*. Now';
   const renameField = `document.activeElement?.matches('.modal input[type=text]')`;
-  await page.mouse('#topbar .crumb.cur');
+  await page.mouse('#topbar .tb-more');
   await page.until(`document.querySelector('.menu:not(.leaving)')`, 'the conversation menu');
   await page.click('Rename', '.menu');
   await page.until(renameField, 'the rename dialog');
@@ -204,10 +206,10 @@ try {
   await page.until(`document.querySelector('#sidebar .s-btn[data-path]') && !document.querySelector('#sidebar .s-row.archived')`, 'unarchived');
   // Settings is a page: Preferences → send with Ctrl+Enter makes Enter a new line; Back returns to the app.
   await page.key(',', { ctrl: true, keyCode: 188, code: 'Comma' });
-  await page.until(`document.querySelector('.modal.settings-card .set-tab.cur')`, 'Settings as a card');
+  await page.until(`document.querySelector('.modal.settings-card .set-tab.cur')`, 'Settings, full window');
   await page.eval(`document.querySelector('#set-general').click()`);
   await page.click('Ctrl+Enter', '.modal.settings-card');
-  await page.click('Close', '.modal.settings-card .set-main');
+  await page.click('Back to app', '.modal.settings-card .set-nav');
   await page.until(`!document.querySelector('.modal.settings-card')`, 'back to the app');
   const sent = model.seen.length;
   await page.fill('#session textarea', 'one line');
@@ -227,20 +229,20 @@ try {
   assert(await page.eval(`return !!document.querySelector('#panel .ask-a, #panel .ask-err')`), 'an answer (or its error) in the panel');
   assert(model.seen.length === seenBefore + 1 && model.seen.at(-1).tools.length === 0, 'one model call, without tools');
   assert((await page.eval(`return document.querySelectorAll('#session .msg').length`)) === msgsBefore, 'nothing added to the conversation');
-  // Automations: add one, run it now (a new conversation joins the sidebar), then delete it.
-  await page.click('Automations', '#sidebar .side-nav');
-  await page.until(`document.querySelector('#runs .au-new')`, 'the Automations page');
-  await page.click('New automation', '#runs');
-  await page.fill('#runs .au-form textarea', 'Say hello from the automation.');
-  await page.click('Add automation', '#runs');
-  await page.until(`document.querySelector('#runs .au-item')`, 'the automation listed');
+  // Loops: add one, run it now (a new conversation joins the sidebar), then delete it.
+  await page.click('Loops', '#sidebar .side-nav');
+  await page.until(`document.querySelector('#runs .au-new')`, 'the Loops page');
+  await page.click('New loop', '#runs');
+  await page.fill('#runs .au-form textarea', 'Say hello from the loop.');
+  await page.click('Add loop', '#runs');
+  await page.until(`document.querySelector('#runs .au-item')`, 'the loop listed');
   const tabsBefore = await page.eval(`return (await import('/js/store.js')).S.tabs.size`);
   await page.click('Run now', '#runs .au-item');
-  await page.until(`(async () => (await import('/js/store.js')).S.tabs.size > ${tabsBefore})()`, 'the automation opened a conversation', 20000);
+  await page.until(`(async () => (await import('/js/store.js')).S.tabs.size > ${tabsBefore})()`, 'the loop opened a conversation', 20000);
   await page.click('Delete', '#runs .au-item');
   await page.click('Delete', '.modal');
-  await page.until(`!document.querySelector('#runs .au-item')`, 'the automation deleted');
-  say('conversation e2e: side question and automations');
+  await page.until(`!document.querySelector('#runs .au-item')`, 'the loop deleted');
+  say('conversation e2e: side question and loops');
   // Shortcuts: record F7 for the sidebar in Settings → Shortcuts, use it, then put the defaults back.
   await page.key(',', { ctrl: true, keyCode: 188, code: 'Comma' });
   await page.until(`document.querySelector('.modal.settings-card')`, 'Settings');
@@ -273,7 +275,7 @@ try {
   assert(await page.eval(`return document.querySelectorAll('.tin > details.work.live').length === 1 && !!document.querySelector('.tin > details.work.live .tool') && !document.querySelector('.tin > .msg .tool')`), 'late tools stay inside the live activity row');
   await page.click('Allow once', '.approval');
   await page.until(`document.querySelector('.tin > details.work:not(.live) + .msg .md')?.textContent.includes('Final answer after the check.')`, 'the final answer below the finished activity');
-  assert(await page.eval(`return !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track, .session-inner > .tl') && getComputedStyle(document.querySelector('.tb-mark .lg-node')).animationName === 'none'`), 'no loose calls, no dotted rail, no idle logo animation');
+  assert(await page.eval(`return !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track, .session-inner > .tl') && getComputedStyle(document.querySelector('.mb-brand .wm-dot')).animationName === 'none'`), 'no loose calls, no dotted rail, no idle logo animation');
   await page.fill('#session textarea', 'Keep this as the second message.');
   await page.key('Enter', { keyCode: 13, code: 'Enter' });
   await page.until(`document.querySelectorAll('.turn-map .turn-mark').length === 2 && document.querySelector('.turn-mark:last-child')?.hasAttribute('aria-current')`, 'compact message markers track the current message');
@@ -296,7 +298,7 @@ try {
     await shot('browser-tab');
     site.close();
     say('conversation e2e: built-in browser');
-    // Settings → Application in the Windows app: the tray and keeping the PC awake switch on and off cleanly.
+    // Settings → About in the Windows app: the tray and keeping the PC awake switch on and off cleanly.
     assert(await page.eval(`return !!window.orbixDesktop.system`), 'the system bridge');
     await page.eval(`const st = await import('/js/store.js'); await st.savePrefs({ tray: true, preventSleep: true }); await new Promise((r) => setTimeout(r, 3500)); await st.savePrefs({ tray: false, preventSleep: false }); await new Promise((r) => setTimeout(r, 500));`);
     say('conversation e2e: tray and prevent sleep');

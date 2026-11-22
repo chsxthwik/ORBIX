@@ -59,6 +59,10 @@ describe('files outside the project', () => {
     assert.equal(ask('ask', 'read', '../secret.txt'), true);
     assert.equal(ask('edits', 'grep', path.join(os.homedir(), '.ssh')), true);
   });
+  test('Guarded writes inside the project without asking, never outside it', () => {
+    assert.equal(ask('safe', 'write', 'src/new.js'), false);
+    assert.equal(ask('safe', 'edit', '../elsewhere.js'), true);
+  });
   test('Allow edits still asks before writing outside the project', () => {
     assert.equal(ask('edits', 'write', 'src/new.js'), false);
     assert.equal(ask('edits', 'write', '../elsewhere.js'), true);
@@ -67,13 +71,18 @@ describe('files outside the project', () => {
     assert.equal(ask('auto', 'read', '../secret.txt'), false);
     assert.equal(ask('ask', 'read', '../secret.txt', ['read:outside']), false);
   });
-  test('a destructive command asks in every mode, Turbo and an approval for the session included', () => {
+  test('a destructive command asks in every mode, Full access and an approval for the session included', () => {
     const run = (approvals, command, allow = []) => AgentProc.prototype._mustAsk.call({ config: { data: { approvals, trusted: ['git'] } }, allowAlways: new Set(allow), tools: T, _outside: AgentProc.prototype._outside, _needsApproval: (n) => ['write', 'edit', 'bash'].includes(n) }, { name: 'bash' }, { command });
-    for (const mode of ['ask', 'edits', 'auto']) {
+    for (const mode of ['ask', 'edits', 'safe', 'auto']) {
       assert.equal(run(mode, 'rm -rf build'), true, mode);
       assert.equal(run(mode, 'git push origin main', ['bash']), true, mode);
     }
-    assert.equal(run('auto', 'npm test'), false, 'Turbo runs an ordinary command');
+    assert.equal(run('auto', 'npm test'), false, 'Full access runs an ordinary command');
+    assert.equal(run('safe', 'git status'), false, 'Guarded runs a read-only command');
+    assert.equal(run('safe', 'grep -rn "a;b" src | head -5'), false, 'Guarded runs a pipe of read-only commands');
+    assert.equal(run('safe', 'npm test'), true, 'Guarded asks before any other command');
+    assert.equal(run('safe', 'ls; touch x'), true, 'Guarded asks before a chained command');
+    assert.equal(run('edits', 'git status'), true, 'Auto edits still asks before commands');
   });
 });
 

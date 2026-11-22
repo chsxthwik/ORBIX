@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Screenshots for the README and the website, taken from a real ORBIX on sample data. No dependencies.
 //
-//   node tools/shots.mjs            regenerate docs/img/shots/*.png and site/assets/img/shots/*.webp
+//   node tools/shots.mjs            regenerate docs/img/shots/*.png and site/assets/img/shots/*.webp (full, -1200 and -800)
 //   node tools/shots.mjs --keep     keep the temporary folder afterwards (it holds the server log)
 //
 // It starts ORBIX with ORBIX_DATA in a temporary folder, a small sample project ("shop-api", a git repository) and a
@@ -360,12 +360,14 @@ function pageOf(cdp) {
       const png = await cdp.send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(path.join(PNG_DIR, `${name}.png`), Buffer.from(png.data, 'base64'));
       if (webp) {
-        if (webpDsf !== dsf) {
-          await P.scale(webpDsf);
+        // The full size, then the 1200 and 800 px wide copies the website's srcset lists.
+        const sizes = [['', webpDsf], ['-1200', 1], ['-800', 2 / 3]].filter(([, d], i) => i === 0 || d < webpDsf);
+        for (const [suffix, d] of sizes) {
+          await P.scale(d);
           await P.settle();
+          const w = await cdp.send('Page.captureScreenshot', { format: 'webp', quality: 82 });
+          fs.writeFileSync(path.join(WEBP_DIR, `${name}${suffix}.webp`), Buffer.from(w.data, 'base64'));
         }
-        const w = await cdp.send('Page.captureScreenshot', { format: 'webp', quality: 82 });
-        fs.writeFileSync(path.join(WEBP_DIR, `${name}.webp`), Buffer.from(w.data, 'base64'));
       }
       say(`  ${name}.png${webp ? ` + ${name}.webp` : ''}`);
     },
@@ -427,10 +429,10 @@ async function scenes(page, project) {
   await page.capture('done', { dsf: 4 / 3, webp: true });
 
   // Themes: the same finished task in Light and in the ORBIX scene theme (Dark is the main shot above).
-  for (const [theme, webp] of [['light', true], ['orbix', false]]) {
+  for (const theme of ['light', 'orbix']) {
     await setTheme(page, theme);
     await page.eval(toEnd);
-    await page.capture(`theme-${theme}`, { dsf: 1, webp });
+    await page.capture(`theme-${theme}`, { dsf: 1, webp: true });
   }
   await setTheme(page, 'dark');
   await panel(true);
@@ -440,7 +442,7 @@ async function scenes(page, project) {
   await page.eval("(await import('/js/store.js')).emit('settings', 'engine')");
   await page.until("document.querySelector('.settings .pv-list .pv-card')", 'the providers page');
   await page.eval('document.activeElement?.blur()');
-  await page.capture('settings', { dsf: 4 / 3 });
+  await page.capture('settings', { dsf: 4 / 3, webp: true });
   await page.key('Escape', { code: 'Escape', keyCode: 27 });
   await page.settle(300);
 
@@ -471,7 +473,7 @@ async function scenes(page, project) {
   await page.until("document.querySelector('#runs .rq-item')", 'the Review queue');
   await page.capture('review-queue', { dsf: 4 / 3, webp: true });
 
-  // Automations: two scheduled prompts, one of them off.
+  // Loops: two scheduled prompts, one of them off.
   await page.eval(`const { api } = await import('/js/api.js');
     await api.post('/api/automations', { name: 'Morning test report', prompt: 'Run the tests and tell me what fails, with a fix for each.', project: window.__shotProject, schedule: { every: 'weekday', hour: 9, minute: 0 } });
     await api.post('/api/automations', { name: 'Weekly dependency check', prompt: 'List outdated dependencies and the risk of updating each one. Do not change files.', project: window.__shotProject, schedule: { every: 'week', day: 1, hour: 8, minute: 30 }, enabled: false });
@@ -479,7 +481,7 @@ async function scenes(page, project) {
   await page.until("document.querySelectorAll('#runs .au-item').length === 2", 'the automations');
   await page.capture('automations', { dsf: 4 / 3, webp: true });
 
-  // Customizations: the marketplace of MCP servers.
+  // Plugins: the marketplace of MCP servers.
   await page.eval("(await import('/js/runs.js')).openHub('customizations'); await new Promise((r) => setTimeout(r, 300));");
   await page.until("document.querySelector('#runs .cz-hero')", 'the marketplace');
   await page.capture('customizations', { dsf: 4 / 3, webp: true });

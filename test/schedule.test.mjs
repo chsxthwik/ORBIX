@@ -15,3 +15,15 @@ test('Create with Prompt: schedule words become a schedule, the rest the task', 
   assert.equal(none.prompt, 'Fix the 3 failing tests');
   assert.deepEqual(none.schedule, { every: 'day', hour: 9, minute: 0 });
 });
+
+test('loops: every N minutes, in N hours, tomorrow at a time', async () => {
+  const { parseSchedule: p } = await import('../web/js/schedule.mjs');
+  const now = new Date(2026, 10, 21, 10, 0).getTime();
+  assert.deepEqual(p('every 15 minutes check the build', now).schedule, { every: 'minutes', interval: 15 });
+  assert.deepEqual(p('every 2 hours sync the docs', now).schedule, { every: 'minutes', interval: 120 });
+  assert.equal(p('every hour run the tests', now).schedule.every, 'hour');
+  const once = p('in 2 hours remind me to deploy', now);
+  assert.deepEqual([once.schedule.every, once.schedule.at, once.prompt], ['once', now + 2 * 3600000, 'Remind me to deploy']);
+  const t = new Date(p('tomorrow at 9am run the tests', now).schedule.at);
+  assert.deepEqual([t.getDate(), t.getHours(), t.getMinutes()], [22, 9, 0]);
+});

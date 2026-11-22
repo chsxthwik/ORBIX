@@ -1,6 +1,6 @@
 // The only bridge between the page and the Windows app: tell the page it is in the app, let it set the colour of
 // the title bar to match its theme, flash the taskbar button, let it scale the interface (Settings → Appearance → Interface size), and let
-// it show and drive app updates (Settings → Application → Updates), and run the built-in browser's session.
+// it show and drive app updates (Settings → About → Updates), and run the built-in browser's session.
 // Nothing else from Electron or Node reaches the page.
 const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
@@ -9,14 +9,25 @@ const arg = process.argv.find((a) => a.startsWith('--orbix-screen='));
 const screenWidth = arg ? Number(arg.slice('--orbix-screen='.length)) || 0 : 0;
 
 contextBridge.exposeInMainWorld('orbixDesktop', {
-  // For Settings → Application and bug reports.
+  // The engine, in the app's own process: API calls and live events over IPC (no server, no port). The main process
+  // answers only the interface at orbix://app/.
+  engine: {
+    call: (method, path, body, q) => ipcRenderer.invoke('orbix:api', { method: String(method), path: String(path), body, q }),
+    hello: () => ipcRenderer.invoke('orbix:hello'),
+    onEvent: (fn) => {
+      const f = (_e, msg) => fn(msg);
+      ipcRenderer.on('orbix:event', f);
+      return () => ipcRenderer.removeListener('orbix:event', f);
+    },
+  },
+  // For Settings → About and bug reports.
   versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
   screenWidth,
   setTitleBar: (bg, fg) => ipcRenderer.send('orbix:titlebar', { bg: String(bg), fg: String(fg) }),
   // Flash the taskbar button until the window is focused (Settings → Notifications).
   flash: () => ipcRenderer.send('orbix:flash'),
   setZoom: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, Number(factor) || 1))),
-  // Settings → Application: keep the PC awake while agents work, keep running in the tray, Windows' notification settings.
+  // Settings → About: keep the PC awake while agents work, keep running in the tray, Windows' notification settings.
   system: {
     keepAwake: (on) => ipcRenderer.send('orbix:keep-awake', on === true),
     tray: (on) => ipcRenderer.send('orbix:tray', on === true),

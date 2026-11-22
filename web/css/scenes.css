@@ -9,9 +9,9 @@
   --bg-hover: rgba(205,208,255,.05); --bg-active: rgba(205,208,255,.09); --bubble: #161722; --bubble-line: rgba(205,208,255,.07);
   --line: rgba(205,208,255,.075); --line-2: rgba(205,208,255,.12); --line-3: rgba(205,208,255,.22); --hi: transparent;
   --fg: #EDEDF3; --fg-2: #A8A9BA; --fg-3: #7E8093;
-  --accent: #D4FF4F; --accent-solid: #D4FF4F; --on-accent: #0A0B10; --accent-soft: rgba(212,255,79,.09); --accent-line: rgba(212,255,79,.36);
-  --live: #D4FF4F; --live-line: rgba(212,255,79,.34);
-  --pa: #D4FF4F; --scrim: rgba(3,3,7,.7);
+  --accent: #FF4D8F; --accent-solid: #FF2E7E; --on-accent: #FFFFFF; --accent-soft: rgba(255,46,126,.12); --accent-line: rgba(255,46,126,.45);
+  --live: #FF2E7E; --live-line: rgba(255,46,126,.4);
+  --pa: #FF2E7E; --scrim: rgba(3,3,7,.7);
   --scene-veil: .5;
 }
 
@@ -79,7 +79,7 @@
 
 /* Theme cards: the same little window, with each scene in the sheet. */
 .scene-opts { margin-top: 12px; }
-.tp-orbix { --tc: #06070B; --ts: #090A10; --tr: #11121A; --tl: rgba(205,208,255,.12); --ti: rgba(237,237,243,.32); --tf: rgba(237,237,243,.14); --tu: #181923; --ta: #D4FF4F; }
+.tp-orbix { --tc: #06070B; --ts: #090A10; --tr: #11121A; --tl: rgba(205,208,255,.12); --ti: rgba(237,237,243,.32); --tf: rgba(237,237,243,.14); --tu: #181923; --ta: #FF2E7E; }
 .tp-sunset { --tc: #0A0516; --ts: #0D0620; --tr: #1A0E30; --tl: rgba(255,190,255,.14); --ti: rgba(248,240,255,.34); --tf: rgba(248,240,255,.14); --tu: #23143D; --ta: #FF4FB8; }
 .tp-koi { --tc: #D3EEEA; --ts: #E4F6F3; --tr: #FFFFFF; --tl: #B9DAD6; --ti: rgba(14,38,41,.32); --tf: rgba(14,38,41,.12); --tu: #FFFFFF; --ta: #F2643A; }
 .tp-aurora { --tc: #030A10; --ts: #05101A; --tr: #0C1B22; --tl: rgba(180,255,230,.13); --ti: rgba(234,251,245,.32); --tf: rgba(234,251,245,.14); --tu: #12242C; --ta: #5EF2B0; }
@@ -87,7 +87,7 @@
 .tp-orbix .tp-sheet, .tp-sunset .tp-sheet, .tp-koi .tp-sheet, .tp-aurora .tp-sheet, .tp-dusk .tp-sheet { position: relative; overflow: hidden; isolation: isolate; }
 .tp-orbix .tp-sheet::before, .tp-orbix .tp-sheet::after, .tp-dusk .tp-sheet::after { content: ''; position: absolute; z-index: -1; pointer-events: none; }
 .tp-orbix .tp-sheet::before { right: -10%; bottom: -22%; width: 50%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 32% 30%, rgba(150,130,255,.55), rgba(40,32,90,.6) 60%, #0B0B16 100%); box-shadow: 0 0 0 1px rgba(228,226,255,.25); }
-.tp-orbix .tp-sheet::after { right: -24%; bottom: 0; width: 92%; height: 22%; border-radius: 50%; border: 1.5px solid rgba(212,255,79,.6); transform: rotate(16deg); }
+.tp-orbix .tp-sheet::after { right: -24%; bottom: 0; width: 92%; height: 22%; border-radius: 50%; border: 1.5px solid rgba(255,46,126,.6); transform: rotate(16deg); }
 .tp-sunset .tp-sheet { background:
   radial-gradient(circle at 80% 56%, #FFD36E 0 9%, #FF6A8A 15%, transparent 16%),
   repeating-linear-gradient(180deg, transparent 0 5px, rgba(255,79,184,.5) 5px 6px) 0 62% / 100% 38% no-repeat,

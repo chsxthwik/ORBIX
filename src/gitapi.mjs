@@ -172,6 +172,14 @@ async function run(backend, ws, args) {
   return r.stdout.toString('utf8');
 }
 
+/** `git init` in a folder that is not a repository yet. */
+export async function init(backend, ws) {
+  const st = await status(backend, ws);
+  if (st.gitMissing) throw Object.assign(new Error('Git is not installed'), { status: 400 });
+  if (st.repo) return;
+  await run(backend, ws, ['init']);
+}
+
 export async function stage(backend, ws, paths) {
   await run(backend, ws, ['add', '-A', '--', ...cleanPaths(paths)]);
 }

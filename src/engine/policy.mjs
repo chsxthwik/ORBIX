@@ -66,7 +66,48 @@ export function destructiveReason(command, depth = 0) {
   return '';
 }
 
-// ---- Network access rules (Settings → General → Network access rules) ----
+// ---- Read-only commands (the Guarded permission level runs these without asking) ----
+// A command reads only when it is one program from this list, or several joined by pipes, with nothing chained (; &&
+// ||), redirected (> <), run in the background (&) or substituted ($( ) and backticks). Some programs read only
+// without certain options (find without -exec or -delete, sort without -o); git only with its reading subcommands.
+const READERS = new Set(['ls', 'dir', 'cat', 'head', 'tail', 'wc', 'grep', 'egrep', 'fgrep', 'rg', 'ag', 'find', 'fd', 'pwd', 'echo', 'printf', 'which', 'where', 'type', 'file', 'stat', 'du', 'df', 'tree', 'sort', 'cut', 'tr', 'nl', 'diff', 'cmp', 'basename', 'dirname', 'realpath', 'readlink', 'whoami', 'uname', 'id', 'true', 'column', 'jq',
+  'get-childitem', 'gci', 'get-content', 'gc', 'get-location', 'gl', 'select-string', 'sls', 'get-item', 'gi', 'test-path', 'resolve-path', 'measure-object', 'select-object', 'format-table', 'format-list', 'get-command', 'where-object', 'sort-object', 'out-string', 'write-output']);
+const GIT_READS = new Set(['status', 'diff', 'log', 'show', 'blame', 'ls-files', 'ls-tree', 'rev-parse', 'describe', 'shortlog', 'grep', 'cat-file', 'reflog', 'merge-base', 'show-ref', 'count-objects']);
+// Options that make a reading program write a file or start another program.
+const NOT_READING = { find: /^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls)$/, fd: /^(-x|--exec|-X|--exec-batch)$/, sort: /^(-o|--output)/, tree: /^-o$/, jq: /^(-i|--in-place)$/, rg: /^--pre/, git: /^(--output|--ext-diff|-O|--open-files-in-pager)/ };
+const LIST_ONLY = /^(-a|-r|-v|-vv|-l|--list|--all|--remotes|--verbose|--show-current|--merged|--no-merged|--sort=\S+|--format=\S+)$/;
+
+/** Whether `command` only reads (see above). */
+export function readOnlyCommand(command) {
+  const c = String(command ?? '').trim();
+  if (!c || c.length > 2000) return false;
+  // Quoted text is data: mask it so a ";" or "|" in a search pattern is not read as shell syntax.
+  const masked = c.replace(QUOTED, (m) => m[0] + '_'.repeat(m.length - 2) + m[0]);
+  if (/[;&`<>\r\n]|\$\(|\|\|/.test(masked)) return false;
+  const segs = [];
+  let from = 0;
+  for (let i = 0; i <= masked.length; i++) if (i === masked.length || masked[i] === '|') (segs.push(c.slice(from, i)), (from = i + 1));
+  return segs.every((seg) => {
+    const w = seg.trim().match(/"(?:[^"\\]|\\.)*"|'[^']*'|\S+/g) || [];
+    if (!w.length) return false;
+    const prog = w[0].replace(/^.*[\\/]/, '').replace(/\.exe$/i, '').toLowerCase();
+    const args = w.slice(1);
+    const bad = NOT_READING[prog];
+    if (bad && args.some((a) => bad.test(a))) return false;
+    if (prog !== 'git') return READERS.has(prog);
+    const i = args.findIndex((a) => !a.startsWith('-'));
+    if (i < 0 || i > 0) return false; // options before the subcommand (-c, --git-dir…) can change what runs
+    const sub = args[0];
+    const rest = args.slice(1);
+    if (GIT_READS.has(sub)) return true;
+    if (sub === 'branch' || sub === 'tag') return rest.every((a) => LIST_ONLY.test(a));
+    if (sub === 'remote') return rest.every((a) => a === '-v' || a === '--verbose');
+    if (sub === 'stash') return rest[0] === 'list' || rest[0] === 'show';
+    return false;
+  });
+}
+
+// ---- Network access rules (Settings → Preferences → Network access rules) ----
 // Sites the agent may read with web_fetch. A rule is a site ("example.com", which also covers its subdomains), only
 // the subdomains ("*.example.com"), a site and path ("example.com/docs"), or "*" for every site. Denied sites are
 // never fetched. When the allowed list has rules, only those sites are fetched without asking and every other site

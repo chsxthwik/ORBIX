@@ -1,14 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { firstName } from '../src/server.mjs';
+import { cleanDisplayName } from '../src/server.mjs';
 
-test('Home greets you by the first name of your Windows account, never by a generic one', () => {
-  assert.equal(firstName('RAVI'), 'Ravi');
-  assert.equal(firstName('anusha.ch'), 'Anusha');
-  assert.equal(firstName('john_doe'), 'John');
-  assert.equal(firstName('Administrator'), '');
-  assert.equal(firstName('user'), '');
-  assert.equal(firstName('x'), '', 'one letter is not a name');
-  assert.equal(firstName('dev123'), '', 'digits are not a name');
-  assert.equal(firstName(''), '');
+test('Home greets you only by the name you set, cleaned to one short line', () => {
+  assert.equal(cleanDisplayName('  QUANTUM  '), 'QUANTUM');
+  assert.equal(cleanDisplayName('Ada\n Lovelace\t'), 'Ada Lovelace');
+  assert.equal(cleanDisplayName('x'.repeat(60)).length, 40);
+  assert.equal(cleanDisplayName(undefined), '');
+  assert.equal(cleanDisplayName('\u0007'), '');
 });

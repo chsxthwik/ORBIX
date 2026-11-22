@@ -1,31 +1,32 @@
 # How ORBIX is built
 
-ORBIX is a Windows app: a local Node.js server and its interface, shown in an Electron window. The server runs one agent per open conversation (its own loop, or another agent CLI) and listens only on `127.0.0.1`. The same server runs without a window on Linux (ORBIX Cloud).
+ORBIX is a Windows desktop app with no server: one Electron process runs the engine (`AppServer` in `src/server.mjs`, used in-process) and shows the interface. The window loads the interface from `orbix://app/` (files read from the app itself) and calls the engine over Electron IPC. Nothing listens on a port. The engine runs one agent per open conversation (its own loop, or another agent CLI). The same engine runs without a window on Linux as ORBIX Cloud, where it is served over HTTP (`src/headless.mjs`).
 
 ```
-Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ──────▶  AgentProc per session (src/engine/proc.mjs)
- ES modules, CSS            HTTP JSON API + SSE                   model clients, tools, MCP, hooks
-                                                                    │
-                                                                    └─ Backend (src/backend.mjs): WSL or Windows
+Window (web/, at orbix://app/)  ◀── IPC: orbix:api, orbix:event ──▶  AppServer (in the app process)  ──▶  AgentProc / HarnessProc
+ ES modules, CSS                    (electron/preload.cjs)              routes, events                      model clients or agent CLIs
+                                                                                                             └─ Backend: WSL or Windows
 ```
 
 ## Start-up and shutdown
 
-1. The app (`electron/main.mjs`) sets the data folder (`%LOCALAPPDATA%\ORBIX` when installed) and starts the server in its own process through `src/app.mjs`.
-2. The server checks `instance.json` in the data folder and reuses a healthy existing server when possible.
-3. A new server creates a random token and binds to port 47821 (or another available local port). The window opens a one-time URL with the token; the server exchanges it for an `HttpOnly`, `SameSite=Strict` cookie, then redirects to `/`.
-4. On first run the server detects where commands run: the first WSL distribution that starts, otherwise Windows.
-5. Closing the window, or Quit ORBIX in Settings, saves, stops every session and the server, and removes the lock file.
-6. Updates (`electron/updater.mjs`, installed app only): electron-updater reads the newest GitHub release's `latest.yml` 15 seconds after start and every 4 hours, downloads the installer into `%LOCALAPPDATA%\orbix-agent-updater` and checks its SHA-512. The page sees the status through the preload bridge (`orbixDesktop.updates`). The installer runs silently (`--updated /S`) as the last step of quitting, after the server has stopped, and with `--force-run` when the update was started from Restart.
+1. The app (`electron/main.mjs`) sets the data folder (`%LOCALAPPDATA%\ORBIX` when installed) and takes Windows' single-instance lock: a second start only brings the open window forward and never starts an engine.
+2. `startDesktopEngine()` (`src/app.mjs`) creates the engine without listening anywhere. `protocol.handle('orbix')` serves the interface's files with the Content-Security-Policy; `ipcMain.handle('orbix:api')` runs one API route in-process (`AppServer.call`) and answers only the page at `orbix://app/`; engine events go to the window as `orbix:event` (`AppServer.listeners`).
+3. `web/js/api.js` uses that IPC bridge when the page is at `orbix://app/`, and plain HTTP (`fetch`, `EventSource`) in a browser or on an ORBIX Cloud machine. Same routes, same JSON.
+4. On first run the engine detects where commands run: the first WSL distribution that starts, otherwise Windows.
+5. Closing the window, or Quit ORBIX in Settings, saves and stops every session.
+6. Updates (`electron/updater.mjs`, installed app only): electron-updater reads the newest GitHub release's `latest.yml` 15 seconds after start and every 4 hours, downloads the installer into `%LOCALAPPDATA%\orbix-agent-updater` and checks its SHA-512. The page sees the status through the preload bridge (`orbixDesktop.updates`). The installer runs silently (`--updated /S`) as the last step of quitting, after every session has stopped, and with `--force-run` when the update was started from Restart.
 
 ## Renderer and performance checks
 
 - `/api/state` includes the public provider status so the initial view needs only one bootstrap request. `/api/engine` is still used for settings changes.
 - Streaming Markdown uses an append-only cursor in `web/js/markdown-stream.mjs`. The preview limits the work for long unfinished blocks; the final reply always uses the complete Markdown renderer.
 - ASCII canvases are owned by their views. Only visible canvases request frames, and the owner disconnects observers when the view is removed. Reduced motion paints on demand.
-- Run `node e2e/viewport.mjs` for narrow and wide Windows layout checks at 2× DPI. To compare the Markdown scanner against 3.9.5, run `node tools/bench-markdown.mjs dist/3.9.5/win-unpacked/resources/app.asar`. This is a scanner microbenchmark, not a network or whole-app timing.
+- Run `node e2e/viewport.mjs` for narrow and wide Windows layout checks at 2× DPI.
 
-## The server (`src/server.mjs`)
+## The engine's API (`src/server.mjs`)
+
+One set of routes serves both ways in: in-process over IPC in the Windows app, and over HTTP on an ORBIX Cloud machine or in a browser (`node src/app.mjs`, used by the end-to-end tests). The HTTP-only rules below (token cookie, Host and Origin checks) apply to that HTTP server; OpenRouter's sign-in, which must return to a local address, opens a callback listener on 127.0.0.1 only for the sign-in (`callbackPort`).
 
 - **Static files:** `web/` and `assets/`, with a strict Content Security Policy (no inline scripts or styles, no remote loads, no workers, and the interface itself cannot be framed). Frames depend on who asks: a web browser may frame only `localhost` and `127.0.0.1` (the Browser tab previews the web apps running on this computer); the Windows app's window (an `Electron/` user agent) may show any `http:` or `https:` page, because its Browser tab is a `<webview>` locked down in `electron/browser.mjs` (its own session, no preload or Node, sandboxed, no permissions beyond full screen and clipboard writes).
 - **Access control:** every request needs the token cookie, except `/api/ping` and the OpenRouter sign-in callback. It also checks the `Host` header (DNS rebinding), `Origin` / `Sec-Fetch-Site` (other local pages), and requires an `x-orbix: 1` header on writes.
@@ -37,12 +38,13 @@ Browser (web/)  ◀──────▶  AppServer (src/server.mjs)  ───�
 | App | `/api/state`, `/api/env`, `/api/backend`, `/api/prefs`, `/api/diagnostics`, `/api/quit` | settings, where commands run, health checks |
 | Desktop | `/api/open-url`, `/api/reveal-data` | open a checked link in the default browser; show the data folder in Explorer (takes no path) |
 | Projects | `/api/workspaces`, `/api/workspaces/remove`, `/api/project/rules` | the project list; a project's instruction and rule files, for its page in Settings |
-| Instructions and skills | `/api/instructions`, `/api/skills` | your instructions for every project (`data/AGENTS.md`); the skills the agent can use, for Customizations |
+| Instructions and skills | `/api/instructions`, `/api/skills` | your instructions for every project (`data/AGENTS.md`); the skills the agent can use; `/api/skills/file`, `/api/skills/save`, `/api/skills/delete` for the Skills page |
 | Conversations | `/api/sessions`, `/api/sessions/rename`, `/api/sessions/delete`, `/api/sessions/trash`, `/api/sessions/restore`, `/api/sessions/trash/empty` | saved conversations (only ORBIX's own files can be deleted; deleted ones stay in the trash for 30 days, Settings → Conversations → Recently deleted) |
 | Branch sessions | `/api/branch`, `/api/branch/diff`, `/api/branch/merge`, `/api/branch/keep`, `/api/branch/discard` | a conversation on its own branch: what it changed, then merge, keep or discard (merge and discard need `confirm: true`) |
-| Automations | `/api/automations`, `/api/automations/delete`, `/api/automations/run` | scheduled prompts (`src/automations.mjs`) |
+| Loops | `/api/automations`, `/api/automations/delete`, `/api/automations/run` | prompts on a schedule or once (`src/automations.mjs`) |
 | Agents | `/api/agents` | agent CLIs found and your own ACP agents (`src/harness/registry.mjs`) |
 | Machines and Teleport | `/api/machines`, `/api/machines/remove`, `/api/machines/check`, `/api/machines/open`, `/api/teleport`, `/api/teleport/files`, `/api/teleport/open` | ORBIX Cloud (`src/cloud.mjs`) |
+| Terminal | `/api/pty/list`, `/api/pty/open`, `/api/pty/input`, `/api/pty/resize`, `/api/pty/interrupt`, `/api/pty/close` | real shells on a pseudo-terminal (a Python helper inside Linux/WSL; PowerShell in line mode for Windows folders), several per project; output as `{ g: "pty" }` events (`src/pty.mjs`) |
 | Browser | `/api/devservers` | web apps running on this computer, for the side panel's Browser tab (`src/devservers.mjs`) |
 | Sessions | `/api/proc/start`, `/api/proc/stop`, `/api/procs`, `/api/proc/ui`, `/api/rpc`, `/api/reply` | open, drive and close agent sessions |
 | AI providers | `/api/engine*` | keys, OpenRouter sign-in, models, approvals, web search |
@@ -129,14 +131,14 @@ The interface (`web/js/runs.js`, `web/css/runs.css`) has three views in the `#ru
 of everything that waits for you) and the page of one run (timeline, documents, changes, feedback, decision bar). The
 server sends `{g: 'run', run}` on every change.
 
-## Automations (`src/automations.mjs`)
+## Loops (`src/automations.mjs`)
 
-A prompt that ORBIX sends by itself, in a project, as a new conversation: every hour (at a minute), every day,
-on weekdays or every week (at a time). `data/automations.json` holds them. A timer checks every 30 seconds; each due
+A prompt that ORBIX sends by itself, in a project, as a new conversation: every 5 to 1440 minutes, every hour (at a minute), every day,
+on weekdays or every week (at a time), or once at a date and time (it turns itself off after it runs). `data/automations.json` holds them. A timer checks every 30 seconds; each due
 one starts through the server (`startAutomation`: open a session, send the prompt, name it), and moves to its next
 time. Times missed while ORBIX was closed are skipped, not caught up, and a run still working is not started twice.
-Approvals work as in any conversation: in Ask first a run waits in Review. The page is `web/js/automations.js`
-(sidebar → Automations, in the `#runs` section).
+Approvals work as in any conversation: in Supervised a run waits in Review. The page is `web/js/automations.js`
+(sidebar → Loops, in the `#runs` section).
 
 ## Where commands run (`src/backend.mjs`)
 
@@ -161,27 +163,31 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | Module | Role |
 |---|---|
 | `main.js` | start-up, layout, sidebar, keyboard shortcuts, routing events to views |
-| `shell.js`, `controls.js` | the window chrome (menu row, toolbar with back/forward and breadcrumbs, the Overview card, the sidebar's preview card) and the message box's "+" and permission chip |
+| `shell.js`, `controls.js` | the window chrome (menu row, toolbar with back/forward, the project tile and breadcrumbs, the context meter, the sidebar's preview card) and the message box's "+", model button, reasoning menu and permission chip |
+| `context.js` | the toolbar's Context menu: where the project runs, MCP servers, skills and rule files, each in a submenu (`cascade()` in dialogs.js) |
 | `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
-| `updates.js` | update status in the sidebar and Settings → Application |
+| `updates.js` | update status: the pill at the top right of the menu row, and Settings → About |
 | `store.js` | client state and the reducer that turns session events into UI state |
 | `api.js` | HTTP calls and the SSE connection |
 | `home.js` | Home: the ORBIX mark and a greeting, suggestions from the project, and the message box with the project and branch strip |
 | `session.js`, `tools.js`, `markdown.js`, `highlight.js`, `ansi.js` | conversation view and tool steps |
 | `composer.js` | message box: attachments, history, `/` and `@` pop-ups |
-| `panels.js` | side panel: Overview, Inspect, Review (a session on its own branch only), Files, Changes (git), Tasks (todos), Agents, Side question, Terminal, Browser |
-| `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings (a card over the workspace; `settingsSearchItems` feeds Ctrl+K) |
+| `panels.js` | side panel (on Home and in conversations), as browser-like tabs of the surfaces you opened (prefs `panelTabs`) and a New tab page listing them all with their Ctrl+Alt shortcuts: Changes (git), Files, Terminal (terminal.js), Browser (Default, Incognito, Device), Tasks (todos and helper agents), Inspect, Side question, Review (a session on its own branch only) |
+| `terminal.js` | the side panel's Terminal tab: xterm.js (`web/vendor/xterm`, loaded on first use) over `/api/pty/*`; several terminals per project, split; xterm's style tags are mirrored into a constructed stylesheet so the CSP needs no inline styles |
+| `project.js` | the project popover: environment, Open in (`/api/project/open`), project scripts (run in the Terminal), Initialize Git (`/api/git/init`) |
+| `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings (the whole window under the menu row; `settingsSearchItems` feeds Ctrl+K) |
 | `keys.mjs` | the shortcuts you can change: actions, default keys, `comboOf(event)`, your changes in `prefs.keys` |
 | `browser.js` | where links open, the Browser tab's addresses and history; `electron/browser.mjs` is the Windows app's browser session |
 | `brands.js` | provider logo marks, drawn inline |
-| `ascii.js` | ASCII canvases: the orbit on Home, the COM-X mark in About, the spinner while the agent works, and art for empty panels; one still frame under reduced motion or screen reader mode |
+| `ascii.js` | the COM-X mark in About (characters on a canvas) and the working loader (the ORBIX mark swapping O ↔ X); one still frame under reduced motion or screen reader mode |
 | `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js` | dialogs and notifications |
 | `dom.js` | DOM helpers, icons and logo |
 | `workbench.js`, `timeline.js`, `quote.js` | find in a conversation, the outline of your messages, the wide column and focus mode; jumping to a message and Alt+↑/↓ between yours; and asking about selected text |
 | `review.js` | sessions on their own branch: the sidebar board and the Review view (merge, keep or discard) |
 | `run-inspector.js`, `run-summary.mjs` | the side panel's Inspect tab: the session's tool activity |
-| `customize.js`, `catalog.mjs` | the Customizations page (Marketplace and Installed); the marketplace's MCP servers and the exact config each one saves |
-| `automations.js`, `schedule.mjs` | the Automations page; Create with Prompt, which turns one sentence into a schedule and a task with plain rules (no model) |
+| `customize.js`, `catalog.mjs` | the Plugins page (Marketplace and Installed); the marketplace's MCP servers and the exact config each one saves |
+| `skills.js` | the Skills page: the project's skills and yours; add, edit, delete (to the trash) |
+| `automations.js`, `schedule.mjs` | the Loops page; Create with Prompt, which turns one sentence into a schedule and a task with plain rules (no model) |
 | `ratings.js` | your 👍 and 👎 per model, counted on this PC only (`localStorage`), listed in Settings → Models → Your ratings |
 | `workspace.js`, `exporter.js` | task suggestions, and a conversation as Markdown |
 | `theme-boot.js`, `desktop.js`, `interface.js` | the theme before first paint, the Windows title bar colours, tooltips |

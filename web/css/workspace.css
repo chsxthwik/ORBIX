@@ -10,10 +10,7 @@
 .sidebar .side-link { position:relative; }
 .sidebar .side-search { margin:8px 12px 2px; }
 .sidebar .side-foot { margin:0 10px 6px; padding:10px 0 0; border-top:1px solid var(--line); }
-.panel .ptabs { padding:8px; gap:4px; min-height:49px; }
-.panel .ptab { border:1px solid transparent; }
 .ibtn { transition:background-color var(--t2) var(--ease), color var(--t2) var(--ease), transform var(--t2) var(--ease); }
-.ibtn:hover:not(:disabled) { background:var(--bg-active); color:var(--fg); }
 .session .send { transition:transform var(--t2) var(--ease), filter var(--t2) var(--ease), box-shadow var(--t3) var(--ease); }
 .session .send:hover:not(:disabled) { filter:brightness(1.06); }
 
@@ -22,7 +19,6 @@
 }
 
 .side-h { margin-top: 18px; font-size: 12px; }
-.ptab.cur { color: var(--fg); background: var(--bg-active); }
 .ptab svg { display: block; }
 
 /* Shared interface controls and harness panels. */
@@ -56,9 +52,8 @@
 
 .run-row-detail { line-height:1.6; }
 .run-inspector .run-duration { font-size:12px; }
-.ptab { transition:background-color var(--t2) var(--ease), color var(--t2) var(--ease); }
 @media(pointer:coarse) {
-  .ibtn, .run-filter, .ptab { min-height:38px; }
+  .ibtn, .run-filter { min-height:38px; }
   .search-clear { min-width:34px; min-height:34px; }
 }
 @media(prefers-reduced-motion:reduce) { .welcome:not([hidden]) { animation:none; } }
@@ -66,12 +61,8 @@
 .run-search { width:100%; height:38px; font-size:13px; margin:0 0 12px; border-color:var(--line-2); border-radius:11px; background:var(--bg-inset); box-shadow:none; }
 .run-match-count { padding:10px 2px 4px; color:var(--fg-3); font-size:12px; font-variant-numeric:tabular-nums; }
 
-/* Dark uses a softer lime than the raw token; Midnight keeps its own sky accent. Every accent tint follows the same hue. */
-:root[data-theme=dark] { --accent:#c2dc8b; --accent-solid:#c2dc8b; --accent-soft:rgba(194,220,139,.09); --accent-line:rgba(194,220,139,.32); --live:#c2dc8b; --live-line:rgba(194,220,139,.32); --pa:#c2dc8b; }
 .main,.panel { border-radius:14px; box-shadow:none; }
 
-.ptabs { overflow-x:auto; flex:none; scrollbar-width:none; padding:6px; }
-.ptab { flex:none; height:32px; }
 .pbody:has(.run-inspector) { overflow-y:auto; }
 .run-inspector { padding:16px; min-width:0; }
 .run-heading,.run-section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -110,7 +101,6 @@
   .app:not(.overlay-panel) .main { min-width:min(560px, 50vw); }
 }
 
-@container (max-width:420px) { .ptab .lbl { display:none; } .ptabs { justify-content:space-between; } .ptab { padding-inline:12px; } }
 
 /* Hairlines: stroke contrast carries hierarchy, not glow.
    It stays out of the way of a system that asks for more contrast, so the stronger hairlines in app.css still apply. */
@@ -128,7 +118,8 @@
 }
 /* The sidebar sits on the window frame; a frame-wide gap, not a second hairline, separates it from the sheet. */
 .app:not(.overlay-side):not(.no-side) #rs-side { width:var(--frame); }
-.app:not(.overlay-side) #rs-side::before { left:0; width:100%; }
+/* The grab area is the gap plus a little of the sheet's edge (not the sidebar's, where its scrollbar sits). */
+.app:not(.overlay-side) #rs-side::before { left:0; width:calc(100% + 4px); }
 .app:not(.overlay-side) #rs-side::after { left:calc(50% - 1px); }
 .app .main,.app .panel { border-color:var(--line-2); }
 
@@ -140,15 +131,7 @@
 /* Reading and composing: consistent spacing across narrow and wide workspaces. */
 .main, .session, .dock-col, .msg, .md { min-width: 0; }
 
-/* The session's message box. */
-.session .composer {
-  padding: 16px 12px 10px 18px;
-  border-color: var(--line-2);
-  border-radius: 18px;
-  box-shadow: none;
-}
 .c-ta { line-height: 1.65; scrollbar-gutter: stable; }
-.c-row { flex-wrap: wrap; }
 .msg .md { overflow-wrap: anywhere; }
 .msg .md pre { overflow-x: auto; overscroll-behavior-inline: contain; }
 .msg .md .md-stream-preview { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -167,7 +150,6 @@
   .msg-act, .ibtn { min-height: 40px; }
 }
 @media (max-width: 600px) {
-  .session .composer { padding: 12px 10px 8px; }
   .c-ta { font-size: 16px; }
 }
 
@@ -194,20 +176,18 @@
 }
 
 /* Control sizing: square icon buttons, aligned labels, and non-shrinking marks. */
-:root { --control-height:36px; --control-small:30px; --control-radius:10px; }
-.btn { min-height:var(--control-height); line-height:1; }
+:root { --control-height:32px; --control-small:28px; --control-radius:8px; }
+.btn { line-height:1; }
 .btn.sm { min-height:var(--control-small); }
 .ibtn { width:var(--control-height); height:var(--control-height); min-height:var(--control-height); padding:0; }
 .ibtn.sm { width:var(--control-small); height:var(--control-small); min-height:var(--control-small); }
-.session .c-row { gap:6px; align-items:center; }
-.c-row .cbtn { line-height:1; max-width:min(260px,100%); }
 
 :is(.btn, .ibtn, .cbtn, .send, .msg-act) > svg { display:block; flex-shrink:0; }
 :is(.btn, .ibtn) > svg:not(.logo):not(.pv-mark) { width:16px; height:16px; }
 .cbtn > svg.pv-mark { width:18px; height:18px; }
 .cbtn > .cbtn-chev { width:12px; height:12px; }
 /* One height for sidebar rows, one for filters and pins; small controls round a little less than full-size ones. */
-:root { --row-height:34px; --control-radius-sm:8px; }
+:root { --row-height:34px; --control-radius-sm:7px; }
 .side-link, .proj-btn, .s-btn, .foot-status { height:var(--row-height); min-height:var(--row-height); border-radius:var(--control-radius-sm); }
 .ibtn { border-radius:var(--control-radius); }
 .btn.sm, .ibtn.sm { border-radius:var(--control-radius-sm); }
@@ -217,12 +197,4 @@
   .msg-act { min-height:44px; }
 }
 
-/* The message box keeps its send button on the right at any width; long labels give way first. */
 .dock-col { container: dock / inline-size; }
-.session .c-row { flex-wrap: nowrap; }
-.session .c-row > .grow { min-width: 0; }
-@container dock (max-width: 520px) {
-  .session .c-row .cbtn + .cbtn > span { display: none; }
-  .session .c-row .cbtn > .cbtn-chev { display: none; }
-  .session .ctx-meter { padding-inline: 4px; }
-}

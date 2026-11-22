@@ -9,7 +9,7 @@ const WEB = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web',
 const settings = fs.readFileSync(path.join(WEB, 'settings.js'), 'utf8');
 const others = fs.readdirSync(WEB).filter((f) => /\.m?js$/.test(f)).map((f) => fs.readFileSync(path.join(WEB, f), 'utf8')).join('\n');
 // Entries that open a page without pointing at one row on it.
-const PAGE_ONLY = new Set(['API keys', 'Local models']);
+const PAGE_ONLY = new Set(['API keys', 'Local models', 'Help & feedback']);
 
 test('every setting Ctrl+K finds is a label on its page', () => {
   const find = /const FIND = \[([\s\S]*?)\n\];/.exec(settings)?.[1];

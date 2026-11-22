@@ -36,7 +36,7 @@ export function ping(port) {
 /**
  * Start the server, or find the one already running for this data folder.
  * Returns { url, existing, server, stop(code) }; `stop` saves, shuts the server down and removes the lock file.
- * `onQuit` runs when the app asks to quit (Settings → Application → Quit ORBIX).
+ * `onQuit` runs when the app asks to quit (Settings → About → Quit ORBIX).
  */
 export async function startOrbix({ port = 47821, onQuit } = {}) {
   initLog(path.join(DATA_DIR, 'logs', 'server.log'));
@@ -77,4 +77,33 @@ export async function startOrbix({ port = 47821, onQuit } = {}) {
   };
   h.onQuit = () => (onQuit ? onQuit() : stop());
   return { url: `http://127.0.0.1:${h.port}/?t=${token}`, existing: false, server: h, stop };
+}
+
+/**
+ * The engine of the Windows app, in its own process and with no server: no port, no token, no lock file. The window
+ * reaches it through Electron IPC (electron/main.mjs). Returns { server, stop() }; `server` is the AppServer whose
+ * routes and events the IPC handlers use. One window per data folder is kept by Electron's single-instance lock.
+ */
+export async function startDesktopEngine({ onQuit } = {}) {
+  initLog(path.join(DATA_DIR, 'logs', 'server.log'));
+  const store = new Store();
+  const h = new AppServer({ store, token: crypto.randomBytes(24).toString('hex') });
+  h.begin();
+  h.startEnv();
+  setTimeout(() => loadCatalog(), 50);
+  h.envReady.then(() => log(`desktop engine, backend: ${store.data.backend.kind}${store.data.backend.distro ? ' (' + store.data.backend.distro + ')' : ''}${h.envInfo.error ? ' | ' + h.envInfo.error : ''}`));
+  let stopping = null;
+  const stop = () => {
+    stopping ||= (async () => {
+      try {
+        store.save();
+        await h.shutdown();
+      } catch (e) {
+        log('shutdown error', e);
+      }
+    })();
+    return stopping;
+  };
+  h.onQuit = () => (onQuit ? onQuit() : stop());
+  return { server: h, stop };
 }

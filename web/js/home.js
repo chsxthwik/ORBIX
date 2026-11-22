@@ -1,13 +1,14 @@
-// Home: the ORBIX mark (a live ASCII orbit that speeds up while you type) and a greeting in the middle; at the bottom what needs you, a few suggestions
-// and the message box, with the project and where it works (the project folder or a separate branch) on top of it.
+// Home: one centred stack. The ORBIX mark (its node circling slowly) and a greeting; what needs
+// you; the message box with the project and where it works (the project folder or a separate branch) under it; then a
+// few suggestions as chips.
 // Conversations and projects are in the sidebar. Before a model or a project is connected, Home offers setup.
-import { addContext, permissionChip } from './controls.js';
-import { h, icon, iconBtn, replace, baseName, toast } from './dom.js';
-import { asciiOrbit } from './ascii.js';
+import { addContext, permissionChip, modelLabel, effortChip } from './controls.js';
+import { runInTerminal } from './terminal.js';
+import { h, icon, iconBtn, replace, baseName, toast, heroMark } from './dom.js';
 import { Composer, dropZone } from './composer.js';
 import { api } from './api.js';
-import { S, openTab, sendPrompt, tabForSession, engineReady, savePrefs, groupSessions, on, setActive } from './store.js';
-import { popMenu, modelPicker, isApproval } from './dialogs.js';
+import { S, openTab, sendPrompt, setThinking, tabForSession, engineReady, savePrefs, groupSessions, on, emit, setActive } from './store.js';
+import { popMenu, modelPicker, isApproval, thinkingLevels } from './dialogs.js';
 import { brandMark } from './brands.js';
 import { taskButtons, projectTasks } from './workspace.js';
 import { branchToggle } from './review.js';
@@ -34,9 +35,18 @@ let W = null; // the mounted page: its persistent slots
 let C = null; // the mounted task box: { comp, el, row, go, start }
 let starting = false;
 on('engine', () => (modelList = null));
+// Git was just set up in a folder (the side panel or the project menu): Home reads its working tree again.
+let drawLast = null;
+on('git:init', (ws) => {
+  if (!W || W.statusPath !== ws) return;
+  W.statusPath = undefined;
+  W.sugFor = undefined;
+  drawLast?.();
+});
 
 /** The project chosen on Home, for pages that need one while no session is open. */
 export const homeProject = () => draft.project || '';
+let panelFor = null;
 
 export function setHomeProject(path, { ephemeral } = {}) {
   if (path) draft.project = path;
@@ -66,6 +76,26 @@ function loadHomeModels() {
   return entry.promise;
 }
 
+/** Add `text` to Home's message box (a skill from the Context menu, a file from the side panel). */
+export function insertHome(text) {
+  if (!C) return;
+  const v = C.comp.value;
+  C.comp.value = v + (v && !/\s$/.test(v) ? ' ' : '') + text;
+  C.comp.focus();
+}
+
+/** The reasoning levels of model `m`, from the loaded model list (null until it has loaded). */
+let modelRows = null;
+function levelsOf(m) {
+  if (!modelRows) return null;
+  return thinkingLevels(modelRows.find((x) => x.provider === m.provider && x.id === m.id));
+}
+async function loadLevels(m) {
+  const r = await loadHomeModels();
+  modelRows = Array.isArray(r) ? r : r?.models || [];
+  return levelsOf(m) || [];
+}
+
 /** The page's skeleton, built once per mount. */
 function shell(root) {
   if (W && root.contains(W.wrap)) return W;
@@ -77,9 +107,9 @@ function shell(root) {
   const deckSlot = h('div', { class: 'home-deck' });
   const under = h('div', { class: 'home-under' });
   const statusSlot = h('div', { class: 'home-status-slot' });
-  const mark = asciiOrbit({ cols: 56, rows: 15, font: 11, lineH: 12 });
+  const mark = heroMark(72);
   const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, mark.el), h('header', { class: 'home-head' }, title, sub));
-  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, under, deckSlot);
+  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, deckSlot, under);
   const wrap = h('div', { class: 'home' }, hero, dock);
   W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot, mark };
   // One drop handler per screen; it always feeds the current box.
@@ -95,7 +125,7 @@ function shell(root) {
 function deck() {
   if (C) return C;
   const comp = new Composer({
-    placeholder: 'Ask anything, @ to mention, / for actions',
+    placeholder: 'Ask anything…  / for commands, @ for context, ! for a shell command',
     label: 'Task for the new conversation',
     cls: 'home-composer',
     state: draft,
@@ -107,9 +137,9 @@ function deck() {
   });
   const row = h('div', { class: 'c-row' });
   comp.el.append(row);
-  // On top of the box: the project, where the conversation works, and the working tree.
+  // Under the box, one quiet line: the project, where the conversation works, and the working tree.
   const head = h('div', { class: 'home-box-h' });
-  C = { comp, row, head, el: h('div', { class: 'home-box' }, head, comp.el) };
+  C = { comp, row, head, el: h('div', { class: 'home-box' }, comp.el, head) };
   return C;
 }
 
@@ -127,6 +157,7 @@ function updateStart(box) {
 export function drawHome(root, H) {
   const agentOk = engineReady();
   const w = shell(root);
+  drawLast = () => !root.hidden && drawHome(root, H);
   const redraw = () => {
     drawHome(root, H);
     C?.comp.focus();
@@ -161,7 +192,7 @@ export function drawHome(root, H) {
   const { comp, row } = box;
   if (box.el.parentNode !== w.deckSlot) w.deckSlot.replaceChildren(box.el);
 
-  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, !!draft.branch, w.statusRepo, agentOk, S.engine?.approvals, homeModel(), projects.map(p => [p.path, p.name])]);
+  const controlsSig = JSON.stringify([draft.project, !!draft.plan, !!draft.ephemeral, !!draft.branch, w.statusRepo, agentOk, S.engine?.approvals, homeModel(), S.ui.homeThinking, projects.map(p => [p.path, p.name])]);
   if (box.controlsSig !== controlsSig) {
     box.controlsSig = controlsSig;
     const projBtn = h('button', { class: 'hb-btn proj-pick' + (g ? '' : ' need'), type: 'button', title: g ? g.path : 'Choose a project folder', 'aria-haspopup': 'menu' }, icon('folder', 13), h('span', { class: 'ell' }, g ? g.name : 'Choose a folder'), icon('chevron-down', 11, 'cbtn-chev'));
@@ -173,15 +204,24 @@ export function drawHome(root, H) {
     });
 
     const m = homeModel();
-    const modelBtn = h('button', { class: 'cbtn home-model-pick', type: 'button', title: 'Model for the new conversation', 'aria-haspopup': 'dialog' }, brandMark(m?.provider, 16, 'pv-mark'), h('span', { class: 'ell' }, m ? m.name || m.id : 'Default model'), icon('chevron-down', 12, 'cbtn-chev'));
+    const modelBtn = h('button', { class: 'cbtn home-model-pick', type: 'button', title: 'Model for the new conversation', 'aria-haspopup': 'dialog' }, ...modelLabel(m));
+    // The reasoning level for the new conversation, when the chosen model has levels (its default until you pick).
+    const effort = effortChip((level) => (savePrefs({ homeThinking: level }), redraw()));
+    const lv = m && levelsOf(m);
+    if (lv || !m) effort.update(lv || [], S.ui.homeThinking || '');
+    else if (engineReady()) loadLevels(m).then((x) => effort.update(x, S.ui.homeThinking || '')).catch(() => {});
     modelBtn.addEventListener('click', () => !engineReady() ? H.settings('engine') : modelPicker({
+      anchor: modelBtn,
       load: loadHomeModels,
       returnFocus: () => row.querySelector('.home-model-pick'),
       loading: 'Loading models from your providers…',
       current: homeModel(),
+      thinking: true,
+      level: S.ui.homeThinking || '',
       extra: 'Default: your saved default model, or the first one listed',
-      onPick: (x) => {
-        savePrefs({ homeModel: x ? { provider: x.provider, id: x.id, name: x.name || x.id } : null });
+      onPick: (x, level) => {
+        const same = x && homeModel() && homeModel().provider === x.provider && homeModel().id === x.id;
+        savePrefs({ homeModel: x ? { provider: x.provider, id: x.id, name: x.name || x.id } : null, homeThinking: level || (same ? S.ui.homeThinking || null : null) });
         redraw();
       },
     }));
@@ -189,11 +229,11 @@ export function drawHome(root, H) {
     const unsaved = h('button', { class: 'cbtn on', type: 'button', title: 'This conversation will not be saved. Click to save it as usual.', hidden: !draft.ephemeral, onclick: () => ((draft.ephemeral = false), (unsaved.hidden = true)) }, h('span', null, 'Not saved'), icon('x', 12));
 
     // Plan first: the session starts in plan mode (reads and proposes, changes nothing), then gets the task.
-    const modes = h('div', { class: 'task-modes', role: 'radiogroup', 'aria-label': 'Task mode' },
-      ...[[false, 'Build', 'Build: it edits files and runs commands'], [true, 'Plan', 'Plan: it reads and proposes a plan, and changes nothing']].map(([plan, label, title]) => h('button', { class: 'task-mode', type: 'button', role: 'radio', title, 'aria-checked': String(!!draft.plan === plan), onclick: () => {
-        draft.plan = plan;
-        redraw();
-      } }, label)));
+    // Plan first: one toggle, as in a conversation's box. On, the agent reads and proposes a plan and changes nothing.
+    const modes = h('button', { class: 'cbtn plan-pick' + (draft.plan ? ' on' : ''), type: 'button', 'aria-pressed': String(!!draft.plan), title: draft.plan ? 'Plan first: it reads and proposes a plan, and changes nothing until you say go' : 'Plan first: off. It edits files and runs commands as your permissions allow', onclick: () => {
+      draft.plan = !draft.plan;
+      redraw();
+    } }, icon('map', 14), h('span', null, 'Plan'));
     const apprBtn = permissionChip().el;
     const go = h('button', { class: 'send start', type: 'button' });
     box.go = go;
@@ -201,6 +241,13 @@ export function drawHome(root, H) {
     box.start = async () => {
       if (starting) return; // Enter twice, or Enter and a click: one session
       if (!draft.project) return H.openFolder();
+      // !command: a shell command, run in the project's Terminal (the side panel), not a new conversation.
+      const bang = /^!\s*(\S[\s\S]*)/.exec(comp.value.trim());
+      if (bang && !draft.attach?.length) {
+        comp.reset(comp.value.trim());
+        persistDraft();
+        return runInTerminal(bang[1].trim());
+      }
       if (!engineReady()) {
         toast('Connect a model first.', 'error', 4000);
         return H.settings('engine');
@@ -218,6 +265,7 @@ export function drawHome(root, H) {
         if (draft.project === workspace) draft.ephemeral = false;
         comp.reset(p?.raw);
         persistDraft();
+        if (S.ui.homeThinking && mm) await setThinking(tab, S.ui.homeThinking).catch(() => {});
         if (plan) await sendPrompt(tab, '/plan');
         if (p) await sendPrompt(tab, p.text || '(see the attached image)', { images: p.images });
       } catch (e) {
@@ -232,9 +280,14 @@ export function drawHome(root, H) {
 
     const branchBtn = branchToggle(draft, w.statusRepo, () => drawHome(root, H));
     box.head.replaceChildren(projBtn, branchBtn || '', h('span', { class: 'grow' }), w.statusSlot);
-    row.replaceChildren(addContext(comp), modelBtn, unsaved, h('span', { class: 'grow' }), modes, apprBtn, go);
+    row.replaceChildren(addContext(comp), modelBtn, effort.el, modes, unsaved, h('span', { class: 'grow' }), apprBtn, go);
   }
   drawSuggestions(w, comp, g);
+  // The side panel on Home works for the chosen project: tell it when that changes.
+  if (panelFor !== draft.project) {
+    panelFor = draft.project;
+    emit('home:project');
+  }
   const active = document.activeElement;
   if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
@@ -261,9 +314,9 @@ function drawSuggestions(w, comp, project) {
   });
 }
 
-// The greeting for the time of day, with your first name when Windows has one.
+// The greeting for the time of day, with the name you set in Settings → Preferences (none by default).
 const greeting = () => {
-  const name = S.env?.app?.user || '';
+  const name = String(S.ui?.displayName || '').trim();
   const hour = new Date().getHours();
   const part = hour < 5 ? 'evening' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
   return name ? `Good ${part}, ${name}` : `Good ${part}`;
@@ -272,8 +325,10 @@ const greeting = () => {
 /** The greeting for an open project; otherwise the next setup step. */
 function drawHead(w, ready, project) {
   const text = project && ready ? greeting() : ready ? 'Open a project folder' : 'Connect a model';
-  if (w.title.textContent !== text) w.title.textContent = text;
-  w.title.title = project ? project.path : '';
+  if (w.title.textContent !== text) {
+    const at = text.indexOf(', ');
+    w.title.replaceChildren(...(project && ready && at > 0 ? [h('span', { class: 'home-hi' }, text.slice(0, at + 1)), ' ', h('span', { class: 'home-name' }, text.slice(at + 2))] : [text]));
+  }
   const sub = project ? '' : ready ? 'The agent works only inside a folder you choose.' : 'Add an API key, sign in, or use a model that runs on this PC. You can change it at any time.';
   if (w.sub.textContent !== sub) w.sub.textContent = sub;
   w.sub.hidden = !sub;
@@ -306,8 +361,12 @@ function drawProjectStatus(w, project, redrawControls) {
       w.statusRepo = !!git?.repo;
       if (!git?.repo) {
         draft.branch = false;
-        details.textContent = git?.gitMissing ? 'Git isn’t available' : 'Not a Git repository';
+        // A folder without git has no working tree to show: the line stays empty, with no refresh button.
+        details.replaceChildren();
+        refresh.hidden = true;
+        if (git?.gitMissing) details.textContent = 'Git isn’t installed';
       } else {
+        refresh.hidden = false;
         const branch = git.branch?.startsWith('HEAD (') ? 'Detached HEAD' : git.branch || 'No branch';
         const count = git.files.length;
         details.replaceChildren(
@@ -348,17 +407,21 @@ function attention(H) {
 /** What is still needed before the first task. Optional extras live in Settings, not here. */
 function checklist(H, projects) {
   const steps = [
-    { done: engineReady(), t: 'Connect a model', act: 'Connect', run: () => H.settings('engine') },
-    { done: projects.length > 0, t: 'Open a project folder', act: 'Open folder', run: () => H.openFolder() },
-    { done: S.sessions.length > 0, t: 'Run your first task' },
+    { done: engineReady(), t: 'Connect a model', run: () => H.settings('engine') },
+    { done: projects.length > 0, t: 'Open a folder', run: () => H.openFolder() },
+    { done: S.sessions.length > 0, t: 'Run a task' },
   ];
   const left = steps.filter((s) => !s.done).length;
   // With a model and a folder, the task box itself is the next step.
   if (steps[0].done && steps[1].done) return null;
-  return h('ol', { class: 'home-steps', 'aria-label': `Setup: ${steps.length - left} of ${steps.length} done` }, steps.map((s, i) => h('li', { class: 'home-step' + (s.done ? ' done' : '') },
-    h('span', { class: 'home-step-n', 'aria-hidden': 'true' }, s.done ? icon('check', 12) : String(i + 1)),
-    h('span', { class: 'ell' }, s.t),
-    !s.done && s.run ? h('button', { class: 'btn sm', type: 'button', onclick: s.run }, s.act) : null)));
+  // A step still to do is one button (number, label, arrow); a done step is a quiet line with a check.
+  return h('ol', { class: 'home-steps', 'aria-label': `Setup: ${steps.length - left} of ${steps.length} done` }, steps.map((s, i) => {
+    const n = h('span', { class: 'home-step-n', 'aria-hidden': 'true' }, s.done ? icon('check', 12) : String(i + 1));
+    const label = h('span', { class: 'ell' }, s.t);
+    const act = !s.done && s.run;
+    return h('li', { class: 'home-step' + (s.done ? ' done' : '') + (act ? ' act' : '') },
+      act ? h('button', { class: 'home-step-b', type: 'button', onclick: s.run }, n, label, icon('arrow-right', 14)) : [n, label]);
+  }));
 }
 
 // ================= first run =================

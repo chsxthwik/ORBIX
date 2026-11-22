@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/logo-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/img/logo-light.svg">
-  <img alt="ORBIX" src="docs/img/logo-light.svg" width="207" height="72">
+  <img alt="ORBIX" src="docs/img/logo-light.svg" width="279" height="60">
 </picture>
 
 ### Every coding agent. Your PC or your cloud.
@@ -23,13 +23,13 @@ Run it on your PC, or on a Linux machine you own that keeps working while your l
 
 <br>
 
-<img src="docs/img/shots/done.png" alt="ORBIX: the menu row and toolbar, the sidebar of projects and conversations, a finished reply whose steps fold into one Worked for line, the changed file with Review and Undo all, and the Overview card on the right.">
+<img src="docs/img/shots/done.png" alt="ORBIX: the menu row and toolbar, the sidebar of projects and conversations, a finished reply whose steps fold into one Worked for line, the changed file with Review and Undo all, and the side panel on the right.">
 
 <sub>Screenshots come from the real app on a sample project with a scripted local model; the tools in them really ran.</sub>
 
 ## Why ORBIX
 
-- **You stay in control.** Reading is free; edits and commands follow the permission chip in the message box: **Ask first**, **Auto edits** or **Turbo**. Destructive commands (recursive delete, push, publish, history rewrite) ask every time, in every mode.
+- **You stay in control.** Reading is free; edits and commands follow the permission chip in the message box: **Supervised**, **Auto edits**, **Guarded** or **Full access**. Destructive commands (recursive delete, push, publish, history rewrite) ask every time, in every mode.
 - **Nothing is final until you say so.** Every file edit can be undone, one at a time or a whole reply at once. Runs work in their own git worktree and only reach your branch when you apply them.
 - **Any model, any agent.** 17 providers and any OpenAI-compatible server, including your ChatGPT plan without an API key, or a model on your own PC. Or run the conversation on **Claude Code**, **Codex**, **OpenCode** or any **ACP agent**, with its own login and plan: ORBIX shows its steps and answers its permission questions with the same approval cards.
 - **Local or cloud.** **ORBIX Cloud** is the same server on a Linux machine you own. Open it from Settings → Machines, and move a conversation there with its project (git history and uncommitted changes included). It keeps working with your PC off.
@@ -42,7 +42,7 @@ Download `ORBIX-Setup` from the [latest release](https://github.com/chsxthwik/OR
 1. Press <kbd>Ctrl</kbd>+<kbd>,</kbd> and open **Providers**. Sign in (ChatGPT, xAI, OpenCode, OpenRouter), paste an API key and press **Check & save**, or connect a local model.
 2. Choose a project folder, describe a task and press <kbd>Enter</kbd>.
 
-ORBIX updates itself from GitHub releases: it downloads in the background and installs when you close it, or at once with **Restart** in the sidebar (Settings → Application → Updates turns this off). Settings and conversations live in `%LOCALAPPDATA%\ORBIX` and stay through every update. There is no account and no subscription; you pay your provider directly, or nothing with a local model.
+ORBIX updates itself from GitHub releases: it downloads in the background and installs when you close it, or at once with **Restart to update** at the top right (Settings → About → Updates turns this off). Settings and conversations live in `%LOCALAPPDATA%\ORBIX` and stay through every update. There is no account and no subscription; you pay your provider directly, or nothing with a local model.
 
 ## Agents
 
@@ -55,7 +55,7 @@ Settings → **Agents** lists the agent CLIs ORBIX found on this computer, with 
 | OpenCode | `opencode acp` (Agent Client Protocol) | `session/request_permission` asks in ORBIX |
 | Gemini CLI and any ACP agent | the command you give it in ACP mode | as above |
 
-Ask first, Auto edits and Turbo apply to every agent; a destructive command asks in every mode. The agent keeps its own history, and reopening the conversation resumes its native session.
+Supervised, Auto edits, Guarded and Full access apply to every agent; a destructive command asks in every mode. The agent keeps its own history, and reopening the conversation resumes its native session.
 
 ## ORBIX Cloud
 
@@ -96,19 +96,19 @@ It installs ORBIX into `~/.orbix-app`, runs `node src/headless.mjs` as a systemd
 <td><b>Home.</b> A greeting, suggestions for the project, and the message box.</td>
 </tr>
 <tr>
-<td><img src="docs/img/shots/automations.png" alt="The Automations page: a weekday test report at 09:00 and a weekly dependency check that is off, each with Run now, Edit and Delete"></td>
-<td><img src="docs/img/shots/customizations.png" alt="The Customizations page: a featured Playwright card and MCP servers by category, each with an add button"></td>
+<td><img src="docs/img/shots/automations.png" alt="The Loops page: a weekday test report at 09:00 and a weekly dependency check that is off, each with Run now, Edit and Delete"></td>
+<td><img src="docs/img/shots/customizations.png" alt="The Plugins page: a featured Playwright card and MCP servers by category, each with an add button"></td>
 </tr>
 <tr>
-<td><b>Automations.</b> Prompts that run on a schedule, each as a new conversation.</td>
-<td><b>Customizations.</b> MCP servers in one click, and what is installed.</td>
+<td><b>Loops.</b> Prompts that run on a schedule or once, each as a new conversation.</td>
+<td><b>Plugins.</b> MCP servers in one click, and what is installed.</td>
 </tr>
 <tr>
-<td><img src="docs/img/shots/settings.png" alt="Settings, a card over the workspace, on the Providers page"></td>
+<td><img src="docs/img/shots/settings.png" alt="Settings, on the Providers page"></td>
 <td></td>
 </tr>
 <tr>
-<td><b>Settings.</b> One card: General, Appearance, Shortcuts, Providers and more.</td>
+<td><b>Settings.</b> One page: General, Appearance, Shortcuts, Providers and more.</td>
 <td></td>
 </tr>
 </table>
@@ -118,14 +118,16 @@ It installs ORBIX into `~/.orbix-app`, runs `node src/headless.mjs` as a systemd
 | Part | What it does |
 | --- | --- |
 | **Menu row and toolbar** | ORBIX, Workspace, View and Window menus. Back and forward (<kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd>) across conversations, Runs and Review; search everything (<kbd>Ctrl</kbd>+<kbd>K</kbd>); where you are, with the conversation's state, running time and branch. |
-| **Sidebar** | New conversation, Runs, Review, Automations and Customizations; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
-| **Overview card** | Beside the conversation (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd>): Changes, Files, Terminal, Tasks and Inspect, plus helper agents and background runs when there are any. |
-| **Side panel** | Opens on a first page (<kbd>Ctrl</kbd>+<kbd>J</kbd>): find a file, then Changes, Files, Terminal, Browser, Side question, Tasks and Inspect, with the conversation's helper agents and the runs working now. Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** starts on the web apps running on this computer; in the Windows app it is a real browser with its own session (any site, back and forward, downloads), in a web browser it shows only this computer's pages. **Side question** answers a quick question about the conversation while the agent keeps working. |
-| **Automations** | Prompts ORBIX starts by itself every hour, every day, on weekdays or every week, each as a new conversation in its project. **Create with Prompt** turns one sentence ("every weekday at 9am, run the tests") into the schedule and the task. Run now, turn on or off, edit. In Ask first a run waits for your OK in Review. |
-| **Customizations** | Marketplace and Installed, with one search box. The marketplace adds well-known MCP servers in one click (Playwright, Chrome DevTools, Context7, GitHub, Supabase, Figma, Notion, Stripe and more); Installed lists your MCP servers, skills and the project's rules. |
+| **Sidebar** | New conversation, Search, Plugins, Skills, Loops, Runs and Review; what is running; pinned conversations; your projects. A conversation shows a state only when it has one (working, needs you, unread). Rest the pointer on one for a preview card; pin or archive it from its row (<kbd>P</kbd>, <kbd>A</kbd>). The filter menu filters, sorts projects by activity or name, and shows archived conversations. |
+| **Side panel** | The button at the top right or <kbd>Ctrl</kbd>+<kbd>J</kbd>, on Home too. Its tabs are the surfaces you opened, like a browser's: × or <kbd>Delete</kbd> closes one, **+** opens a **New tab** page listing every surface with its shortcut (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+ R Review, B Browser, N Incognito browser, T Terminal, P Open file, F Files, D Changes, K Tasks, I Inspect, M Device at phone size, S Side question). **Terminal** is a real shell on a pseudo-terminal in WSL and Linux (PowerShell for a Windows folder). Changes can stage, unstage, discard and commit; a conversation on its own branch also gets Review. **Browser** starts on the web apps running on this computer; in the Windows app it is a real browser with its own session (any site, back and forward, downloads), in a web browser it shows only this computer's pages. **Side question** answers a quick question about the conversation while the agent keeps working. |
+| **Terminal** | <kbd>Ctrl</kbd>+<kbd>`</kbd> or the side panel's Terminal tab: real shells, several per project and two at once. In WSL and Linux your own login shell on a real pty (prompt, colours, vim, htop); PowerShell for a Windows folder. |
+| **Project menu** | The project's name in the toolbar or ⋯ in the sidebar: where it runs (Windows, or the WSL distribution and user), **Open in** File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal, **project scripts** that run in the Terminal, and **Initialize Git**. |
+| **Loops** | Prompts ORBIX starts by itself every few minutes, every hour, every day, on weekdays or every week, or once at a set time, each as a new conversation in its project. **Create with Prompt** turns one sentence ("every weekday at 9am, run the tests") into the schedule and the task. Run now, turn on or off, edit. In Supervised a run waits for your OK in Review. |
+| **Plugins** | Marketplace and Installed, with one search box. The marketplace adds well-known MCP servers in one click (Playwright, Chrome DevTools, Context7, GitHub, Supabase, Figma, Notion, Stripe and more); Installed lists your MCP servers, skills and the project's rules. |
+| **Skills** | Every skill the agent can use in the open project and yours in every project: add one (name, when to use it, instructions) as a `SKILL.md` in `.agents/skills` or in your data folder, edit it, or delete it (it moves to the trash). |
 | **Home** | The ORBIX mark and a greeting; suggestions and the message box at the bottom, with the project and the project-folder or separate-branch choice on a strip on top of the box. |
-| **Settings** | A card over the workspace (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> closes; <kbd>Ctrl</kbd>+<kbd>K</kbd> finds any setting). **General**: permission preset, tool permissions, network access rules, Steer or Queue while the agent works, the send key. **Application**: prevent sleep while a conversation or run is working, keep running in the tray, Windows notification settings, WSL, updates, data folder, help. **Appearance** (steps Default or Verbose, theme, contrast, font: Google Sans, Segoe UI or the system font, font size, your own colours, conversation width, screen reader mode, which also stops all animation), **Shortcuts** (change any key), **Notifications** (with volume), **Providers**, **Models** (fast and plan models, and your 👍 / 👎 per model), **Browser** (where links open, downloads, history, site data). Agent: Instructions, Checks, Tools & MCP. A page per project (folder, recent conversations, its instruction and rule files, its check command), Conversations (archived and recently deleted), Worktrees, and **Give feedback**. |
-| **Message box** | <kbd>+</kbd> adds files, a mention (<kbd>@</kbd>) or a command (<kbd>/</kbd>); the model and its thinking level; the permission chip; the context meter. |
+| **Settings** | The whole window under the menu row (<kbd>Ctrl</kbd>+<kbd>,</kbd>; <kbd>Esc</kbd> or **Back to app** returns; **Search** at the top of the page list, or <kbd>Ctrl</kbd>+<kbd>K</kbd>, finds any setting). **Preferences** (permissions, Steer or Queue, the send key, checks, your name), **Appearance**, **Notifications**, **Shortcuts**; **Providers**, **Models**, **Agents**, **Tools & MCP**, **Instructions**, **Checks**; **Projects**, **Worktrees**, **Conversations**, **Machines**, **Browser**; **About** (updates, WSL, the tray, prevent sleep, data folder, help). **Help & feedback** is at the top right of every page. |
+| **Message box** | <kbd>+</kbd> adds images and files, a command (<kbd>/</kbd>), context (<kbd>@</kbd>) or a shell command (<kbd>!</kbd>, run in the project's Terminal); the model as **Provider / Model** and its reasoning level as its own menu; Plan; the permission chip. |
 | **Conversation** | A centred column; the steps of a turn fold into one "Worked for…" line above the answer. Readable Markdown with code blocks and tables; under each reply copy, 👍, 👎 (answer again, use another model, or report a problem) and retry. Ratings are counted per model on this PC only. <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> between your messages, find (<kbd>Ctrl</kbd>+<kbd>F</kbd>), focus mode (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd>). The side panel stays closed until you open it. |
 
 ## Models
@@ -144,18 +146,18 @@ Model lists come live from each provider and offer chat models only. Context siz
 
 Approvals are a checkpoint, not a sandbox: the agent runs with your Windows user's permissions, so read what you approve.
 
-| Action | Ask first (default) | Auto edits | Turbo |
-| --- | --- | --- | --- |
-| Reading and searching | Runs | Runs | Runs |
-| `write`, `edit` | Asks | Runs (undoable) | Runs (undoable) |
-| `bash` | Asks, unless the command is trusted | Asks, unless trusted | Runs |
-| Destructive commands (recursive delete, push, publish, history rewrite, system changes) | Asks | Asks | **Asks** |
-| Files outside the project folder | Asks | Asks | Runs |
-| MCP tools | Ask, unless the server marks them read-only | Ask, unless read-only | Run |
-| `web_fetch` | Runs; denied sites never, and with an allowed list other sites ask | Same | Same |
-| Project MCP servers and hooks | Do not start until you approve them | Same | Same |
+| Action | Supervised (default) | Auto edits | Guarded | Full access |
+| --- | --- | --- | --- | --- |
+| Reading and searching | Runs | Runs | Runs | Runs |
+| `write`, `edit` | Asks | Runs (undoable) | Runs (undoable) | Runs (undoable) |
+| `bash` | Asks, unless the command is trusted | Asks, unless trusted | Read-only commands run (`ls`, `cat`, `grep`, `find`, `git status`/`diff`/`log`, pipes of them); others ask, unless trusted | Runs |
+| Destructive commands (recursive delete, push, publish, history rewrite, system changes) | Asks | Asks | Asks | **Asks** |
+| Files outside the project folder | Asks | Asks | Asks | Runs |
+| MCP tools | Ask, unless the server marks them read-only | Ask, unless read-only | Ask, unless read-only | Run |
+| `web_fetch` | Runs; denied sites never, and with an allowed list other sites ask | Same | Same | Same |
+| Project MCP servers and hooks | Do not start until you approve them | Same | Same | Same |
 
-- **Local server:** listens only on `127.0.0.1`, behind a per-launch token in an `HttpOnly`, `SameSite=Strict` cookie; checks `Host` and `Origin`; serves the interface with a strict Content Security Policy.
+- **No open port:** the Windows app runs the engine in its own process and talks to it over Electron IPC; the interface is loaded from the app's own files with a strict Content Security Policy. Only ORBIX Cloud, on a machine you own, serves it over HTTP, behind a token.
 - **API keys:** encrypted for your Windows account with DPAPI, sent only to their own provider, never written to the log.
 - **What reaches your provider:** your messages, tool definitions, project rules and tool results, including the contents of files the agent reads.
 - **Other network use:** the models.dev model catalog, update checks on GitHub (unless turned off), the sign-ins you use, `web_fetch` / `web_search` when the agent calls them, the MCP servers you add, and the pages you open in the built-in browser. **No telemetry.**
@@ -170,12 +172,12 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 | **Project rules** | `AGENTS.md`, `CLAUDE.md` or `.omp/AGENTS.md` in the project. `/init` writes a first version. |
 | **Rule files** | `.agents/rules/*.md` in the project. Front matter `trigger:` `always_on` (default, in every prompt), `model_decision` (with a `description`: the agent reads it when it applies), `glob` (with `globs`: for matching files) or `manual` (only when you @mention it). |
 | **Your instructions** | Settings → Instructions: followed in every project. |
-| **MCP servers** | Customizations (Settings → Tools & MCP), or `.mcp.json` in the project. Stdio and HTTP. |
+| **MCP servers** | Plugins (Settings → Tools & MCP), or `.mcp.json` in the project. Stdio and HTTP. |
 | **Skills** | A folder with a `SKILL.md` in `.agents/skills`, `.claude/skills` or `.omp/skills`. |
 | **Slash commands** | Markdown files in `.omp/commands` or `.claude/commands`. `$ARGUMENTS` and `$1` to `$9` are filled in. |
 | **Hooks** | `hooks.json` in the data folder, or `.orbix/hooks.json` in a project. Events: `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, `Stop`. Exit code 2 blocks the step and tells the model why. |
 | **Web search** | Settings → Tools & MCP: Brave Search, Tavily or your own SearXNG. |
-| **Network access rules** | Settings → General: sites `web_fetch` may read without asking, and sites it may never read (also after a redirect). With an allowed list, every other site asks first. |
+| **Network access rules** | Settings → Preferences: sites `web_fetch` may read without asking, and sites it may never read (also after a redirect). With an allowed list, every other site asks first. |
 
 <details>
 <summary><b>Keyboard shortcuts</b></summary>
@@ -187,16 +189,16 @@ The defaults. Settings → Shortcuts changes any of them: <kbd>+</kbd> records n
 | --- | --- |
 | <kbd>Ctrl</kbd>+<kbd>K</kbd> / <kbd>Ctrl</kbd>+<kbd>P</kbd> | Search everything (settings too) / find a file |
 | <kbd>Ctrl</kbd>+<kbd>N</kbd> | New conversation |
-| <kbd>Ctrl</kbd>+<kbd>2</kbd> / <kbd>Ctrl</kbd>+<kbd>3</kbd> / <kbd>Ctrl</kbd>+<kbd>U</kbd> | Runs / Review / Automations |
+| <kbd>Ctrl</kbd>+<kbd>2</kbd> / <kbd>Ctrl</kbd>+<kbd>3</kbd> / <kbd>Ctrl</kbd>+<kbd>U</kbd> | Runs / Review / Loops |
 | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd> (or <kbd>Ctrl</kbd>+<kbd>[</kbd> / <kbd>Ctrl</kbd>+<kbd>]</kbd>) | Back / forward |
-| <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>O</kbd> | Sidebar / side panel / Overview card |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> | Sidebar / side panel |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> / <kbd>Ctrl</kbd>+<kbd>/</kbd> | Settings / keyboard shortcuts |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>,</kbd> | Next / previous side panel tab |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | Focus the message box |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> | Find in the conversation / jump to one of your messages |
 | <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>9</kbd>, <kbd>Ctrl</kbd>+<kbd>Tab</kbd> | Switch between open conversations |
 | <kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>Alt</kbd>+<kbd>↓</kbd> | Previous / next message of yours |
-| <kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> | While the agent works: steer / queue (Settings → General can swap them) |
+| <kbd>Enter</kbd> / <kbd>Alt</kbd>+<kbd>Enter</kbd> | While the agent works: steer / queue (Settings → Preferences can swap them) |
 | <kbd>1</kbd> <kbd>2</kbd> <kbd>Esc</kbd> | Allow once / allow for the conversation / deny; <kbd>Esc</kbd> also stops the agent |
 
 </details>
@@ -230,7 +232,7 @@ Settings → Appearance: System, Dark, Light, Midnight and Frost, plus five scen
 <table>
 <tr>
 <td width="50%"><img src="docs/img/shots/theme-light.png" alt="ORBIX in the Light theme"></td>
-<td width="50%"><img src="docs/img/shots/theme-orbix.png" alt="The ORBIX scene theme: a planet with a lime ring behind the conversation"></td>
+<td width="50%"><img src="docs/img/shots/theme-orbix.png" alt="The ORBIX scene theme: a planet with a Plasma ring behind the conversation"></td>
 </tr>
 <tr>
 <td><b>Light</b></td>
@@ -243,7 +245,7 @@ Settings → Appearance: System, Dark, Light, Midnight and Frost, plus five scen
 ```mermaid
 flowchart LR
   subgraph PC["Your Windows PC"]
-    UI["Interface<br/>web/ plain ES modules, no bundler"] <-->|"HTTP + SSE, 127.0.0.1"| S["Local server<br/>src/server.mjs"]
+    UI["Interface<br/>web/ at orbix://app/"] <-->|"Electron IPC"| S["Engine<br/>src/server.mjs, in the app process"]
     W["Electron window<br/>electron/"] --- UI
     S <--> A["Agent loop<br/>src/engine/, one per conversation"]
     S <--> R["Runs<br/>src/runs.mjs, worktrees and event log"]
@@ -253,7 +255,7 @@ flowchart LR
   A <-->|"messages, tools, results"| M["Model provider<br/>cloud or local"]
 ```
 
-ORBIX is a local Node.js server and an interface in plain ES modules, shown in an Electron window. There is no framework and no build step; the only npm package the app ships is electron-updater. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools, runs and storage.
+ORBIX is an Electron app: the engine runs in the app's process and the interface, in plain ES modules, talks to it over IPC (no server, no port). The same engine runs on Linux as ORBIX Cloud. There is no framework and no build step; the only npm package the app ships is electron-updater. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers start-up, the API, the agent loop, tools, runs and storage.
 
 ## Development
 
@@ -262,14 +264,15 @@ Node.js 22 or newer.
 ```bash
 npm install        # Electron and the installer builder
 npm start          # run the app from source (data stays in ./data)
-npm test           # about 840 tests: no network, no API keys
+npm test           # about 880 tests: no network, no API keys
 npm run e2e        # a run and a conversation driven through the real interface (needs Edge, Chrome or Brave)
+node e2e/cloud.mjs # ORBIX Cloud: two headless servers, a conversation moved between them (Linux or WSL)
 npm run dist       # build the installer into dist/
 ```
 
 ```text
 electron/   the Windows app: window, title bar, updates
-src/        the local server: HTTP API, event stream, runs, WSL and Windows backend
+src/        the engine: its API (IPC in the app, HTTP for ORBIX Cloud), events, runs, agents, WSL and Windows backend
 src/engine/ the agent: loop, model clients, tools, MCP, hooks, policy, conversations
 web/        the interface: plain ES modules and CSS
 test/       regression tests on Node's built-in runner

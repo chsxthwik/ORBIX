@@ -6,7 +6,7 @@ import { LineProcess, Rpc } from './lines.mjs';
 import { fromCodex, resultText } from './tools.mjs';
 
 /** ORBIX approvals → Codex policy. The sandbox stays on: commands write only inside the project. */
-const POLICY = { ask: 'untrusted', edits: 'on-request', auto: 'on-request' };
+const POLICY = { ask: 'untrusted', edits: 'on-request', safe: 'on-request', auto: 'on-request' };
 
 export class CodexDriver extends EventEmitter {
   constructor({ backend, bin, cwd, approvals }) {

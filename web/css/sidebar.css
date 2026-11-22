@@ -36,9 +36,6 @@
 .sidebar .proj-head { padding: 0; }
 .sidebar .proj-btn { gap: 0; padding: 0 8px 0 0; border-radius: 8px; }
 .sidebar .proj-btn:hover { background: var(--bg-hover); }
-.sidebar .proj-btn .chev { display: none; }
-.sidebar .proj-btn .proj-ic { width: var(--sb-ic); color: var(--fg-3); }
-.sidebar .proj-btn:hover .proj-ic { color: var(--fg-2); }
 .sidebar .proj-n { color: var(--fg-3); font-size: 12px; font-weight: 400; }
 
 /* ---- sessions: titles start under the project name; status lives in the icon column ---- */

@@ -59,7 +59,7 @@ export async function renderSearchSettings(root) {
   sync();
   replace(root,
     h('div', { class: 'mcp-head' }, h('h4', { class: 'set-sub' }, 'Web search'), cur.configured ? h('span', { class: 'tag ok' }, 'On') : h('span', { class: 'tag' }, 'Off')),
-    h('p', { class: 'set-note' }, 'Lets the agent look up current facts and documentation. Only your search words are sent to the service you choose. Once it’s set up, searches don’t need your OK.'),
+    h('p', { class: 'set-note' }, 'Current facts and documentation. Only your search words go to the service you choose.'),
     h('div', { class: 'pv-form' }, sel, url, key, save, off),
     help);
 }
@@ -84,7 +84,7 @@ export async function renderHooksSettings(root, ws) {
   const proj = data.project;
   replace(root,
     h('h4', { class: 'set-sub' }, 'Hooks'),
-    h('p', { class: 'set-note' }, 'A hook is your own command that runs at a set moment: before a tool runs (PreToolUse), after it runs (PostToolUse), when you send a message (UserPromptSubmit), or when the agent is about to finish (Stop). It receives the details as JSON on standard input. Exit code 2 blocks the action and tells the agent why; any other error only shows a warning. Each hook has 10 seconds to finish. Hooks live in files, so this list is read-only.'),
+    h('p', { class: 'set-note' }, 'Your commands at PreToolUse, PostToolUse, UserPromptSubmit and Stop. They get JSON on stdin and 10 seconds; exit code 2 blocks the action. Read-only: hooks live in files.'),
     h('code', { class: 'mcp-cmd' }, '{ "hooks": { "PreToolUse": [ { "matcher": "bash|edit", "command": "node check.js" } ] } }'),
     block('Your hooks', data.user, 'user'),
     proj

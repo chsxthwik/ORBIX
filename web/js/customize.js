@@ -1,6 +1,6 @@
-// Customizations (sidebar → Customizations): a page with Marketplace and Installed and one search
-// box. Marketplace adds well-known MCP servers with one click (catalog.mjs has their exact configs); Installed lists
-// what the agent can use in the open project: MCP servers, skills, and the instruction and rule files.
+// Plugins (sidebar → Plugins): a page with Marketplace and Installed and one search box. Marketplace adds well-known
+// MCP servers with one click (catalog.mjs has their exact configs); Installed lists what the agent can use in the open
+// project: MCP servers, and the instruction and rule files. Skills have their own page (skills.js).
 import { h, icon, replace, toast, baseName, skeleton, errorState, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, emit, activeTab } from './store.js';
@@ -11,7 +11,7 @@ import { CATALOG, CATEGORIES, FEATURED, configFor } from './catalog.mjs';
 let tab = 'market';
 let query = '';
 let page = null; // the mounted page, so a redraw of the hub keeps the search box and its caret
-let data = null; // { servers, skills, rules } or { error }
+let data = null; // { servers, rules } or { error }
 
 const project = () => activeTab()?.workspace || homeProject() || S.workspaces?.[0]?.path || '';
 
@@ -19,8 +19,8 @@ async function load() {
   const ws = project();
   const q = ws ? `?ws=${encodeURIComponent(ws)}` : '';
   try {
-    const [mcp, sk, rules] = await Promise.all([api.get(`/api/mcp${q}`), api.get(`/api/skills${q}`).catch(() => ({ skills: [] })), ws ? api.get(`/api/project/rules${q}`).catch(() => null) : null]);
-    data = { ws, servers: [...mcp.servers, ...(mcp.project?.servers || [])], skills: sk.skills || [], rules };
+    const [mcp, rules] = await Promise.all([api.get(`/api/mcp${q}`), ws ? api.get(`/api/project/rules${q}`).catch(() => null) : null]);
+    data = { ws, servers: [...mcp.servers, ...(mcp.project?.servers || [])], rules };
   } catch (e) {
     data = { error: e.message };
   }
@@ -125,7 +125,6 @@ function installedView() {
       load();
     } } : null,
   ].filter(Boolean));
-  const skills = data.skills.filter((k) => match(k.name, k.description));
   const rules = [...(data.rules?.instructions || []).map((f) => ({ name: baseName(f.path), path: f.path, tag: 'Instructions', d: f.path })), ...(data.rules?.rules || []).map((r) => ({ name: r.name, path: r.path, tag: { always_on: 'Always', model_decision: 'When relevant', glob: 'Matching files', manual: 'On @mention' }[r.trigger], d: r.description || r.globs || '' }))].filter((r) => match(r.name, r.d));
   const reveal = (p) => api.post('/api/fs/reveal', { path: p }).catch((e) => toast(e.message, 'error'));
   return [
@@ -136,8 +135,6 @@ function installedView() {
         dots.addEventListener('click', () => more(s, dots));
         return h('div', { class: 'cz-row' }, e ? tile(e, 28) : plainTile(28), h('div', { class: 'cz-row-t' }, h('b', null, s.name, h('span', { class: 'tag' }, s.scope === 'project' ? 'Project' : 'Yours')), h('span', { class: 'ell' }, what(s.config))), stat(s), dots);
       })) : h('p', { class: 'cz-none' }, query ? 'No MCP server matches.' : 'None yet. Add one from the Marketplace.')),
-    h('section', { class: 'cz-sec' }, head('Skills', skills.length),
-      skills.length ? h('div', { class: 'cz-lines' }, skills.map((k) => h('button', { class: 'cz-line', type: 'button', title: k.path, onclick: () => reveal(k.path) }, h('b', null, `/${k.name}`), h('span', { class: 'tag' }, k.scope === 'project' ? 'Project' : 'Yours'), h('span', { class: 'ell' }, k.description)))) : h('p', { class: 'cz-none' }, 'No skills. A skill is a folder with a SKILL.md in .agents/skills (this project) or in the skills folder of the ORBIX data folder (every project).')),
     h('section', { class: 'cz-sec' }, head('Rules', rules.length),
       rules.length ? h('div', { class: 'cz-lines' }, rules.map((r) => h('button', { class: 'cz-line', type: 'button', title: r.path, onclick: () => reveal(r.path) }, h('b', null, r.name), h('span', { class: 'tag' }, r.tag), h('span', { class: 'ell' }, r.d)))) : h('p', { class: 'cz-none' }, data.ws ? 'No rules in this project. /init writes an AGENTS.md; Markdown files in .agents/rules add more.' : 'Open a project to see its rules.')),
   ];
@@ -154,11 +151,11 @@ function render() {
 /** Draw the page into the hub's section (`root`). A redraw of the hub keeps the page as it is. */
 export function drawCustomizations(root) {
   if (page && root.contains(page)) return;
-  const search = h('input', { type: 'search', class: 'cz-q', placeholder: 'Search customizations…', 'aria-label': 'Search customizations', value: query, spellcheck: 'false', autocomplete: 'off' });
+  const search = h('input', { type: 'search', class: 'cz-q', placeholder: 'Search plugins…', 'aria-label': 'Search plugins', value: query, spellcheck: 'false', autocomplete: 'off' });
   search.addEventListener('input', () => ((query = search.value), render()));
   const tabs = h('div', { class: 'cz-tabs', role: 'tablist' }, [['market', 'Marketplace'], ['installed', 'Installed']].map(([t, l]) => h('button', { type: 'button', role: 'tab', 'data-t': t, 'aria-selected': String(t === tab), onclick: () => ((tab = t), render()) }, l)));
   page = h('div', { class: 'hub cz' },
-    h('header', { class: 'cz-head' }, h('h1', null, 'Customizations'), h('span', { class: 'cz-for muted small' }), h('span', { class: 'grow' }), tabs),
+    h('header', { class: 'cz-head' }, h('h1', null, 'Plugins'), h('span', { class: 'cz-for muted small' }), h('span', { class: 'grow' }), tabs),
     h('div', { class: 'cz-search' }, icon('search', 14), search),
     h('div', { class: 'cz-body' }));
   replace(root, page);

@@ -1,7 +1,7 @@
 // Claude Code as an ORBIX agent: one `claude -p` process per conversation, stream-json on stdin and stdout, with
 // the control protocol for permissions (--permission-prompt-tool stdio), model changes and interrupts. Claude Code
 // keeps its own agent loop, tools, login and history (~/.claude/projects); ORBIX shows the work and answers its
-// permission questions with its own approval cards, so Ask first, Auto edits and Turbo work as they do for ORBIX.
+// permission questions with its own approval cards, so Supervised, Auto edits and Full access work as they do for ORBIX.
 import { EventEmitter } from 'node:events';
 import crypto from 'node:crypto';
 import { LineProcess } from './lines.mjs';
@@ -14,8 +14,8 @@ export const CLAUDE_MODELS = [
 ];
 export const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-/** ORBIX approvals → Claude Code permission mode. Turbo still answers each question itself (see proc). */
-const MODE = { ask: 'default', edits: 'acceptEdits', auto: 'acceptEdits' };
+/** ORBIX approvals → Claude Code permission mode. Full access still answers each question itself (see proc). */
+const MODE = { ask: 'default', edits: 'acceptEdits', safe: 'acceptEdits', auto: 'acceptEdits' };
 
 export class ClaudeDriver extends EventEmitter {
   constructor({ backend, bin, cwd, approvals }) {

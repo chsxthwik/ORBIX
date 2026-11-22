@@ -66,3 +66,50 @@ export async function readSkill(skill) {
   const text = await fs.promises.readFile(skill.hostPath, 'utf8');
   return parseFrontmatter(text).body.trim();
 }
+
+/** A skill name as a folder: lower-case words joined by dashes ("Write release notes" → "write-release-notes"). */
+function skillSlug(name) {
+  return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64);
+}
+
+/** SKILL.md text for a name, a one-line description and the instructions. */
+function skillText({ name, description, body }) {
+  const one = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  return `---\nname: ${skillSlug(name)}\ndescription: ${one(description)}\n---\n\n${String(body || '').trim()}\n`;
+}
+
+/**
+ * Write a skill: a new one in the project (`.agents/skills/<name>/SKILL.md`) or for you in every project
+ * (`<data>/skills/<name>/SKILL.md`), or over an existing one's own file (`hostPath`). Returns the file written.
+ */
+export async function saveSkill({ hostRoot, scope, name, description, body, hostPath }) {
+  const slug = skillSlug(name);
+  if (!slug) throw Object.assign(new Error('Give the skill a name'), { status: 400 });
+  if (!String(description || '').trim()) throw Object.assign(new Error('Say in one line when the agent should use it'), { status: 400 });
+  if (!String(body || '').trim()) throw Object.assign(new Error('Write the instructions'), { status: 400 });
+  if (String(body).length > 100000) throw Object.assign(new Error('Keep a skill under 100,000 characters'), { status: 400 });
+  let file = hostPath;
+  if (!file) {
+    const base = scope === 'user' ? path.join(DATA_DIR, 'skills') : path.join(hostRoot, '.agents', 'skills');
+    file = path.join(base, slug, 'SKILL.md');
+    if (fs.existsSync(file)) throw Object.assign(new Error(`A skill named ${slug} is already there`), { status: 409 });
+  }
+  await fs.promises.mkdir(path.dirname(file), { recursive: true });
+  await fs.promises.writeFile(file, skillText({ name: slug, description, body }));
+  return file;
+}
+
+/** Delete a skill: its folder moves to <data>/trash/skills, so it can be put back by hand. Returns where it went. */
+export async function trashSkill(hostPath) {
+  const dir = path.dirname(hostPath);
+  const to = path.join(DATA_DIR, 'trash', 'skills', `${Date.now()}~${path.basename(dir)}`);
+  await fs.promises.mkdir(path.dirname(to), { recursive: true });
+  try {
+    await fs.promises.rename(dir, to);
+  } catch (e) {
+    if (e.code !== 'EXDEV') throw e; // another drive: copy, then remove
+    await fs.promises.cp(dir, to, { recursive: true });
+    await fs.promises.rm(dir, { recursive: true, force: true });
+  }
+  return to;
+}

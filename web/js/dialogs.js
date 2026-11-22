@@ -1,8 +1,8 @@
 // Modals, menus and pickers: modal, confirm, prompt, folder picker, model picker, agent requests, palette.
 import { h, $, icon, iconBtn, replace, toast, fmtTokens, skeleton, kbd, leave, errorState, loadingState, onEnter } from './dom.js';
 import { api } from './api.js';
-import { replyUi, S } from './store.js';
-import { brandMark } from './brands.js';
+import { replyUi, S, savePrefs } from './store.js';
+import { brandMark, modelMark } from './brands.js';
 import { fuzzy, marked } from './composer.js';
 
 const FOCUSABLE = 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"],a[href]';
@@ -16,9 +16,11 @@ function topModal(root) {
 function syncModalFocus(root) {
   const top = topModal(root);
   for (const layer of root.children) layer.inert = layer !== top;
-  for (const id of ['app', 'chrome']) {
+  // Settings fills the window under the menu row, so the menu row (menus, the update, the window) stays usable.
+  const full = !!top?.querySelector('.settings-card');
+  for (const [id, off] of [['app', !!top], ['topbar', !!top], ['chrome', !!top && !full]]) {
     const page = document.getElementById(id);
-    if (page) page.inert = !!top;
+    if (page) page.inert = off;
   }
 }
 
@@ -37,6 +39,8 @@ export function modal({ title, body, actions = [], size = '', cls = '', onClose,
   const onKey = (e) => {
     if (!isTop() || e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Escape') {
+      if (document.querySelector('.menu:not(.leaving)')) return; // Esc closes the open menu first
+      if (e.target?.matches?.('input[type=search]') && e.target.value) return; // …and clears a search box first
       e.stopPropagation();
       e.preventDefault();
       close();
@@ -59,7 +63,7 @@ export function modal({ title, body, actions = [], size = '', cls = '', onClose,
     document.removeEventListener('keydown', onKey, true);
     scrim.classList.add('closing');
     syncModalFocus(root);
-    setTimeout(() => scrim.remove(), 140);
+    setTimeout(() => scrim.remove(), 180);
     onClose?.(val);
     try {
       const target = returnFocus?.() || prev;
@@ -227,10 +231,6 @@ export function folderPicker(start = '') {
   });
 }
 
-/**
- * Searchable model list. `load()` returns the models; `onPick(model)` applies one (throw to keep the list open).
- * `loading` is the line shown while `load()` runs.
- */
 /** A model's details for its tooltip in the picker: id, context window and thinking levels. */
 function modelTip(x) {
   const th = x.thinking;
@@ -239,26 +239,223 @@ function modelTip(x) {
 }
 
 let pickerId = 0;
-export function modelPicker({ load, current, onPick, extra, loading = 'Loading models…', returnFocus }) {
+const keyOf = (x) => (x ? `${x.provider}/${x.id}` : '');
+const THINK_NAMES = { off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
+export const thinkingName = (l) => THINK_NAMES[l] || String(l || '').charAt(0).toUpperCase() + String(l || '').slice(1);
+/** The thinking levels a model offers, in order ('off' first when it can stop thinking). */
+export const thinkingLevels = (x) => (x?.thinking?.efforts?.length ? [...(x.thinking.canOff === false ? [] : ['off']), ...x.thinking.efforts] : []);
+
+/**
+ * A small panel anchored to `anchor` (above it when there is no room below). Esc, an outside click or a resize close
+ * it and focus goes back to the anchor. Returns { el, close }.
+ */
+export function popover(anchor, content, { align = 'start', cls = '', label = '' } = {}) {
+  document.querySelector('.menu:not(.leaving)')?._close?.();
+  const el = h('div', { class: `menu pop-panel${cls ? ' ' + cls : ''}`, role: 'dialog', 'aria-label': label || null }, content);
+  document.body.append(el);
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const w = el.offsetWidth;
+    const ht = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(align === 'end' ? r.right - w : r.left, innerWidth - w - 8)) + 'px';
+    const below = r.bottom + 6 + ht <= innerHeight - 8 || r.top - 6 - ht < 8;
+    el.style.top = (below ? r.bottom + 6 : r.top - 6 - ht) + 'px';
+    el.classList.toggle('down', below);
+    el.classList.toggle('up', !below);
+  };
+  place();
+  let closed = false;
+  const close = (refocus = true) => {
+    if (closed) return;
+    closed = true;
+    leave(el);
+    document.removeEventListener('mousedown', off, true);
+    document.removeEventListener('keydown', onKey, true);
+    removeEventListener('resize', close);
+    if (refocus) anchor.focus?.({ preventScroll: true });
+  };
+  const off = (e) => !el.contains(e.target) && !anchor.contains(e.target) && close(false);
+  const onKey = (e) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    close();
+  };
+  el._close = () => close(false);
+  el._anchor = anchor;
+  el._place = place;
+  setTimeout(() => {
+    document.addEventListener('mousedown', off, true);
+    document.addEventListener('keydown', onKey, true);
+    addEventListener('resize', close);
+  }, 0);
+  return { el, close };
+}
+
+/**
+ * A menu whose rows open a submenu to the side, as in a desktop context menu: the pointer, → or Enter opens it, ←
+ * goes back, Esc closes everything. An item: { icon, label, hint, count (number or element), dot ('ok' | 'bad' |
+ * 'warn'), off, why, sub: () => items (or a promise of them), run }, '-' for a line, { header } for a title.
+ * `head` (an element) goes above the rows.
+ */
+export function cascade(anchor, items, { head = null, cls = '', label = '', align = 'start' } = {}) {
+  let sub = null;
+  let subFor = null;
+  let leaveTimer = 0;
+  const closeSub = () => {
+    clearTimeout(leaveTimer);
+    sub?.remove();
+    sub = null;
+    subFor?.classList.remove('open');
+    subFor?.setAttribute('aria-expanded', 'false');
+    subFor = null;
+  };
+  const pick = (it) => {
+    if (it.off) return;
+    pop.close(false);
+    it.run?.();
+  };
+  const rowOf = (it, inSub) => {
+    if (it === '-') return h('div', { class: 'xm-sep', role: 'separator' });
+    if (it.header) return h('div', { class: 'xm-h' }, it.header);
+    const count = it.count == null || it.count === '' ? null : it.count instanceof Node ? it.count : h('span', { class: 'xm-n num' }, String(it.count));
+    const b = h('button', { class: 'xm-it' + (it.off ? ' off' : '') + (it.danger ? ' danger' : ''), type: 'button', role: 'menuitem', title: it.off ? it.why || null : it.title || null, 'aria-disabled': it.off ? 'true' : null, 'aria-haspopup': it.sub ? 'menu' : null, 'aria-expanded': it.sub ? 'false' : null },
+      it.icon ? icon(it.icon, 14, 'xm-ic') : null,
+      it.dot ? h('span', { class: `xm-dot ${it.dot}`, 'aria-hidden': 'true' }) : null,
+      h('span', { class: 'xm-l ell' }, it.label),
+      count,
+      it.hint ? h('span', { class: 'xm-hint' }, it.hint) : null,
+      it.sub ? icon('chevron-right', 12, 'xm-more') : null);
+    if (it.sub && !inSub) {
+      b.addEventListener('click', () => openSub(it, b, true));
+      b.addEventListener('pointerenter', () => (clearTimeout(leaveTimer), subFor !== b && openSub(it, b, false)));
+    } else {
+      b.addEventListener('click', () => pick(it));
+      // Moving onto a plain row closes an open submenu, a moment later (so a diagonal path to it does not).
+      if (!inSub) b.addEventListener('pointerenter', () => sub && (clearTimeout(leaveTimer), (leaveTimer = setTimeout(closeSub, 160))));
+    }
+    return b;
+  };
+  const openSub = async (it, b, focus) => {
+    if (it.off) return;
+    if (subFor === b) return focus && sub?.querySelector('.xm-it')?.focus();
+    closeSub();
+    subFor = b;
+    b.classList.add('open');
+    b.setAttribute('aria-expanded', 'true');
+    const el = h('div', { class: 'xm-sub', role: 'menu', 'aria-label': it.label }, h('div', { class: 'xm-wait' }, h('span', { class: 'xm-spin', 'aria-hidden': 'true' }), 'Loading…'));
+    el.addEventListener('pointerenter', () => clearTimeout(leaveTimer));
+    sub = el;
+    pop.el.append(el);
+    const place = () => {
+      const r = b.getBoundingClientRect();
+      const p = pop.el.getBoundingClientRect();
+      const w = el.offsetWidth;
+      const right = p.right + 6 + w <= innerWidth - 8;
+      el.style.left = `${right ? p.width + 6 : -w - 6}px`;
+      el.classList.toggle('left', !right);
+      const top = Math.max(8 - p.top, Math.min(r.top - p.top - 5, innerHeight - 8 - p.top - el.offsetHeight));
+      el.style.top = `${top}px`;
+    };
+    place();
+    let list;
+    try {
+      list = await (typeof it.sub === 'function' ? it.sub() : it.sub);
+    } catch (e) {
+      list = [{ label: e.message || 'Could not load this', off: true }];
+    }
+    if (sub !== el) return;
+    el.replaceChildren(...(list?.length ? list : [{ label: 'Nothing here yet', off: true }]).filter(Boolean).map((x) => rowOf(x, true)));
+    place();
+    if (focus) el.querySelector('.xm-it:not(.off)')?.focus({ preventScroll: true });
+  };
+  const content = [head, ...items.filter(Boolean).map((it) => rowOf(it, false))].filter(Boolean);
+  const pop = popover(anchor, h('div', { class: 'xm-rows', role: 'menu', 'aria-label': label || null }, content), { cls: `xm ${cls}`.trim(), label, align });
+  const rowsOf = (box) => [...box.querySelectorAll(':scope > .xm-it, :scope > .xm-rows > .xm-it')].filter((x) => !x.classList.contains('off'));
+  pop.el.addEventListener('keydown', (e) => {
+    const inSub = !!document.activeElement?.closest('.xm-sub');
+    const box = inSub ? sub : pop.el.querySelector('.xm-rows');
+    const list = rowsOf(box);
+    const i = list.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!inSub) closeSub();
+      return list[(i + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length]?.focus();
+    }
+    if (e.key === 'Home' || e.key === 'End') return e.preventDefault(), list[e.key === 'Home' ? 0 : list.length - 1]?.focus();
+    if (e.key === 'ArrowRight' && !inSub && document.activeElement?.getAttribute('aria-haspopup')) return e.preventDefault(), document.activeElement.click();
+    if (e.key === 'ArrowLeft' && inSub) {
+      e.preventDefault();
+      const back = subFor;
+      closeSub();
+      return back?.focus();
+    }
+    if (e.key === 'Tab') pop.close(false);
+  });
+  rowsOf(pop.el.querySelector('.xm-rows'))[0]?.focus({ preventScroll: true });
+  return pop;
+}
+
+/**
+ * The model picker, a panel over the message box: providers as marks on the left (Starred and Recent first, agent
+ * CLIs after), that provider's models in the middle, and the highlighted model's reasoning levels on the right. One
+ * search covers every model. ↑ ↓ move, ← → change provider, Enter picks, Ctrl+1…9 picks a listed model.
+ * `load()` returns { models, errors } or a list; `onPick(model, level?)` applies one (throw to keep the picker open);
+ * `level` is the current thinking level (with `thinking: true` the reasoning column shows); `extra` is the label of a
+ * "use the default" choice (Home), picked as null.
+ */
+export function modelPicker({ load, current, onPick, extra, loading = 'Loading models…', returnFocus, anchor, thinking = false, level = '' }) {
   const id = `models-${++pickerId}`;
+  const rail = h('div', { class: 'mp-rail', role: 'tablist', 'aria-label': 'Providers', 'aria-orientation': 'vertical' });
   const list = h('div', { id, class: 'list mp-list', role: 'listbox', 'aria-label': 'Models' });
-  const q = h('input', { type: 'search', role: 'combobox', 'aria-autocomplete': 'list', 'aria-controls': id, 'aria-expanded': 'false', placeholder: 'Search by model or provider', 'aria-label': 'Search models', spellcheck: 'false' });
+  const side = h('div', { class: 'mp-side', hidden: true });
+  const q = h('input', { type: 'search', role: 'combobox', 'aria-autocomplete': 'list', 'aria-controls': id, 'aria-expanded': 'false', placeholder: 'Search models…', 'aria-label': 'Search models', spellcheck: 'false', autocomplete: 'off' });
   const feedback = h('span', { class: 'mp-results', role: 'status' });
-  const footer = h('div', { class: 'mp-footer' }, feedback, h('span', { 'aria-hidden': 'true' }, kbd('↑'), kbd('↓'), ' navigate ', kbd('Enter'), ' choose'));
-  const m = modal({ title: 'Choose a model', cls: 'model-picker', body: h('div', { class: 'mp-layout' }, q, list, footer), initialFocus: q, returnFocus });
+  const foot = h('div', { class: 'mp-footer' }, feedback);
+  const body = h('div', { class: 'mp-layout' }, rail, h('div', { class: 'mp-main' }, h('label', { class: 'mp-search' }, icon('search', 14), q), list), side, foot);
+  const m = modal({ title: 'Choose a model', cls: 'model-picker' + (anchor ? ' anchored' : ''), body, initialFocus: q, returnFocus });
+  const scrim = m.el.parentElement;
+  m.el.classList.toggle('with-side', !!thinking);
+  if (anchor) {
+    scrim.classList.add('pop');
+    // Above the chip when there is room (the message box sits at the bottom), else below; kept on screen as it grows.
+    const place = () => {
+      if (!anchor.isConnected || !scrim.isConnected) return;
+      const r = anchor.getBoundingClientRect();
+      const above = r.top - 16;
+      const below = innerHeight - r.bottom - 16;
+      const up = above >= 300 || above >= below;
+      m.el.style.maxHeight = Math.min(460, Math.max(160, up ? above : below)) + 'px';
+      const w = m.el.offsetWidth;
+      m.el.style.left = Math.max(8, Math.min(r.left - 8, innerWidth - w - 8)) + 'px';
+      m.el.style.top = up ? '' : r.bottom + 8 + 'px';
+      m.el.style.bottom = up ? innerHeight - r.top + 8 + 'px' : '';
+      m.el.classList.toggle('up', up);
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(m.el);
+    addEventListener('resize', place);
+    const gone = new MutationObserver(() => !scrim.isConnected && (removeEventListener('resize', place), ro.disconnect(), gone.disconnect()));
+    gone.observe(scrim.parentElement, { childList: true });
+  }
   let models = [];
   let errors = [];
-  let options = [];
-  let marked = null;
-  let sel = 0;
+  let groups = []; // [{ key, name, mark, models, kind: 'recent' | 'fav' | 'provider' | 'agent' }]
+  let pv = '';
   let shown = [];
+  let options = [];
+  let sel = 0;
   let choosing = false;
-  const choose = async (x) => {
+  const names = () => new Map([...(S.engine?.providers || []), ...(S.engine?.agents || [])].map((p) => [p.id, p.name]));
+  const prefList = (k) => (Array.isArray(S.ui?.[k]) ? S.ui[k] : []);
+  const choose = async (x, lvl) => {
     if (choosing || !list.isConnected) return;
     choosing = true;
     list.setAttribute('aria-busy', 'true');
     try {
-      await onPick(x);
+      await onPick(x, lvl);
+      if (x) savePrefs({ modelRecent: [keyOf(x), ...prefList('modelRecent').filter((k) => k !== keyOf(x))].slice(0, 8) });
       m.close();
     } catch (e) {
       toast(e.message, 'error');
@@ -267,63 +464,147 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
       list.removeAttribute('aria-busy');
     }
   };
+  const star = (x) => {
+    const k = keyOf(x);
+    const fav = prefList('modelFav');
+    savePrefs({ modelFav: fav.includes(k) ? fav.filter((f) => f !== k) : [k, ...fav].slice(0, 30) });
+    build();
+    draw();
+  };
+  const build = () => {
+    const nm = names();
+    const byKey = new Map(models.map((x) => [keyOf(x), x]));
+    const pick = (keys) => keys.map((k) => byKey.get(k)).filter(Boolean);
+    const recent = pick(prefList('modelRecent'));
+    const fav = pick(prefList('modelFav'));
+    const byProv = new Map();
+    for (const x of models) (byProv.get(x.provider) || byProv.set(x.provider, []).get(x.provider)).push(x);
+    groups = [
+      ...(fav.length ? [{ key: ':fav', name: 'Starred', icon: 'star', models: fav, kind: 'fav' }] : []),
+      ...(recent.length ? [{ key: ':recent', name: 'Recent', icon: 'clock', models: recent, kind: 'recent' }] : []),
+      ...[...byProv].map(([p, arr]) => ({ key: p, name: nm.get(p) || p, mark: p, models: arr, kind: p.startsWith('agent-') ? 'agent' : 'provider' })).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'agent' ? 1 : -1)),
+    ];
+    if (!groups.some((g) => g.key === pv)) pv = (current && groups.find((g) => g.key === current.provider)?.key) || groups.find((g) => g.kind === 'fav' || g.kind === 'recent')?.key || groups[0]?.key || '';
+  };
+  const row = (x, withProvider, n) => {
+    const isCur = !!current && keyOf(current) === keyOf(x);
+    const faved = prefList('modelFav').includes(keyOf(x));
+    const starBtn = h('span', { class: 'mp-star' + (faved ? ' on' : ''), role: 'button', tabindex: '-1', title: faved ? 'Unstar' : 'Star: keep it at the top', 'aria-label': faved ? `Unstar ${x.name || x.id}` : `Star ${x.name || x.id}`, onclick: (e) => (e.stopPropagation(), star(x)) }, icon('star', 13));
+    return h('button', { class: 'list-it mp-it' + (isCur ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(isCur), title: modelTip(x), onclick: () => choose(x), onmousemove: () => { if (shown[sel] !== x) ((sel = shown.indexOf(x)), mark()); } },
+      modelMark(x.provider, x.id, 15, 'mp-pmark'),
+      h('span', { class: 'mp-name ell' }, x.name || x.id, withProvider ? h('small', null, names().get(x.provider) || x.provider) : null),
+      isCur ? icon('check', 14, 'mp-cur') : null,
+      h('span', { class: 'grow' }),
+      x.contextWindow ? h('span', { class: 'mp-ctx num' }, fmtTokens(x.contextWindow)) : null,
+      starBtn,
+      n <= 9 ? h('kbd', { class: 'mp-key' }, `Ctrl+${n}`) : null);
+  };
+  // The reasoning column: the highlighted model's levels; a click picks that model at that level.
+  let sideFor = null;
+  const drawSide = () => {
+    const x = shown[sel] || current;
+    const levels = thinking ? thinkingLevels(x) : [];
+    side.hidden = !thinking;
+    if (!thinking || sideFor === x) return;
+    sideFor = x;
+    const isCur = !!current && x && keyOf(current) === keyOf(x);
+    const at = isCur ? level || 'off' : x?.thinking?.default || (levels.includes('medium') ? 'medium' : levels[0]);
+    replace(side, [
+      h('div', { class: 'mp-side-h' }, h('span', null, 'Reasoning'), x ? h('small', { class: 'ell' }, x.name || x.id) : null),
+      levels.length
+        ? h('div', { class: 'mp-levels', role: 'group', 'aria-label': 'Reasoning' }, levels.map((l) => h('button', { class: 'mp-lvl' + (l === at ? ' on' : ''), type: 'button', 'aria-pressed': String(l === at), tabindex: '-1', onclick: () => choose(x, l) }, h('span', { class: 'grow' }, thinkingName(l)), l === at ? icon('check', 14) : null)))
+        : h('p', { class: 'mp-side-none' }, x ? 'This model has no reasoning levels.' : ''),
+    ]);
+  };
   const draw = (initial = false) => {
     const f = q.value.toLowerCase().trim();
-    const byProv = new Map();
+    const nm = names();
+    const match = (x) => !f || `${nm.get(x.provider) || ''} ${x.provider} ${x.id} ${x.name || ''}`.toLowerCase().includes(f);
+    replace(rail, [
+      extra ? h('button', { class: 'mp-pv mp-default' + (!current ? ' cur' : ''), type: 'button', title: extra, 'aria-label': 'Default model', onclick: () => choose(null) }, icon('sparkle', 16)) : null,
+      ...groups.flatMap((g, i) => {
+        const n = f ? g.models.filter(match).length : g.models.length;
+        const sep = i && g.kind !== groups[i - 1].kind && (g.kind === 'provider' || g.kind === 'agent') ? h('div', { class: 'mp-rail-sep', role: 'separator' }) : null;
+        const b = h('button', { class: 'mp-pv' + (g.key === pv && !f ? ' on' : '') + (f && !n ? ' dim' : ''), type: 'button', role: 'tab', title: `${g.name} · ${n} ${n === 1 ? 'model' : 'models'}`, 'aria-label': g.name, 'aria-selected': String(g.key === pv && !f), onclick: () => ((pv = g.key), (q.value = ''), (sel = 0), draw(), q.focus()) },
+          g.mark ? brandMark(g.mark, 18, 'mp-pmark') : icon(g.icon, 16));
+        return [sep, b];
+      }),
+    ].filter(Boolean));
+    const kids = [];
     shown = [];
     options = [];
-    marked = null;
-    const providerNames = new Map([...(S.engine?.providers || []), ...(S.engine?.agents || [])].map((p) => [p.id, p.name]));
-    for (const x of models) if (!f || `${providerNames.get(x.provider) || ''} ${x.provider} ${x.id} ${x.name || ''}`.toLowerCase().includes(f)) (byProv.get(x.provider) || byProv.set(x.provider, []).get(x.provider)).push(x);
-    const kids = [];
-    const option = (x, b) => {
+    const add = (x, withProvider) => {
+      const b = row(x, withProvider, shown.length + 1);
       b.id = `${id}-${shown.length}`;
       b.tabIndex = -1;
       shown.push(x);
       options.push(b);
       kids.push(b);
     };
-    if (extra && !f) {
-      option(null, h('button', { class: 'list-it' + (!current ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(!current), onclick: () => choose(null) }, h('span', { class: 'grow' }, extra)));
-    }
-    // "thinking" only tells models apart where a provider has some that think and some that do not.
-    const mixed = new Set([...byProv].filter(([, arr]) => arr.some((x) => x.reasoning) && arr.some((x) => !x.reasoning)).map(([p]) => p));
-    for (const [p, arr] of byProv) {
-      kids.push(h('div', { class: 'list-h with-mark' }, brandMark(p, 16), providerNames.get(p) || p));
-      for (const x of arr) {
-        const isCur = current && current.id === x.id && current.provider === x.provider;
-        option(x, h('button', { class: 'list-it' + (isCur ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(!!isCur), title: modelTip(x), onclick: () => choose(x) }, h('span', { class: 'grow ell' }, x.name || x.id), x.reasoning && mixed.has(p) ? h('span', { class: 'tag' }, 'thinking') : null, x.contextWindow ? h('span', { class: 'muted small num' }, fmtTokens(x.contextWindow)) : null, isCur ? icon('check', 14) : null));
+    if (f) {
+      const seen = new Set();
+      for (const g of groups) {
+        if (g.kind === 'recent' || g.kind === 'fav') continue;
+        const hit = g.models.filter(match);
+        if (!hit.length) continue;
+        kids.push(h('div', { class: 'list-h with-mark' }, brandMark(g.mark, 13), g.name));
+        for (const x of hit) if (!seen.has(keyOf(x))) (seen.add(keyOf(x)), add(x, false));
       }
+      if (!shown.length) kids.push(h('div', { class: 'empty' }, 'No model matches.'));
+    } else {
+      const g = groups.find((x) => x.key === pv);
+      if (g) {
+        kids.push(h('div', { class: 'list-h' }, g.name));
+        for (const x of g.models) add(x, g.kind === 'recent' || g.kind === 'fav');
+      } else kids.push(h('div', { class: 'empty' }, 'No models. Connect a provider in Settings → Providers, or install an agent.'));
     }
     if (errors.length) kids.push(h('div', { class: 'pad small warn-text', role: 'status' }, errors.join(' · ')));
-    if (!byProv.size && !(extra && !f)) kids.push(h('div', { class: 'empty' }, 'No matching models'));
     replace(list, kids);
-    const count = shown.filter(Boolean).length;
-    feedback.textContent = `${count} ${count === 1 ? 'model' : 'models'}${errors.length ? ` · ${errors.length} source${errors.length === 1 ? '' : 's'} unavailable` : ''}`;
+    const total = f ? shown.length : models.length;
+    feedback.textContent = f ? `${shown.length} ${shown.length === 1 ? 'match' : 'matches'}` : `${total} ${total === 1 ? 'model' : 'models'}${errors.length ? ` · ${errors.length} unavailable` : ''}`;
     q.setAttribute('aria-expanded', String(shown.length > 0));
-    if (initial) sel = shown.findIndex((x) => x ? x.id === current?.id && x.provider === current?.provider : !current);
+    if (initial) sel = Math.max(0, shown.findIndex((x) => current && keyOf(x) === keyOf(current)));
     sel = Math.max(0, Math.min(sel, shown.length - 1));
+    marked = null;
     mark();
   };
+  let marked = null;
   const mark = () => {
     const next = options[sel];
-    if (next === marked) return;
+    if (next === marked && next?.isConnected) return;
     marked?.classList.remove('sel');
     marked = next;
     marked?.classList.add('sel');
     if (marked) q.setAttribute('aria-activedescendant', marked.id);
     else q.removeAttribute('aria-activedescendant');
     marked?.scrollIntoView({ block: 'nearest' });
+    drawSide();
   };
   q.addEventListener('input', () => {
     sel = 0;
     draw();
   });
+  // Ctrl+1…9 anywhere in the picker picks that row.
+  m.el.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || !/^[1-9]$/.test(e.key)) return;
+    const x = shown[+e.key - 1];
+    if (!x) return;
+    e.preventDefault();
+    choose(x);
+  });
   q.addEventListener('keydown', (e) => {
-    if (!shown.length || e.isComposing || e.keyCode === 229) return;
+    if (e.isComposing || e.keyCode === 229) return;
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !q.value && groups.length) {
+      e.preventDefault();
+      const i = groups.findIndex((g) => g.key === pv);
+      pv = groups[(i + (e.key === 'ArrowRight' ? 1 : -1) + groups.length) % groups.length].key;
+      sel = 0;
+      return draw();
+    }
+    if (!shown.length) return;
     if (e.key === 'ArrowDown') (e.preventDefault(), (sel = Math.min(shown.length - 1, sel + 1)), mark());
     else if (e.key === 'ArrowUp') (e.preventDefault(), (sel = Math.max(0, sel - 1)), mark());
-    else if (e.key === 'Enter' && shown.length) (e.preventDefault(), choose(shown[sel]));
+    else if (e.key === 'Enter') (e.preventDefault(), choose(shown[sel]));
   });
   const fetchModels = () => {
     feedback.textContent = 'Loading model list';
@@ -336,6 +617,7 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
         if (!list.isConnected) return;
         models = Array.isArray(result) ? result : result?.models || [];
         errors = Array.isArray(result?.errors) ? result.errors : [];
+        build();
         draw(true);
       })
       .catch((e) => {

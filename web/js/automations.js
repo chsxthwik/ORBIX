@@ -1,5 +1,5 @@
-// Automations (sidebar → Automations): prompts ORBIX sends by itself on a schedule, each as a new conversation in
-// its project. The page lists them with their next and last run, and has a form to add or change one.
+// Loops (sidebar → Loops): prompts ORBIX sends by itself, on a schedule or once, each as a new conversation in its
+// project. The page lists them with their next and last run, and has a form to add or change one.
 import { h, icon, replace, toast, baseName, timeAgo, errorState, skeleton, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, emit, groupSessions } from './store.js';
@@ -13,7 +13,13 @@ let form = null; // the automation being added or changed: { id?, name, prompt, 
 let host = null;
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const EVERY = [['hour', 'Every hour'], ['day', 'Every day'], ['weekday', 'Weekdays'], ['week', 'Every week']];
+const EVERY = [['minutes', 'Every few minutes'], ['hour', 'Every hour'], ['day', 'Every day'], ['weekday', 'Weekdays'], ['week', 'Every week'], ['once', 'Once']];
+/** A timestamp as the value of a datetime-local field (local time). */
+const localInput = (ts) => {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 async function load() {
   loading = true;
@@ -51,7 +57,7 @@ async function save(data) {
   try {
     items = (await api.post('/api/automations', data)).items;
     form = null;
-    toast(data.id ? 'Saved' : 'Automation added', 'ok', 1400);
+    toast(data.id ? 'Saved' : 'Loop added', 'ok', 1400);
   } catch (e) {
     toast(e.message, 'error');
   }
@@ -72,26 +78,34 @@ function editor() {
   const dayWrap = h('label', { class: 'au-f' }, h('span', null, 'Day'), day);
   const timeWrap = h('label', { class: 'au-f' }, h('span', null, 'At'), time);
   const minWrap = h('label', { class: 'au-f' }, h('span', null, 'Minute past the hour'), minute);
+  const interval = h('input', { type: 'number', min: 5, max: 1440, step: 5, value: String(s.interval || 30), 'aria-label': 'Every how many minutes' });
+  const intWrap = h('label', { class: 'au-f' }, h('span', null, 'Every (minutes)'), interval);
+  const at = h('input', { type: 'datetime-local', value: localInput(s.at || Date.now() + 3600000), 'aria-label': 'When' });
+  const atWrap = h('label', { class: 'au-f' }, h('span', null, 'When'), at);
   const sync = () => {
-    dayWrap.hidden = every.value !== 'week';
-    timeWrap.hidden = every.value === 'hour';
-    minWrap.hidden = every.value !== 'hour';
+    const v = every.value;
+    dayWrap.hidden = v !== 'week';
+    timeWrap.hidden = v === 'hour' || v === 'minutes' || v === 'once';
+    minWrap.hidden = v !== 'hour';
+    intWrap.hidden = v !== 'minutes';
+    atWrap.hidden = v !== 'once';
   };
   every.addEventListener('change', sync);
   sync();
   const m = S.ui.homeModel;
   const submit = () => {
     const [hh, mm] = (time.value || '09:00').split(':').map(Number);
-    const sched = every.value === 'hour' ? { every: 'hour', minute: Math.max(0, Math.min(59, Number(minute.value) || 0)) } : { every: every.value, hour: hh, minute: mm, ...(every.value === 'week' ? { day: Number(day.value) } : {}) };
+    const v = every.value;
+    const sched = v === 'minutes' ? { every: v, interval: Math.round(Number(interval.value) || 0) } : v === 'once' ? { every: v, at: at.value ? new Date(at.value).getTime() : 0 } : v === 'hour' ? { every: 'hour', minute: Math.max(0, Math.min(59, Number(minute.value) || 0)) } : { every: v, hour: hh, minute: mm, ...(v === 'week' ? { day: Number(day.value) } : {}) };
     return save({ id: f.id, name: name.value, prompt: prompt.value, project: project.value, schedule: sched, enabled: f.enabled !== false, model: f.model || (m ? `${m.provider}/${m.id}` : '') });
   };
   setTimeout(() => prompt.focus(), 0);
-  return h('section', { class: 'au-form', 'aria-label': f.id ? 'Change automation' : 'New automation' },
-    h('h2', null, f.id ? 'Change automation' : 'New automation'),
+  return h('section', { class: 'au-form', 'aria-label': f.id ? 'Change loop' : 'New loop' },
+    h('h2', null, f.id ? 'Change loop' : 'New loop'),
     name, prompt,
-    h('div', { class: 'au-row' }, h('label', { class: 'au-f grow' }, h('span', null, 'Project'), project), h('label', { class: 'au-f' }, h('span', null, 'How often'), every), dayWrap, timeWrap, minWrap),
-    h('p', { class: 'muted small' }, `Uses ${f.model ? f.model.split('/').slice(1).join('/') : m ? m.name || m.id : 'the default model'}. Runs while ORBIX is open; a time missed while it was closed is skipped.`),
-    h('div', { class: 'au-acts' }, btn(f.id ? 'Save' : 'Add automation', submit, 'primary'), btn('Cancel', () => ((form = null), drawAutomations(host)))));
+    h('div', { class: 'au-row' }, h('label', { class: 'au-f grow' }, h('span', null, 'Project'), project), h('label', { class: 'au-f' }, h('span', null, 'How often'), every), dayWrap, timeWrap, minWrap, intWrap, atWrap),
+    h('p', { class: 'muted small' }, `Uses ${f.model ? f.model.split('/').slice(1).join('/') : m ? m.name || m.id : 'the default model'}. Runs while ORBIX is open (or on a machine, all the time); a time missed while it was closed is skipped.`),
+    h('div', { class: 'au-acts' }, btn(f.id ? 'Save' : 'Add loop', submit, 'primary'), btn('Cancel', () => ((form = null), drawAutomations(host)))));
 }
 
 function row(a) {
@@ -125,7 +139,7 @@ function row(a) {
         }, 'sm'),
         btn('Edit', () => ((form = { ...a }), drawAutomations(host)), 'sm'),
         btn('Delete', async () => {
-          if (!(await confirmDialog('Delete automation', `Delete “${a.name}”? Conversations it already started stay.`, { ok: 'Delete', danger: true }))) return;
+          if (!(await confirmDialog('Delete loop', `Delete “${a.name}”? Conversations it already started stay.`, { ok: 'Delete', danger: true }))) return;
           items = (await api.post('/api/automations/delete', { id: a.id }).catch((e) => (toast(e.message, 'error'), { items }))).items;
           drawAutomations(host);
         }, 'sm danger'))));
@@ -133,7 +147,7 @@ function row(a) {
 
 /** Create with Prompt: one sentence with the task and when; the form opens filled in for you to check. */
 function createWithPrompt(root) {
-  const ta = h('textarea', { class: 'au-ask', rows: 3, placeholder: 'For example: Every weekday at 9am, run the tests and tell me what fails, with a fix for each.', 'aria-label': 'The task and when it runs' });
+  const ta = h('textarea', { class: 'au-ask', rows: 3, placeholder: 'For example: Every weekday at 9am, run the tests and tell me what fails. Or: in 2 hours, check the deploy.', 'aria-label': 'The task and when it runs' });
   const go = () => {
     const text = ta.value.trim();
     if (!text) return ta.focus();
@@ -144,7 +158,7 @@ function createWithPrompt(root) {
     toast(found ? 'Check the schedule and the task, then add it.' : 'No time was found, so it runs every day at 09:00. Change it below.', found ? 'ok' : 'info', 3500);
   };
   onEnter(ta, go);
-  const m = modal({ title: 'Create with Prompt', size: 'sm', body: h('div', { class: 'au-ask-b' }, h('p', { class: 'muted small' }, 'Say what it should do and when: every hour, every day, on weekdays or on a day of the week, at a time.'), ta), actions: [btn('Cancel', () => m.close()), btn('Continue', go, 'primary')] });
+  const m = modal({ title: 'Create with Prompt', size: 'sm', body: h('div', { class: 'au-ask-b' }, h('p', { class: 'muted small' }, 'Say what it should do and when: every 15 minutes, every hour, every day, on weekdays or on a day of the week at a time, or once: in 2 hours, today at 5pm, tomorrow at 9.'), ta), actions: [btn('Cancel', () => m.close()), btn('Continue', go, 'primary')] });
 }
 
 /** Draw the page into `root` (the hub section). */
@@ -162,13 +176,13 @@ export function drawAutomations(root) {
   replace(root,
     h('div', { class: 'hub' },
       h('header', { class: 'hub-head au-head' },
-        h('h1', null, 'Automations'),
+        h('h1', null, 'Loops'),
         form ? null : h('div', { class: 'au-head-acts' },
           h('button', { class: 'btn sm au-ai', type: 'button', onclick: () => createWithPrompt(root) }, icon('bolt', 13), 'Create with Prompt'),
-          h('button', { class: 'btn sm au-new', type: 'button', 'aria-label': 'New automation', onclick: () => ((form = { enabled: true, project: projects()[0]?.[0] || '' }), drawAutomations(root)) }, icon('plus', 13), 'New'))),
-      ask ? h('p', { class: 'au-note' }, icon('shield', 13), 'With Ask first or Auto edits, a run waits for your OK on commands. Review lists what it waits for.') : null,
+          h('button', { class: 'btn sm au-new', type: 'button', 'aria-label': 'New loop', onclick: () => ((form = { enabled: true, project: projects()[0]?.[0] || '' }), drawAutomations(root)) }, icon('plus', 13), 'New'))),
+      ask ? h('p', { class: 'au-note' }, icon('shield', 13), 'Unless permissions are Full access, a loop’s run waits for your OK on commands. Review lists what it waits for.') : null,
       form ? editor() : null,
-      error ? errorState(error, { retry: () => ((error = ''), load()) }) : !items ? skeleton(3) : !items.length && !form ? h('div', { class: 'empty' }, icon('clock', 22), h('b', null, 'No automations yet'), h('span', null, 'Run a prompt on a schedule, like a morning summary of yesterday’s changes. Each run opens as a new conversation in its project.')) : h('div', { class: 'au-list' }, items.map(row))));
+      error ? errorState(error, { retry: () => ((error = ''), load()) }) : !items ? skeleton(3) : !items.length && !form ? h('div', { class: 'empty' }, icon('clock', 22), h('b', null, 'No loops yet'), h('span', null, 'Send a prompt on a schedule or once, like a morning summary of yesterday’s changes or a check every 30 minutes. Each run opens as a new conversation in its project.')) : h('div', { class: 'au-list' }, items.map(row))));
 }
 
 /** Refresh the list (another window changed it, or a run started or ended). */

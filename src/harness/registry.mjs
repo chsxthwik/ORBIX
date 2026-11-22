@@ -8,7 +8,7 @@ import { runProc } from '../backend.mjs';
 import { LineProcess, Rpc } from './lines.mjs';
 import { CLAUDE_MODELS, CLAUDE_EFFORTS } from './claude.mjs';
 
-export const BUILTIN_AGENTS = [
+const BUILTIN_AGENTS = [
   { id: 'agent-claude', name: 'Claude Code', cmd: 'claude', kind: 'claude', install: 'npm install -g @anthropic-ai/claude-code', login: 'claude', note: 'Anthropic’s agent, on your Claude plan or API key.' },
   { id: 'agent-codex', name: 'Codex', cmd: 'codex', kind: 'codex', install: 'npm install -g @openai/codex', login: 'codex login', note: 'OpenAI’s agent, on your ChatGPT plan or API key.' },
   { id: 'agent-opencode', name: 'OpenCode', cmd: 'opencode', kind: 'acp', args: ['acp'], env: { OPENCODE_DISABLE_AUTOUPDATE: '1' }, extra: ['.opencode/bin/opencode'], install: 'npm install -g opencode-ai', login: 'opencode auth login', note: 'Open-source agent for 75+ providers, over ACP.' },

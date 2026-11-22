@@ -135,7 +135,7 @@ export async function renderMcpSettings(root) {
   const proj = data.project;
   replace(
     root,
-    h('p', { class: 'set-note' }, 'MCP servers add tools such as databases, browsers or issue trackers. They start with your first message in a conversation and stop when it closes.'),
+    h('p', { class: 'set-note' }, 'MCP servers add tools such as databases, browsers or issue trackers. They run while a conversation is open.'),
     h('h4', { class: 'set-sub' }, 'Built-in tools'),
     h('div', { class: 'mcp-builtin' }, BUILTIN.map(([n, d, asks]) => h('div', { class: 'mcp-tool' }, h('code', null, n), h('span', { class: `tag${asks ? ' warn' : ''}` }, asks ? 'Asks first' : 'No approval'), h('span', { class: 'muted' }, d)))),
     h('div', { class: 'mcp-head' }, h('h4', { class: 'set-sub' }, 'Your MCP servers'), btn('Add server', () => editor(edit, {}, (saved) => (saved ? reload() : replace(edit))), 'primary sm')),

@@ -1,14 +1,13 @@
 # Security
 
-ORBIX runs a local server that can start an AI agent (which can run commands and edit files), so it is built to be reachable only from the local browser UI:
+ORBIX starts AI agents that can run commands and edit files, so nothing outside the app may reach them:
 
-- Binds to `127.0.0.1` only.
-- Every API call needs a random per-launch token delivered as an HttpOnly, SameSite=Strict cookie.
-- `Host` and `Origin` are checked (DNS-rebinding and cross-site protection); state-changing calls also need a custom header.
+- **The Windows app has no server and opens no port.** The engine runs inside the app's own process; the window loads the interface from `orbix://app/` (the app's own files) and calls the engine over Electron IPC, which answers only that page. OpenRouter sign-in, which must return to a local address, opens a 127.0.0.1 listener for the callback alone, only while you sign in.
+- **ORBIX Cloud** (`src/headless.mjs`, on a machine you own) serves the same engine over HTTP: it binds to `127.0.0.1` unless told otherwise, every call needs the token (an HttpOnly, SameSite=Strict cookie, or a bearer token), `Host` and `Origin` are checked (DNS-rebinding and cross-site protection), state-changing calls need a custom header, and the app refuses plain `http://` to a machine across the internet.
 - A strict Content-Security-Policy is served with the UI (scripts and styles from the app only, no inline code, no workers, and the UI itself cannot be framed); all UI text is inserted as text nodes, never as HTML. Every answer also sends `nosniff`, `X-Frame-Options: DENY`, `no-referrer` and a same-origin resource policy.
 - Frames: in a web browser the UI may only frame pages on `localhost` and `127.0.0.1` (the Browser tab's preview of web apps on this computer). In the Windows app the Browser tab is a built-in browser (`electron/browser.mjs`): a `<webview>` that can show any `http`/`https` page, in its own session (`persist:orbix-browser`) apart from ORBIX's window. Its pages get no preload and no Node, run sandboxed with web security on, get no permissions except full screen and clipboard writes (no camera, microphone, location or notifications), and cannot navigate to anything but `http`/`https`; pop-ups open in the same view. Only the ORBIX window can change its download folder or clear its data (Settings → Browser).
-- Links from replies open in your default browser, or in the built-in browser if you choose that in Settings → Browser. ORBIX listens only on loopback, and each request needs the session token.
-- API keys are verified with the provider, then stored encrypted with Windows DPAPI (current user only). They are decrypted in memory once per run, never sent to the UI, never logged, and only sent to the provider you chose.
+- Links from replies open in your default browser, or in the built-in browser if you choose that in Settings → Browser.
+- API keys are verified with the provider, then stored encrypted with Windows DPAPI (current user only; on an ORBIX Cloud machine, AES-256-GCM under a key file only its user can read). They are decrypted in memory once per run, never sent to the UI, never logged, and only sent to the provider you chose.
 - The ORBIX agent asks before every write, edit or command unless you switch it to automatic in Settings.
 - Deleting conversations only accepts files inside the app's own sessions folder and is logged to `logs/server.log` in the data folder. The log is capped at 1 MB (one older copy is kept); API keys, agent shell commands and MCP server arguments are never written to it.
 - Sign-ins: ChatGPT, xAI, OpenCode and OpenRouter.

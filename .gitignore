@@ -2,5 +2,5 @@ node_modules/
 *.log
 data/
 dist/
-# Screenshots from `npm run e2e -- --shots`: local evidence only (they show local paths)
-docs/evidence/*.png
+# End-to-end evidence (screenshots, the run log): local only, they show local paths
+docs/evidence/

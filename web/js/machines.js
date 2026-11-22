@@ -9,12 +9,12 @@ const bridge = () => window.orbixDesktop?.machines || null;
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
 
 /** This window shows a machine (a self-hosted ORBIX), not the ORBIX on this PC. */
-export const onMachine = () => !LOOPBACK.test(location.hostname);
+export const onMachine = () => (location.protocol === 'http:' || location.protocol === 'https:') && !LOOPBACK.test(location.hostname);
 
 const INSTALL = 'curl -fsSL https://orbix-agent.vercel.app/install.sh | bash';
 
 /** Open machine `id` in this window (the app), or in a new browser tab. */
-export async function openMachine(m) {
+async function openMachine(m) {
   try {
     const { url } = await api.post('/api/machines/open', { id: m.id });
     if (bridge()) await bridge().open(url);

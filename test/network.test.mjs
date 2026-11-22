@@ -50,7 +50,7 @@ test('web_fetch asks for sites off the allowed list, in every mode, until allowe
   const net = { allow: ['github.com'], deny: [] };
   assert.equal(ask('ask', 'https://github.com/a', net), false);
   assert.equal(ask('ask', 'https://example.com', net), true);
-  assert.equal(ask('auto', 'https://example.com', net), true, 'Turbo does not skip a rule you wrote');
+  assert.equal(ask('auto', 'https://example.com', net), true, 'Full access does not skip a rule you wrote');
   assert.equal(ask('ask', 'https://example.com', net, ['web_fetch:site']), false);
   assert.equal(ask('ask', 'https://example.com', { allow: [], deny: [] }), false, 'no allowed list: reads as before');
 });

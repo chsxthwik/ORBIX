@@ -76,7 +76,6 @@ export class Tab {
     this.dead = false;
     this.deadInfo = null;
     this.stderr = [];
-    this.console = [];
     this.ready = false;
     this.buffer = [];
     this.unread = false;

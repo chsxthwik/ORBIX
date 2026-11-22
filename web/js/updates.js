@@ -1,22 +1,16 @@
 // App updates, as the page sees them. The Windows app checks GitHub, downloads in the background and installs on
-// close (electron/updater.mjs); this keeps its status in S.update, says once when an update is ready, and restarts
+// close (electron/updater.mjs); this keeps its status in S.update, shows it in the top right corner, and restarts
 // into it on request. In a browser, or run from a clone, there are no updates and S.update stays null.
-import { h, toast } from './dom.js';
-import { S, emit } from './store.js';
+import { h, toast, icon } from './dom.js';
+import { S, emit, on } from './store.js';
 import { confirmDialog } from './dialogs.js';
 
 const bridge = window.orbixDesktop?.updates;
-let told = '';
 
 function take(st) {
   if (!st || typeof st !== 'object') return;
   const was = S.update;
   S.update = st;
-  // Said once per version: the sidebar keeps showing it after the toast is gone.
-  if (st.state === 'ready' && told !== st.version) {
-    told = st.version;
-    toast(`ORBIX ${st.version} is ready. Restart to update, or it installs when you close ORBIX.`, 'ok', 9000);
-  }
   if (st.manual && was?.state === 'checking' && st.state === 'latest') toast(`ORBIX ${st.current} is the newest version.`, 'ok', 3200);
   if (st.manual && was?.state === 'checking' && st.state === 'error') toast(st.error, 'error', 7000);
   emit('update', st);
@@ -42,7 +36,7 @@ export async function restartToUpdate() {
   bridge.restart().catch((e) => toast(e.message, 'error'));
 }
 
-/** One line for Settings → Application: where the update stands. */
+/** One line for Settings → About: where the update stands. */
 export function updateLine(st = S.update) {
   if (!st) return '';
   const when = st.checkedAt ? ` Checked ${new Date(st.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.` : '';
@@ -56,17 +50,28 @@ export function updateLine(st = S.update) {
   }
 }
 
-/** The sidebar's button while an update is downloading or ready; nothing otherwise. */
-export function sideUpdate(iconEl) {
+/**
+ * The update in the top right corner of the menu row, next to the window buttons: a quiet "Updating 42%" while a new
+ * version downloads, then "Restart to update" in the brand colour. One persistent element; the menu row places it.
+ */
+export const updatePill = h('button', { class: 'update-pill', type: 'button', hidden: true, onclick: () => restartToUpdate() });
+
+function drawPill() {
   const st = S.update;
-  if (!st || (st.state !== 'ready' && st.state !== 'downloading')) return null;
-  const ready = st.state === 'ready';
-  return h('button', {
-    class: 'side-update' + (ready ? ' ready' : ''),
-    type: 'button',
-    title: ready ? `ORBIX ${st.version} is ready. Restart to install it (it also installs when you close ORBIX).` : `Downloading ORBIX ${st.version}`,
-    disabled: ready ? null : true,
-    onclick: ready ? () => restartToUpdate() : null,
-    style: ready ? null : { '--p': `${st.percent || 0}%` },
-  }, iconEl, h('span', { class: 'ell' }, ready ? `Update to ${st.version}` : `Downloading ${st.version}`), h('span', { class: 'su-k' }, ready ? 'Restart' : `${st.percent || 0}%`));
+  const ready = st?.state === 'ready' && !!st.version;
+  const loading = st?.state === 'downloading' && !!st.version;
+  updatePill.hidden = !ready && !loading;
+  updatePill.classList.toggle('ready', ready);
+  updatePill.disabled = !ready;
+  if (!ready && !loading) return updatePill.replaceChildren();
+  const busy = [...S.tabs.values()].filter((t) => !t.dead && (t.streaming || t.dialogs?.length)).length;
+  updatePill.style.setProperty('--p', `${ready ? 100 : st.percent || 0}%`);
+  updatePill.title = ready
+    ? `ORBIX ${st.version} is ready. Restart to install it${busy ? `: ${busy === 1 ? 'a working conversation stops' : `${busy} working conversations stop`}` : '; your conversations open again from the sidebar'}. It also installs when you close ORBIX.`
+    : `Downloading ORBIX ${st.version}`;
+  updatePill.replaceChildren(icon(ready ? 'refresh' : 'download', 13), h('span', null, ready ? 'Restart to update' : `Updating ${st.percent || 0}%`));
 }
+on('update', drawPill);
+on('tabs', drawPill);
+on('tab:state', drawPill);
+drawPill();

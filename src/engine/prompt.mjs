@@ -103,6 +103,7 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex
       .join('\n'),
   );
   if (approvals === 'auto') parts.push('# Approvals\nTool calls run without asking the user, so double-check commands and edits before you make them. Destructive commands (recursive delete, push, publish, history rewrite, system changes) still ask the user each time.');
+  else if (approvals === 'safe') parts.push('# Approvals\nwrite and edit run without asking (each can be undone), and so do read-only commands (ls, cat, grep, find, git status/diff/log, and pipes of them). Any other bash command asks the user, except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   else if (approvals === 'edits') parts.push('# Approvals\nwrite and edit run without asking (each can be undone); bash asks the user each time, except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   else if (approvals) parts.push('# Approvals\nwrite, edit and bash ask the user for approval each time (read-only tools do not), except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   if (rules.length) {

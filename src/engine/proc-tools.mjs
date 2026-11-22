@@ -4,15 +4,15 @@ import path from 'node:path';
 import { clip } from '../util.mjs';
 import { invalidArgsText } from './tools.mjs';
 import { isTrustedCommand, trustableCommand } from './store.mjs';
-import { destructiveReason, siteVerdict } from './policy.mjs';
+import { destructiveReason, siteVerdict, readOnlyCommand } from './policy.mjs';
 
 // File tools whose path is checked against the project folder before they run.
 const PATH_TOOLS = new Set(['read', 'grep', 'glob', 'write', 'edit']);
 
 // The same call failing the same way with no other call between it: from the REPEAT_NOTE-th time the result tells the
 // model to change course; from the REPEAT_BLOCK-th time it is not run at all (see _loop for when the run stops).
-export const REPEAT_NOTE = 3;
-export const REPEAT_BLOCK = 5;
+const REPEAT_NOTE = 3;
+const REPEAT_BLOCK = 5;
 
 /** JSON with object keys sorted, so two calls with the same arguments in another order compare equal. */
 const stableJson = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((key) => [key, x[key]])) : x));
@@ -48,14 +48,14 @@ export class ToolRuns {
   /** Whether this call waits for the user, given the approval mode, what was allowed this session and trusted commands. */
   _mustAsk(call, args) {
     const mode = this.config.data.approvals;
-    // A file outside the project folder is asked about every time, read-only or not (except under Turbo): text in the
+    // A file outside the project folder is asked about every time, read-only or not (except under Full access): text in the
     // project could otherwise point the agent at ~/.ssh or a .env elsewhere and send it on with web_fetch.
     if (mode !== 'auto' && this._outside(call, args)) return !this.allowAlways.has(`${call.name}:outside`);
-    // A destructive command asks every time, in every mode: Turbo, "allow for this session", a trusted command and a
+    // A destructive command asks every time, in every mode: Full access, "allow for this session", a trusted command and a
     // run's approved scope never cover it.
     if (call.name === 'bash' && destructiveReason(args?.command)) return true;
     // web_fetch follows your network rules: a site on the allowed list runs, and with an allowed list in use any
-    // other site asks (denied sites never get here, see _runTool). Turbo does not skip this: it is a rule you wrote.
+    // other site asks (denied sites never get here, see _runTool). Full access does not skip this: it is a rule you wrote.
     if (call.name === 'web_fetch') {
       const v = siteVerdict(args?.url, this.config.data.network);
       if (v === 'ask') return !this.allowAlways.has('web_fetch:site');
@@ -63,7 +63,8 @@ export class ToolRuns {
     }
     if (!this._needsApproval(call.name)) return false;
     if (mode === 'auto' || this.allowAlways.has(call.name)) return false;
-    if (mode === 'edits' && (call.name === 'edit' || call.name === 'write')) return false;
+    if ((mode === 'edits' || mode === 'safe') && (call.name === 'edit' || call.name === 'write')) return false;
+    if (mode === 'safe' && call.name === 'bash' && readOnlyCommand(args?.command)) return false;
     if (call.name === 'bash' && args?.shell !== 'powershell' && isTrustedCommand(args?.command, this.config.data.trusted)) return false;
     return true;
   }
@@ -243,7 +244,7 @@ export class ToolRuns {
       result = await this._hooked(call.name, args, signal, {
         // Asked after the PreToolUse hooks, so a hook can stop a call before you see it.
         gate: async () => {
-          if (call.name === 'web_fetch' && siteVerdict(args.url, this.config.data.network) === 'deny') return { text: 'Blocked by the user\'s network rules (Settings → General → Network access rules). Do not retry this site.', isError: true, details: { url: String(args.url ?? ''), blocked: true } };
+          if (call.name === 'web_fetch' && siteVerdict(args.url, this.config.data.network) === 'deny') return { text: 'Blocked by the user\'s network rules (Settings → Preferences → Network access rules). Do not retry this site.', isError: true, details: { url: String(args.url ?? ''), blocked: true } };
           if (!this._mustAsk(call, args)) return undefined;
           const denied = await this._approve(call, args);
           t0 = Date.now(); // the run time counts from your answer, not the time the call waited for you

@@ -217,6 +217,9 @@ export class AgentProc extends EventEmitter {
         return ok({ commands: this.cache.commands });
       case 'get_session_stats':
         return ok(this._stats());
+      // The Context tab: the system prompt this conversation sends with its next turn.
+      case 'get_system_prompt':
+        return ok({ text: await this._system() });
       case 'get_subagents':
         return ok({ subagents: [...this.subagents.values()] });
       case 'set_model': {
@@ -710,6 +713,8 @@ export class AgentProc extends EventEmitter {
         }
         if (retrying && ev.type !== 'start' && ev.type !== 'usage') retryDone(true);
         const r = asm.push(ev);
+        // When the model started answering: the reply's latency, and its speed (output tokens over the time after it).
+        if (r && !msg.firstTokenAt) msg.firstTokenAt = Date.now();
         if (r) update(r.kind === 'toolcall_start' || r.kind === 'toolcall_end', r);
       }
       retryDone(true);
@@ -1002,7 +1007,7 @@ export class AgentProc extends EventEmitter {
       // reading a file or fetching a host cannot be side-stepped with the task tool.
       runTool: (c, signal) => {
         const input = c.arguments || {};
-        // A helper agent cannot ask you, so it does not reach outside the project unless approvals are Turbo.
+        // A helper agent cannot ask you, so it does not reach outside the project unless approvals are Full access.
         if (this.config.data.approvals !== 'auto' && this._outside(c, input)) return { text: `Not run: ${input.path} is outside the project folder. Helper agents only read inside it; say in your answer that the main agent should read it.`, isError: true };
         // Network rules: a denied site is never read; with an allowed list in use, a helper reads only listed sites.
         const site = c.name === 'web_fetch' ? siteVerdict(input.url, this.config.data.network) : 'any';

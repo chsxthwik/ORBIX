@@ -18,7 +18,8 @@ const LIST_TTL = 60 * 1000;
 
 const SEARCH_PROVIDERS = ['brave', 'tavily', 'searxng'];
 /** ask: edits and commands ask. edits: edits run, commands ask. auto: nothing asks. */
-const APPROVAL_MODES = ['ask', 'edits', 'auto'];
+// ask: everything waits; edits: file changes run; safe: file changes and read-only commands run; auto: all runs.
+const APPROVAL_MODES = ['ask', 'edits', 'safe', 'auto'];
 
 /** A tidy trusted-command list: trimmed, single-spaced, no control characters, no duplicates, at most 100. */
 export function cleanTrusted(list) {
@@ -53,7 +54,7 @@ export class EngineConfig {
       approvals: APPROVAL_MODES.includes(d.approvals) ? d.approvals : 'ask',
       // Commands that run without asking: exact text, or a prefix ending in " *" ("npm run *").
       trusted: cleanTrusted(d.trusted),
-      // Sites web_fetch may read (Settings → General → Network access rules): { allow, deny }, see policy.mjs.
+      // Sites web_fetch may read (Settings → Preferences → Network access rules): { allow, deny }, see policy.mjs.
       network: { allow: cleanSiteRules(d.network?.allow), deny: cleanSiteRules(d.network?.deny) },
       providers: d.providers && typeof d.providers === 'object' ? d.providers : {},
       defaultModel: d.defaultModel || '',

@@ -1,16 +1,18 @@
 // The window chrome, laid out like a desktop app: a menu row (ORBIX, Workspace, View, Window; in the Windows app the
-// window buttons sit at its right end), then the toolbar: the mark, the sidebar switch, back and forward, search, and
-// where you are (project / conversation, with its state and branch); on the right the conversation's menu, the
-// Overview card and the side panel. Also here: the Overview card itself, back/forward history across conversations
-// and views, and the card that previews a conversation when you rest the pointer on it in the sidebar.
+// window buttons sit at its right end), then the toolbar: the sidebar switch, back and forward, search, and where you
+// are (the project's tile and name / the conversation, its ··· menu, state and branch); on the right how full the
+// context is, the Context menu (MCP, skills, rules) and the side panel. Also here: back/forward history across
+// conversations and views, and the card that previews a conversation when you rest the pointer on it in the sidebar.
 // main.js owns the actions and passes them in through `H`.
-import { h, icon, iconBtn, logo, baseName, fmtElapsed, timeAgo } from './dom.js';
+import { h, icon, iconBtn, wordmark, baseName, fmtElapsed, timeAgo, projTile, fmtTokens } from './dom.js';
 import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
-import { gitState, panelInfo, showTab } from './panels.js';
+import { contextMenu } from './context.js';
+import { gitState, showTab } from './panels.js';
 import { firstKey } from './keys.mjs';
 import { onMachine, backToThisPc } from './machines.js';
-import { updatesSupported, checkForUpdates } from './updates.js';
+import { homeProject } from './home.js';
+import { updatesSupported, checkForUpdates, updatePill } from './updates.js';
 
 /** The key of a shortcut as you set it (Settings → Shortcuts), for menus and hints. */
 const K = (id) => firstKey(S.ui.keys, id);
@@ -58,7 +60,9 @@ let menuOpenFrom = null;
 function openMenu(btn, items) {
   menuOpenFrom = btn;
   btn.classList.add('open');
-  popMenu(btn, items.filter(Boolean), { minWidth: 250 });
+  // Over the full-window Settings, an action closes Settings first (opening Settings again just changes its page).
+  const closingSettings = (it) => (it && typeof it === 'object' && it.run ? { ...it, run: (...a) => (emit('settings:close'), it.run(...a)) } : it);
+  popMenu(btn, items.filter(Boolean).map(closingSettings), { minWidth: 250 });
   // popMenu closes on any outside press, Esc, blur or resize; the row button follows it.
   const menu = document.querySelector('.menu:not(.leaving)');
   if (!menu) return void btn.classList.remove('open');
@@ -92,16 +96,17 @@ function menus() {
       '-',
       { label: 'Runs', hint: K('runs'), run: () => H.goHub('runs') },
       { label: 'Review', hint: K('review'), run: () => H.goHub('review') },
-      { label: 'Automations', run: () => H.goHub('automations') },
-      { label: 'Customizations', run: () => H.goHub('customizations') },
+      { label: 'Plugins', run: () => H.goHub('customizations') },
+      { label: 'Skills', run: () => H.goHub('skills') },
+      { label: 'Loops', run: () => H.goHub('automations') },
       { label: 'Search everything', hint: K('search'), run: () => H.search() },
       '-',
       { label: 'Manage conversations…', run: H.manage },
     ]],
     ['View', [
       { label: 'Sidebar', hint: K('sidebar'), on: H.sideShown(), run: H.toggleSidebar },
-      t ? { label: 'Overview', on: overviewWanted(), run: toggleOverview } : null,
       t ? { label: 'Side panel', hint: K('panel'), on: H.panelShown(), run: H.togglePanel } : null,
+      t || homeProject() ? { label: 'Terminal', hint: K('terminal'), on: H.terminalShown(), run: () => H.toggleTerminal() } : null,
       t ? { label: 'Focus mode', hint: K('zen'), on: document.documentElement.classList.contains('zen'), run: () => H.zen() } : null,
       t ? { label: 'Wide reading column', on: document.documentElement.classList.contains('wide'), run: H.wide } : null,
       '-',
@@ -129,7 +134,8 @@ export function drawMenubar(el) {
       if (menuOpenFrom === b) return document.querySelector('.menu:not(.leaving)')?._close?.();
       openMenu(b, menus().find((m) => m[0] === name)[1]);
       e.stopPropagation();
-    } }, name);
+    } }, ...(name === 'ORBIX' ? [wordmark(13)] : [name]));
+    if (name === 'ORBIX') (b.classList.add('mb-brand'), b.setAttribute('aria-label', 'ORBIX'));
     // With one menu open, moving along the row opens the next, as in any desktop menu bar.
     b.addEventListener('pointerenter', () => menuOpenFrom && menuOpenFrom !== b && openMenu(b, menus().find((m) => m[0] === name)[1]));
     b.addEventListener('keydown', (e) => {
@@ -139,7 +145,7 @@ export function drawMenubar(el) {
     });
     return b;
   });
-  el.replaceChildren(h('nav', { class: 'mb-row', 'aria-label': 'Menu' }, row), h('span', { class: 'mb-drag grow' }));
+  el.replaceChildren(h('nav', { class: 'mb-row', 'aria-label': 'Menu' }, row), h('span', { class: 'mb-drag grow' }), updatePill);
 }
 
 // ================= toolbar =================
@@ -154,35 +160,79 @@ function crumbs(t, hub) {
     const branch = t.worktree?.branch || g?.branch;
     const n = g?.files?.length || 0;
     return [
-      h('button', { class: 'crumb', type: 'button', title: t.workspace, 'aria-haspopup': 'menu', onclick: (e) => H.projectMenu(t, e.currentTarget) }, h('bdi', null, baseName(t.workspace) || 'No folder')),
+      h('button', { class: 'crumb crumb-proj', type: 'button', title: t.workspace, 'aria-haspopup': 'menu', onclick: (e) => H.projectMenu(t, e.currentTarget) }, projTile(baseName(t.workspace), 18), h('bdi', null, baseName(t.workspace) || 'No folder')),
       h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'),
-      h('button', { class: 'crumb cur', type: 'button', title: `${t.name}\nDouble-click to rename`, ondblclick: () => H.rename(t), onclick: (e) => H.sessionMenu(t, e.currentTarget) }, h('span', { class: 'ell' }, t.name)),
+      h('span', { class: 'crumb cur', title: `${t.name}\nDouble-click to rename`, ondblclick: () => H.rename(t) }, h('span', { class: 'ell' }, t.name)),
+      iconBtn('more', 'Conversation actions', (e) => H.sessionMenu(t, e.currentTarget), 'sm tb-more'),
       st === 'ok' ? null : h('span', { class: `crumb-st ${st}` }, h('span', { class: `dot ${st === 'wait' ? 'warn' : st}` }), st === 'run' ? h('span', { class: 'num', dataset: { tick: t.id } }, `Working ${elapsed(t)}`) : st === 'wait' ? 'Needs your OK' : 'Ended'),
       branch ? h('button', { class: 'crumb-br', type: 'button', title: n ? `Branch ${branch} · ${n} changed file${n === 1 ? '' : 's'}` : `Branch ${branch}`, onclick: () => showTab(t.worktree ? 'review' : 'changes') }, icon('branch', 12), h('span', { class: 'ell' }, h('bdi', null, branch)), n ? h('b', { class: 'num' }, n) : null) : null,
     ];
   }
-  if (hub) return [h('span', { class: 'crumb cur static' }, { review: 'Review', automations: 'Automations', customizations: 'Customizations' }[hub.view] || 'Runs')];
-  return [h('span', { class: 'crumb cur static' }, 'New conversation')];
+  if (hub) return [h('span', { class: 'crumb cur static' }, { review: 'Review', automations: 'Loops', customizations: 'Plugins', skills: 'Skills' }[hub.view] || 'Runs')];
+  const ws = homeProject();
+  return [ws ? h('span', { class: 'crumb crumb-proj static', title: ws }, projTile(baseName(ws), 18), h('bdi', null, baseName(ws))) : null, ws ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/') : null, h('span', { class: 'crumb cur static' }, 'New conversation')].filter(Boolean);
 }
+
+// ================= context meter =================
+
+/** How full the conversation's context is: a ring and the tokens used ("96k"); a click opens the Context tab. */
+const meter = h('button', { class: 'tb-ctx', type: 'button', hidden: true });
+const RING = 2 * Math.PI * 6;
+const arc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+{
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
+  svg.setAttribute('aria-hidden', 'true');
+  const track = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  for (const c of [track, arc]) (c.setAttribute('cx', '8'), c.setAttribute('cy', '8'), c.setAttribute('r', '6'), svg.append(c));
+  track.setAttribute('class', 'ring-track');
+  arc.setAttribute('class', 'ring-arc');
+  arc.setAttribute('stroke-dasharray', `0 ${RING}`);
+  meter.append(svg, h('span', { class: 'num' }));
+}
+function usage(t) {
+  const cu = t?.stats?.contextUsage;
+  if (!t || t.dead || !cu?.contextWindow || !(cu.tokens > 0)) return null;
+  return { ...cu, pct: Math.min(100, cu.percent ?? (cu.tokens / cu.contextWindow) * 100) };
+}
+function syncMeter(t) {
+  const u = usage(t);
+  meter.hidden = !u;
+  if (!u) return;
+  meter.classList.toggle('hot', u.pct > 70 && u.pct <= 90);
+  meter.classList.toggle('crit', u.pct > 90);
+  arc.setAttribute('stroke-dasharray', `${((RING * u.pct) / 100).toFixed(2)} ${RING.toFixed(2)}`);
+  const label = fmtTokens(u.tokens);
+  if (meter.lastChild.textContent !== label) meter.lastChild.textContent = label;
+  meter.title = `Context: ${fmtTokens(u.tokens)} of ${fmtTokens(u.contextWindow)} tokens (${u.pct < 1 ? u.pct.toFixed(1) : Math.round(u.pct)}%)${u.estimated ? ', estimated' : ''}`;
+  meter.setAttribute('aria-label', meter.title);
+}
+// A click opens the Context tab: tokens by kind, cost, the system prompt, and Compact.
+meter.addEventListener('click', () => showTab('context'));
 
 let topSig = '';
 export function drawToolbar(el, { force = false } = {}) {
   const t = activeTab();
   const hub = !t && H.hubView();
   const g = t && gitState(t.workspace);
-  const sig = JSON.stringify([S.active, hub?.view, hub?.id, H.sideShown(), H.panelShown(), !!document.getElementById('app')?.classList.contains('overlay-panel'), overviewWanted(), canGo(-1), canGo(1), t && [t.name, t.workspace, stateOf(t), t.worktree?.branch, g?.branch, g?.files?.length]]);
+  syncMeter(t);
+  const sig = JSON.stringify([S.active, hub?.view, hub?.id, homeProject(), H.sideShown(), H.panelShown(), H.panelMax(), !!document.getElementById('app')?.classList.contains('overlay-panel'), canGo(-1), canGo(1), t && [t.name, t.workspace, stateOf(t), t.worktree?.branch, g?.branch, g?.files?.length]]);
   if (!force && sig === topSig && el.childElementCount) return;
   topSig = sig;
   el.classList.toggle('busy', !!t?.streaming && !t.dead);
-  const docked = H.panelShown() && !document.getElementById('app')?.classList.contains('overlay-panel');
+  // Across the window, the panel takes the conversation's place: its switches end the toolbar like any other button.
+  const wide = H.panelMax();
+  const docked = H.panelShown() && !wide && !document.getElementById('app')?.classList.contains('overlay-panel');
   const panelBtn = () => iconBtn('panel-right', tip('Side panel', 'panel'), H.togglePanel, 'tb-panel' + (H.panelShown() ? ' on' : ''));
+  const maxBtn = () => (H.panelShown() ? iconBtn(H.panelMax() ? 'minimize' : 'maximize', H.panelMax() ? 'Restore the side panel' : 'Side panel across the window', H.togglePanelMax, 'tb-max' + (H.panelMax() ? ' on' : '')) : null);
   const back = iconBtn('arrow-left', tip('Back', 'back'), () => navGo(-1), 'tb-nav');
   const fwd = iconBtn('arrow-right', tip('Forward', 'forward'), () => navGo(1), 'tb-nav');
   back.disabled = !canGo(-1);
   fwd.disabled = !canGo(1);
   el.replaceChildren(...[
     h('div', { class: 'tb-lead' },
-      h('button', { class: 'tb-mark', type: 'button', title: tip('New conversation', 'new'), 'aria-label': 'New conversation', onclick: () => H.newSession() }, logo(20, { alive: true })),
       iconBtn('panel-left', tip('Sidebar', 'sidebar'), H.toggleSidebar, 'tb-side' + (H.sideShown() ? ' on' : '')),
       back, fwd,
       iconBtn('search', tip('Search everything', 'search'), () => H.search(), 'tb-search')),
@@ -190,12 +240,14 @@ export function drawToolbar(el, { force = false } = {}) {
     // This window shows a machine (ORBIX Cloud): say which, and lead back to this PC.
     onMachine() ? h('button', { class: 'tb-machine', type: 'button', title: window.orbixDesktop?.machines ? 'Back to the ORBIX on this PC' : 'ORBIX on a machine', onclick: () => (window.orbixDesktop?.machines ? backToThisPc() : H.settings('machines')) }, icon('cloud', 13), location.hostname, window.orbixDesktop?.machines ? h('span', { class: 'muted' }, '· Back to this PC') : null) : null,
     h('span', { class: 'grow tb-drag' }),
-    t ? h('div', { class: 'tb-end' },
-      iconBtn('more-v', 'Conversation actions', (e) => H.sessionMenu(t, e.currentTarget), 'tb-more'),
-      iconBtn('overview', tip('Overview', 'overview'), toggleOverview, 'tb-ov' + (overviewShown() ? ' on' : '')),
+    // The side panel works for a conversation, and on Home for the project chosen there.
+    t || (!hub && homeProject()) ? h('div', { class: 'tb-end' },
+      t ? meter : null,
+      iconBtn('layers', 'Context: MCP servers, skills and rules', (e) => contextMenu(e.currentTarget, { ws: t?.workspace || homeProject(), tab: t, go: H.goHub, settings: H.settings }), 'tb-cx'),
+      wide ? maxBtn() : null,
       docked ? null : panelBtn()) : null,
-    // With the side panel docked, its switch sits above it, and the conversation's own buttons end where the conversation does.
-    t && docked ? h('div', { class: 'tb-pz' }, panelBtn()) : null,
+    // With the side panel docked, its switches sit above it, and the conversation's own buttons end where the conversation does.
+    (t || (!hub && homeProject())) && docked ? h('div', { class: 'tb-pz' }, maxBtn(), panelBtn()) : null,
   ].filter(Boolean));
 }
 
@@ -205,59 +257,7 @@ export function tickToolbar(el) {
     const t = S.tabs.get(s.dataset.tick);
     if (t?.streaming) s.textContent = `Working ${elapsed(t)}`;
   }
-}
-
-// ================= Overview =================
-
-const overviewWanted = () => S.ui.overview !== false;
-const overviewShown = () => !!activeTab() && overviewWanted() && !H.panelShown();
-/** The Overview button: with the side panel open it closes the panel and shows the card; otherwise it shows or hides the card. */
-function toggleOverview() {
-  // In a small window the card has no room: the button opens the side panel instead.
-  if (!H.panelShown() && ovEl?.isConnected && !ovEl.getClientRects().length) return H.togglePanel();
-  if (H.panelShown()) {
-    if (!overviewWanted()) savePrefs({ overview: true });
-    return H.togglePanel();
-  }
-  savePrefs({ overview: !overviewWanted() });
-}
-
-const ORDER = ['review', 'changes', 'files', 'console', 'todos', 'run'];
-const LABEL = { run: ['Inspect', 'activity'], review: ['Review', 'check'], files: ['Files', 'file'], changes: ['Changes', 'branch'], todos: ['Tasks', 'list'], console: ['Terminal', 'terminal'] };
-let ovEl = null;
-let ovSig = '';
-export function syncOverview(host) {
-  const t = activeTab();
-  const show = overviewShown() && !document.documentElement.classList.contains('zen');
-  if (!show) {
-    ovEl?.remove();
-    ovEl = null;
-    ovSig = '';
-    return;
-  }
-  const info = panelInfo(t);
-  const working = H.workingCount();
-  const sig = JSON.stringify([t.id, info.tabs.map((x) => x[0]), info.badge, working, t.subagents?.size || 0]);
-  if (ovEl?.isConnected && sig === ovSig) return;
-  ovSig = sig;
-  const row = (k) => {
-    const [label, ic] = LABEL[k];
-    const n = info.badge[k];
-    return h('button', { class: 'ov-it', type: 'button', onclick: () => showTab(k) }, icon(ic, 14), h('span', { class: 'grow' }, label), n ? h('span', { class: 'ov-n num' }, n) : null);
-  };
-  const fresh = !ovEl?.isConnected;
-  const helpers = [...(t.subagents?.values() || [])].length;
-  const have = new Set(info.tabs.map(([k]) => k));
-  // Sections with nothing in them are left out, as in the side panel's own empty states.
-  const el = h('aside', { class: 'overview' + (fresh ? ' in' : ''), 'aria-label': 'Overview' },
-    h('div', { class: 'ov-h' }, h('span', null, 'Overview')),
-    ORDER.filter((k) => have.has(k)).map(row),
-    helpers || working ? h('div', { class: 'ov-sep' }) : null,
-    helpers ? h('button', { class: 'ov-it ov-sub', type: 'button', onclick: () => showTab('agents') }, h('span', null, 'Subagents'), h('span', { class: 'ov-n num' }, String(helpers))) : null,
-    working ? h('button', { class: 'ov-it ov-sub', type: 'button', onclick: () => H.goHub('runs') }, h('span', null, 'Background runs'), h('span', { class: 'ov-n num' }, String(working))) : null);
-  if (ovEl?.isConnected) ovEl.replaceWith(el);
-  else host.append(el);
-  ovEl = el;
+  syncMeter(activeTab());
 }
 
 // ================= conversation preview card =================

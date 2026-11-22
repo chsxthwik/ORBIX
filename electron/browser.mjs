@@ -22,12 +22,23 @@ function freePath(dir, name) {
   return path.join(dir, `${stem}-${Date.now()}${ext}`);
 }
 
-/** Wire the browser session to the main window `win` (its page is the only one that may configure it). */
+// Incognito views (the side panel's Browser → Incognito) each get an in-memory session, "orbix-incognito-<n>": no
+// sign-ins shared with the default browser, and nothing written to disk.
+const INCOGNITO = /^orbix-incognito-\d{1,6}$/;
+const locked = new WeakSet();
+
+/** Wire the browser sessions to the main window `win` (its page is the only one that may configure them). */
 export function setupBrowser(getWin) {
   const ses = session.fromPartition(PARTITION);
-  ses.setPermissionRequestHandler((_wc, perm, done) => done(perm === 'fullscreen' || perm === 'clipboard-sanitized-write'));
-  ses.setPermissionCheckHandler((_wc, perm) => perm === 'fullscreen' || perm === 'clipboard-sanitized-write');
-  ses.on('will-download', (_e, item) => {
+  lock(ses);
+  function lock(s) {
+    if (locked.has(s)) return;
+    locked.add(s);
+    s.setPermissionRequestHandler((_wc, perm, done) => done(perm === 'fullscreen' || perm === 'clipboard-sanitized-write'));
+    s.setPermissionCheckHandler((_wc, perm) => perm === 'fullscreen' || perm === 'clipboard-sanitized-write');
+    s.on('will-download', (_e, item) => download(item));
+  }
+  function download(item) {
     let dir = downloads;
     try {
       if (!dir || !fs.statSync(dir).isDirectory()) dir = app.getPath('downloads');
@@ -37,7 +48,7 @@ export function setupBrowser(getWin) {
     const file = freePath(dir, item.getFilename());
     item.setSavePath(file);
     item.once('done', (_ev, state) => getWin()?.webContents.send('orbix:download', { name: path.basename(file), path: file, state }));
-  });
+  }
 
   app.on('web-contents-created', (_e, contents) => {
     if (contents.getType() === 'window') {
@@ -50,7 +61,9 @@ export function setupBrowser(getWin) {
         prefs.sandbox = true;
         prefs.webSecurity = true;
         prefs.allowRunningInsecureContent = false;
-        params.partition = PARTITION;
+        const incog = INCOGNITO.test(String(params.partition || ''));
+        params.partition = incog ? params.partition : PARTITION;
+        if (incog) lock(session.fromPartition(params.partition));
         if (params.src && !web(params.src) && params.src !== 'about:blank') ev.preventDefault();
       });
     }

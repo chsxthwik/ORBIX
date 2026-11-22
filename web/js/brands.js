@@ -37,3 +37,13 @@ export function brandMark(id, size = 18, cls = '') {
   for (const n of m.n) svg.append(draw(n, suffix));
   return svg;
 }
+
+// Who made a model, from its id: providers that serve other makers' models (OpenCode, OpenRouter, Groq, Ollama…)
+// show the maker's mark next to the model, so "deepseek-v4.1-flash" reads as DeepSeek, not as a plain square.
+const MAKERS = [[/claude|anthropic/, 'anthropic'], [/gpt|^o\d|openai|codex/, 'openai'], [/gemini|gemma|google/, 'google'], [/grok|xai/, 'xai'], [/deepseek/, 'deepseek'], [/mistral|codestral|devstral|magistral/, 'mistral'], [/kimi|moonshot/, 'moonshot'], [/glm|zai|z-ai/, 'zai'], [/qwen|qwq/, 'qwen']];
+/** The mark for model `id` on `provider`: the maker's when the id names one, else the provider's. */
+export function modelMark(provider, id, size = 16, cls = '') {
+  const name = String(id || '').toLowerCase().split('/').pop();
+  const maker = MAKERS.find(([re]) => re.test(name))?.[1];
+  return brandMark(maker || provider, size, cls);
+}

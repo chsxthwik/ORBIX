@@ -39,7 +39,7 @@ export function cleanUrl(u) {
 }
 
 /** Tar a project folder into a gzip stream. Runs where the project is (WSL or Windows tar). */
-export function tarProject(backend, folder) {
+function tarProject(backend, folder) {
   const args = ['-czf', '-', ...SKIP.flatMap((s) => [`--exclude=${s}`]), '-C', backend.execPath(folder), '.'];
   return backend.spawn(['tar', ...args], { quiet: true });
 }

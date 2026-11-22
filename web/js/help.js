@@ -12,7 +12,7 @@ export function openHelp() {
         step('Connect a model', 'In Settings → Providers: sign in (ChatGPT, xAI, OpenCode, OpenRouter), add an API key, or connect a model on this PC (Ollama, LM Studio).'),
         step('Choose a project folder', 'The agent works only inside it. It can be on Windows (C:\\…) or in WSL (/home/…).'),
         step('Describe the task', 'For example: find why the login test fails and fix it.'),
-        step('Approve changes', 'In Ask first, the default, the agent asks before it edits a file or runs a command; the permission chip in the message box changes that. Reading and searching don’t need your OK.'),
+        step('Approve changes', 'In Supervised, the default, the agent asks before it edits a file or runs a command; the permission chip in the message box changes that. Reading and searching don’t need your OK.'),
         step('Undo', 'Click Undo on an edit, or type /undo, to restore your files.')),
       h('div', { class: 'help-keys' }, h('span', null, kbd('Ctrl+K'), ' commands'), h('span', null, kbd('/'), ' slash commands'), h('span', null, kbd('@'), ' mention a file'), h('span', null, kbd('Alt+Enter'), ' queue a message'), h('span', null, kbd('Esc'), ' stop')),
       h('p', { class: 'set-note' }, 'Rules the agent always follows go in AGENTS.md at the project root.')),

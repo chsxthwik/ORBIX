@@ -1,32 +1,35 @@
 // ORBIX front-end bootstrap: layout, sidebar, keyboard, and routing of events to views. The window chrome (menu row,
-// toolbar, Overview card, history) is drawn by shell.js with the actions defined here.
+// toolbar, history) is drawn by shell.js with the actions defined here.
 import './desktop.js';
-import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, lsGet, lsSet, copyText, fmtElapsed } from './dom.js';
+import { $, h, icon, iconBtn, replace, toast, timeAgo, baseName, lsGet, lsSet, fmtElapsed, projTile, dotGrid } from './dom.js';
 import { api, rpc, connectEvents } from './api.js';
 import { brandMark } from './brands.js';
 import { moveToMachine, onMachine, backToThisPc } from './machines.js';
 import { S, Tab, on, emit, activeTab, loadEnv, loadSessions, openTab, closeTab, setActive, routeEvent, onHello, onProcs, attach, savePrefs, groupSessions, unlistedTabs, tabForSession, engineReady, renameSession, cleanName, keyPath, agentOf } from './store.js';
 import { TabView, sessionMenu, copyConversation } from './session.js';
-import { drawHome, setHomeProject } from './home.js';
+import { drawHome, setHomeProject, homeProject, insertHome } from './home.js';
 import { openCleanup, confirmDeleteConversation } from './cleanup.js';
 import { openDiagnostics } from './diagnostics.js';
 import { initNotify } from './notify.js';
 import { openHelp } from './help.js';
-import { mountPanel, showTab, viewFile, stepPanelTab } from './panels.js';
+import { mountPanel, showTab, viewFile, stepPanelTab, openSurface } from './panels.js';
+import { mountTerminal, toggleTerminal, terminalShown } from './terminal.js';
+import { projectPopover } from './project.js';
 import { actionFor, comboOf, firstKey } from './keys.mjs';
 import { browserPrefs, desktopBrowser, canShowInside } from './browser.js';
 import { settingsSearchItems, openFeedback } from './settings.js';
-import { H as shell, drawMenubar, drawToolbar, tickToolbar, syncOverview, navRecord, navGo, bindHoverCards, updatedLabel } from './shell.js';
+import { H as shell, drawMenubar, drawToolbar, tickToolbar, navRecord, navGo, bindHoverCards, updatedLabel } from './shell.js';
 import { folderPicker, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
 import { onBoard, boardState } from './review.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
-import { sideUpdate } from './updates.js';
 import { initBackdrop, SCENES } from './backdrop.js';
 import { refreshAutomations } from './automations.js';
 import { initRuns, openHub, closeHub, isHub, hubView, draw as drawHub, onRunEvent, reviewCount, workingCount } from './runs.js';
 
+// No layout animation until the saved layout has been applied (boot() removes this).
+document.documentElement.classList.add('still');
 const views = new Map();
 const sideEl = $('#sidebar');
 const topEl = $('#topbar');
@@ -121,7 +124,8 @@ function applyPrefs() {
   root.style.setProperty('--side-w', Math.min(SIDE_MAX, Math.max(SIDE_MIN, u.sidebarW || SIDE_W)) + 'px');
   root.style.setProperty('--panel-w', (u.panelW || 380) + 'px');
   const side = narrowSide.matches ? overlay.side : u.sidebar !== false;
-  const panel = !!activeTab() && !isHub() && (narrowPanel.matches ? overlay.panel : u.rightPanel === true); // closed until you open it
+  // A conversation's panel, or on Home the panel of the project chosen there; closed until you open it.
+  const panel = (!!activeTab() || !!homeProject()) && !isHub() && (narrowPanel.matches ? overlay.panel : u.rightPanel === true);
   appEl.classList.toggle('no-side', !side);
   appEl.classList.toggle('no-panel', !panel);
   appEl.classList.toggle('overlay-side', side && narrowSide.matches);
@@ -138,13 +142,26 @@ function toggleSidebar() {
   if (narrowSide.matches) (overlay.side = !overlay.side), applyPrefs(), drawTop();
   else savePrefs({ sidebar: S.ui.sidebar === false });
 }
+/** The side panel across the whole window (the conversation hidden), and back. */
+const panelMax = () => appEl.classList.contains('panel-max');
+function togglePanelMax() {
+  if (!panelShown()) return;
+  appEl.classList.toggle('panel-max');
+  drawTop();
+}
 function togglePanel() {
-  if (!activeTab()) return;
-  // Opening the panel from the toolbar (or Ctrl+J) lands on its first page.
-  if (!panelShown()) return showTab('home');
+  if (!activeTab() && !homeProject()) return;
+  // Opening the panel from the toolbar (or Ctrl+J) shows the tab it had last (Changes the first time).
+  if (!panelShown()) return showTab(S.ui.rightTab || 'changes');
   if (narrowPanel.matches) (overlay.panel = false), applyPrefs(), drawTop();
   else savePrefs({ rightPanel: false });
+  appEl.classList.remove('panel-max');
 }
+// Home's project decides whether its side panel and the panel button are there.
+on('home:project', () => {
+  applyPrefs();
+  drawTop();
+});
 on('panel:open', () => {
   if (narrowPanel.matches && !overlay.panel) (overlay.panel = true), applyPrefs(), drawTop();
 });
@@ -154,35 +171,117 @@ appEl.addEventListener('mousedown', (e) => {
   if (overlay.panel && narrowPanel.matches && !$('#panel').contains(e.target) && !e.target.closest('.tb-panel')) (overlay.panel = false), applyPrefs(), drawTop();
 });
 
-function resizer(id, varName, key, min, max, fromRight, reset) {
+// The main sheet keeps at least this much room while you drag an edge.
+const MAIN_MIN = 360;
+// Drag the sidebar's edge this far past its narrowest width and it closes; drag back out (still holding) and it opens.
+const SNAP_SHUT = 64;
+/**
+ * A draggable edge between two columns. The column follows the pointer exactly: the width moves by as much as the
+ * pointer has moved since the press (so pressing never makes it jump), it is written once per frame, and width
+ * animations are off while you drag. The pointer is captured, so releasing outside the window (or over an embedded
+ * page) still ends the drag. Esc puts the width back; double-click or Enter resets it; the arrow keys move it.
+ * `snapShut` (the sidebar): dragging well past the narrowest width closes the column.
+ */
+function resizer(id, { target, varName, key, min, max, fromRight, reset, snapShut }) {
   const el = $(id);
-  if (reset) el.addEventListener('dblclick', () => {
-    document.documentElement.style.setProperty(varName, reset + 'px');
-    savePrefs({ [key]: reset });
-  });
-  el.addEventListener('mousedown', (e) => {
+  const root = document.documentElement;
+  const col = $(target);
+  // The column on the other side of the main sheet, when it is docked, also takes room.
+  const other = () => (fromRight ? (sideShown() && !narrowSide.matches ? sideEl.offsetWidth : 0) : panelShown() && !narrowPanel.matches ? $('#panel').offsetWidth : 0);
+  // The sheet's own min-width (CSS may ask for more, to keep the conversation readable) counts too.
+  const mainMin = () => Math.max(MAIN_MIN, parseFloat(getComputedStyle(mainEl).minWidth) || 0);
+  const limit = () => Math.max(min, Math.min(max, innerWidth - mainMin() - other()));
+  const clamp = (w) => Math.round(Math.max(min, Math.min(limit(), w)));
+  const current = () => Math.round(col.getBoundingClientRect().width) || S.ui[key] || reset;
+  const sync = (w) => {
+    el.setAttribute('aria-valuemin', min);
+    el.setAttribute('aria-valuemax', limit());
+    el.setAttribute('aria-valuenow', w);
+  };
+  const set = (w) => {
+    root.style.setProperty(varName, w + 'px');
+    S.ui[key] = w;
+    sync(w);
+  };
+  el.tabIndex = 0;
+  el.addEventListener('focus', () => sync(current()));
+  if (reset) el.addEventListener('dblclick', () => (set(clamp(reset)), savePrefs({ [key]: S.ui[key] })));
+  el.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 64 : 16;
+    const grow = fromRight ? 'ArrowLeft' : 'ArrowRight';
+    const shrink = fromRight ? 'ArrowRight' : 'ArrowLeft';
+    const w = current();
+    const next = e.key === grow ? w + step : e.key === shrink ? w - step : e.key === 'Home' ? min : e.key === 'End' ? limit() : e.key === 'Enter' && reset ? reset : null;
+    if (next === null) return;
     e.preventDefault();
+    set(clamp(next));
+    savePrefs({ [key]: S.ui[key] });
+  });
+
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startW = current();
+    let want = startW, shut = false, frame = 0, done = false;
     el.classList.add('drag');
     document.body.classList.add('resizing');
-    const move = (ev) => {
-      const w = fromRight ? innerWidth - ev.clientX : ev.clientX;
-      const v = Math.round(Math.max(min, Math.min(max, w)));
-      document.documentElement.style.setProperty(varName, v + 'px');
-      S.ui[key] = v;
+    root.classList.add('sizing'); // width transitions off: the column sticks to the pointer
+    const showShut = (on) => {
+      if (on === shut) return;
+      shut = on;
+      // A closing sidebar slides away (transitions back on); one that reopens follows the pointer again.
+      root.classList.toggle('sizing', !on);
+      appEl.classList.toggle('no-side', on);
+      root.classList.toggle('side-open', !on);
     };
-    const up = () => {
+    const paint = () => {
+      frame = 0;
+      if (snapShut) showShut(want < min - SNAP_SHUT);
+      if (!shut) set(clamp(want));
+    };
+    const move = (ev) => {
+      want = startW + (fromRight ? startX - ev.clientX : ev.clientX - startX);
+      frame ||= requestAnimationFrame(paint);
+    };
+    const end = (cancel) => {
+      if (done) return;
+      done = true;
+      cancelAnimationFrame(frame);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      el.removeEventListener('lostpointercapture', up);
+      removeEventListener('keydown', esc, true);
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       el.classList.remove('drag');
       document.body.classList.remove('resizing');
-      removeEventListener('mousemove', move);
-      removeEventListener('mouseup', up);
-      savePrefs({ [key]: S.ui[key] });
+      if (cancel) {
+        showShut(false);
+        set(startW);
+      } else if (!shut) {
+        paint();
+      }
+      // Let the last width land before transitions come back on.
+      requestAnimationFrame(() => root.classList.remove('sizing'));
+      if (shut && !cancel) {
+        set(startW); // it reopens at the width it had
+        return savePrefs({ sidebar: false });
+      }
+      if (S.ui[key] !== startW) savePrefs({ [key]: S.ui[key] });
     };
-    addEventListener('mousemove', move);
-    addEventListener('mouseup', up);
+    const up = () => end(false);
+    const esc = (ev) => ev.key === 'Escape' && (ev.preventDefault(), ev.stopPropagation(), end(true));
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+    addEventListener('keydown', esc, true);
   });
 }
-resizer('#rs-side', '--side-w', 'sidebarW', SIDE_MIN, SIDE_MAX, false, SIDE_W);
-resizer('#rs-panel', '--panel-w', 'panelW', 280, 720, true, 380);
+resizer('#rs-side', { target: '#sidebar', varName: '--side-w', key: 'sidebarW', min: SIDE_MIN, max: SIDE_MAX, fromRight: false, reset: SIDE_W, snapShut: true });
+resizer('#rs-panel', { target: '#panel', varName: '--panel-w', key: 'panelW', min: 280, max: 720, fromRight: true, reset: 380 });
 // The toolbar puts the panel switch above the panel: it follows the panel's real width (CSS can narrow the panel).
 new ResizeObserver(([e]) => {
   const w = Math.round(e.contentRect.width + 1); // + its left hairline
@@ -193,7 +292,9 @@ new ResizeObserver(([e]) => {
 const dotState = (t) => (t.dead ? 'dead' : t.dialogs?.some(isApproval) ? 'warn' : t.streaming ? 'run' : t.unread ? 'unread' : '');
 const dotCls = (t) => 'dot' + (dotState(t) ? ` ${dotState(t)}` : '');
 /** A conversation's state in the sidebar, only when it has one: working, needs you, unread or ended (an open, idle one shows nothing). */
-const stateDot = (t) => (t && dotState(t) ? h('span', { class: dotCls(t), title: { dead: 'Ended', warn: 'Needs your OK', run: 'Working', unread: 'Finished while you were away' }[dotState(t)] }) : null);
+// A working conversation shows the dot grid in its row's corner instead of a dot in front.
+const stateDot = (t) => (t && dotState(t) && dotState(t) !== 'run' ? h('span', { class: dotCls(t), title: { dead: 'Ended', warn: 'Needs your OK', unread: 'Finished while you were away' }[dotState(t)] }) : null);
+const working = (t) => !!t && dotState(t) === 'run';
 
 // Pinned conversations, by session file, saved with the other UI preferences.
 const pinned = () => (Array.isArray(S.ui.pinned) ? S.ui.pinned : []);
@@ -270,32 +371,27 @@ function sessionRow(s, where) {
       s.branch ? icon('branch', 12, 's-br') : null,
       s.agent ? h('span', { class: 's-agent', title: `Runs on ${agentOf(s.agent)?.name || s.agent}` }, brandMark(s.agent, 12)) : null,
       h('span', { class: 'ell grow' }, s.title),
-      where ? h('span', { class: 's-where ell' }, where) : h('span', { class: 's-when' }, timeAgo(s.mtime))),
+      working(tab) ? dotGrid('s-live') : where ? h('span', { class: 's-where ell' }, where) : h('span', { class: 's-when' }, timeAgo(s.mtime))),
     h('span', { class: 'row-acts' }, pin, arch, more));
 }
 
 /** A project's menu (its ⋯ button or a right-click on its name). */
 function projectMenu(g, anchor) {
   const all = groupSessions();
-  popMenu(anchor, [
-    { header: g.name },
-    { label: 'New conversation here', run: () => newSession(g.path) },
-    { label: 'Show folder in Explorer', run: () => api.post('/api/fs/reveal', { path: g.path }).catch((e) => toast(e.message, 'error')) },
-    { label: 'Copy folder path', run: () => copyText(g.path) },
-    '-',
-    { label: 'Fold the other projects', run: () => {
+  projectPopover(g.path, anchor, [
+    { icon: 'plus', label: 'New conversation here', run: () => newSession(g.path) },
+    { icon: 'chevron-up', label: 'Fold the other projects', run: () => {
       for (const x of all) if (x.key !== g.key) collapsed.add(x.key);
       collapsed.delete(g.key);
       lsSet('collapsed', [...collapsed]);
       drawSidebar();
     } },
-    { label: 'Unfold all projects', run: () => {
+    { icon: 'chevron-down', label: 'Unfold all projects', run: () => {
       collapsed.clear();
       lsSet('collapsed', []);
       drawSidebar();
     } },
-    g.saved ? '-' : null,
-    g.saved ? { label: 'Remove from the list', hint: 'files kept', run: async () => {
+    g.saved ? { icon: 'x', label: 'Remove from the list (files kept)', run: async () => {
       try {
         S.workspaces = (await api.post('/api/workspaces/remove', { id: g.id })).workspaces;
         drawSidebar();
@@ -303,7 +399,7 @@ function projectMenu(g, anchor) {
         toast(e.message, 'error');
       }
     } } : null,
-  ].filter(Boolean), { minWidth: 240 });
+  ].filter(Boolean));
 }
 
 /** Pinned conversations, above the projects. */
@@ -381,14 +477,14 @@ function drawSidebar() {
     return h('div', { class: 'proj' },
       h('div', { class: 'proj-head' },
         h('button', { class: 'proj-btn', type: 'button', title: live ? `${g.path}\n${live} working` : g.path, 'aria-expanded': String(open), onclick: toggle, oncontextmenu: (e) => (e.preventDefault(), projectMenu(g, e.currentTarget)), onkeydown: (e) => ((e.key === 'F10' && e.shiftKey) || e.key === 'ContextMenu') && (e.preventDefault(), projectMenu(g, e.currentTarget)) },
-          icon(open ? 'chevron-down' : 'chevron-right', 12, 'chev'), icon(open ? 'folder-open' : 'folder', 14, 'proj-ic'), h('span', { class: 'ell' }, g.name),
-          live ? h('span', { class: 'proj-live', title: `${live} working`, 'aria-label': `${live} working` }, h('span', { class: 'dot run' })) : null,
+          h('span', { class: 'proj-mark' }, projTile(g.name, 20), icon(open ? 'chevron-down' : 'chevron-right', 12, 'chev')), h('span', { class: 'ell proj-name' }, g.name),
+          live ? h('span', { class: 'proj-live', title: `${live} working` }, dotGrid()) : null,
           g.sessions.length ? h('span', { class: 'proj-n num' }, g.sessions.length) : null),
         h('span', { class: 'row-acts' },
           iconBtn('plus', `New conversation in ${g.name}`, () => newSession(g.path), 'sm'),
           iconBtn('more', `${g.name}: more`, (e) => projectMenu(g, e.currentTarget), 'sm'))),
       open ? fresh.map((t) => h('div', { class: 's-row' + (t.id === S.active ? ' cur' : '') },
-        h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, stateDot(t), h('span', { class: 'ell grow' }, t.name), h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
+        h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, stateDot(t), h('span', { class: 'ell grow' }, t.name), working(t) ? dotGrid('s-live') : h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
       shown.map((s) => sessionRow(s)),
       open && !term && !sess.length && !fresh.length ? h('div', { class: 's-none' }, g.sessions.length ? 'All pinned' : 'No conversations yet') : null,
       // The rest of a long project opens in place; it stays open until you fold it again.
@@ -409,10 +505,12 @@ function drawSidebar() {
   sideEl.append(
     h('button', { class: 'side-new' + (S.active || isHub() ? '' : ' cur'), type: 'button', title: 'New conversation (Ctrl+N)', 'aria-current': S.active || isHub() ? null : 'page', onclick: () => newSession() }, icon('plus', 14), h('span', null, 'New conversation')),
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
+      h('button', { class: 'side-link side-search-btn', type: 'button', title: `Search conversations (${firstKey(S.ui.keys, 'search') || 'Ctrl+K'})`, onclick: () => openSearch('conversations') }, icon('search', 15), h('span', null, 'Search'), h('kbd', { class: 'side-kbd' }, firstKey(S.ui.keys, 'search') || 'Ctrl+K')),
+      h('button', { class: 'side-link' + (hubView()?.view === 'customizations' ? ' cur' : ''), type: 'button', title: 'MCP servers to add from a marketplace, and the ones in use', 'aria-current': hubView()?.view === 'customizations' ? 'page' : null, onclick: () => goHub('customizations') }, icon('puzzle', 15), h('span', null, 'Plugins')),
+      h('button', { class: 'side-link' + (hubView()?.view === 'skills' ? ' cur' : ''), type: 'button', title: 'Instructions the agent follows for a kind of task', 'aria-current': hubView()?.view === 'skills' ? 'page' : null, onclick: () => goHub('skills') }, icon('bolt', 15), h('span', null, 'Skills')),
+      h('button', { class: 'side-link' + (hubView()?.view === 'automations' ? ' cur' : ''), type: 'button', title: 'Prompts ORBIX sends by itself, on a schedule or once', 'aria-current': hubView()?.view === 'automations' ? 'page' : null, onclick: () => goHub('automations') }, icon('infinity', 15), h('span', null, 'Loops')),
       ((v) => h('button', { class: 'side-link' + (v === 'runs' || v === 'run' ? ' cur' : ''), type: 'button', title: 'Every run across projects (Ctrl+2)', 'aria-current': v === 'runs' || v === 'run' ? 'page' : null, onclick: () => goHub('runs') }, icon('activity', 15), h('span', null, 'Runs'), workingCount() ? h('span', { class: 'side-count quiet num', title: `${workingCount()} working` }, workingCount()) : null))(hubView()?.view),
-      h('button', { class: 'side-link' + (hubView()?.view === 'review' ? ' cur' : ''), type: 'button', title: 'What waits for you (Ctrl+3)', 'aria-current': hubView()?.view === 'review' ? 'page' : null, onclick: () => goHub('review') }, icon('shield', 15), h('span', null, 'Review'), reviewCount() ? h('span', { class: 'side-count num', title: `${reviewCount()} waiting for you`, 'aria-label': `${reviewCount()} waiting for you` }, reviewCount()) : null),
-      h('button', { class: 'side-link' + (hubView()?.view === 'automations' ? ' cur' : ''), type: 'button', title: 'Tasks ORBIX starts by itself on a schedule', 'aria-current': hubView()?.view === 'automations' ? 'page' : null, onclick: () => goHub('automations') }, icon('clock', 15), h('span', null, 'Automations')),
-      h('button', { class: 'side-link' + (hubView()?.view === 'customizations' ? ' cur' : ''), type: 'button', title: 'MCP servers, skills and rules; a marketplace of tools to add', 'aria-current': hubView()?.view === 'customizations' ? 'page' : null, onclick: () => goHub('customizations') }, icon('puzzle', 15), h('span', null, 'Customizations'))),
+      h('button', { class: 'side-link' + (hubView()?.view === 'review' ? ' cur' : ''), type: 'button', title: 'What waits for you (Ctrl+3)', 'aria-current': hubView()?.view === 'review' ? 'page' : null, onclick: () => goHub('review') }, icon('shield', 15), h('span', null, 'Review'), reviewCount() ? h('span', { class: 'side-count num', title: `${reviewCount()} waiting for you`, 'aria-label': `${reviewCount()} waiting for you` }, reviewCount()) : null)),
     h('div', { class: 'side-scroll', onkeydown: listKeys },
       runningList(),
       pinnedList(term),
@@ -430,7 +528,6 @@ function drawSidebar() {
           iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm'))),
       showFilter ? h('div', { class: 'side-search' }, icon('search', 14), search) : null,
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'No projects yet.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
-    sideUpdate(icon('download', 15)) || '', // native append() would print null as text
     h('div', { class: 'side-foot' },
       h('button', { class: 'side-link foot-set', type: 'button', title: 'Settings (Ctrl+,)', onclick: () => settingsDialog() }, icon('cog', 15), h('span', null, 'Settings')),
       footStatus()),
@@ -459,7 +556,7 @@ function runningList() {
       const st = boardState(t);
       const waiting = st === 'needs you';
       return h('button', { class: 'run-row' + (t.id === S.active ? ' cur' : '') + (t.worktree ? ' has-branch' : ''), type: 'button', title: `${t.name}\n${t.worktree ? t.worktree.branch + '\n' : ''}${t.workspace}`, dataset: { id: t.id }, onclick: () => setActive(t.id) },
-        h('span', { class: 'dot' + (waiting ? ' warn' : t.streaming ? ' run' : ' ok') }),
+        t.streaming && !waiting ? dotGrid('run-live') : h('span', { class: 'dot' + (waiting ? ' warn' : ' ok') }),
         h('span', { class: 'run-m' }, h('span', { class: 'ell' }, t.name), t.worktree ? h('span', { class: 'run-br ell' }, h('bdi', null, t.worktree.branch)) : null, h('span', { class: 'run-now ell' }, runNow(t, st))),
         h('span', { class: 'run-st num' + (waiting ? ' you' : t.streaming ? '' : ' idle') }, runLabel(t, st)));
     }));
@@ -613,18 +710,12 @@ async function renameTab(t) {
 
 /** The project crumb in the toolbar: a new conversation there, show the folder, copy its path. */
 function projectCrumbMenu(t, anchor) {
-  popMenu(anchor, [
-    { header: t.workspace },
-    { label: 'New conversation in this project', hint: 'Ctrl+N', run: () => newSession(t.workspace) },
-    { label: 'Show in Explorer', run: () => api.post('/api/fs/reveal', { path: t.workspace }).catch((e) => toast(e.message, 'error')) },
-    { label: 'Copy path', run: () => copyText(t.workspace) },
-  ], { minWidth: 240 });
+  projectPopover(t.workspace, anchor, [{ icon: 'plus', label: 'New conversation in this project', run: () => newSession(t.workspace) }]);
 }
 
-/** The toolbar and the Overview card follow the view; both redraw only when what they show changed. */
+/** The toolbar follows the view; it redraws only when what it shows changed. */
 function drawTop() {
   drawToolbar(topEl);
-  syncOverview(mainEl);
 }
 
 /** Text size of the conversation (Appearance → Message text size): +1, -1, or 0 to reset. */
@@ -653,7 +744,7 @@ function goTo(loc) {
 
 Object.assign(shell, {
   newSession, openFolder, goHub, goTo, settings: (tab) => settingsDialog(tab), help: openHelp, shortcuts: () => settingsDialog('keys'), diagnostics: openDiagnostics,
-  manage: openCleanup, search: () => openSearch(), toggleSidebar, togglePanel, sideShown, panelShown, toggleTheme, textSize, cycle,
+  manage: openCleanup, search: () => openSearch(), toggleSidebar, togglePanel, sideShown, panelShown, toggleTerminal, terminalShown, togglePanelMax, panelMax, toggleTheme, textSize, cycle,
   zen: () => toggleZen(), wide: toggleWide, hubView, workingCount, open: (id) => setActive(id), close: (t) => closeWithCheck(t), rename: (t) => renameTab(t),
   projectMenu: projectCrumbMenu,
   sessionMenu: (t, anchor) => {
@@ -680,7 +771,6 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   emit('browse', a.href);
 });
-on('panel:badges', () => syncOverview(mainEl));
 
 const homeHandlers = {
   search: openSearch,
@@ -788,7 +878,6 @@ on('prefs', (patch = {}) => {
   if (t && ('whileBusy' in patch || 'sendKey' in patch)) views.get(t.id)?.updateComposer();
 });
 const viewOf = (tab) => views.get(tab.id);
-on('zen', () => syncOverview(mainEl));
 // Focus mode only makes sense on a conversation: going Home leaves it.
 on('active', () => !activeTab() && zenOn() && toggleZen(false));
 on('tab:messages', (tab, d) => {
@@ -833,7 +922,7 @@ on('insert', (text) => {
     const cur = v.composer.value;
     v.setText(cur + (cur && !/\s$/.test(cur) ? ' ' : '') + text);
     v.focus();
-  }
+  } else if (!t && !isHub()) insertHome(text);
 });
 on('settings', (tab) => settingsDialog(tab));
 on('run:open', () => showTab('run'));
@@ -856,8 +945,9 @@ function paletteItems() {
     { group: 'General', icon: 'plus', label: 'New conversation', key: firstKey(S.ui.keys, 'new'), run: () => newSession() },
     { group: 'General', icon: 'activity', label: 'Runs', key: firstKey(S.ui.keys, 'runs'), run: () => goHub('runs') },
     { group: 'General', icon: 'shield', label: 'Review: what waits for you', key: firstKey(S.ui.keys, 'review'), run: () => goHub('review') },
-    { group: 'General', icon: 'clock', label: 'Automations', run: () => goHub('automations') },
-    { group: 'General', icon: 'puzzle', label: 'Customizations: MCP servers, skills and rules', run: () => goHub('customizations') },
+    { group: 'General', icon: 'infinity', label: 'Loops: prompts on a schedule', run: () => goHub('automations') },
+    { group: 'General', icon: 'puzzle', label: 'Plugins: MCP servers and rules', run: () => goHub('customizations') },
+    { group: 'General', icon: 'bolt', label: 'Skills', run: () => goHub('skills') },
     { group: 'General', icon: 'plus', label: 'New conversation without saving it', run: () => newSession(undefined, { ephemeral: true }) },
     { group: 'General', icon: 'folder-plus', label: 'Open project folder…', run: openFolder },
     { group: 'General', icon: 'cog', label: 'Settings', key: firstKey(S.ui.keys, 'settings'), run: () => settingsDialog() },
@@ -872,7 +962,7 @@ function paletteItems() {
   if (t) {
     items.push({ group: 'View', icon: 'panel-right', label: 'Toggle side panel', key: firstKey(S.ui.keys, 'panel'), run: togglePanel });
     items.push({ group: 'View', icon: 'eye', label: zenOn() ? 'Leave focus mode' : 'Focus mode', key: firstKey(S.ui.keys, 'zen'), run: () => toggleZen() }, { group: 'View', icon: 'wrap', label: 'Toggle wide reading column', run: toggleWide }, { group: 'Conversation', icon: 'search', label: 'Find in conversation', key: 'Ctrl+F', run: () => viewOf(t)?.bar.openFind() }, { group: 'Conversation', icon: 'list', label: 'Jump to one of your messages…', key: 'Ctrl+Shift+O', run: () => viewOf(t)?.bar.openOutline() });
-    for (const [k, l, ic] of [['run', 'Inspect', 'activity'], ['files', 'Files', 'folder'], ['changes', 'Changes', 'branch'], ['todos', 'Tasks', 'list'], ['agents', 'Agents', 'users'], ['console', 'Terminal', 'terminal']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
+    for (const [k, l, ic] of [['changes', 'Changes', 'branch'], ['files', 'Files', 'folder'], ['console', 'Terminal', 'terminal'], ['browser', 'Browser', 'globe'], ['todos', 'Tasks', 'list'], ['run', 'Inspect', 'activity']]) items.push({ group: 'View', icon: ic, label: `Show ${l}`, run: () => showTab(k) });
     items.push({ group: 'Conversation', icon: 'pencil', label: 'Rename conversation…', run: () => renameTab(t) }, { group: 'Conversation', icon: 'copy', label: 'Copy conversation as Markdown', run: () => copyConversation(t) }, { group: 'Conversation', icon: 'x', label: 'Close conversation', run: () => closeWithCheck(t) });
     for (const c of t.commands) items.push({ group: 'Slash commands', icon: 'command', label: `/${c.name}`, hint: c.description, run: () => emit('insert', `/${c.name} `) });
   }
@@ -914,9 +1004,9 @@ const ACTION_RUN = {
   prevConv: () => cycle(-1),
   sidebar: () => toggleSidebar(),
   panel: () => togglePanel(),
+  terminal: () => toggleTerminal(),
   nextPanelTab: () => stepPanelTab(1),
   prevPanelTab: () => stepPanelTab(-1),
-  overview: () => topEl.querySelector('.tb-ov')?.click(),
   shortcuts: () => settingsDialog('keys'),
   settings: () => settingsDialog(),
   focusInput: () => (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus()),
@@ -924,8 +1014,16 @@ const ACTION_RUN = {
   outline: () => viewOf(activeTab())?.bar.openOutline(),
   prevMine: () => viewOf(activeTab())?.timeline?.stepYou(-1),
   nextMine: () => viewOf(activeTab())?.timeline?.stepYou(1),
-  sideQuestion: () => showTab('ask'),
-  inspector: () => showTab('run'),
+  sideQuestion: () => openSurface('sideQuestion'),
+  inspector: () => openSurface('inspector'),
+  surfReview: () => openSurface('surfReview'),
+  surfBrowser: () => openSurface('surfBrowser'),
+  surfIncognito: () => openSurface('surfIncognito'),
+  surfDevice: () => openSurface('surfDevice'),
+  surfFiles: () => openSurface('surfFiles'),
+  surfChanges: () => openSurface('surfChanges'),
+  surfTasks: () => openSurface('surfTasks'),
+  surfContext: () => openSurface('surfContext'),
   zen: () => toggleZen(),
   textBigger: () => textSize(1),
   textSmaller: () => textSize(-1),
@@ -933,9 +1031,13 @@ const ACTION_RUN = {
 };
 // Actions that belong to an open conversation, and ones that wait while a dialog is open; otherwise the key does
 // what it would do anyway (Ctrl+F finds in the page on Home, for example).
-const NEEDS_TAB = new Set(['nextPanelTab', 'prevPanelTab', 'overview', 'find', 'outline', 'prevMine', 'nextMine', 'sideQuestion', 'inspector', 'zen']);
+const NEEDS_TAB = new Set(['nextPanelTab', 'prevPanelTab', 'find', 'outline', 'prevMine', 'nextMine', 'zen']);
 const NO_DIALOG = new Set(['find', 'outline', 'prevMine', 'nextMine', 'inspector', 'zen', 'nextPanelTab', 'prevPanelTab']);
+// In a terminal the keys belong to the shell, except the ones that show or hide the terminal and the panel, and the
+// Ctrl+Alt ones that open a side panel surface.
+const IN_TERMINAL = new Set(['terminal', 'panel', 'sideQuestion', 'inspector', 'surfReview', 'surfBrowser', 'surfIncognito', 'surfDevice', 'surfFiles', 'surfChanges', 'surfTasks', 'surfContext']);
 const canRun = (a, e) => {
+  if (e.target.closest?.('.xterm') && !IN_TERMINAL.has(a.id)) return false;
   if (a.field === false && e.target.closest?.('input, textarea, select, [contenteditable]')) return false;
   if (e.target.closest?.('.menu')) return false;
   if (NEEDS_TAB.has(a.id) && !activeTab()) return false;
@@ -946,8 +1048,10 @@ const canRun = (a, e) => {
 
 addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey;
-  // Shortcuts you can change: the first action whose keys match. Some wait while you type in a text field.
-  const action = !e.defaultPrevented && actionFor(comboOf(e), S.ui.keys);
+  // Shortcuts you can change: the first action whose keys match. Some wait while you type in a text field. AltGr
+  // (Ctrl+Alt to Windows) types characters on many layouts (ś, €, @), so it never runs a Ctrl+Alt shortcut.
+  const altGr = e.getModifierState?.('AltGraph');
+  const action = !e.defaultPrevented && !altGr && actionFor(comboOf(e), S.ui.keys);
   if (action && canRun(action, e)) {
     e.preventDefault();
     ACTION_RUN[action.id]?.();
@@ -1020,11 +1124,14 @@ async function boot() {
   }
   layoutOnce();
   applyPrefs();
+  // The saved layout lands without animating; from here on the sidebar slides and resizes smoothly.
+  requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove('still')));
   drawMenubar(menuEl);
   drawSidebar();
   drawTop();
   drawWelcome();
   mountPanel($('#panel'));
+  mountTerminal({ close: () => panelShown() && togglePanel() });
   bindHoverCards(sideEl, (path) => {
     const s = S.sessions.find((x) => x.path === path);
     if (!s) return null;
@@ -1034,7 +1141,7 @@ async function boot() {
   });
   initNotify();
   initBackdrop();
-  // Settings → Application in the Windows app: the tray, and keeping the PC awake while an agent works.
+  // Settings → About in the Windows app: the tray, and keeping the PC awake while an agent works.
   const sys = window.orbixDesktop?.system;
   if (sys) {
     let tray = null;
@@ -1065,6 +1172,7 @@ async function boot() {
       }
       else if (g.g === 'run' || g.g === 'run_removed') onRunEvent(g);
       else if (g.g === 'sessions') loadSessions();
+      else if (g.g === 'pty') emit('pty', g);
       else if (g.g === 'engine' && g.engine) {
         S.engine = g.engine;
         emit('engine');

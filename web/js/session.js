@@ -1,26 +1,24 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, replace, clear, toast, fmtTokens, fmtCost, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet } from './dom.js';
+import { h, icon, replace, clear, toast, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet, heroMark } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { MarkdownBoundary, liveExcerpt, LIVE_MARKDOWN_LIMIT } from './markdown-stream.mjs';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi, openTab, closeTab } from './store.js';
 import { rpc, api } from './api.js';
-import { modelPicker, popMenu, isApproval, approvalLabel } from './dialogs.js';
-import { brandMark } from './brands.js';
-import { asciiOrbit, asciiSpin } from './ascii.js';
+import { modelPicker, popMenu, isApproval, approvalLabel, thinkingLevels, thinkingName } from './dialogs.js';
+import { asciiSpin } from './ascii.js';
 import { viewFile, reviewChanges, askSide } from './panels.js';
+import { runInTerminal } from './terminal.js';
 import { conversationToMarkdown } from './exporter.js';
 import { rateModel } from './ratings.js';
 import { shellCommand } from './tool-title.mjs';
 import { Composer } from './composer.js';
-import { addContext, permissionChip } from './controls.js';
+import { addContext, permissionChip, modelLabel, effortChip } from './controls.js';
 import { Timeline } from './timeline.js';
 
 // How each thinking level reads in the interface.
-const THINKING = { off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
-const thinkingLabel = (l) => THINKING[l] || String(l).charAt(0).toUpperCase() + String(l).slice(1);
 
 const isReply = (m) => {
   if (m.role !== 'assistant') return false;
@@ -295,13 +293,13 @@ export class TabView {
     this.jump = h('button', { class: 'jump', type: 'button', hidden: true, onclick: () => this.scrollBottom(true) }, icon('arrow-down', 14), 'Latest');
     this.queue = h('div', { class: 'queue' });
     this.composer = new Composer({
-      placeholder: 'Ask anything, @ to mention, / for actions',
+      placeholder: 'Add a follow-up…  / for commands, @ for context, ! for a shell command',
       label: 'Message',
       state: t,
       workspace: () => t.workspace,
       commands: () => t.commands,
       model: () => t.model,
-      // Settings → General → While the agent works: Enter steers or queues, Alt+Enter does the other.
+      // Settings → Preferences → While the agent works: Enter steers or queues, Alt+Enter does the other.
       onSubmit: (alt) => this.onSend(alt !== (S.ui.whileBusy === 'queue')),
       onEscape: () => this.onEscape(),
       onChange: () => this.updateSend(),
@@ -309,12 +307,18 @@ export class TabView {
     this.ta = this.composer.ta;
     this.sendBtn = h('button', { class: 'send', type: 'button', onclick: () => this.onSend(S.ui.whileBusy === 'queue', true) });
     this.modelBtn = h('button', { class: 'cbtn', type: 'button', title: 'Model', 'aria-haspopup': 'dialog', onclick: () => this.pickModel() });
-    this.thinkBtn = h('button', { class: 'cbtn c-effort', type: 'button', title: 'Thinking level', 'aria-haspopup': 'menu', onclick: (e) => this.pickThinking(e.currentTarget) });
     this.permBtn = permissionChip();
+    this.effort = effortChip(async (level) => {
+      try {
+        await setThinking(t, level);
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+      this.focus();
+    });
     this.planBtn = h('button', { class: 'cbtn plan', type: 'button', title: 'Plan mode: the agent reads and proposes a plan, but changes nothing', onclick: () => this.togglePlan() });
-    this.ctx = h('span', { class: 'ctx-meter' });
     this.statusLine = h('div', { class: 'c-status', 'aria-live': 'polite' });
-    this.composer.el.append(h('div', { class: 'c-row' }, addContext(this.composer), h('span', { class: 'c-model' }, this.modelBtn, this.thinkBtn), this.planBtn, h('span', { class: 'grow' }), this.ctx, this.permBtn.el, this.sendBtn));
+    this.composer.el.append(h('div', { class: 'c-row' }, addContext(this.composer), this.modelBtn, this.effort.el, this.planBtn, h('span', { class: 'grow' }), this.permBtn.el, this.sendBtn));
     this.dockCol = h('div', { class: 'dock-col' }, this.queue, this.composer.el, this.statusLine);
     this.dock = h('div', { class: 'dock' }, this.jump, this.dockCol);
     this.root = h('div', { class: 'session-inner' }, this.scroller, this.dock, h('div', { class: 'drop-hint', 'aria-hidden': 'true' }, icon('paperclip', 18), 'Drop images or text files to attach'));
@@ -424,29 +428,23 @@ export class TabView {
     const m = t.model;
     const dead = t.dead;
     this.ta.disabled = dead;
-    this.ta.placeholder = dead ? 'This conversation has ended' : t.streaming ? (S.ui.whileBusy === 'queue' ? 'Queue a follow-up…' : 'Add guidance…') : 'Ask anything…  @ for files, / for actions';
+    this.ta.placeholder = dead ? 'This conversation has ended' : t.streaming ? (S.ui.whileBusy === 'queue' ? 'Queue a follow-up…' : 'Add guidance…') : t.messages?.length ? 'Add a follow-up…  / for commands, @ for context, ! for a shell command' : 'Ask anything…  / for commands, @ for context, ! for a shell command';
     this.composer.el.classList.toggle('busy', !!t.streaming);
     this.updateSend();
 
     this.modelBtn.hidden = dead;
     const model = m ? m.name || m.id : 'Default model';
-    const modelKey = `${m?.provider || ''}:${model}`;
+    const lvl = st?.thinkingLevel || 'off';
+    const levels = thinkingLevels(m);
+    const modelKey = `${m?.provider || ''}:${model}:${(S.engine?.providers || []).length}`;
     if (this.modelKey !== modelKey) {
       this.modelKey = modelKey;
       const provider = S.engine?.providers?.find((p) => p.id === m?.provider)?.name || m?.provider;
       this.modelBtn.title = provider ? `${model} · ${provider}` : 'Choose a model';
-      this.modelBtn.replaceChildren(brandMark(m?.provider, 16, 'pv-mark'), h('span', { class: 'ell' }, model), icon('chevron-down', 12, 'cbtn-chev'));
+      this.modelBtn.replaceChildren(...modelLabel(m));
     }
+    this.effort.update(dead ? [] : levels, lvl);
     this.permBtn.update(dead);
-    const efforts = m?.thinking?.efforts || [];
-    const lvl = st?.thinkingLevel || 'off';
-    this.thinkBtn.hidden = dead || !(m?.reasoning || efforts.length);
-    if (this.thinkingLabel !== lvl) {
-      this.thinkingLabel = lvl;
-      this.thinkBtn.replaceChildren(h('span', null, lvl === 'off' ? 'Thinking off' : thinkingLabel(lvl)), icon('chevron-down', 12, 'cbtn-chev'));
-    }
-    this.thinkBtn.title = m?.thinking?.canOff === false ? 'How hard the model thinks. This model always thinks, so there is no Off.' : 'How hard the model thinks before it answers';
-    this.thinkBtn.classList.toggle('on', lvl !== 'off');
     const hasPlan = !!st && 'planMode' in st;
     this.planBtn.hidden = dead || !hasPlan;
     if (this.planOn !== !!st?.planMode) {
@@ -456,15 +454,6 @@ export class TabView {
     this.planBtn.classList.toggle('on', !!st?.planMode);
     this.planBtn.setAttribute('aria-pressed', String(!!st?.planMode));
 
-    const cu = t.stats?.contextUsage;
-    if (cu?.contextWindow && cu.tokens > 0 && !dead) {
-      const pct = Math.min(100, cu.percent ?? (cu.tokens / cu.contextWindow) * 100);
-      this.ctx.hidden = false;
-      this.ctx.className = 'ctx-meter' + (pct > 90 ? ' crit' : pct > 70 ? ' hot' : '');
-      this.ctx.style.setProperty('--p', pct.toFixed(1));
-      this.ctx.title = `Context: ${fmtTokens(cu.tokens)} of ${fmtTokens(cu.contextWindow)} tokens${cu.estimated ? ' (estimated)' : ''}${t.stats?.cost ? ` · cost ${fmtCost(t.stats.cost)}` : ''}`;
-      this.ctx.replaceChildren(h('i', { 'aria-hidden': 'true' }), pct < 0.1 ? '<0.1%' : `${pct < 10 ? pct.toFixed(1) : pct.toFixed(0)}%`);
-    } else this.ctx.hidden = true;
 
     const q = [...(t.queued?.steering || []).map((x) => ['Steer', x]), ...(t.queued?.followUp || []).map((x) => ['Next', x])];
     replace(this.queue, q.map(([k, x]) => {
@@ -538,22 +527,19 @@ export class TabView {
   pickModel() {
     const t = this.tab;
     modelPicker({
+      anchor: this.modelBtn,
       load: () => loadModels(t),
       current: t.model,
-      onPick: async (x) => {
-        await setModel(t, x);
+      thinking: true,
+      level: t.state?.thinkingLevel || 'off',
+      onPick: async (x, level) => {
+        const same = t.model && t.model.provider === x.provider && t.model.id === x.id;
+        if (!same) await setModel(t, x);
+        if (level && level !== t.state?.thinkingLevel) await setThinking(t, level);
         savePrefs({ homeModel: { provider: x.provider, id: x.id, name: x.name || x.id } });
         this.focus();
       },
     });
-  }
-
-  pickThinking(anchor) {
-    const t = this.tab;
-    const lvl = t.state?.thinkingLevel || 'off';
-    const th = t.model?.thinking;
-    const levels = [...(th?.canOff === false ? [] : ['off']), ...(th?.efforts || [])];
-    popMenu(anchor, [{ header: th?.canOff === false ? 'Thinking · this model always thinks' : 'Thinking' }, ...levels.map((l) => ({ label: thinkingLabel(l), on: l === lvl, run: () => setThinking(t, l).catch((er) => toast(er.message, 'error')) }))], { minWidth: 200 });
   }
 
   async togglePlan() {
@@ -716,7 +702,7 @@ export class TabView {
     if (this.emptyEl?.parentNode === this.tin) return;
     // Suggested first tasks for this project; the row keeps its height while the folder is read, so nothing jumps.
     const tasks = h('div', { class: 'ce-tasks-slot' });
-    this.emptyMark = asciiOrbit({ cols: 56, rows: 16 });
+    this.emptyMark = heroMark(52);
     this.emptyEl = h('div', { class: 'chat-empty' },
       this.emptyMark.el,
       h('div', { class: 'ce-name' }, baseName(t.workspace)),
@@ -969,11 +955,31 @@ export class TabView {
     const ended = m.stopReason === 'error' || m.stopReason === 'aborted';
     if (!text && !ended) return wrap;
     if (m.timestamp) acts.prepend(msgTime(m.timestamp));
-    // Which model wrote it, at the end of the row (the reply itself carries no name plate).
-    const model = typeof m.model === 'string' ? m.model : '';
-    if (model) acts.append(h('span', { class: 'msg-model', title: m.provider ? `${m.provider}/${model}` : model }, model));
+    // Which model wrote it, how long the turn took and how fast it wrote, at the end of the row.
+    const meta = this.replyMeta(m);
+    if (meta) acts.append(meta);
     wrap.append(acts);
     return wrap;
+  }
+
+  /** "Claude Opus 5.5 Medium · 5s · 103.5 tok/s": the model and its reasoning, the turn's time, the writing speed. */
+  replyMeta(m) {
+    const t = this.tab;
+    const id = typeof m.model === 'string' ? m.model : '';
+    if (!id) return null;
+    const known = (t.models || []).find((x) => x.id === id && (!m.provider || x.provider === m.provider));
+    const lvl = m.thinkingLevel && m.thinkingLevel !== 'off' ? ` ${thinkingName(m.thinkingLevel)}` : '';
+    const bits = [`${known?.name || id}${lvl}`];
+    // The turn: from your message to the end of this reply.
+    let u = t.messages.indexOf(m);
+    while (u > 0 && t.messages[u].role !== 'user') u--;
+    const start = t.messages[u]?.role === 'user' ? t.messages[u].timestamp : m.timestamp;
+    if (start && m.doneAt > start) bits.push(fmtDuration(m.doneAt - start));
+    const out = m.usage?.output || 0;
+    const writing = m.doneAt && m.firstTokenAt ? (m.doneAt - m.firstTokenAt) / 1000 : 0;
+    if (out > 0 && writing > 0.25) bits.push(`${(out / writing).toFixed(1)} tok/s`);
+    const tip = [m.provider ? `${m.provider}/${id}` : id, m.firstTokenAt && m.timestamp ? `First token after ${fmtDuration(m.firstTokenAt - m.timestamp)}` : '', out ? `${out.toLocaleString()} output tokens` : ''].filter(Boolean).join('\n');
+    return h('span', { class: 'msg-model num', title: tip }, bits.join(' · '));
   }
 
   /**
@@ -1480,6 +1486,12 @@ export class TabView {
     if (btw && !p.images?.length) {
       this.composer.reset(p.raw);
       return askSide(t, btw[1]);
+    }
+    // !command: a shell command, run in the project's Terminal (the side panel), not sent to the agent.
+    const bang = /^!\s*(\S[\s\S]*)/.exec(p.raw || '');
+    if (bang && !p.images?.length && !p.items?.length) {
+      this.composer.reset(p.raw);
+      return runInTerminal(bang[1].trim());
     }
     this.sending = true;
     this.composer.reset(p.raw);

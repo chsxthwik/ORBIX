@@ -1,4 +1,4 @@
-// Automations → Create with Prompt: "Every weekday at 9am, run the tests and tell me what fails" becomes a schedule
+// Loops → Create with Prompt: "Every weekday at 9am, run the tests and tell me what fails" becomes a schedule
 // (weekdays, 09:00) and a task ("Run the tests and tell me what fails"). Plain rules, no model: what it finds is
 // shown in the form for you to check before anything is saved.
 
@@ -30,11 +30,43 @@ function parseTime(text) {
  * The schedule and the task in one sentence. Returns { schedule, prompt, found } where `found` is false when no
  * schedule words were found (the schedule is then the default: every day at 09:00).
  */
-export function parseSchedule(input) {
+export function parseSchedule(input, now = Date.now()) {
   let text = String(input || '').trim();
   const cut = (re) => {
     if (re) text = text.replace(re, ' ');
   };
+  const tidy = (t) => {
+    let p = t.replace(/\s+/g, ' ').replace(/^[\s,.;:–—-]+|[\s,;:–—-]+$/g, '').replace(/^(please\s+)?(to|and|then)\s+/i, '').trim();
+    return p ? p[0].toUpperCase() + p.slice(1) : p;
+  };
+  // "every 15 minutes", "every 2 hours": an interval.
+  let x = /\bevery\s+(\d{1,4})\s*(minutes?|mins?|m|hours?|hrs?|h)\b/i.exec(text);
+  if (x) {
+    const n = Number(x[1]) * (/^h/i.test(x[2]) ? 60 : 1);
+    if (n >= 5 && n <= 1440 && !(n % 60 === 0 && n / 60 === 1)) {
+      cut(x[0]);
+      return { schedule: { every: 'minutes', interval: n }, prompt: tidy(text), found: true };
+    }
+  }
+  // "in 2 hours", "in 30 minutes": once, that long from now.
+  x = /\bin\s+(\d{1,4})\s*(minutes?|mins?|hours?|hrs?|days?)\b/i.exec(text);
+  if (x) {
+    const mult = /^d/i.test(x[2]) ? 1440 : /^h/i.test(x[2]) ? 60 : 1;
+    cut(x[0]);
+    return { schedule: { every: 'once', at: Math.ceil((now + Number(x[1]) * mult * 60000) / 60000) * 60000 }, prompt: tidy(text), found: true };
+  }
+  // "today at 5pm", "tomorrow at 9": once, at that time.
+  x = /\b(today|tonight|tomorrow)\b/i.exec(text);
+  if (x) {
+    const t = parseTime(input);
+    const d = new Date(now);
+    if (/tomorrow/i.test(x[1])) d.setDate(d.getDate() + 1);
+    const [hh, mm] = t ? t.hm : /tonight/i.test(x[1]) ? [21, 0] : [9, 0];
+    d.setHours(hh, mm, 0, 0);
+    cut(x[0]);
+    if (t) cut(t.re);
+    return { schedule: { every: 'once', at: d.getTime() }, prompt: tidy(text), found: true };
+  }
   let every = null;
   let day;
   let m;

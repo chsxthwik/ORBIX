@@ -285,7 +285,7 @@ export async function startDesktop(exe, data, profile) {
       }
       if (port) {
         const pages = await debugPages(port).catch(() => []);
-        const target = pages.find((p) => p.type === 'page' && p.url.startsWith('http://127.0.0.1:'));
+        const target = pages.find((p) => p.type === 'page' && (p.url.startsWith('orbix://app/') || p.url.startsWith('http://127.0.0.1:')));
         if (target) return await connectPage(exe, proc, target, undefined, profile);
       }
       await sleep(100);

@@ -72,9 +72,9 @@ export function tabAgents(el, show, m) {
     }
   };
   el.append(
-    h('p', { class: 'set-note' }, 'Run a conversation on another coding agent with the plan or key it already uses. Pick it in the model picker, as a provider named after the agent. ORBIX shows its work as steps and asks before it runs a command or changes a file, as your permission preset says; a destructive command always asks. The agent keeps its own login and history, and a saved conversation resumes the agent’s own session.'),
+    h('p', { class: 'set-note' }, 'Pick an agent in the model picker to run a conversation on it, with its own login. Your permission preset applies; destructive commands always ask.'),
     h('section', { class: 'set-group' }, h('div', { class: 'set-sub-row' }, h('h4', { class: 'set-sub' }, 'On this computer'), btn('Look again', () => refresh(true), 'sm')), list),
-    h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Your ACP agents'), h('p', { class: 'set-note' }, 'Any agent that speaks the Agent Client Protocol on stdio: Hermes, Kimi, Droid, fx, Goose, your own. Enter the command that starts it in ACP mode.'), mine));
+    h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Your ACP agents'), h('p', { class: 'set-note' }, 'Any Agent Client Protocol agent, such as Hermes, Goose or your own: the command that starts it in ACP mode.'), mine));
   draw();
   refresh(false);
 }

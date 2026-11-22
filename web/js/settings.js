@@ -1,7 +1,7 @@
-// Settings: a card over the workspace. Pages on the left (Settings, Customizations, one page per
+// Settings: the whole window under the menu row. Pages on the left (General to Machines, Agent, one page per
 // project, conversations and worktrees), Give feedback and this copy of ORBIX at the bottom. Esc or × closes it.
 // Ctrl+K finds any setting by name (settingsSearchItems) and opens its page.
-import { h, icon, iconBtn, toast, replace, clear, logo, errorState, loadingState, copyText, timeAgo, baseName, kbd, onEnter } from './dom.js';
+import { h, icon, toast, replace, clear, logoTile, errorState, loadingState, copyText, timeAgo, baseName, kbd, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
 import { colWidth, setColWidth } from './workbench.js';
@@ -9,7 +9,6 @@ import { modal, btn, confirmDialog, row, toggle, folderPicker } from './dialogs.
 import { notifyPrefs, attention, notifyPermission, askNotifyPermission, chime } from './notify.js';
 import { allRuns } from './runs.js';
 import { renderEngineSettings, openLink } from './engine.js';
-import { brandMark } from './brands.js';
 import { renderModelRoles } from './models.js';
 import { renderMcpSettings } from './mcp.js';
 import { openHelp } from './help.js';
@@ -24,36 +23,40 @@ import { modelRatings, clearRatings } from './ratings.js';
 import { tabAgents } from './agents.js';
 import { tabMachines } from './machines.js';
 
-/** The pages in the list: [key, label, one line under the title]. Headings are { h }. */
+/** The pages in the list, in groups: [key, label, one line under the title, icon]. */
 const NAV = [
-  { h: 'Settings' },
-  ['general', 'General', 'Permissions, sending messages while the agent works, and the sites the agent may read.'],
-  ['application', 'Application', 'Updates, where ORBIX keeps its data, and this copy.'],
-  ['look', 'Appearance', 'Theme, scenes, text size and layout.'],
-  ['keys', 'Shortcuts', 'Add keys to an action with +, remove them with the bin. Keys need Ctrl or Alt, or are a function key.'],
-  ['notify', 'Notifications', 'When ORBIX gets your attention, and how.'],
-  ['engine', 'Providers', 'Sign in, paste an API key or connect a local model. Keys are checked, stored encrypted for your Windows account and sent only to their provider.'],
-  ['agents', 'Agents', 'Claude Code, Codex, OpenCode and other coding agents a conversation can run on, with their own plans and logins.'],
-  ['models', 'Models', 'Which model does which job.'],
-  ['browser', 'Browser', 'Where links open, the built-in browser, its history and downloads.'],
-  ['machines', 'Machines', 'ORBIX on computers you own, such as a Linux VPS: agents that keep working while this PC sleeps.'],
-  { h: 'Agent' },
-  ['rules', 'Instructions', 'What the agent should always know about you and how you work. It follows these in every project.'],
-  ['checks', 'Checks', 'How the agent checks its own work before it replies.'],
-  ['tools', 'Tools & MCP', 'What the agent can use, and the extra tools you add.'],
-  { h: 'Projects', projects: true },
-  { h: 'History' },
-  ['conversations', 'Conversations', 'Archived conversations and the ones deleted in the last 30 days.'],
-  ['worktrees', 'Worktrees', 'Runs and conversations that work on their own branch, in their own folder, apart from your checkout.'],
+  [
+    ['general', 'Preferences', 'Permissions and how messages are sent.', 'sliders'],
+    ['look', 'Appearance', 'Theme, text and layout.', 'palette'],
+    ['notify', 'Notifications', 'When ORBIX gets your attention.', 'bell'],
+    ['keys', 'Shortcuts', 'Keys need Ctrl or Alt, or are a function key.', 'keyboard'],
+  ],
+  [
+    ['engine', 'Providers', 'Sign in, add an API key or use a local server. Keys are stored encrypted.', 'plug'],
+    ['models', 'Models', 'Which model does which job.', 'sparkle'],
+    ['agents', 'Agents', 'Claude Code, Codex, OpenCode and other agent CLIs, on their own plans.', 'cpu'],
+    ['tools', 'Tools & MCP', 'Web search, MCP servers and hooks.', 'puzzle'],
+    ['rules', 'Instructions', 'What the agent follows in every project.', 'pencil'],
+    ['checks', 'Checks', 'What the agent runs before it says it is done.', 'check'],
+  ],
+  [
+    ['projects', 'Projects', 'Every folder ORBIX knows.', 'folder'],
+    ['worktrees', 'Worktrees', 'Branches that runs and conversations use, apart from your checkout.', 'git-fork'],
+    ['conversations', 'Conversations', 'Archived, and deleted in the last 30 days.', 'archive'],
+    ['machines', 'Machines', 'Your own computers running ORBIX, so work goes on while this PC sleeps.', 'server'],
+    ['browser', 'Browser', 'Links, the built-in browser, history and downloads.', 'globe'],
+  ],
+  [
+    ['feedback', 'Help & feedback', 'Opens a GitHub issue in your browser. You check it before it is sent.', 'message'],
+    ['application', 'About', 'Updates, data folder and version.', 'info'],
+  ],
 ];
 /** Pages reached from another page, with the page they belong to. */
 const SUB = [
-  ['behavior', 'Tool permissions', 'What the agent may do without asking, the commands you trust, and where it runs commands.', 'general'],
-  ['network', 'Network access rules', 'Which sites the agent may read with web_fetch.', 'general'],
-  ['projects', 'All projects', 'Every folder ORBIX knows, with its conversations.', null],
-  ['feedback', 'Give feedback', 'Report a problem or ask for a feature. It opens as a GitHub issue that you check before you send it.', null],
+  ['behavior', 'Tool permissions', 'What runs without asking, and where commands run.', null, 'general'],
+  ['network', 'Network access rules', 'Which sites the agent may read with web_fetch.', null, 'general'],
 ];
-const PAGES = [...NAV.filter((t) => Array.isArray(t)), ...SUB];
+const PAGES = [...NAV.flat(), ...SUB];
 const OLD = { start: 'general', prefs: 'general', about: 'application' }; // page names from before 3.7
 
 /** What Ctrl+K finds: [setting, page, extra words]. */
@@ -62,6 +65,7 @@ const FIND = [
   ['Local models', 'engine', 'ollama lm studio offline server custom'],
   ['Machines', 'machines', 'cloud vps server remote teleport move self-host linux tailscale'],
   ['Agents', 'agents', 'claude code codex opencode gemini acp harness cli agent subscription plan'],
+  ['Your name', 'general', 'name greeting home display'],
   ['Fast model', 'models', 'titles summaries helper agents cheap'],
   ['Plan model', 'models', 'plan mode'],
   ['Permission preset', 'general', 'approval ask allow permission auto edits turbo'],
@@ -73,8 +77,7 @@ const FIND = [
   ['Run the project’s check', 'checks', 'verify test tests lint build typecheck after edits'],
   ['Review the changes', 'checks', 'review diff self-review defects bugs'],
   ['Instructions for every project', 'rules', 'agents.md rules memory preferences custom prompt'],
-  ['Run commands in', 'behavior', 'shell wsl windows powershell kali'],
-  ['Overview card', 'look', 'card overview panel'],
+  ['Run commands in', 'behavior', 'shell wsl windows powershell kali windows subsystem for linux distribution distro'],
   ['Sort projects', 'look', 'sidebar order name recent'],
   ['Show archived conversations', 'look', 'archive hide sidebar'],
   ['Archived', 'conversations', 'archive unarchive'],
@@ -94,7 +97,7 @@ const FIND = [
   ['Font size', 'look', 'text size zoom bigger smaller'],
   ['Font', 'look', 'typeface google sans segoe system'],
   ['Contrast', 'look', 'strong high contrast'],
-  ['Theme colours', 'look', 'background foreground accent colour color custom'],
+  ['Theme colors', 'look','background foreground accent colour color custom'],
   ['Animate scenes', 'look', 'animation motion backdrop'],
   ['Conversation steps', 'look', 'verbose fold steps worked for'],
   ['Screen reader mode', 'look', 'accessibility a11y motion narrator'],
@@ -108,8 +111,8 @@ const FIND = [
   ['Data folder', 'application', 'logs folder settings location'],
   ['Prevent sleep', 'application', 'awake sleep power'],
   ['Keep running in the tray', 'application', 'tray background close minimize'],
-  ['Windows Subsystem for Linux', 'application', 'wsl distribution distro linux'],
-  ['Give feedback', 'feedback', 'bug report feature request issue problem'],
+  ['Notification settings', 'notify', 'windows do not disturb banners focus'],
+  ['Help & feedback', 'feedback', 'give feedback bug report feature request issue problem'],
 ];
 
 /** Ctrl+K: every setting, as search items that open its page. */
@@ -120,87 +123,113 @@ export function settingsSearchItems() {
 /** Rows that belong together, in one framed list. */
 const group = (title, note, ...rows) => h('section', { class: 'set-group' }, title ? h('h4', { class: 'set-sub' }, title) : null, note ? h('p', { class: 'set-note' }, note) : null, h('div', { class: 'set-card' }, ...rows));
 
-/** The projects in the list: most recent first. */
+/** A row that opens another page or view: the whole row is the button, with a chevron. */
+const go = (label, hint, onclick) => h('button', { class: 'set-row set-go', type: 'button', onclick },
+  h('div', { class: 'set-k' }, h('div', { class: 'set-l' }, label), hint ? h('div', { class: 'set-hint' }, hint) : null),
+  icon('chevron-right', 14));
+
+/** "3 trusted commands" / "No trusted commands". */
+const trustedLine = (n) => `${n || 'No'} trusted command${n === 1 ? '' : 's'}`;
+
+/** The projects, most recent first. */
 const projectList = () => groupSessions().filter((g) => g.path).sort((a, b) => (b.latest || 0) - (a.latest || 0));
-const MAX_PROJECTS = 8;
 
 let current = null; // the open settings card, so a second open only changes its page
 
 /** Open Settings on a page (general, look, keys, engine, …, or proj:<path>). `focus` points at one setting on it. */
+// A menu-row action taken while Settings fills the window closes it first, so what it does is not hidden behind it.
+on('settings:close', () => current?.close());
+
 export function openSettings(initial = 'general', focus = '') {
   initial = OLD[initial] || initial;
   if (current?.isOpen()) return current.show(initial, focus);
   const valid = (k) => PAGES.some(([p]) => p === k) || k.startsWith('proj:');
   let cur = valid(initial) ? initial : 'general';
   const list = h('div', { class: 'set-pages', role: 'tablist', 'aria-orientation': 'vertical', 'aria-label': 'Settings pages' });
-  const foot = h('div', { class: 'set-foot' });
-  const nav = h('nav', { class: 'set-nav', 'aria-label': 'Settings' }, list, foot);
+  const back = h('button', { class: 'set-back', type: 'button', title: 'Back to the app (Esc)', onclick: () => m.close() }, icon('arrow-left', 14), 'Back to app');
+  const search = h('input', { type: 'search', class: 'set-search-in', placeholder: 'Search', 'aria-label': 'Search settings', spellcheck: 'false', autocomplete: 'off' });
+  const nav = h('nav', { class: 'set-nav', 'aria-label': 'Settings' }, back, h('label', { class: 'set-search' }, icon('search', 14), search), list);
   const content = h('div', { class: 'set-content', role: 'tabpanel', tabindex: '-1' });
+  const wrap = h('div', { class: 'set-wrap' }, nav, h('div', { class: 'set-main' }, content));
   let disposePage;
   let offSessions;
-  const closeBtn = iconBtn('x', 'Close (Esc)', () => m.close(), 'set-close');
-  const m = modal({ title: 'Settings', cls: 'settings settings-card', body: h('div', { class: 'set-wrap' }, nav, h('div', { class: 'set-main' }, closeBtn, content)), onClose: () => {
+  const m = modal({ title: 'Settings', cls: 'settings settings-card', body: wrap, onClose: () => {
     disposePage?.();
     offSessions?.();
     current = null;
   } });
 
-  const tab = (key, label, extra = null) => h('button', { type: 'button', role: 'tab', id: `set-${key.replace(/[^\w-]/g, '_')}`, 'aria-selected': String(key === cur), tabindex: key === cur ? '0' : '-1', class: 'set-tab' + (key === cur ? ' cur' : ''), title: label, onclick: () => show(key) }, h('span', { class: 'ell grow' }, label), extra);
-  const badge = (k) => {
-    if (k !== 'engine') return null;
-    return (S.engine?.providers || []).some((p) => p.configured) ? null : h('span', { class: 'dot warn', title: 'No model connected' });
+  // A project's own page belongs to Projects; a sub-page to its parent.
+  const navKey = (k) => (k.startsWith('proj:') ? 'projects' : PAGES.find(([p]) => p === k)?.[4] || k);
+  const tab = ([key, label, , ic]) => {
+    const on = navKey(cur) === key && !search.value.trim();
+    return h('button', { type: 'button', role: 'tab', id: `set-${key}`, 'aria-selected': String(on), tabindex: on ? '0' : '-1', class: 'set-tab' + (on ? ' cur' : ''), onclick: () => show(key) },
+      icon(ic, 15), h('span', { class: 'ell grow' }, label),
+      key === 'engine' && !(S.engine?.providers || []).some((p) => p.configured) ? h('span', { class: 'dot warn', title: 'No model connected' }) : null);
   };
-  const drawNav = () => {
-    const out = [];
-    for (const t of NAV) {
-      if (Array.isArray(t)) out.push(tab(t[0], t[1], badge(t[0])));
-      else if (t.projects) {
-        const ps = projectList();
-        if (!ps.length) continue;
-        out.push(h('div', { class: 'set-nav-h' }, t.h));
-        for (const g of ps.slice(0, MAX_PROJECTS)) out.push(tab(`proj:${g.path}`, g.name));
-        if (ps.length > MAX_PROJECTS) out.push(tab('projects', `All projects (${ps.length})`));
-      } else out.push(h('div', { class: 'set-nav-h' }, t.h));
-    }
-    replace(list, out);
-    const eng = S.engine || {};
-    const conn = (eng.providers || []).filter((p) => p.configured);
-    replace(foot,
-      tab('feedback', 'Give feedback'),
-      h('button', { class: 'set-me', type: 'button', title: 'About this copy of ORBIX', onclick: () => show('application') },
-        conn[0] ? h('span', { class: 'set-me-ic' }, brandMark(conn[0].id, 18)) : h('span', { class: 'set-me-ic' }, logo(18)),
-        h('span', { class: 'set-me-t' }, h('b', null, `ORBIX ${S.env.app.version}`), h('small', { class: 'ell' }, conn.length ? `${conn.map((p) => p.name).join(', ')} connected` : 'No model connected'))));
-  };
+  const drawNav = () => replace(list, NAV.map((g) => h('div', { class: 'set-nav-g' }, g.map(tab))));
+
+  const head = (title, lead, crumb) => h('header', { class: 'set-head' },
+    crumb ? h('button', { class: 'set-crumb', type: 'button', onclick: () => show(crumb[0]) }, icon('arrow-left', 13), crumb[1]) : null,
+    h('div', { class: 'set-head-row' }, h('h3', { class: 'set-title' }, title)),
+    lead ? h('p', { class: 'set-lead' }, lead) : null);
 
   const show = (name, focusLabel = '', focusNav = false) => {
     name = OLD[name] || name;
     if (!valid(name)) name = 'general';
     cur = name;
+    if (search.value) search.value = '';
     drawNav();
     nav.querySelector('.set-tab.cur')?.scrollIntoView({ block: 'nearest' });
-    content.setAttribute('aria-labelledby', `set-${name.replace(/[^\w-]/g, '_')}`);
+    content.setAttribute('aria-labelledby', `set-${navKey(name)}`);
     disposePage?.();
     disposePage = null;
     clear(content);
-    content.scrollTop = 0;
+    wrap.scrollTop = 0;
     const body = h('div', { class: 'set-body' });
     if (name.startsWith('proj:')) {
       const p = name.slice(5);
       const g = projectList().find((x) => x.path === p);
-      content.append(h('header', { class: 'set-head' }, h('h3', { class: 'set-title' }, g?.name || baseName(p)), h('p', { class: 'set-lead' }, h('bdi', null, p))), body);
+      content.append(head(g?.name || baseName(p), h('bdi', null, p), ['projects', 'Projects']), body);
       tabProject(body, show, m, p);
     } else {
       const page = PAGES.find(([k]) => k === name);
-      const parent = page[3] && PAGES.find(([k]) => k === page[3]);
-      content.append(h('header', { class: 'set-head' },
-        parent ? h('button', { class: 'set-crumb', type: 'button', onclick: () => show(parent[0]) }, icon('arrow-left', 13), parent[1]) : null,
-        h('h3', { class: 'set-title' }, page[1]), h('p', { class: 'set-lead' }, page[2])), body);
+      const parent = page[4] && PAGES.find(([k]) => k === page[4]);
+      content.append(head(page[1], page[2], parent), body);
       const cleanup = ({ general: tabGeneral, application: tabApplication, look: tabLook, keys: tabKeys, notify: tabNotify, engine: renderEngineSettings, agents: tabAgents, machines: tabMachines, models: tabModels, browser: tabBrowser, rules: tabRules, checks: tabChecks, tools: renderMcpSettings, conversations: tabConversations, worktrees: tabWorktrees, behavior: tabBehavior, network: tabNetwork, projects: tabProjects, feedback: tabFeedback })[name](body, show, m);
       if (typeof cleanup === 'function') disposePage = cleanup;
     }
     if (focusLabel) pointAt(content, focusLabel);
     if (focusNav) nav.querySelector('.set-tab.cur')?.focus();
   };
+
+  // Search: every setting by name and by the words around it; a result opens its page at that setting.
+  const results = () => {
+    const q = search.value.trim().toLowerCase();
+    if (!q) return show(cur);
+    drawNav();
+    disposePage?.();
+    disposePage = null;
+    clear(content);
+    wrap.scrollTop = 0;
+    const words = q.split(/\s+/);
+    const hits = FIND.filter(([label, page, extra]) => {
+      const text = `${label} ${PAGES.find(([k]) => k === page)?.[1] || ''} ${extra}`.toLowerCase();
+      return words.every((w) => text.includes(w));
+    });
+    const pageHits = PAGES.filter(([k, label]) => label.toLowerCase().includes(q) && !hits.some(([, p]) => p === k));
+    const item = (label, page, focus) => h('button', { class: 'set-row set-hit', type: 'button', onclick: () => show(page, focus) },
+      h('div', { class: 'set-k' }, h('div', { class: 'set-l' }, label), h('div', { class: 'set-hint' }, PAGES.find(([k]) => k === page)?.[1])), icon('chevron-right', 14));
+    content.append(head('Search', null),
+      hits.length || pageHits.length
+        ? h('div', { class: 'set-card' }, ...pageHits.map(([k, label]) => item(label, k, '')), ...hits.map(([label, page]) => item(label, page, label)))
+        : h('p', { class: 'set-none' }, `No setting matches “${search.value.trim()}”.`));
+  };
+  search.addEventListener('input', results);
+  search.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && search.value) (e.preventDefault(), e.stopPropagation(), (search.value = ''), show(cur));
+    if (e.key === 'Enter') content.querySelector('.set-hit')?.click();
+  });
 
   // ↑ / ↓ move through the pages, Home / End to the first and last.
   nav.addEventListener('keydown', (e) => {
@@ -212,10 +241,10 @@ export function openSettings(initial = 'general', focus = '') {
     next.click();
     nav.querySelector('.set-tab.cur')?.focus();
   });
-  offSessions = on('sessions', drawNav);
+  offSessions = on('sessions', () => !search.value.trim() && drawNav());
   show(cur, focus);
   setTimeout(() => nav.querySelector('.set-tab.cur')?.focus({ preventScroll: true }), 0);
-  current = { isOpen: () => content.isConnected, show: (k, f) => show(OLD[k] || k, f) };
+  current = { isOpen: () => content.isConnected, show: (k, f) => show(OLD[k] || k, f), close: () => m.close() };
   return m;
 }
 
@@ -246,11 +275,11 @@ const ago = (ts) => {
   return t === 'now' ? 'just now' : /^\d+[mhd]$/.test(t) ? `${t} ago` : `on ${t}`;
 };
 
-const saveEngine = async (body, quiet = false) => {
+// Settings save as you change them; the control itself shows the new value, so only a failure says anything.
+const saveEngine = async (body) => {
   try {
     await api.post('/api/engine/settings', body);
     await loadEngine();
-    if (!quiet) toast('Saved', 'ok', 1200);
     return true;
   } catch (e) {
     toast(e.message, 'error');
@@ -260,14 +289,16 @@ const saveEngine = async (body, quiet = false) => {
 
 // ================= general =================
 
+/** Permission presets: [value, name, what it does, icon]. One list for Preferences and Tool permissions. */
 const MODES = [
-  ['ask', 'Ask first', 'Each file edit and command waits for your OK.'],
-  ['edits', 'Auto edits', 'File edits run without asking, and each one can be undone. Commands still wait for your OK.'],
-  ['auto', 'Turbo', 'File edits and commands run without asking, also outside the project folder. Edits can be undone; commands cannot. Destructive commands still ask.'],
+  ['ask', 'Supervised', 'Every file edit and command waits for your OK.', 'lock'],
+  ['edits', 'Auto edits', 'Edits run without asking and can be undone. Commands wait for your OK.', 'pencil'],
+  ['safe', 'Guarded', 'Edits and read-only commands (ls, cat, grep, git status, diff, log) run without asking. Other commands wait.', 'shield-check'],
+  ['auto', 'Full access', 'Edits and commands run without asking, also outside the project. Commands cannot be undone; destructive ones still ask.', 'shield-off'],
 ];
 
-/** Ask before Turbo; returns whether to go on. */
-const confirmTurbo = () => confirmDialog('Turn on Turbo', 'The agent will edit files and run commands without asking, also outside the project folder. Every file edit can still be undone, but commands cannot. Destructive commands (deleting folders, pushing, publishing) still ask.', { ok: 'Turn on Turbo', danger: true });
+/** Ask before Full access; returns whether to go on. */
+const confirmFull = () => confirmDialog('Give full access', 'The agent will edit files and run commands without asking, also outside the project folder. Every file edit can still be undone, but commands cannot. Destructive commands (deleting folders, pushing, publishing) still ask.', { ok: 'Give full access', danger: true });
 
 function tabGeneral(el, show) {
   const u = S.ui;
@@ -275,24 +306,33 @@ function tabGeneral(el, show) {
   const mode = eng.approvals || 'ask';
   const modeHint = h('span', null, MODES.find(([k]) => k === mode)?.[2]);
   const preset = pick('Permission preset', MODES.map(([k, l]) => [k, l]), mode, async (v, sel) => {
-    if (v === 'auto' && !(await confirmTurbo())) return (sel.value = S.engine?.approvals || 'ask');
+    if (v === 'auto' && !(await confirmFull())) return (sel.value = S.engine?.approvals || 'ask');
     if (await saveEngine({ approvals: v })) modeHint.textContent = MODES.find(([k]) => k === v)?.[2];
     else sel.value = S.engine?.approvals || 'ask';
   });
   const net = eng.network || { allow: [], deny: [] };
-  const netLine = net.allow.length ? `${net.allow.length} allowed site${net.allow.length === 1 ? '' : 's'} read without asking; others ask${net.deny.length ? `. ${net.deny.length} denied` : ''}.` : net.deny.length ? `Any site except ${net.deny.length} denied.` : 'Any site. Local and private addresses ask first.';
+  const netLine = net.allow.length ? `${net.allow.length} allowed site${net.allow.length === 1 ? '' : 's'}, every other site asks${net.deny.length ? `, ${net.deny.length} denied` : ''}` : net.deny.length ? `Any site except ${net.deny.length} denied` : 'Any site. Local addresses ask first';
+  const where = S.env.backend.kind === 'wsl' ? `WSL${S.env.backend.distro ? ` (${S.env.backend.distro})` : ''}` : 'Windows';
   el.append(
-    engineReady() ? '' : h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'Connect a model to start'), h('p', null, 'Use an API key, a sign-in or a model on this PC. Nothing else needs to be installed.')), btn('Connect a model', () => show('engine'), 'primary')),
+    engineReady() ? '' : h('div', { class: 'ov-cta' }, h('div', null, h('strong', null, 'Connect a model to start'), h('p', null, 'A sign-in, an API key or a model on this PC.')), btn('Connect a model', () => show('engine'), 'primary')),
     group('Permissions', null,
       row('Permission preset', preset, modeHint),
-      row('Tool permissions', btn('Open', () => show('behavior'), 'sm'), `${(eng.trusted || []).length || 'No'} trusted command${(eng.trusted || []).length === 1 ? '' : 's'}. Commands run in ${S.env.backend.kind === 'wsl' ? 'WSL' : 'Windows'}.`),
-      row('Network access rules', btn('Open', () => show('network'), 'sm'), netLine)),
+      go('Tool permissions', `${trustedLine((eng.trusted || []).length)} · Commands run in ${where}`, () => show('behavior')),
+      go('Network access rules', netLine, () => show('network'))),
     group('Messages', null,
-      row('While the agent works', seg('While the agent works', [['steer', 'Steer'], ['queue', 'Queue']], u.whileBusy === 'queue' ? 'queue' : 'steer', (v) => savePrefs({ whileBusy: v })), 'What Enter does while the agent works. Steer: it reads your message at its next step. Queue: your message waits until it finishes. Alt+Enter does the other.'),
-      row('Send messages with', seg('Send messages with', [['enter', 'Enter'], ['ctrl', 'Ctrl+Enter']], u.sendKey === 'ctrl' ? 'ctrl' : 'enter', (v) => savePrefs({ sendKey: v })), 'With Enter, Shift+Enter starts a new line. With Ctrl+Enter, Enter starts a new line.'),
-      row('Follow new output', toggle(u.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Scrolls to the newest text while a reply streams in, unless you have scrolled up.')),
-    group('Checks', null,
-      row('After the agent changes files', btn('Open', () => show('checks'), 'sm'), [{ off: 'The project’s check does not run', ask: 'Asks before running the project’s check', always: 'Runs the project’s check' }[eng.verify || 'ask'], eng.review === false ? '' : ', then reviews its changes once'].join('') + '.')));
+      row('While the agent works', seg('While the agent works', [['steer', 'Steer'], ['queue', 'Queue']], u.whileBusy === 'queue' ? 'queue' : 'steer', (v) => savePrefs({ whileBusy: v })), 'Steer: read at the agent’s next step. Queue: sent when the turn ends. Alt+Enter does the other.'),
+      row('Send messages with', seg('Send messages with', [['enter', 'Enter'], ['ctrl', 'Ctrl+Enter']], u.sendKey === 'ctrl' ? 'ctrl' : 'enter', (v) => savePrefs({ sendKey: v })), 'The other key adds a new line.'),
+      row('Follow new output', toggle(u.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Keep a streaming reply in view, unless you scroll up.')),
+    group('You', null,
+      row('Your name', (() => {
+        const input = h('input', { type: 'text', class: 'set-name', value: u.displayName || '', placeholder: 'Not set', maxlength: 40, spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Your name' });
+        let t = null;
+        input.addEventListener('input', () => {
+          clearTimeout(t);
+          t = setTimeout(() => savePrefs({ displayName: input.value.trim() }), 400);
+        });
+        return input;
+      })(), 'Shown in the greeting on Home.')));
 }
 
 // ================= network rules =================
@@ -303,7 +343,7 @@ function tabNetwork(el) {
     const input = h('input', { type: 'text', class: 'trust-in', placeholder, spellcheck: 'false', autocomplete: 'off', 'aria-label': `Add to ${title.toLowerCase()}` });
     const items = () => (S.engine?.network || { allow: [], deny: [] })[key] || [];
     const save = async (next) => {
-      if (await saveEngine({ network: { [key]: next } }, true)) draw();
+      if (await saveEngine({ network: { [key]: next } })) draw();
     };
     const add = async () => {
       const v = input.value.trim();
@@ -322,9 +362,9 @@ function tabNetwork(el) {
     return h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, title), h('p', { class: 'set-note' }, note), h('div', { class: 'set-card trust-card' }, listEl, h('div', { class: 'trust-add' }, input, btn('Add', add, 'sm'))));
   };
   el.append(
-    editor('allow', 'Allowed sites', 'Read without asking. When this list has sites, every other site asks first, in every permission preset. A site covers its subdomains; *.example.com covers only the subdomains; example.com/docs covers that path.', 'example.com, *.example.com or example.com/docs'),
-    editor('deny', 'Denied sites', 'Never read, also when a page redirects there. A denied site wins over an allowed one. * denies every site.', 'example.com'),
-    h('p', { class: 'set-note set-after-note' }, 'Local and private addresses (localhost, 192.168.x.x) still ask first unless you named them in your message. Web search results are not affected.'));
+    editor('allow', 'Allowed sites', 'Read without asking. Once this list has a site, every other site asks first. example.com covers its subdomains, *.example.com only the subdomains, example.com/docs only that path.', 'example.com, *.example.com or example.com/docs'),
+    editor('deny', 'Denied sites', 'Never read, even through a redirect. Denied wins over allowed. * denies every site.', 'example.com'),
+    h('p', { class: 'set-note set-after-note' }, 'Local and private addresses (localhost, 192.168.x.x) ask first unless your message names them. Web search is not affected.'));
 }
 
 // ================= projects =================
@@ -381,7 +421,7 @@ function tabProjects(el, show) {
     const ps = projectList();
     el.append(h('div', { class: 'set-actions set-actions-top' }, add));
     if (!ps.length) return el.append(h('p', { class: 'set-note' }, 'No projects yet. Open a folder to start.'));
-    el.append(h('div', { class: 'set-card' }, ps.map((g) => row(h('span', { class: 'proj-l' }, icon('folder', 14), g.name), btn('Open', () => show(`proj:${g.path}`), 'sm'), h('span', null, h('code', { class: 'about-path', title: g.path }, g.path), h('br'), `${g.sessions.length} conversation${g.sessions.length === 1 ? '' : 's'}${g.latest ? ` · last active ${ago(g.latest)}` : ''}`)))));
+    el.append(h('div', { class: 'set-card' }, ps.map((g) => go(h('span', { class: 'proj-l' }, icon('folder', 14), g.name), h('span', null, h('code', { class: 'about-path', title: g.path }, g.path), h('br'), `${g.sessions.length} conversation${g.sessions.length === 1 ? '' : 's'}${g.latest ? ` · last active ${ago(g.latest)}` : ''}`), () => show(`proj:${g.path}`)))));
   };
   draw();
 }
@@ -528,13 +568,14 @@ function tabNotify(el) {
     group('Tell me', null,
       row('When the agent finishes', toggle(p.done, set('done'), 'When the agent finishes'), 'A reply or a task has ended.'),
       row('When the agent needs you', toggle(p.input, set('input'), 'When the agent needs you'), 'An approval or a question is waiting for you.'),
-      row('Only while ORBIX is in the background', toggle(p.onlyAway, set('onlyAway'), 'Only while ORBIX is in the background'), 'Turn this off to be told even while you are looking at ORBIX.')),
+      row('Only while ORBIX is in the background', toggle(p.onlyAway, set('onlyAway'), 'Only while ORBIX is in the background'), 'Off: also while ORBIX is in front.')),
     group('Windows', null,
-      row('Windows notifications', allow, perm === 'denied' ? 'Allow them in Windows Settings → System → Notifications.' : 'The message in the corner of the screen.'),
-      window.orbixDesktop ? row('Flash the taskbar', toggle(p.flash, set('flash'), 'Flash the taskbar'), 'The ORBIX button on the taskbar flashes until you open the window.') : null),
+      row('Windows notifications', allow, perm === 'denied' ? 'Allow them in Windows Settings → System → Notifications.' : 'The banner in the corner of the screen.'),
+      window.orbixDesktop ? row('Flash the taskbar', toggle(p.flash, set('flash'), 'Flash the taskbar'), 'Until you open the window.') : null,
+      window.orbixDesktop?.system ? row('Notification settings', btn('Open in Windows', () => window.orbixDesktop.system.openNotifications(), 'sm'), 'Banners, sound and Do not disturb for ORBIX.') : null),
     group('Sound', null,
-      row('Play a sound', sound, 'A short, soft chime when the agent finishes or needs you.'),
-      row('Volume', h('div', { class: 'row range-row' }, volume, volVal), 'How loud the chime is. Moving the slider plays it.')),
+      row('Play a sound', sound, 'A soft chime when the agent finishes or needs you.'),
+      row('Volume', h('div', { class: 'row range-row' }, volume, volVal), 'Moving the slider plays the chime.')),
     group(null, null, row('Try it', btn('Send a test', () => attention('ORBIX', 'This is how ORBIX gets your attention.', { force: true }), 'sm'), 'Uses the choices above, even while ORBIX is in front.')));
 }
 
@@ -571,7 +612,7 @@ function tabBrowser(el, show) {
         toast('Site data cleared', 'ok', 1400);
       }, 'sm'), 'Sign-ins, cookies and cached pages of the built-in browser. Your own browser is not touched.') : null),
     group('Agent', null,
-      row('Sites the agent may read', btn('Open', () => show('network'), 'sm'), 'Network access rules for web_fetch: allowed and denied sites.')));
+      go('Network access rules', 'Which sites the agent may read with web_fetch.', () => show('network'))));
 }
 
 // ================= feedback =================
@@ -745,35 +786,34 @@ function tabLook(el) {
   reset.disabled = !Object.keys(colors).length;
   el.append(
     group('Chat', null,
-      row('Conversation steps', seg('Conversation steps', [['default', 'Default'], ['verbose', 'Verbose']], u.steps === 'verbose' ? 'verbose' : 'default', (v) => savePrefs({ steps: v })), 'Default folds each turn’s steps into “Worked for…” above the answer. Verbose keeps them open.'),
-      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'The model’s reasoning above its reply, folded until you open it.')),
+      row('Conversation steps', seg('Conversation steps', [['default', 'Default'], ['verbose', 'Verbose']], u.steps === 'verbose' ? 'verbose' : 'default', (v) => savePrefs({ steps: v })), 'Default folds each turn’s steps into “Worked for…”. Verbose keeps them open.'),
+      row('Show model thinking', toggle(u.showThinking !== false, (v) => savePrefs({ showThinking: v }), 'Show model thinking'), 'Folded above the reply until you open it.')),
     group('Theme and text', null,
       row('Theme', modeSeg),
       row('Contrast', seg('Contrast', [['default', 'Default'], ['strong', 'Strong']], u.contrast === 'strong' ? 'strong' : 'default', (v) => savePrefs({ contrast: v }))),
       row('Font', font),
-      row('Font size', fontSize, 'The size of the conversation’s text. Ctrl+= and Ctrl+- change it too.')),
+      row('Font size', fontSize, 'Conversation text. Ctrl+= and Ctrl+- change it too.')),
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Presets'), themes),
-    group('Colors', 'Your own background, text and accent for the theme in use. Hover colours, borders and muted text follow from them.',
+    group('Colors', 'Background, text and accent for the theme in use. Borders and muted text follow from them.',
       colorRow('bg', 'Background', '--bg'),
       colorRow('fg', 'Foreground', '--fg'),
       colorRow('accent', 'Accent', '--accent'),
-      row('Theme colours', reset, 'Back to the theme’s own colours.')),
+      row('Theme colors', reset, 'Back to the theme’s own colors.')),
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Scenes'),
-      h('p', { class: 'set-note' }, 'Themes with a moving picture behind the conversation. Text stays in a plain column in the middle, the scene speeds up while the agent works, and fireworks go up when a task finishes.'),
+      h('p', { class: 'set-note' }, 'A moving picture behind the conversation. It speeds up while the agent works; fireworks go off when a task finishes.'),
       scenes,
       h('div', { class: 'set-card scene-opts' },
-        row('Animate scenes', toggle(u.sceneMotion !== false, (v) => savePrefs({ sceneMotion: v }), 'Animate scenes'), 'Turn this off to keep the picture still. Scenes also stay still when Windows is set to reduce motion.'),
-        row('Preview the finish', btn('Fireworks', () => previewCelebration()), 'Shows what happens in a scene theme when the agent finishes a task.'))),
+        row('Animate scenes', toggle(u.sceneMotion !== false, (v) => savePrefs({ sceneMotion: v }), 'Animate scenes'), 'Off keeps the picture still. Windows’ reduce-motion setting does the same.'),
+        row('Preview the finish', btn('Fireworks', () => previewCelebration()), 'What a scene does when a task finishes.'))),
     group('Chat layout', null,
-      row('Conversation width', seg('Conversation width', [['narrow', 'Narrow'], ['default', 'Default'], ['wide', 'Wide'], ['fill', 'Fill']], colWidth(), (v) => setColWidth(v)), 'The widest the conversation and the message box get.'),
-      window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales everything in the window. Auto picks a size for your screen and goes larger on wide, high-resolution screens.') : null,
-      row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows in the sidebar and more steps on the screen.'),
-      row('Overview card', toggle(u.overview !== false, (v) => savePrefs({ overview: v }), 'Overview card'), 'The card beside the conversation with Changes, Files, Terminal and Tasks.')),
+      row('Conversation width', seg('Conversation width', [['narrow', 'Narrow'], ['default', 'Default'], ['wide', 'Wide'], ['fill', 'Fill']], colWidth(), (v) => setColWidth(v)), 'Widest the conversation and message box get.'),
+      window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales the whole window. Auto goes larger on wide, high-resolution screens.') : null,
+      row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows and steps on screen.')),
     group('Sidebar', null,
       row('Sort projects', seg('Sort projects', [['recent', 'Recent activity'], ['name', 'Name']], u.sortProjects === 'name' ? 'name' : 'recent', (v) => savePrefs({ sortProjects: v }))),
-      row('Show archived conversations', toggle(u.showArchived === true, (v) => savePrefs({ showArchived: v }), 'Show archived conversations'), 'Archived conversations stay on disk; Settings → Conversations lists them.')),
+      row('Show archived conversations', toggle(u.showArchived === true, (v) => savePrefs({ showArchived: v }), 'Show archived conversations'))),
     group('Accessibility', null,
-      row('Screen reader mode', toggle(u.screenReader === true, (v) => savePrefs({ screenReader: v }), 'Screen reader mode'), 'No animation or moving pictures, and each turn’s steps stay open so they are read in order.')));
+      row('Screen reader mode', toggle(u.screenReader === true, (v) => savePrefs({ screenReader: v }), 'Screen reader mode'), 'No animation, and every turn’s steps stay open so they are read in order.')));
 }
 
 /** Interface size in the Windows app: Auto, or a fixed scale. */
@@ -811,15 +851,8 @@ function seg(label, options, value, onPick) {
 function tabBehavior(el) {
   const mode = S.engine?.approvals || 'ask';
   const set = async (value, card) => {
-    if (value === 'auto' && !(await confirmTurbo())) return;
-    try {
-      await api.post('/api/engine/settings', { approvals: value });
-      await loadEngine();
-      for (const b of card.parentElement.children) b.setAttribute('aria-checked', String(b === card));
-      toast('Saved', 'ok', 1200);
-    } catch (e) {
-      toast(e.message, 'error');
-    }
+    if (value === 'auto' && !(await confirmFull())) return;
+    if (await saveEngine({ approvals: value })) for (const b of card.parentElement.children) b.setAttribute('aria-checked', String(b === card));
   };
   const choice = (value, ic, title, text, tag) => h('button', { class: `perm is-${value}`, type: 'button', role: 'radio', 'aria-checked': String(mode === value), onclick: (e) => e.currentTarget.getAttribute('aria-checked') !== 'true' && set(value, e.currentTarget) },
     h('span', { class: 'perm-ic' }, icon(ic, 16)),
@@ -828,11 +861,9 @@ function tabBehavior(el) {
   el.append(
     h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'File edits and commands'), h('p', { class: 'set-note' }, 'Reading and searching never ask.'),
       h('div', { class: 'perms', role: 'radiogroup', 'aria-label': 'File edits and commands' },
-        choice('ask', 'shield', 'Ask first', 'Each file edit and command waits for your OK.', 'Recommended'),
-        choice('edits', 'pencil', 'Auto edits', 'File edits run without asking, and each one can be undone. Commands still wait for your OK.'),
-        choice('auto', 'bolt', 'Turbo', 'File edits and commands run without asking. Edits can be undone; commands cannot. Destructive commands still ask.'))),
+        MODES.map(([value, title, text, ic]) => choice(value, ic, title, text, value === 'ask' ? 'Recommended' : '')))),
     trustedGroup(),
-    group('Running', null, whereRow()));
+    group('Where commands run', null, whereRow()));
 }
 
 /**
@@ -875,19 +906,10 @@ function trustedGroup() {
 
 function tabChecks(el) {
   const eng = S.engine || {};
-  const save = async (body) => {
-    try {
-      await api.post('/api/engine/settings', body);
-      await loadEngine();
-      toast('Saved', 'ok', 1200);
-    } catch (e) {
-      toast(e.message, 'error');
-    }
-  };
   el.append(
-    group('After the agent changes files', 'The check runs when the agent says it is done. If the check fails, the agent gets its output and fixes the cause before it replies.',
-      row('Run the project’s check', seg('Run the project’s check', [['off', 'Off'], ['ask', 'Ask'], ['always', 'Always']], eng.verify || 'ask', (v) => save({ verify: v })), 'Off never runs it. Ask lets you choose each time. Always runs it like any other command, so it still waits for your OK unless the command is trusted.'),
-      row('Review the changes', toggle(eng.review !== false, (v) => save({ review: v }), 'Review the changes'), 'Before the reply, the fast model (or the conversation’s model) reads the changes once and reports real defects for the agent to fix. It is skipped when fewer than 5 lines changed.')),
+    group('After the agent changes files', 'When the agent says it is done. A failing check goes back to the agent to fix before it replies.',
+      row('Run the project’s check', seg('Run the project’s check', [['off', 'Off'], ['ask', 'Ask'], ['always', 'Always']], eng.verify || 'ask', (v) => saveEngine({ verify: v })), 'Always still waits for your OK unless the command is trusted or the preset allows it.'),
+      row('Review the changes', toggle(eng.review !== false, (v) => saveEngine({ review: v }), 'Review the changes'), 'The fast model reads the diff once and reports defects for the agent to fix. Skipped under 5 changed lines.')),
     checkCommandGroup(activeTab()?.workspace || homeProject()));
 }
 
@@ -906,7 +928,6 @@ function checkCommandGroup(ws) {
   const save = async (command) => {
     try {
       show(await api.post('/api/engine/check', { ws, command }));
-      toast('Saved', 'ok', 1200);
     } catch (e) {
       toast(e.message, 'error');
     }
@@ -946,7 +967,7 @@ function tabRules(el) {
   const failed = h('div', { class: 'rules-err' });
   el.append(
     h('section', { class: 'set-group' },
-      h('p', { class: 'set-note' }, 'Write plain text or Markdown. A project’s own AGENTS.md or CLAUDE.md comes after this and wins when the two disagree.'),
+      h('p', { class: 'set-note' }, 'Plain text or Markdown. A project’s AGENTS.md or CLAUDE.md wins when the two disagree.'),
       failed,
       ta,
       h('div', { class: 'rules-foot' }, count, h('span', { class: 'grow' }), status, saveBtn)));
@@ -974,7 +995,7 @@ function tabRules(el) {
 function whereRow() {
   const b = S.env.backend;
   const cur = b.kind === 'wsl' ? 'wsl|' + b.distro : 'native|';
-  const sel = h('select', { 'aria-label': 'Run commands in' }, h('option', { value: 'native|' }, 'Windows'), b.kind === 'wsl' ? h('option', { value: cur }, (b.distro ? `WSL · ${b.distro}` : 'WSL · default distribution')) : null);
+  const sel = h('select', { class: 'set-select', 'aria-label': 'Run commands in' }, h('option', { value: 'native|' }, 'Windows'), b.kind === 'wsl' ? h('option', { value: cur }, (b.distro ? `WSL · ${b.distro}` : 'WSL · default distribution')) : null);
   sel.value = cur;
   api.get('/api/env').then((env) => {
     for (const d of env.distros || []) if (!sel.querySelector(`option[value="wsl|${CSS.escape(d)}"]`)) sel.append(h('option', { value: 'wsl|' + d }, `WSL · ${d}`));
@@ -1003,7 +1024,7 @@ const COMX_URL = 'https://comx-site.vercel.app';
 
 const RELEASES_URL = 'https://github.com/chsxthwik/ORBIX/releases';
 
-/** Settings → Application → Updates, in the Windows app. It redraws itself as the status changes. */
+/** Settings → About → Updates, in the Windows app. It redraws itself as the status changes. */
 function updatesGroup(onDispose) {
   if (!updatesSupported()) return ''; // el.append() would print null
   const box = h('div');
@@ -1018,8 +1039,7 @@ function updatesGroup(onDispose) {
       : h('button', { class: 'btn sm', type: 'button', disabled: busy ? true : null, onclick: () => checkForUpdates() }, st.state === 'checking' ? 'Checking…' : st.state === 'downloading' ? `${st.percent || 0}%` : 'Check now');
     replace(box, group('Updates', null,
       row(st.state === 'ready' ? `ORBIX ${st.version} is ready` : `ORBIX ${st.current}`, action, h('span', { class: 'upd-line' + (st.state === 'error' ? ' err' : '') }, updateLine(st))),
-      row('Update automatically', toggle(st.auto, (v) => setAutoUpdates(v), 'Update automatically'), 'Downloads new versions in the background from GitHub. Each download is checked before it installs, and your settings and conversations are kept.'),
-      row('What’s new', btn('Release notes', () => openLink(RELEASES_URL), 'sm'), 'Every version and what changed in it.')));
+      row('Update automatically', toggle(st.auto, (v) => setAutoUpdates(v), 'Update automatically'), 'Downloads from GitHub in the background and verifies each download. Settings and conversations are kept.')));
   };
   const off = on('update', draw);
   onDispose(off);
@@ -1074,7 +1094,7 @@ function tabApplication(el, show) {
   const cleanups = [mark.destroy];
   const onDispose = (fn) => cleanups.push(fn);
   el.append(
-    h('header', { class: 'about-h' }, logo(44),
+    h('header', { class: 'about-h' }, logoTile(44),
       h('div', { class: 'about-id' },
         h('div', { class: 'about-name' }, h('strong', null, 'ORBIX'), h('span', { class: 'tag on', title: 'Features and screens may still change between versions.' }, 'Beta')),
         h('div', { class: 'about-ver' }, h('span', { class: 'num' }, `Version ${S.env.app.version}`), updatePill(onDispose))),
@@ -1085,21 +1105,17 @@ function tabApplication(el, show) {
         setTimeout(() => (b2.textContent = 'Copy version info'), 1600);
       }, 'sm about-copy')),
     window.orbixDesktop?.system ? group('General', null,
-      row('Prevent sleep', toggle(S.ui.preventSleep === true, (on) => savePrefs({ preventSleep: on }), 'Prevent sleep'), 'Keep the computer awake while an agent works, so a long task or an automation is not cut off.'),
-      row('Keep running in the tray', toggle(S.ui.tray === true, (on) => savePrefs({ tray: on }), 'Keep running in the tray'), 'Closing the window hides ORBIX to the notification area, so automations keep running. Quit it from the tray icon.')) : '',
-    window.orbixDesktop?.system ? group('Notifications', null,
-      row('Notification settings', btn('Open Windows settings', () => window.orbixDesktop.system.openNotifications(), 'sm'), 'How Windows shows ORBIX’s notifications (banners, sound, Do not disturb). What ORBIX tells you about is in Settings → Notifications.')) : '',
-    group('Windows Subsystem for Linux', 'Run commands, tools, git and MCP servers in a WSL distribution instead of Windows.', whereRow()),
+      row('Prevent sleep', toggle(S.ui.preventSleep === true, (on) => savePrefs({ preventSleep: on }), 'Prevent sleep'), 'Keep the PC awake while an agent works.'),
+      row('Keep running in the tray', toggle(S.ui.tray === true, (on) => savePrefs({ tray: on }), 'Keep running in the tray'), 'Closing the window hides ORBIX to the tray, so loops keep running.')) : '',
     h('div', { class: 'about-upd' }, updatesGroup(onDispose)),
     group('This copy', null,
-      v ? row('Runtime', h('span', { class: 'about-v num' }, `Electron ${v.electron}`), `With Chromium ${v.chrome} and Node.js ${v.node}.`) : null,
+      v ? row('Runtime', h('span', { class: 'about-v num' }, `Electron ${v.electron}`), `Chromium ${v.chrome} · Node.js ${v.node}`) : null,
       S.env.app.os ? row('System', h('span', { class: 'about-v' }, S.env.app.os)) : null,
-      data ? row('Data folder', btn('Open', () => api.post('/api/reveal-data').catch((e) => toast(e.message, 'error')), 'sm'), h('span', null, h('code', { class: 'about-path', title: data }, data), h('br'), 'Settings, conversations and logs live here and stay through every update.')) : null),
+      go('Commands run in', S.env.backend.kind === 'wsl' ? `WSL${S.env.backend.distro ? ` (${S.env.backend.distro})` : ''}` : 'Windows', () => show('behavior', 'Run commands in')),
+      data ? row('Data folder', btn('Open', () => api.post('/api/reveal-data').catch((e) => toast(e.message, 'error')), 'sm'), h('span', null, h('code', { class: 'about-path', title: data }, data), h('br'), 'Settings, conversations and logs. Kept through updates.')) : null),
     group('Help', null,
-      row('How ORBIX works', btn('Open', () => openHelp(), 'sm'), 'A short guide to connecting a model, approvals, undo and project rules.'),
-      row('Keyboard shortcuts', btn('Open', () => show('keys'), 'sm'), 'Every shortcut. Change the keys of any action.'),
-      row('Check my setup', btn('Run', () => openDiagnostics(), 'sm'), 'Checks the data folder, WSL and that a model is set up, and says what to fix.'),
-      row('Report a problem', btn('Give feedback', () => show('feedback'), 'sm'), 'A bug, a feature you miss, or anything else. It opens as a GitHub issue you check before sending.')),
+      go('How ORBIX works', 'Connecting a model, approvals, undo and project rules.', () => openHelp()),
+      go('Check my setup', 'Data folder, WSL and model, and what to fix.', () => openDiagnostics())),
     h('section', { class: 'about-maker', 'aria-label': 'Made by COM-X Corporation' },
       mark.el,
       h('div', { class: 'about-maker-t' },
@@ -1113,6 +1129,6 @@ function tabApplication(el, show) {
           await api.post('/api/quit').catch(() => {});
         }
       }, 'sm danger'), 'Stops every running conversation and closes the window. A downloaded update installs now.')),
-    h('p', { class: 'about-legal' }, '© 2026 chsxthwik. Licensed under FSL-1.1-MIT: free to use, and each release becomes MIT two years after it ships. Google Sans Flex and Geist Mono are used under the SIL Open Font License.'));
+    h('p', { class: 'about-legal' }, '© 2026 QUANTUM. Licensed under FSL-1.1-MIT: free to use, and each release becomes MIT two years after it ships. Google Sans Flex and Geist Mono are used under the SIL Open Font License.'));
   return () => cleanups.forEach((cleanup) => cleanup());
 }

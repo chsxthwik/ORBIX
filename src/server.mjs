@@ -10,12 +10,13 @@ import { Backend, runProc, isWinPath } from './backend.mjs';
 import { AgentProc } from './engine/proc.mjs';
 import { HarnessProc } from './harness/proc.mjs';
 import { Machines, receiveFiles, openTeleport } from './cloud.mjs';
+import { Ptys } from './pty.mjs';
 import { AgentRegistry, isAgentId, cleanCustomAgent } from './harness/registry.mjs';
 import { mcpRoutes } from './engine/mcp.mjs';
 import { DATA_DIR } from './store.mjs';
 import { Automations } from './automations.mjs';
 import { findDevServers } from './devservers.mjs';
-import { discoverSkills } from './engine/skills.mjs';
+import { discoverSkills, parseFrontmatter, saveSkill, trashSkill } from './engine/skills.mjs';
 import { EngineConfig, listAgentSessions, deleteAgentSessions, listTrash, restoreFromTrash, emptyTrash, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
 import { modelChoice } from './engine/proc-models.mjs';
 import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
@@ -28,6 +29,7 @@ import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted
 import { collect as collectDiagnostics } from './diagnostics.mjs';
 import * as fsapi from './fsapi.mjs';
 import * as gitapi from './gitapi.mjs';
+import * as projectapi from './project.mjs';
 import { RunController, runRoutes } from './runctl.mjs';
 import { openExternal } from './launcher.mjs';
 
@@ -57,17 +59,12 @@ export function trackOpenUi(open, ev) {
   } else if (ev.type === 'agent_end' && ev.isTerminal !== false) open.clear();
 }
 
-/** The Windows account's first name for Home's greeting ("RAVI" → "Ravi"), or '' for a generic account name. */
-export function firstName(raw = (() => {
-  try {
-    return os.userInfo().username;
-  } catch {
-    return '';
-  }
-})()) {
-  const w = String(raw || '').trim().split(/[\s._-]+/)[0] || '';
-  if (!/^\p{L}[\p{L}'’]{1,23}$/u.test(w) || /^(admin|administrator|user|owner|root|guest|default|pc|windows)$/i.test(w)) return '';
-  return w[0].toUpperCase() + w.slice(1).toLowerCase();
+/**
+ * The name Home greets you with: only the one you typed in Settings → Preferences (never your Windows account name).
+ * One line, at most 40 characters, no control characters; '' for none.
+ */
+export function cleanDisplayName(raw) {
+  return String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
 }
 
 const CSP = [
@@ -88,6 +85,8 @@ const CSP = [
 // a web browser gets frames from this computer only.
 // Electron's <webview> adds one style to its shadow root, ":host { display: flex; }": allowed by its hash, nothing else.
 const CSP_DESKTOP = CSP.replace('frame-src http://localhost:* http://127.0.0.1:*', 'frame-src http: https:').replace("style-src 'self'", "style-src 'self' 'sha256-XNfYdUW7S7AWSxlvq47SGsGIxvvzKwvUGdsFQQ/zXf4='");
+/** The desktop window loads the interface from orbix://app/ (no HTTP): the same policy as the app window before. */
+export const DESKTOP_CSP = CSP_DESKTOP;
 const cspFor = (req) => (/\bElectron\//.test(req?.headers['user-agent'] || '') ? CSP_DESKTOP : CSP);
 
 /** On every response: no sniffing, no framing, no referrer, and no use of our responses by other origins. */
@@ -125,7 +124,7 @@ function shapeResponse(type, res) {
 const BOOT = Date.now().toString(36); // part of every static file's ETag
 
 /**
- * "Windows 11 Pro (build 26100)" for Settings → Application; empty when the system will not say. Windows 11 still calls
+ * "Windows 11 Pro (build 26100)" for Settings → About; empty when the system will not say. Windows 11 still calls
  * itself Windows 10 in the registry name os.version() reads, so the build number decides (22000 and up is 11).
  */
 export function osName(version = os.version(), release = os.release()) {
@@ -157,9 +156,12 @@ export class AppServer {
     this.agentView = [];
     // Other ORBIX servers you run (ORBIX Cloud), and moving conversations to them: see cloud.mjs.
     this.machines = new Machines(this);
+    // The Terminal under the conversation: real shells on a pty, several per project (pty.mjs).
+    this.ptys = new Ptys({ backend: this.backend, emit: (m) => this.broadcast(m) });
     this.procs = new Map();
     this.resuming = new Map();
     this.clients = new Set();
+    this.listeners = new Set(); // in-process subscribers to every event (the desktop window)
     this.envInfo = {};
     this.envReady = Promise.resolve();
     this.pendingUpdates = new Map();
@@ -194,7 +196,7 @@ export class AppServer {
         // A self-hosted server (headless.mjs) is reached by other machines: it also takes the token as a bearer
         // token. The app's own server takes only its cookie.
         this.remote = remote || host !== '127.0.0.1' || allowHosts.length > 0;
-        this.automations.begin();
+        this.begin();
         resolve(this.port);
       });
     });
@@ -232,10 +234,14 @@ export class AppServer {
       } catch {}
     }
     pkce.closeAll(); // sign-in callback servers
-    this.server.close();
+    this.ptys.closeAll();
+    if (this.server.listening) this.server.close();
+    this.callbackServer?.close();
   }
 
   broadcast(msg) {
+    // The desktop window hears events over IPC (electron/main.mjs adds itself here); browsers over /api/events.
+    if (this.listeners) for (const fn of this.listeners) fn(msg);
     if (!this.clients.size) return;
     const data = `data: ${JSON.stringify(msg)}\n\n`;
     for (const c of this.clients) {
@@ -369,6 +375,19 @@ export class AppServer {
     this.runs.adopt(proc); // a saved conversation that belongs to a run keeps recording into it
     this.broadcastProcs();
     return proc;
+  }
+
+  /** The skills the agent sees in project `ws` (with yours), or only yours without a project. */
+  async skillsOf(ws) {
+    const join = (root, rel) => (isWinPath(root) ? path.win32.join(root, rel) : path.posix.join(root, rel));
+    if (!ws) return (await discoverSkills({ hostRoot: path.join(DATA_DIR, '.no-project'), displayRoot: '', join }).catch(() => [])).filter((k) => k.scope === 'user');
+    return discoverSkills({ hostRoot: this.backend.hostPath(ws), displayRoot: ws, join }).catch(() => []);
+  }
+
+  async skillNamed(ws, name) {
+    const k = (await this.skillsOf(String(ws || ''))).find((x) => x.name.toLowerCase() === String(name || '').toLowerCase());
+    if (!k) throw Object.assign(new Error('That skill is no longer there'), { status: 404 });
+    return k;
   }
 
   /** The agent CLI a new or reopened conversation runs on (null: ORBIX's own agent). */
@@ -529,6 +548,74 @@ export class AppServer {
     return this.serveStatic(url.pathname, res, req);
   }
 
+  /**
+   * The desktop app's engine, without HTTP: one API call, as a route sees it. Returns the same JSON a browser gets
+   * ({ ok: true, ... }); errors come back as { ok: false, error, status }.
+   */
+  async call(method, pathname, body = {}, q = {}) {
+    const route = this.routes[`${method} ${pathname}`];
+    if (!route || pathname === '/api/events' || pathname === '/api/teleport/files') return { ok: false, error: 'No such endpoint', status: 404 };
+    try {
+      await this.envReady;
+      const out = await route({ req: null, res: null, url: new URL(pathname, 'orbix://app'), body: body && typeof body === 'object' && !Array.isArray(body) ? body : {}, q: q || {} });
+      return { ok: true, ...out };
+    } catch (e) {
+      if (!e.status || e.status >= 500) log('handler error', e);
+      return { ok: false, error: e.message || String(e), status: e.status || 500, ...(e.code ? { code: e.code } : {}) };
+    }
+  }
+
+  /** Start the background work a running app does (automations); listen() does it for an HTTP server. */
+  begin() {
+    this.automations.begin();
+  }
+
+  /** A file of the interface (web/, or /assets/), for the desktop window's orbix:// protocol. */
+  staticFile(pathname) {
+    let rel;
+    try {
+      rel = decodeURIComponent(pathname);
+    } catch {
+      return { status: 400 };
+    }
+    if (rel.includes('\0')) return { status: 400 };
+    if (rel === '/' || rel === '') rel = '/index.html';
+    const base = path.resolve(rel.startsWith('/assets/') ? this.assetsRoot : this.webRoot);
+    const file = path.resolve(base, rel.startsWith('/assets/') ? rel.slice('/assets/'.length) : rel.slice(1));
+    if (!file.startsWith(base + path.sep)) return { status: 403 };
+    try {
+      return { status: 200, type: MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', body: fs.readFileSync(file) };
+    } catch {
+      return { status: 404 };
+    }
+  }
+
+  /**
+   * OpenRouter sends its sign-in back to a local address. An HTTP server has one; the desktop app opens a callback
+   * listener on 127.0.0.1 for that alone (any other path is refused) and closes it after the sign-in window.
+   */
+  async callbackPort() {
+    if (this.port) return this.port;
+    if (!this.callbackServer) {
+      const srv = http.createServer((req, res) => {
+        const url = new URL(req.url, 'http://x');
+        if (req.method === 'GET' && url.pathname.startsWith(oauth.CALLBACK_PATH + '/')) return oauth.handleCallback(url, res, this.engineCfg);
+        res.writeHead(404, { 'content-type': 'text/plain' });
+        res.end('Not found');
+      });
+      await new Promise((resolve, reject) => srv.once('error', reject).listen(0, '127.0.0.1', resolve));
+      this.callbackServer = srv;
+      srv.unref();
+    }
+    clearTimeout(this.callbackTimer);
+    this.callbackTimer = setTimeout(() => {
+      this.callbackServer?.close();
+      this.callbackServer = null;
+    }, 11 * 60 * 1000);
+    this.callbackTimer.unref?.();
+    return this.callbackServer.address().port;
+  }
+
   serveStatic(pathname, res, req) {
     let rel;
     try {
@@ -570,7 +657,7 @@ export class AppServer {
   stateSnapshot() {
     const d = this.store.data;
     return {
-      app: { version: VERSION, pid: process.pid, data: DATA_DIR, os: osName(), user: firstName() },
+      app: { version: VERSION, pid: process.pid, data: DATA_DIR, os: osName() },
       backend: { kind: d.backend.kind, distro: d.backend.distro, error: this.envInfo.error || null },
       workspaces: d.workspaces,
       ui: d.ui,
@@ -602,7 +689,10 @@ export class AppServer {
       },
 
       'POST /api/prefs': async ({ body }) => {
-        if (body.ui && typeof body.ui === 'object') Object.assign(this.store.data.ui, body.ui);
+        if (body.ui && typeof body.ui === 'object') {
+          if ('displayName' in body.ui) body.ui.displayName = cleanDisplayName(body.ui.displayName);
+          Object.assign(this.store.data.ui, body.ui);
+        }
         this.store.saveSoon();
         return { ui: this.store.data.ui };
       },
@@ -653,7 +743,7 @@ export class AppServer {
           return { url, state, provider };
         }
         if (provider !== 'openrouter') throw Object.assign(new Error('This provider has no sign-in.'), { status: 400 });
-        const { url, state } = oauth.startOpenRouter({ port: this.port });
+        const { url, state } = oauth.startOpenRouter({ port: await this.callbackPort() });
         if (oauth.isOpenRouterAuthUrl(url)) openExternal(url);
         return { url, state, provider };
       },
@@ -676,7 +766,11 @@ export class AppServer {
         return { engine: this.engineView() };
       },
       'POST /api/engine/settings': async ({ body }) => {
-        if (body.approvals !== undefined) this.engineCfg.setApprovals(body.approvals);
+        if (body.approvals !== undefined) {
+          this.engineCfg.setApprovals(body.approvals);
+          // Conversations on another agent CLI switch its own permission mode now, not only at their next start.
+          for (const p of this.procs.values()) p.driver?.setMode?.(this.engineCfg.data.approvals)?.catch?.(() => {});
+        }
         if (body.trusted !== undefined) this.engineCfg.setTrusted(body.trusted);
         if (body.network !== undefined) this.engineCfg.setNetwork(body.network || {});
         if (body.verify !== undefined || body.review !== undefined) this.engineCfg.setChecks({ verify: body.verify, review: body.review });
@@ -733,6 +827,12 @@ export class AppServer {
         );
         return { models: [...lists.flat(), ...agentLists.flat()], errors };
       },
+      'GET /api/pty/list': async ({ q }) => ({ ptys: this.ptys.list(String(q.ws || '')) }),
+      'POST /api/pty/open': async ({ body }) => ({ pty: this.ptys.open(String(body.ws || ''), { cols: body.cols, rows: body.rows }) }),
+      'POST /api/pty/input': async ({ body }) => this.ptys.input(body.id, body.data),
+      'POST /api/pty/resize': async ({ body }) => this.ptys.resize(body.id, body.cols, body.rows),
+      'POST /api/pty/interrupt': async ({ body }) => this.ptys.interrupt(body.id),
+      'POST /api/pty/close': async ({ body }) => this.ptys.close(body.id),
       // ORBIX Cloud: your machines, opening one in the window, and moving a conversation there (cloud.mjs).
       'GET /api/machines': async () => ({ machines: this.machines.view() }),
       'POST /api/machines': async ({ body }) => {
@@ -888,10 +988,28 @@ export class AppServer {
       // Skills the agent can use: the project's (.agents/skills, .claude/skills, .omp/skills) and your own, for Customizations.
       'GET /api/skills': async ({ q }) => {
         const ws = q.ws || this.store.data.workspaces?.[0]?.path || '';
-        if (!ws) return { skills: [] };
-        const join = (root, rel) => (isWinPath(root) ? path.win32.join(root, rel) : path.posix.join(root, rel));
-        const skills = await discoverSkills({ hostRoot: this.backend.hostPath(ws), displayRoot: ws, join }).catch(() => []);
-        return { skills: skills.map(({ hostPath, ...s }) => s) };
+        const skills = await this.skillsOf(ws);
+        return { ws, skills: skills.map(({ hostPath, ...s }) => s) };
+      },
+      // Skills page: read one skill's SKILL.md, write a new or changed one, delete one (to the trash).
+      'GET /api/skills/file': async ({ q }) => {
+        const k = await this.skillNamed(q.ws, q.name);
+        const { meta, body } = parseFrontmatter(await fs.promises.readFile(k.hostPath, 'utf8'));
+        return { name: k.name, description: meta.description || '', body, path: k.path, scope: k.scope };
+      },
+      'POST /api/skills/save': async ({ body }) => {
+        const ws = String(body.ws || '');
+        const scope = body.scope === 'user' ? 'user' : 'project';
+        if (scope === 'project' && !ws) throw Object.assign(new Error('Open a project to add a skill to it'), { status: 400 });
+        const old = body.original ? await this.skillNamed(ws, body.original) : null;
+        await saveSkill({ hostRoot: ws ? this.backend.hostPath(ws) : '', scope, name: body.original || body.name, description: body.description, body: body.body, hostPath: old?.hostPath });
+        return { skills: (await this.skillsOf(ws)).map(({ hostPath, ...s }) => s) };
+      },
+      'POST /api/skills/delete': async ({ body }) => {
+        const k = await this.skillNamed(body.ws, body.name);
+        const to = await trashSkill(k.hostPath);
+        log('skill moved to trash', k.name, to);
+        return { trashed: to, skills: (await this.skillsOf(String(body.ws || ''))).map(({ hostPath, ...s }) => s) };
       },
       'GET /api/devservers': async () => ({ servers: await findDevServers({ skip: [this.port] }) }),
 
@@ -1013,6 +1131,9 @@ export class AppServer {
       'POST /api/git/unstage': async ({ body }) => (await gitapi.unstage(this.backend, wsPath(body), body.paths), {}),
       'POST /api/git/discard': async ({ body }) => (await gitapi.discard(this.backend, wsPath(body), { tracked: body.tracked, untracked: body.untracked }), {}),
       'POST /api/git/commit': async ({ body }) => ({ commit: await gitapi.commit(this.backend, wsPath(body), body.message) }),
+      'POST /api/git/init': async ({ body }) => (await gitapi.init(this.backend, wsPath(body)), {}),
+      'GET /api/project/info': async ({ q }) => ({ info: await projectapi.info(this.backend, wsPath(q), gitapi) }),
+      'POST /api/project/open': async ({ body }) => (await projectapi.open(this.backend, wsPath(body), String(body.app || 'explorer')), {}),
 
       'POST /api/open-url': async ({ body }) => {
         try {
@@ -1023,7 +1144,7 @@ export class AppServer {
         return {};
       },
 
-      // Settings → Application: the data folder in Explorer. Takes no path, so it can open nothing else.
+      // Settings → About: the data folder in Explorer. Takes no path, so it can open nothing else.
       'POST /api/reveal-data': async () => {
         await runProc('explorer.exe', [DATA_DIR], { timeout: 5000 }).catch(() => {}); // explorer.exe exits 1 even when it opened the folder
         return {};
