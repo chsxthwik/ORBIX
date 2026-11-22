@@ -102,6 +102,7 @@ kbd { display: inline-block; min-width: 1.75em; padding: 0 .45em; border: 1px so
 .pill-v { padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: 600 12px/1.5 var(--mono); }
 .hero-t { max-width: 100%; margin-top: 28px; font-size: clamp(44px, 7.4vw, 96px); font-weight: 560; line-height: .98; letter-spacing: -.04em; text-wrap: balance; }
 .hero-t .dim { display: block; color: var(--fg-3); }
+.hero-t .w { display: inline-block; }
 .hero-lead { max-width: 62ch; margin-top: 28px; color: var(--fg-2); font-size: clamp(17px, 1.6vw, 19px); line-height: 1.6; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 36px; }
 .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 22px; color: var(--fg-3); font: 13px/1.5 var(--mono); }
@@ -324,7 +325,7 @@ kbd { display: inline-block; min-width: 1.75em; padding: 0 .45em; border: 1px so
 .lost-main code { font-size: 1em; }
 
 /* ---------------- reveal (only once the script has set it up) ---------------- */
-.reveal-on [data-reveal] { opacity: 0; transform: translateY(14px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.reveal-on [data-reveal] { opacity: 0; transform: translateY(18px); transition: opacity .8s var(--ease), transform .8s var(--ease); transition-delay: calc(var(--d, 0) * 80ms); }
 .reveal-on [data-reveal].in { opacity: 1; transform: none; }
 
 /* ---------------- agents orbit: the name, drawn. Scroll turns it; nothing spins on its own ---------------- */
@@ -368,11 +369,30 @@ kbd { display: inline-block; min-width: 1.75em; padding: 0 .45em; border: 1px so
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @keyframes fadein { from { opacity: 0; } }
   @keyframes travel { to { offset-distance: 100%; } }
-  @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+  @keyframes fade { from { opacity: 0; transform: translateY(10px) scale(.99); } }
   @keyframes pop { from { opacity: 0; transform: scale(.9); } }
   .hero-orbit .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.8s var(--ease) .15s forwards; }
   .hero-orbit .d2 { animation-delay: .3s; } .hero-orbit .d3 { animation-delay: .45s; } .hero-orbit .d4 { animation-delay: .6s; }
   .hero-orbit .ring { animation: fadein 1.2s 1.1s both; }
+  /* Headline: each phrase rises out of a soft focus. Transform and filter only, never opacity (it is the LCP). */
+  @keyframes word { from { transform: translateY(.32em); filter: blur(10px); } to { transform: none; filter: none; } }
+  .hero-t .w { animation: word 1s var(--ease) backwards; }
+  .hero-t .w1 { animation-delay: .06s; } .hero-t .w2 { animation-delay: .18s; } .hero-t .w3 { animation-delay: .3s; }
+  /* The Plasma glow behind the hero drifts slowly; it stops while the hero is off screen. */
+  @keyframes drift { to { transform: translate3d(-5%, 4%, 0) scale(1.08); } }
+  .hero::before { animation: drift 16s ease-in-out infinite alternate; }
+  .hero.away::before { animation-play-state: paused; }
+  /* A light passes over the primary button on hover. */
+  .btn:not(.ghost) { position: relative; overflow: hidden; }
+  .btn:not(.ghost)::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .38) 50%, transparent 65%); transform: translateX(-110%); pointer-events: none; }
+  .btn:not(.ghost):hover::after { transform: translateX(110%); transition: transform .75s var(--ease); }
+  /* The run track lights up stage by stage. */
+  @keyframes stage { from { opacity: .3; transform: translateY(6px); } }
+  .reveal-on .track.in li { animation: stage .5s var(--ease) both; }
+  .reveal-on .track.in li:nth-child(2) { animation-delay: .12s; } .reveal-on .track.in li:nth-child(3) { animation-delay: .24s; }
+  .reveal-on .track.in li:nth-child(4) { animation-delay: .36s; } .reveal-on .track.in li:nth-child(5) { animation-delay: .48s; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+  .menu[open] .menu-panel { transform-origin: top right; animation: drop .22s var(--ease); }
   @supports (offset-path: path('M0 0')) {
     .hero-orbit .sat { display: block; offset-path: path('M90 50a45 17 0 1 1-90 0a45 17 0 1 1 90 0'); animation: travel 18s linear infinite, fadein 1s 1.4s backwards; }
     .hero.away .sat { animation-play-state: paused; }
@@ -397,7 +417,17 @@ kbd { display: inline-block; min-width: 1.75em; padding: 0 .45em; border: 1px so
     .o-out { animation: turn linear both; animation-timeline: --orb; }
     .o-out b, .o-in { animation: unturn linear both; animation-timeline: --orb; }
     .shot .window { animation: settle linear both; animation-timeline: view(); animation-range: entry 0% cover 38%; }
+    .top::after { content: ''; position: absolute; left: 0; bottom: -1px; width: 100%; height: 2px; background: var(--accent); transform-origin: left; animation: grow linear both; animation-timeline: scroll(root); pointer-events: none; }
     .steps-grid::before { content: ''; position: absolute; left: 0; top: -1px; width: 100%; height: 2px; background: var(--accent-ink); transform-origin: left; animation: grow linear both; animation-timeline: view(); animation-range: entry 35% cover 50%; }
+  }
+}
+
+/* FAQ answers open and close smoothly where the browser can animate to auto height. */
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    :root { interpolate-size: allow-keywords; }
+    .faq details::details-content { block-size: 0; overflow: hidden; transition: block-size .35s var(--ease), content-visibility .35s allow-discrete; }
+    .faq details[open]::details-content { block-size: auto; }
   }
 }
 
@@ -425,7 +455,7 @@ kbd { display: inline-block; min-width: 1.75em; padding: 0 .45em; border: 1px so
 @media (max-width: 640px) {
   .steps-grid::before { display: none; }
   .top .btn.sm { display: none; }
-  .hero-t .dim { display: inline; }
+  .hero-t .dim { display: inline-block; }
   .hero-orbit { top: 120px; width: 160vw; right: -70vw; }
   .facts li + li::before { display: none; }
   .bento, .split, .steps-grid, .steps-grid.three { grid-template-columns: minmax(0, 1fr); }

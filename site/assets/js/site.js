@@ -1,6 +1,6 @@
 // ORBIX website. Small and optional: the page is complete without it. Header state, the narrow-screen menu, the
-// permission and screen tabs (WAI-ARIA, arrow keys, Home, End), the copy button, scroll reveals, the current
-// section in the header and a pointer light on cards.
+// permission demo and screen tabs (WAI-ARIA, arrow keys, Home, End), the copy button, staggered scroll reveals, the
+// current section in the header and a pointer light on cards.
 (() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -48,17 +48,39 @@
         pick(all[(to + all.length) % all.length], true);
       });
     }
+    return pick;
   }
 
   function permissions() {
     const perm = document.querySelector('.perm');
     const list = perm?.querySelector('[role=tablist]');
     if (!list) return;
-    tabs(list, (t) => {
+    const pick = tabs(list, (t) => {
       perm.classList.remove('mode-ask', 'mode-edits', 'mode-safe', 'mode-auto');
       perm.classList.add('mode-' + t.dataset.mode);
       perm.querySelector('[role=tabpanel]')?.setAttribute('aria-labelledby', t.id);
     });
+    // While it is on screen and nobody has touched it, the demo steps through the four levels by itself. Any click,
+    // key or focus inside hands it to the visitor for good; hovering pauses it. Screen readers hear only their own picks.
+    if (reduced.matches || !('IntersectionObserver' in window)) return;
+    const all = [...list.querySelectorAll('[role=tab]')];
+    const desc = perm.querySelector('.perm-desc');
+    let timer = null; let stopped = false; let visible = false; let hover = false;
+    const pause = () => { clearInterval(timer); timer = null; };
+    const run = () => {
+      if (stopped || timer || !visible || hover || document.hidden) return;
+      desc?.setAttribute('aria-live', 'off');
+      timer = setInterval(() => {
+        const i = all.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+        pick(all[(i + 1) % all.length], false);
+      }, 3200);
+    };
+    const stop = () => { if (stopped) return; stopped = true; pause(); desc?.setAttribute('aria-live', 'polite'); };
+    for (const ev of ['pointerdown', 'keydown', 'focusin']) perm.addEventListener(ev, stop);
+    perm.addEventListener('pointerenter', () => { hover = true; pause(); });
+    perm.addEventListener('pointerleave', () => { hover = false; run(); });
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; visible ? run() : pause(); }, { threshold: 0.5 }).observe(perm);
+    document.addEventListener('visibilitychange', () => (document.hidden ? pause() : run()));
   }
 
   function gallery() {
@@ -67,6 +89,12 @@
     tabs(list, (t) => {
       for (const f of document.querySelectorAll('.g-view [role=tabpanel]')) f.classList.toggle('on', f.id === t.getAttribute('aria-controls'));
     });
+    // Load every screen once the gallery is near, so switching tabs never shows an empty frame.
+    const imgs = [...document.querySelectorAll('.g-view img[loading=lazy]')];
+    const eager = () => { for (const i of imgs) i.loading = 'eager'; };
+    if (!('IntersectionObserver' in window)) return eager();
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { eager(); io.disconnect(); } }, { rootMargin: '800px 0px' });
+    io.observe(list);
   }
 
   function copy() {
@@ -98,8 +126,18 @@
     const els = [...document.querySelectorAll('[data-reveal]')];
     const below = els.filter((el) => el.getBoundingClientRect().top > innerHeight * 0.92);
     if (!below.length) return;
+    // Elements that come into view together arrive one after another, 80 ms apart.
     const io = new IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      let k = 0;
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const el = e.target;
+        if (k) el.style.setProperty('--d', String(Math.min(k, 5)));
+        k++;
+        el.classList.add('in');
+        io.unobserve(el);
+        setTimeout(() => el.style.removeProperty('--d'), 1400);
+      }
     }, { rootMargin: '0px 0px -8% 0px' });
     document.documentElement.classList.add('reveal-on');
     for (const el of els) {
