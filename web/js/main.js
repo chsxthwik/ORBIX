@@ -1159,6 +1159,7 @@ const ACTION_RUN = {
   shortcuts: () => settingsDialog('keys'),
   settings: () => settingsDialog(),
   connect: () => openConnect(),
+  mcpMenu: () => document.querySelector('#topbar .tb-cx')?.click(),
   focusInput: () => (activeTab() ? viewOf(activeTab())?.focus() : homeEl.querySelector('textarea')?.focus()),
   find: () => viewOf(activeTab())?.bar.openFind(),
   outline: () => viewOf(activeTab())?.bar.openOutline(),

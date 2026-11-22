@@ -214,7 +214,7 @@ html.zen .main { border-left: 0; border-radius: 0; }
 }
 
 /* ================= toolbar over a docked side panel ================= */
-.tb-pz { display: flex; justify-content: flex-end; flex: none; width: calc(var(--panel-live, var(--panel-w)) - 8px); }
+.tb-pz { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex: none; width: calc(var(--panel-live, var(--panel-w)) - 8px); }
 /* The panel's tabs: below 720px only the current tab keeps its name (the others keep their icon and hint), so the row never overflows. */
 
 

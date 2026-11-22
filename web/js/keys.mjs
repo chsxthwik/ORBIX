@@ -23,6 +23,7 @@ export const ACTIONS = [
   { id: 'shortcuts', group: 'General', label: 'Keyboard shortcuts', keys: ['Ctrl+/'] },
   { id: 'settings', group: 'General', label: 'Open settings', keys: ['Ctrl+,'] },
   { id: 'connect', group: 'General', label: 'Connect a provider or agent', keys: ['Ctrl+Shift+M'] },
+  { id: 'mcpMenu', group: 'General', label: 'MCP servers, skills and rules', keys: ['Ctrl+Alt+X'] },
   { id: 'focusInput', group: 'Conversation', label: 'Focus the message box', keys: ['Ctrl+L'] },
   { id: 'find', group: 'Conversation', label: 'Find in the conversation', keys: ['Ctrl+F'] },
   { id: 'outline', group: 'Conversation', label: 'Jump to one of your messages', keys: ['Ctrl+Shift+O'] },

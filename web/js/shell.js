@@ -225,6 +225,8 @@ export function drawToolbar(el, { force = false } = {}) {
   const docked = H.panelShown() && !wide && !document.getElementById('app')?.classList.contains('overlay-panel');
   const panelBtn = () => iconBtn('panel-right', tip('Side panel', 'panel'), H.togglePanel, 'tb-panel' + (H.panelShown() ? ' on' : ''));
   const maxBtn = () => (H.panelShown() ? iconBtn(H.panelMax() ? 'minimize' : 'maximize', H.panelMax() ? 'Restore the side panel' : 'Side panel across the window', H.togglePanelMax, 'tb-max' + (H.panelMax() ? ' on' : '')) : null);
+  // The project's MCP servers, skills and rules: always in the right-hand group, never alone at the panel's edge.
+  const cxBtn = () => iconBtn('layers', tip('MCP servers, skills and rules', 'mcpMenu'), (e) => contextMenu(e.currentTarget, { ws: t?.workspace || homeProject(), tab: t, go: H.goHub, settings: H.settings }), 'tb-cx');
   const back = iconBtn('arrow-left', tip('Back', 'back'), () => navGo(-1), 'tb-nav');
   const fwd = iconBtn('arrow-right', tip('Forward', 'forward'), () => navGo(1), 'tb-nav');
   back.disabled = !canGo(-1);
@@ -241,11 +243,11 @@ export function drawToolbar(el, { force = false } = {}) {
     // The side panel works for a conversation, and on Home for the project chosen there.
     t || (!hub && homeProject()) ? h('div', { class: 'tb-end' },
       t ? meter : null,
-      iconBtn('layers', 'Context: MCP servers, skills and rules', (e) => contextMenu(e.currentTarget, { ws: t?.workspace || homeProject(), tab: t, go: H.goHub, settings: H.settings }), 'tb-cx'),
+      docked ? null : cxBtn(),
       wide ? maxBtn() : null,
       docked ? null : panelBtn()) : null,
-    // With the side panel docked, its switches sit above it, and the conversation's own buttons end where the conversation does.
-    (t || (!hub && homeProject())) && docked ? h('div', { class: 'tb-pz' }, maxBtn(), panelBtn()) : null,
+    // With the side panel docked, the right-hand group sits above it: MCP, skills and rules, then the panel's switches.
+    (t || (!hub && homeProject())) && docked ? h('div', { class: 'tb-pz' }, cxBtn(), maxBtn(), panelBtn()) : null,
   ].filter(Boolean));
 }
 
