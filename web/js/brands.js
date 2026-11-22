@@ -19,19 +19,35 @@ function draw([tag, attrs, kids], suffix) {
   return el;
 }
 
+// Each mark's drawn box in its 24-unit grid (measured with getBBox), so every mark is framed to the same optical size:
+// its visual size (the square root of its area) takes 78% of the frame and no side takes more than 96%. A wide mark
+// (Fireworks) and a dense one (OpenAI) then read as the same weight beside a name at 16 and 18px.
+const BOX = {"anthropic":[0,3.52,24,16.48],"openai":[0,0,24,23.79],"google":[1,1,22,22],"xai":[2,1,20,22],"groq":[5,2,14,20],"mistral":[0,3.4,24,17.14],"deepseek":[0,3,24,17.66],"openrouter":[0,3.87,24,16.96],"together":[0,1.5,24.05,22.39],"fireworks":[0,5,24,12],"cerebras":[3.42,1.3,16.35,21.4],"moonshot":[0,0,24,24],"zai":[0,2,24,20],"qwen":[0,0,23.59,24],"ollama":[3.5,1,17,22],"lmstudio":[0,2,24,19.4],"opencode":[4,2,16,20]};
+export function frameOf(id) {
+  const b = BOX[id];
+  if (!b) return '0 0 24 24';
+  const [x, y, w, h] = b;
+  const side = Math.max(Math.sqrt(w * h) / 0.78, Math.max(w, h) / 0.96);
+  const r = (v) => Math.round(v * 100) / 100;
+  return `${r(x + w / 2 - side / 2)} ${r(y + h / 2 - side / 2)} ${r(side)} ${r(side)}`;
+}
+// Marks with their own colours that fall under 3:1 on light surfaces (yellow, pale lilac, green): on light themes they
+// are drawn in one colour, as their makers' single-colour versions; tiles put them on a dark ground instead.
+const LOW_ON_LIGHT = new Set(['google', 'mistral', 'together']);
+
 /** The provider's logo, decorative (its name is always beside it). A provider without a mark, like a custom server, gets a neutral icon. */
 export function brandMark(id, size = 18, cls = '') {
   if (Object.hasOwn(SAME_MAKER, id)) id = SAME_MAKER[id];
   const m = Object.hasOwn(MARKS, id) ? MARKS[id] : null;
   if (!m) return icon('cpu', size, cls);
   const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('viewBox', frameOf(id));
   svg.setAttribute('width', size);
   svg.setAttribute('height', size);
   svg.setAttribute('fill', 'currentColor');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  if (cls) svg.setAttribute('class', cls);
+  svg.setAttribute('class', `bmark${LOW_ON_LIGHT.has(id) ? ' bm-lowlight' : ''}${cls ? ' ' + cls : ''}`);
   for (const [k, v] of Object.entries(m.a)) svg.setAttribute(k, v);
   const suffix = `-b${++uid}`;
   for (const n of m.n) svg.append(draw(n, suffix));
@@ -41,9 +57,9 @@ export function brandMark(id, size = 18, cls = '') {
 // Each provider as an app icon: its mark on its own brand colour. Marks that carry their own colours sit on white,
 // as their makers show them. Two ways into one maker share a tile (see SAME_MAKER).
 const TILE = {
-  anthropic: ['#D97757', '#FFFFFF'], openai: ['#0B0B0C', '#FFFFFF'], google: ['#FFFFFF'], xai: ['#0B0B0C', '#FFFFFF'],
-  groq: ['#F55036', '#FFFFFF'], mistral: ['#FFFFFF'], deepseek: ['#FFFFFF'], opencode: ['#0B0B0C', '#FFFFFF'],
-  openrouter: ['#6467F2', '#FFFFFF'], together: ['#FFFFFF'], fireworks: ['#6720FF', '#FFFFFF'], cerebras: ['#FFFFFF', '#F15A29'],
+  anthropic: ['#D97757', '#FFFFFF'], openai: ['#0B0B0C', '#FFFFFF'], google: ['#1A1A1D'], xai: ['#0B0B0C', '#FFFFFF'],
+  groq: ['#F55036', '#FFFFFF'], mistral: ['#1A1A1D'], deepseek: ['#FFFFFF'], opencode: ['#0B0B0C', '#FFFFFF'],
+  openrouter: ['#6467F2', '#FFFFFF'], together: ['#1A1A1D'], fireworks: ['#6720FF', '#FFFFFF'], cerebras: ['#FFFFFF', '#F15A29'],
   moonshot: ['#0B0B0C', '#FFFFFF'], zai: ['#FFFFFF', '#0B0B0C'], qwen: ['#615CED', '#FFFFFF'], ollama: ['#FFFFFF', '#0B0B0C'],
   lmstudio: ['#4338CA', '#FFFFFF'],
 };
@@ -51,7 +67,7 @@ const TILE = {
 export function brandTile(id, size = 28, cls = '') {
   const key = Object.hasOwn(SAME_MAKER, id) ? SAME_MAKER[id] : id;
   const [bg, fg] = Object.hasOwn(TILE, key) ? TILE[key] : [];
-  const el = h('span', { class: `btile${bg ? '' : ' plain'}${bg === '#FFFFFF' ? ' light' : ''}${cls ? ' ' + cls : ''}`, 'aria-hidden': 'true' }, brandMark(id, Math.round(size * (bg ? 0.6 : 0.55))));
+  const el = h('span', { class: `btile${bg ? '' : ' plain'}${bg === '#FFFFFF' ? ' light' : ''}${cls ? ' ' + cls : ''}`, 'aria-hidden': 'true' }, brandMark(id, Math.round(size * (bg ? 0.66 : 0.6))));
   el.style.setProperty('--bt', `${size}px`);
   if (bg) el.style.setProperty('--bt-bg', bg);
   if (fg) el.style.setProperty('--bt-fg', fg);

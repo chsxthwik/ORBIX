@@ -191,8 +191,8 @@ export function logoTile(size = 44) {
 // Home and an empty conversation. The mark is sampled into particles (one per ~1.3 px of its two halves). They come
 // in as a flat Plasma galaxy that spirals into the O, the halves swap along the brand's arc (the far one smaller and
 // dimmer) into the X, and the mark snaps with a shock ring. Then it is matter: the pointer parts it, a click scatters
-// it and springs pull it back; a Plasma sheen sweeps across every 7 s (2.4 s while an agent works). At rest the exact
-// vector mark is drawn over the particles, so it stays crisp, and the loop sleeps until the next sweep or the pointer
+// it and springs pull it back; a Plasma sheen sweeps across every 2.4 s while an agent works. At rest the exact
+// vector mark is drawn over the particles, so it stays crisp, and the loop draws nothing until an agent works or the pointer
 // comes near: no frames are drawn while nothing moves, and none while it is off screen or the window is hidden.
 // Reduced motion draws the still X.
 const ease3 = (t) => 1 - (1 - t) ** 3;
@@ -417,7 +417,8 @@ export function heroMark(size = 72) {
     settled = false;
     if (phase === 0) intro(); else live(f, pu);
     draw();
-    if (phase === 1 && settled) timer = setTimeout(wake, Math.max(50, nextSweep - clock));
+    // At rest nothing is drawn: the next sweep is scheduled only while an agent works; the pointer or a new turn wakes it.
+    if (phase === 1 && settled) timer = busy ? setTimeout(wake, Math.max(50, nextSweep - clock)) : 0;
     else raf = requestAnimationFrame(frame);
   }
   function wake() {
@@ -461,7 +462,7 @@ export function heroMark(size = 72) {
   if (still) toStill();
   const ro = new ResizeObserver(() => {
     const r = canvas.getBoundingClientRect();
-    cw = r.width; ch = r.height; dpr = window.devicePixelRatio || 1;
+    cw = r.width; ch = r.height; dpr = Math.min(2, window.devicePixelRatio || 1); // a 2x canvas is sharp enough and half the pixels of 4x
     canvas.width = Math.max(1, Math.round(cw * dpr)); canvas.height = Math.max(1, Math.round(ch * dpr));
     draw();
     wake();

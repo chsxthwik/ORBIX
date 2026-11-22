@@ -129,8 +129,8 @@
 .app.side-rail .sidebar :is(.side-link, .proj-btn) { position: relative; }
 .app.side-rail .sidebar .side-link:has(.side-count)::after,
 .app.side-rail .sidebar .proj-btn[data-state]:not([data-state=""])::after { content: ''; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg-side); background: var(--warn); }
-.app.side-rail .sidebar .side-link:has(.side-count.quiet)::after, .app.side-rail .sidebar .proj-btn[data-state=run]::after { background: var(--working); }
-.app.side-rail .sidebar .proj-btn[data-state=unread]::after { width: 6px; height: 6px; background: var(--fg); }
+.app.side-rail .sidebar .side-link:has(.side-count.quiet)::after, .app.side-rail .sidebar .proj-btn[data-state=run]:not([data-state=""])::after { background: var(--working); }
+.app.side-rail .sidebar .proj-btn[data-state=unread]:not([data-state=""])::after { width: 6px; height: 6px; background: var(--fg); }
 
 /* ================= light themes ================= */
 :root[data-mode=light] .app .sidebar .side-week { background: var(--bg-raise); box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgb(0 0 0 / .04); }
@@ -183,3 +183,7 @@
 .mp-empty p { margin: 0; }
 .pv-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pv-via { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg-2); font-size: 11px; font-weight: 500; }
+
+/* Provider marks whose own colours fall under 3:1 on light surfaces use one colour there (js/brands.js); on their
+   dark tiles they keep their colours. */
+:root[data-mode=light] .bm-lowlight:not(.btile .bm-lowlight) * { fill: currentColor; }
