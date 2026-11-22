@@ -6,7 +6,7 @@
   <img alt="ORBIX" src="docs/img/logo-light.svg" width="279" height="60">
 </picture>
 
-### Every coding agent. Your PC or your cloud.
+### Every Coding Agent - Your PC or Your Cloud.
 
 An agentic development environment for Windows: its own agent with any model, plus Claude Code, Codex,<br>
 OpenCode and any ACP agent on the plans you already pay for. Every agent asks before it acts.<br>
