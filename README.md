@@ -15,7 +15,7 @@ Every coding agent. Every model. One environment that asks before it acts.
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-FF2E7E?style=flat-square&labelColor=151514)](#install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-FF2E7E?style=flat-square&labelColor=151514)](LICENSE)
 
-**[Download for Windows](https://github.com/chsxthwik/ORBIX/releases/latest)** · [Website](https://orbix-agent.vercel.app) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Security](SECURITY.md)
+**[Download for Windows](https://github.com/chsxthwik/ORBIX/releases/latest)** · [Website](https://orbix-agent.vercel.app) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Security](SECURITY.md) · [Discord](https://discord.gg/TcZ2MGCQ)
 
 </div>
 
@@ -200,6 +200,19 @@ npm run dist    # build the installer into dist/
 | `site/` | The website |
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request.
+
+## Community
+
+Questions, ideas and show-and-tell are welcome.
+
+| | |
+| --- | --- |
+| **Discord** | [discord.gg/TcZ2MGCQ](https://discord.gg/TcZ2MGCQ) |
+| **Telegram** | [t.me/rootmaxhackers](https://t.me/rootmaxhackers) |
+| **X** | [COM-X](https://x.com/comxhq) · [QUANTUM](https://x.com/chsxthwik) |
+| **Links** | [linktr.ee/sxthwik](https://linktr.ee/sxthwik) |
+
+Found a bug? [Open an issue](https://github.com/chsxthwik/ORBIX/issues). Found a vulnerability? Follow [SECURITY.md](SECURITY.md).
 
 ## License
 
