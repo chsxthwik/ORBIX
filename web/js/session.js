@@ -1047,12 +1047,17 @@ export class TabView {
     let u = t.messages[idx] === m ? idx : t.messages.indexOf(m); // the index is known when drawing: no search per reply
     while (u > 0 && t.messages[u].role !== 'user') u--;
     const start = t.messages[u]?.role === 'user' ? t.messages[u].timestamp : m.timestamp;
-    if (start && m.doneAt > start) bits.push(fmtDuration(m.doneAt - start));
     const out = m.usage?.output || 0;
     const writing = m.doneAt && m.firstTokenAt ? (m.doneAt - m.firstTokenAt) / 1000 : 0;
-    if (out > 0 && writing > 0.25) bits.push(`${(out / writing).toFixed(1)} tok/s`);
-    const tip = [m.provider ? `${m.provider}/${id}` : id, m.firstTokenAt && m.timestamp ? `First token after ${fmtDuration(m.firstTokenAt - m.timestamp)}` : '', out ? `${NUM.format(out)} output tokens` : ''].filter(Boolean).join('\n');
-    return h('span', { class: 'msg-model num', title: tip }, bits.join(' · '));
+    // One fact on screen, the model; the turn's time, the writing speed and the rest are in the tooltip.
+    const tip = [
+      m.provider ? `${m.provider}/${id}` : id,
+      start && m.doneAt > start ? `Took ${fmtDuration(m.doneAt - start)}` : '',
+      out > 0 && writing > 0.25 ? `${(out / writing).toFixed(1)} tokens a second` : '',
+      m.firstTokenAt && m.timestamp ? `First token after ${fmtDuration(m.firstTokenAt - m.timestamp)}` : '',
+      out ? `${NUM.format(out)} output tokens` : '',
+    ].filter(Boolean).join('\n');
+    return h('span', { class: 'msg-model num', title: tip }, bits[0]);
   }
 
   /**

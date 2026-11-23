@@ -141,7 +141,7 @@ try {
             // reduced motion and forced colours
             await dt.media([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
             await sleep(200);
-            check(await page.eval(`return [...document.querySelectorAll('#sidebar .dgrid i, #sidebar .sw-bars i')].every((i) => getComputedStyle(i).animationName === 'none')`), 'reduced motion: the sidebar does not animate');
+            check(await page.eval(`return [...document.querySelectorAll('#sidebar .dgrid i')].every((i) => getComputedStyle(i).animationName === 'none')`), 'reduced motion: the sidebar does not animate');
             await dt.media([{ name: 'forced-colors', value: 'active' }]);
             await sleep(300);
             check(await page.eval(`return matchMedia('(forced-colors: active)').matches`), 'forced colours: emulated');

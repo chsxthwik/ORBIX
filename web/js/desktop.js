@@ -10,7 +10,6 @@ const win = bridge?.windows || null;
 let winState = null;
 
 /** Windows' state as the app last heard it (null outside the Windows app). */
-export const windowsState = () => winState;
 
 /** Any CSS colour as #rrggbb (computed colours come back as rgb(), color(srgb …) or color-mix results). */
 const probe = document.createElement('canvas');

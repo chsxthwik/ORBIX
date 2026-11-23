@@ -40,8 +40,8 @@ details.think > summary { color: var(--fg-3); }
 .c-status { color: var(--fg-3); }
 
 /* ---- primary actions: flat, no lamp ---- */
-.btn.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); box-shadow: none; }
-.btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 86%, var(--bg)); box-shadow: none; transform: none; }
+.btn.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 86%, var(--bg)); transform: none; }
 .btn.primary:active:not(:disabled), .send:not(.stop):not(:disabled):active { transform: scale(.98); box-shadow: none; }
 
 /* ---- panels, menus and dialogs: flat surfaces over a dim, unblurred workspace ---- */

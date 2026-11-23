@@ -214,7 +214,7 @@ function syncMeter(t) {
   meter.classList.toggle('hot', level === 'hot');
   meter.classList.toggle('crit', level === 'crit');
   arc.setAttribute('stroke-dasharray', `${((RING * Math.min(100, pct || 0)) / 100).toFixed(2)} ${RING.toFixed(2)}`);
-  const label = u?.tokens > 0 ? `${fmtTokens(u.tokens)}${Number.isFinite(pct) ? ` · ${Math.floor(pct)}%` : ''}` : 'Context';
+  const label = u?.tokens > 0 ? (Number.isFinite(pct) ? `${Math.floor(pct)}%` : fmtTokens(u.tokens)) : 'Context';
   if (meter.lastChild.textContent !== label) meter.lastChild.textContent = label;
   meter.title = u?.contextWindow ? `Context and cost · ${fmtTokens(u.tokens)} of ${fmtTokens(u.contextWindow)} tokens (${pct.toFixed(1)}%)${u.estimated ? ', estimated' : ''}` : 'Context and cost';
   meter.setAttribute('aria-label', meter.title);

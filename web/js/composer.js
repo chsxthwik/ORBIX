@@ -106,7 +106,7 @@ export function dropZone(zone, target) {
 }
 
 /** The message box's hint when it is idle: what you can type and the three prefixes. */
-export const ASK = 'Ask anything · / commands · @ context · ! shell';
+export const ASK = 'Ask anything, or type / for commands, @ for context, ! for a shell';
 
 export class Composer {
   /**

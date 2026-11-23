@@ -1,6 +1,5 @@
 /* Runs and Review: the hub views beside Home, and the page of one run. Uses the tokens of app.css only. */
 .runs { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
-.runs:not([hidden]) { animation: fade-in var(--t2) var(--ease); }
 .hub { margin: 0 auto; padding: 20px clamp(12px, 3vw, 28px) 40px; display: flex; flex-direction: column; gap: 16px; }
 .hub-head h1 { margin: 0 0 4px; }
 .hub-head p { margin: 0; max-width: 68ch; line-height: 1.55; }
@@ -146,4 +145,4 @@ button.rstep-btn:hover { background: var(--bg-hover); }
   .chg-files { position: static; }
   .hub { padding: 20px 16px 40px; }
 }
-@media (prefers-reduced-motion: reduce) { .runs:not([hidden]) { animation: none; } }
+@media (prefers-reduced-motion: reduce) {  }

@@ -5,7 +5,7 @@ import { h, logo } from './dom.js';
 const motionOff = matchMedia('(prefers-reduced-motion: reduce)');
 const reduced = { get matches() {
   const root = document.documentElement;
-  return motionOff.matches || root.classList.contains('sr') || root.dataset.motion === 'off';
+  return motionOff.matches || root.classList.contains('sr') || root.classList.contains('no-motion');
 } };
 const TAU = Math.PI * 2;
 // 4x4 ordered dither, so shading steps between two characters instead of banding.
@@ -128,7 +128,7 @@ function charCanvas({ cols, rows, font, lineH, cls }) {
         schedule();
       };
       const theme = new MutationObserver(invalidate);
-      theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme', 'data-mode', 'data-motion'] });
+      theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme', 'data-mode'] });
       const options = { signal: stop.signal };
       motionOff.addEventListener('change', invalidate, options);
       document.addEventListener('visibilitychange', schedule, options);
