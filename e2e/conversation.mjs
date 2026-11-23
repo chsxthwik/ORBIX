@@ -247,16 +247,17 @@ try {
   await page.key(',', { ctrl: true, keyCode: 188, code: 'Comma' });
   await page.until(`document.querySelector('.modal.settings-card')`, 'Settings');
   await page.eval(`document.querySelector('#set-keys').click()`);
-  await page.eval(`document.querySelector('[aria-label="Add keys for Show or hide the sidebar"]').click()`);
+  await page.eval(`document.querySelector('[aria-label="Add keys for Sidebar: full or rail"]').click()`);
   await page.until(`document.querySelector('.kc-rec')`, 'recording keys');
   await page.key('F7', { keyCode: 118, code: 'F7' });
   await page.until(`(async () => ((await import('/js/store.js')).S.ui.keys?.sidebar || []).includes('F7'))()`, 'F7 saved for the sidebar');
   assert(await page.eval(`return !!document.querySelector('.modal.settings-card')`), 'recording a key does not close Settings');
   await page.key('Escape', { keyCode: 27, code: 'Escape' });
   await page.until(`!document.querySelector('.modal.settings-card')`, 'Settings closed');
-  const side0 = await page.eval(`return !document.querySelector('#app').classList.contains('no-side')`);
+  // The sidebar key switches the full sidebar and the rail (dragging it narrower closes it).
+  const rail0 = await page.eval(`return document.querySelector('#app').classList.contains('side-rail')`);
   await page.key('F7', { keyCode: 118, code: 'F7' });
-  await page.until(`(document.querySelector('#app').classList.contains('no-side')) === ${side0}`, 'F7 toggled the sidebar');
+  await page.until(`document.querySelector('#app').classList.contains('side-rail') === ${!rail0}`, 'F7 toggled the sidebar rail');
   await page.key('F7', { keyCode: 118, code: 'F7' });
   await page.eval(`(await import('/js/store.js')).savePrefs({ keys: {} })`);
   // Ctrl+K finds a setting by name and opens its page.

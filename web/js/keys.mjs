@@ -15,7 +15,7 @@ export const ACTIONS = [
   { id: 'forward', group: 'General', label: 'Go forward', keys: ['Alt+→', 'Ctrl+]'], field: false },
   { id: 'nextConv', group: 'General', label: 'Next open conversation', keys: ['Ctrl+Tab'] },
   { id: 'prevConv', group: 'General', label: 'Previous open conversation', keys: ['Ctrl+Shift+Tab'] },
-  { id: 'sidebar', group: 'General', label: 'Show or hide the sidebar', keys: ['Ctrl+B'] },
+  { id: 'sidebar', group: 'General', label: 'Sidebar: full or rail', keys: ['Ctrl+B'] },
   { id: 'panel', group: 'Side panel', label: 'Show or hide the side panel', keys: ['Ctrl+J'] },
   { id: 'terminal', group: 'Side panel', label: 'Show or hide the terminal', keys: ['Ctrl+`', 'Ctrl+Alt+T'] },
   { id: 'nextPanelTab', group: 'Side panel', label: 'Next side panel tab', keys: ['Ctrl+Shift+.'] },
