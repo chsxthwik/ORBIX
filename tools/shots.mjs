@@ -931,8 +931,8 @@ async function main() {
     const errs = page.errors.filter(Boolean);
     if (errs.length) say(`Console errors:\n  ${errs.join('\n  ')}`);
     else say('Console: no errors');
-    if (COMPARE) failures = visualCompare(PNG_DIR);
-    if (AUDIT) failures = reportAudit();
+    if (COMPARE) failures += visualCompare(PNG_DIR);
+    if (AUDIT) failures += reportAudit();
   } finally {
     await stop();
   }
