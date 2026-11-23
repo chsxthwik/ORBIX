@@ -13,7 +13,7 @@ const DEFAULTS = {
   workspaces: [],
   // Chat first (3.8): the side panel starts closed and the sidebar is narrower. A config from before gets the same
   // once, through layoutOnce in main.js (no 'layout' here, so an old config is recognised by its absence).
-  ui: { theme: 'system', density: 'comfortable', showThinking: true, autoScroll: true, rightPanel: false, rightTab: 'home', sidebarW: 240, panelW: 380, fontSize: 14 },
+  ui: { theme: 'system', density: 'comfortable', showThinking: true, autoScroll: true, rightPanel: false, rightTab: 'home', sidebarW: 260, panelW: 380, fontSize: 14 },
 };
 
 /** Keys older versions saved for an external CLI engine (since removed); dropped on load so they never come back. */

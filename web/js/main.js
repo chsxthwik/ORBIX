@@ -1293,13 +1293,14 @@ async function adoptRunning(procs, { quiet = false } = {}) {
 }
 
 /**
- * Once, on the first start of 3.8: the chat-first layout (side panel closed until you open it, a narrower sidebar).
- * A sidebar width you dragged yourself is kept; the old defaults (264 or 292) are not.
+ * Once per layout generation. 3.8: the chat-first layout (side panel closed until you open it, a narrower sidebar).
+ * 4: the sidebar is 260px by default. A sidebar width you dragged yourself is kept; the old defaults (240, 264, 292) are not.
  */
 function layoutOnce() {
-  if ((S.ui.layout || 0) >= 2) return;
+  const was = S.ui.layout || 0;
+  if (was >= 3) return;
   const w = S.ui.sidebarW;
-  const patch = { layout: 2, rightPanel: false, ...(w === 264 || w === 292 || !w ? { sidebarW: SIDE_W } : {}) };
+  const patch = { layout: 3, ...(was < 2 ? { rightPanel: false } : {}), ...(w === 240 || w === 264 || w === 292 || !w ? { sidebarW: SIDE_W } : {}) };
   Object.assign(S.ui, patch); // before anything is drawn, so no redraw is needed
   api.post('/api/prefs', { ui: patch }).catch(() => {});
 }
