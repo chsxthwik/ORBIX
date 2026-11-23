@@ -642,7 +642,11 @@ function drawChanges(t) {
     }, 'sm');
     return body.append(h('div', { class: 'empty' }, h('span', { class: 'empty-ic', 'aria-hidden': 'true' }, icon('branch', 17)), h('b', null, 'Not a Git repository'), h('span', null, 'Initialize Git to track the agent’s changes here, review them and undo them.'), init));
   }
-  if (!g.files.length) return body.append(emptyState('check', 'No changes yet.'));
+  if (!g.files.length) {
+    // After Commit & push the tree is clean: what it did (the commit, the push, the pull request link) stays on screen.
+    const done = shippedNote(t);
+    return body.append(done ? h('div', { class: 'p-scroll ship-done' }, done, emptyState('check', 'Nothing left to commit.')) : emptyState('check', 'No changes yet.'));
+  }
   const list = h('div', { class: 'p-scroll' });
   const paths = (files) => files.flatMap((f) => (f.from ? [f.path, f.from] : [f.path]));
   const letter = (f) => (f.untracked ? 'U' : f.x !== ' ' ? f.x : f.y);

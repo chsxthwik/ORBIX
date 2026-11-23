@@ -564,10 +564,10 @@ html.sr .logo .lg-h, :root[data-motion=off] .logo .lg-h { animation: none !impor
 .cbtn.plan-pick.on, .c-row .cbtn.plan.on { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--fg); }
 .cbtn.plan-pick.on svg, .c-row .cbtn.plan.on svg { color: var(--brand); }
 /* Send: a round button in the text colour; the brand colour on hover. Stop turns red on hover. */
-.send { flex: none; width: 32px; height: 32px; min-height: 32px; margin-left: 4px; padding: 0; border: 0; border-radius: 50%; background: var(--fg); color: var(--bg); box-shadow: none; }
+/* The send button is one of the few places the accent is used. */
+.send { flex: none; width: 32px; height: 32px; min-height: 32px; margin-left: 4px; padding: 0; border: 0; border-radius: 50%; background: var(--accent-solid); color: var(--on-accent); box-shadow: none; }
 .send > svg { width: 16px; height: 16px; }
-.send:not(.stop):not(:disabled):hover { background: var(--plasma); color: #FFFFFF; }
-:root[data-mode=light] .send:not(.stop):not(:disabled):hover { color: #FFFFFF; }
+.send:not(.stop):not(:disabled):hover { background: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); }
 .send:disabled { background: var(--bg-active); color: var(--fg-3); }
 .send.stop { background: var(--err); color: #FFFFFF; box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent); }
 .send.stop:hover { background: color-mix(in srgb, var(--err) 86%, #fff); }

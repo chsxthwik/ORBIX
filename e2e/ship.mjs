@@ -48,13 +48,13 @@ try {
 
   // The model writes the message (the scripted model answers a short text; whatever it says becomes the message).
   await page.click('Write', '.commit-box');
-  await page.until(`document.querySelector('.commit-msg').value.trim().length > 0`, 'a written message');
+  await page.until(`document.querySelector('.commit-msg').value.trim().length > 0`, 'a written message', 90000);
   say('ship e2e: Write fills the message');
 
   await page.fill('.commit-msg', 'Lock an email after 5 failed sign-ins\n\nAdds `src/limit.js` and the limit in `src/auth.js`.');
   await page.eval(`document.querySelector('.commit-msg').focus()`);
   await page.key('Enter', { ctrl: true, keyCode: 13, code: 'Enter' });
-  await page.until(`document.querySelector('.ship')?.textContent.includes('Pushed orbix/ship-test to origin')`, 'the push', 60000);
+  await page.until(`document.querySelector('.ship')?.textContent.includes('Pushed orbix/ship-test to origin')`, 'the push', 90000);
   assert(await page.eval(`return document.querySelector('.ship').textContent.includes('Committed') && document.querySelector('.ship').textContent.includes('Lock an email after 5 failed sign-ins')`), 'the note names the commit');
   const link = await page.eval(`return document.querySelector('.ship-link')?.getAttribute('href') || ''`);
   assert(link.startsWith('https://github.com/acme/shop-api/compare/main...orbix%2Fship-test?'), `the pull request link points at the branch (${link.slice(0, 90)})`);

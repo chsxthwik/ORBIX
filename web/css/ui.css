@@ -112,3 +112,6 @@
 .mp-search:focus-within { border-bottom-color: var(--accent); box-shadow: 0 1px 0 var(--accent); }
 .clr:focus-within { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
 .resizer:focus-visible::after { opacity: 1; background: var(--accent); }
+
+/* After Commit & push the tree is clean: the result (the commit, the push, the pull request link) stays above the empty note. */
+.ship-done { display: grid; align-content: start; gap: var(--sp-4); padding: var(--sp-3); }
