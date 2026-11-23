@@ -31,7 +31,7 @@
 .sidebar .side-link { position: relative; display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--ctl-h); padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .side-link:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .side-link:hover .sic { color: var(--fg-2); }
-.sidebar .side-count { flex: none; min-width: var(--sp-5); height: var(--sp-5); margin-left: auto; padding: 0 var(--sp-1); border-radius: var(--sp-2); background: var(--warn-soft); color: var(--warn); font: var(--fw) var(--fs-12)/20px var(--font); text-align: center; }
+.sidebar .side-count { flex: none; min-width: var(--sp-5); height: var(--sp-5); margin-left: auto; padding: 0 var(--sp-1); border-radius: var(--sp-2); background: var(--warn-soft); color: color-mix(in srgb, var(--warn) 78%, var(--fg)); font: var(--fw) var(--fs-12)/20px var(--font); text-align: center; }
 .sidebar .side-count.quiet { background: transparent; color: var(--fg-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 
 /* The current page or conversation: a soft fill and a 2px accent bar on its left edge. Only that row has colour. */

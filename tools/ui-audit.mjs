@@ -235,7 +235,8 @@ export function auditPage() {
 export function focusPrepare() {
   const style = (e) => {
     const cs = getComputedStyle(e);
-    return [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.borderTopColor, cs.backgroundColor, cs.color, cs.textDecorationLine].join('|');
+    const bits = ['::before', '::after'].map((p) => { const ps = getComputedStyle(e, p); return `${ps.opacity}/${ps.backgroundColor}`; });
+    return [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.borderTopColor, cs.backgroundColor, cs.color, cs.textDecorationLine, ...bits].join('|');
   };
   const wrap = (e) => e.closest('label, .field, .composer, .set-search, .cz-search, .c-box, .seg, .switch');
   const list = [...document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])')].filter((e) => {

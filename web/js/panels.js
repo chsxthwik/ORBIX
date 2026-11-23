@@ -729,6 +729,9 @@ function diffBody(t, f) {
   return renderUnifiedDiff(d.text, f.path);
 }
 
+/** Refreshes the buttons of the commit box now on screen (the box is drawn again whenever the panel is, even while the model writes). */
+let commitSync = null;
+
 /** The commit box: a message (its first line is the title, the rest the body), Write, Commit, and Commit & push. */
 function commitBox(t, nStaged, nAll) {
   const ta = h('textarea', { class: 'commit-msg', rows: '3', placeholder: 'Commit message: the first line is the title, the rest is the body', 'aria-label': 'Commit message', spellcheck: 'true' });
@@ -737,14 +740,14 @@ function commitBox(t, nStaged, nAll) {
   const write = btn('Write', async () => {
     if (P.writing) return;
     P.writing = true;
-    sync();
+    commitSync?.();
     try {
       await writeMessage(t, ta);
     } catch (e) {
       toast(e.message, 'error', 7000);
     }
     P.writing = false;
-    sync();
+    commitSync?.();
   }, 'sm');
   write.prepend(icon('sparkle', 13));
   write.title = canWrite ? 'Write the title and body from the changes, with this conversation’s model' : 'Open a conversation to write the message with its model';
@@ -791,6 +794,7 @@ function commitBox(t, nStaged, nAll) {
     await loadGit(true);
     if (P.tab === 'changes' && cur() === t) draw();
   };
+  commitSync = sync;
   ta.addEventListener('input', sync);
   ta.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), ship(true));
@@ -838,9 +842,11 @@ async function writeMessage(t, ta) {
   if (r?.success === false || r?.ok === false) throw new Error(r.error || 'The model could not write it');
   const { title, body: text } = splitMessage(r?.data?.text || '');
   if (!title) throw new Error('The model returned nothing to use');
-  ta.value = joinMessage(title, text);
-  ta.dispatchEvent(new Event('input'));
-  ta.focus();
+  // The box may have been drawn again while the model wrote: the message goes in the one on screen.
+  const box = document.querySelector('.commit-box .commit-msg') || ta;
+  box.value = joinMessage(title, text);
+  box.dispatchEvent(new Event('input'));
+  box.focus();
 }
 
 /** Tasks: the agent's task list, then the helper agents it started for research. */

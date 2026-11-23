@@ -48,7 +48,10 @@ try {
 
   // The model writes the message (the scripted model answers a short text; whatever it says becomes the message).
   await page.click('Write', '.commit-box');
-  await page.until(`document.querySelector('.commit-msg').value.trim().length > 0`, 'a written message', 90000);
+  // A message, or the error toast that says why there is none.
+  await page.until(`document.querySelector('.commit-msg').value.trim().length > 0 || document.querySelector('.toast')`, 'a written message', 90000);
+  const written = await page.eval(`return document.querySelector('.commit-msg').value.trim()`);
+  assert(written, `Write fills the message (the page said: ${await page.eval(`return document.querySelector('.toast')?.innerText || ''`)})`);
   say('ship e2e: Write fills the message');
 
   await page.fill('.commit-msg', 'Lock an email after 5 failed sign-ins\n\nAdds `src/limit.js` and the limit in `src/auth.js`.');

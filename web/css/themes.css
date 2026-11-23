@@ -150,5 +150,5 @@
 :root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox], [data-theme=latte], [data-theme=dawn]) :is(.btn.primary, .send:not(.stop):not(:disabled)) { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
 :root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox], [data-theme=latte], [data-theme=dawn]) :is(.btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover) { background: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); border-color: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); }
 /* Changed words in a diff: a lighter wash on light palettes, so coloured code on it still reads. */
-:root:is([data-mode=light], [data-theme=latte], [data-theme=dawn]) mark.wd.add { background: color-mix(in srgb, var(--ok) 16%, transparent); }
-:root:is([data-mode=light], [data-theme=latte], [data-theme=dawn]) mark.wd.del { background: color-mix(in srgb, var(--err) 16%, transparent); }
+:root:is([data-mode=light], [data-theme=latte], [data-theme=dawn]) mark.wd.add { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+:root:is([data-mode=light], [data-theme=latte], [data-theme=dawn]) mark.wd.del { background: color-mix(in srgb, var(--err) 10%, transparent); }
