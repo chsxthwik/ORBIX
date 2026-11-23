@@ -58,12 +58,16 @@ export function contextMessages(messages) {
     // A compaction in the middle of a long run can summarize the user's request itself; the model then gets it back
     // word for word after the summary, so an exact instruction ("do not touch file Y") is never only paraphrased.
     let text = summaryText(messages[start].summary);
+    let ask;
     if (!messages.slice(start + 1).some((m) => m.role === 'user')) {
-      const ask = messages.slice(0, start).findLast((m) => m.role === 'user');
-      const said = (ask?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n').trim();
-      if (said) text += `\n\n<latest-user-message>\n${said.length > 8000 ? `${said.slice(0, 8000)}\n[… cut at 8,000 characters]` : said}\n</latest-user-message>`;
+      // Saved markers from older versions could cut through a turn. Restore the entire user message.
+      ask = messages.slice(0, start).findLast((m) => m.role === 'user');
+      const said = (ask?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+      if (said) text += `\n\n<latest-user-message>\n${said}\n</latest-user-message>`;
     }
-    out.push({ role: 'user', content: [{ type: 'text', text }], timestamp: messages[start].timestamp });
+    const content = [{ type: 'text', text }, ...(ask?.content || []).filter((c) => c.type === 'image')];
+    if (ask?.attachments?.length) content.push({ type: 'text', text: attachmentsText(ask.attachments) });
+    out.push({ role: 'user', content, timestamp: messages[start].timestamp, ...(ask?.attachments?.length ? { attachments: ask.attachments } : {}) });
   }
   // A reply that was stopped or failed mid-stream can hold tool calls that never ran; providers reject a tool call
   // without a result, so those calls are left out.
@@ -103,6 +107,8 @@ export function contextTokens(messages) {
   const start = lastMarker(messages);
   for (let i = messages.length - 1; i > start; i--) {
     const m = messages[i];
+    const marker = messages[start];
+    if (marker && (m.contextMeasure ? m.contextMeasure.epoch !== (marker.id || marker.timestamp || null) : m.timestamp && marker.timestamp && m.timestamp < marker.timestamp)) continue;
     if (m.role === 'assistant' && m.usage && m.usage.input + m.usage.cacheRead + m.usage.cacheWrite > 0) {
       return m.usage.input + m.usage.cacheRead + m.usage.cacheWrite + m.usage.output + estimateTokens(messages.slice(i + 1));
     }
@@ -117,8 +123,11 @@ export function contextTokens(messages) {
  */
 export function findCut(messages, keepTokens) {
   const start = lastMarker(messages) + 1;
+  // Never summarize the newest actual user message, including its files and images.
+  const user = messages.findLastIndex((m) => m.role === 'user');
+  const end = user < 0 ? messages.length - 1 : user;
   let maxCut = -1;
-  for (let i = messages.length - 1; i >= start; i--) {
+  for (let i = end; i >= start; i--) {
     if (messages[i].role === 'user' || messages[i].role === 'assistant') {
       maxCut = i;
       break;
@@ -137,6 +146,21 @@ export function findCut(messages, keepTokens) {
   // Prefer starting the kept part at a user turn when one is close by.
   for (let j = cut; j <= maxCut && j < cut + 8; j++) if (messages[j].role === 'user') return j;
   return cut > start ? cut : -1;
+}
+
+export const MANUAL_KEEP_TURNS = 6;
+
+/** One chat turn starts at a user message and includes its replies and tool exchanges. */
+export function manualCut(messages) {
+  const start = lastMarker(messages) + 1;
+  let keep = -1;
+  let turns = 0;
+  for (let i = messages.length - 1; i >= start; i--) {
+    if (messages[i].role !== 'user') continue;
+    if (++turns === MANUAL_KEEP_TURNS) keep = i;
+    if (turns > MANUAL_KEEP_TURNS) return keep;
+  }
+  return -1;
 }
 
 /**
@@ -240,7 +264,7 @@ export function rebuildSession(file) {
     if (o.type === 'message' && o.message) messages.push(o.message);
     else if (o.type === 'compaction' && typeof o.summary === 'string') {
       const at = Math.max(0, messages.length - Math.max(0, o.keptCount | 0));
-      messages.splice(at, 0, { role: 'compactionSummary', summary: o.summary, tokensBefore: o.tokensBefore, timestamp: o.timestamp || Date.now(), ...(o.usage ? { usage: o.usage } : {}), ...(Number.isFinite(o.cost) ? { cost: o.cost } : {}) });
+      messages.splice(at, 0, { role: 'compactionSummary', summary: o.summary, tokensBefore: o.tokensBefore, timestamp: o.timestamp || Date.now(), ...(o.id ? { id: o.id } : {}), ...(o.usage ? { usage: o.usage } : {}), ...(Number.isFinite(o.cost) ? { cost: o.cost } : {}) });
     } else if (o.type === 'rewind' && Number.isInteger(o.count) && o.count >= 0) {
       for (const k of ['input', 'output', 'cacheRead', 'cacheWrite', 'cost']) extras.droppedUsage[k] += Number(o.dropped?.[k]) || 0;
       messages.length = Math.min(messages.length, o.count);

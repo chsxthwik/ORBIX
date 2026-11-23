@@ -4,7 +4,8 @@
 import { h, icon, iconBtn, replace, clear, toast, skeleton, baseName, copyText, debounce, errorState, fmtTokens, fmtCost, keyHint } from './dom.js';
 import { asciiSpin } from './ascii.js';
 import { api, rpc } from './api.js';
-import { S, activeTab, emit, on, savePrefs, sendPrompt } from './store.js';
+import { S, activeTab, emit, on, savePrefs } from './store.js';
+import { compactBlock, contextBar, requestCompaction } from './context-popover.js';
 import { homeProject } from './home.js';
 import { codeView, renderUnifiedDiff, todoList, agentRow } from './tools.js';
 import { langFor } from './highlight.js';
@@ -735,7 +736,8 @@ function drawDiff(t) {
 let ctxEl = null;
 function drawContext(t) {
   ctxEl = { grid: h('dl', { class: 'ctx-grid' }), prompt: h('div', { class: 'ctx-prompt' }, skeleton(6, 'pad')), t };
-  const compact = btn('Compact now', () => sendPrompt(t, '/compact').catch((e) => toast(e.message, 'error')), 'sm');
+  const compact = btn('Compact now', () => requestCompaction(t), 'sm');
+  compact.disabled = true;
   const copy = btn('Copy system prompt', () => copyText(ctxEl?.promptText || '').then(() => toast('Copied', 'ok', 1200)), 'sm');
   ctxEl.compact = compact;
   ctxEl.copy = copy;
@@ -760,7 +762,7 @@ async function fillContext(t) {
   try {
     st = (await rpc(t.id, { type: 'get_session_stats' }))?.data || st;
   } catch {}
-  if (!ctxEl?.grid.isConnected) return;
+  if (!ctxEl?.grid.isConnected || ctxEl.t !== t) return;
   const msgs = t.messages || [];
   const cu = st.contextUsage || t.stats?.contextUsage;
   const tk = st.tokens || {};
@@ -775,9 +777,9 @@ async function fillContext(t) {
     ['Messages', n(st.totalMessages ?? msgs.length)],
     ['Provider', pv || '—'],
     ['Model', m ? m.name || m.id : '—'],
-    ['Context limit', cu ? n(cu.contextWindow) : '—'],
+    ['Context limit', cu?.contextWindow ? `${n(cu.contextWindow)}${cu.windowEstimated ? ' (estimated)' : ''}` : '—'],
     ['In context now', cu ? `${n(cu.tokens)}${cu.estimated ? ' (estimated)' : ''}` : '—'],
-    ['Usage', cu ? `${cu.percent < 1 ? cu.percent.toFixed(1) : Math.round(cu.percent)}%` : '—'],
+    ['Usage', Number.isFinite(cu?.percent) ? `${cu.percent.toFixed(1)}%` : '—'],
     ['Total tokens', n(tk.total)],
     ['Input tokens', n(tk.input)],
     ['Output tokens', n(tk.output)],
@@ -791,13 +793,13 @@ async function fillContext(t) {
     ['Last activity', when(times[times.length - 1])],
   ].filter(Boolean);
   ctxEl.grid.replaceChildren(...rows.map(([k, v]) => h('div', { class: 'ctx-cell' }, h('dt', null, k), h('dd', { class: 'num' }, v))));
-  if (cu) {
-    const bar = h('div', { class: 'ctx-bar' + (cu.percent > 90 ? ' crit' : cu.percent > 70 ? ' hot' : '') }, h('i'));
-    bar.firstChild.style.setProperty('--p', `${Math.min(100, cu.percent).toFixed(1)}%`);
+  const bar = contextBar(cu);
+  if (bar) {
     ctxEl.grid.append(h('div', { class: 'ctx-cell wide' }, h('dt', null, `Context window · ${fmtTokens(cu.tokens)} of ${fmtTokens(cu.contextWindow)}`), bar));
   }
-  ctxEl.compact.disabled = !!t.streaming || !msgs.length;
-  ctxEl.compact.title = t.streaming ? 'Wait until the agent is done' : 'Summarize older turns now to free the context';
+  const blocked = compactBlock(t, st);
+  ctxEl.compact.disabled = !!blocked || !cu;
+  ctxEl.compact.title = blocked || (cu ? 'Summarize older turns. The latest six stay verbatim.' : 'This agent manages its own context.');
 }
 
 function drawTodos(t) {

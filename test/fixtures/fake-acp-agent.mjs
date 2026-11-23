@@ -2,6 +2,9 @@
 // session/prompt. A prompt containing "cmd" asks permission to run a command first, then reports the step.
 import readline from 'node:readline';
 
+// `node --test` runs every file under test/, this one too: only serve when a test starts it.
+if (!process.argv.includes('--serve')) process.exit(0);
+
 const send = (o) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...o }) + '\n');
 const update = (sessionId, u) => send({ method: 'session/update', params: { sessionId, update: u } });
 let seq = 1000;

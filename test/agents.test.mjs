@@ -53,11 +53,11 @@ describe('custom agents', () => {
 
 describe('a conversation on an ACP agent', () => {
   const backend = new Backend({ kind: 'native' });
-  const config = { data: { approvals: 'ask', agents: [{ name: 'Fake', command: `${process.execPath} ${FAKE}` }] } };
+  const config = { data: { approvals: 'ask', agents: [{ name: 'Fake', command: `${process.execPath} ${FAKE} --serve` }] } };
   const registry = new AgentRegistry({ backend, config });
   // The test agent's command has an absolute path to node, so detection does not depend on PATH.
   registry.detect = async () => ({ 'agent-x-fake': { path: process.execPath, version: 'test' } });
-  const agent = { ...registry.get('agent-x-fake'), args: [FAKE] };
+  const agent = { ...registry.get('agent-x-fake'), args: [FAKE, '--serve'] };
   const ws = path.join(TMP, 'ws');
   fs.mkdirSync(ws, { recursive: true });
   let file;

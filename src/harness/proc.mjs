@@ -426,6 +426,8 @@ export class HarnessProc extends EventEmitter {
         return ok({ commands: this.cache.commands });
       case 'get_session_stats':
         return ok({ tokens: { input: this.usage.input, output: this.usage.output, cacheRead: this.usage.cacheRead, cacheWrite: this.usage.cacheWrite, total: this.usage.input + this.usage.output + this.usage.cacheRead + this.usage.cacheWrite }, cost: this.costKnown ? this.cost : undefined, messages: this.messages.length });
+      case 'get_context_budget':
+        return ok({ cost: this.costKnown ? this.cost : undefined, contextOwner: this.agent.name, compactBlock: 'This agent manages its own context. ORBIX cannot guarantee which turns its compaction keeps.' });
       // An agent CLI builds its own system prompt; ORBIX never sees it.
       case 'get_system_prompt':
         return ok({ text: '', owner: this.agent.name });

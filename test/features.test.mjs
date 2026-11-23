@@ -186,8 +186,8 @@ describe('model roles', () => {
   test('compaction summaries and helper agents use the fast model; plan mode uses the plan model', async () => {
     const roles = { fast: 'anthropic/claude-fast', plan: 'anthropic/claude-plan' };
     const p = await make(makeConfig({ roles: () => roles }));
-    // a long enough conversation to compact
-    for (let i = 0; i < 4; i++) {
+    // a long enough conversation to compact (manual compaction keeps the latest six turns)
+    for (let i = 0; i < 7; i++) {
       const both = byModel({ 'claude-test': sse(turn({ text: `answer ${i} ${'x'.repeat(2000)}`, input: 500 })), 'claude-fast': sse(turn({ text: 'Title' })) });
       script = i === 0 ? [both, both] : [both];
       await send(p, `question ${i} ${'y'.repeat(2000)}`);

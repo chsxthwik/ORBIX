@@ -366,11 +366,13 @@ function reduce(tab, ev) {
       break;
     case 'auto_compaction_start':
       tab.compacting = true;
+      tab.compactionResult = null;
       emit('tab:status', tab);
       note(tab, 'info', 'Compacting context…');
       break;
     case 'auto_compaction_end': {
       tab.compacting = false;
+      tab.compactionResult = ev.reason === 'manual' ? { result: ev.result, error: ev.errorMessage } : null;
       emit('tab:status', tab);
       if (ev.skipped) {
         note(tab, 'info', 'Nothing to compact yet');
@@ -378,9 +380,11 @@ function reduce(tab, ev) {
       }
       const failed = ev.aborted || ev.result === null || !!ev.errorMessage;
       if (!failed) {
-        note(tab, 'info', 'Context compacted');
+        const saved = ev.result?.tokensSaved;
+        note(tab, 'info', saved > 0 ? `Context compacted · about ${saved.toLocaleString()} tokens saved` : 'Context compacted');
         attachSoft(tab);
       } // otherwise the agent reports its own reason
+      refreshStats(tab);
       break;
     }
     case 'auto_retry_start':

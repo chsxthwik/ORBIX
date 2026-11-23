@@ -700,6 +700,66 @@ describe('agent loop end to end (mock provider)', () => {
     for (const p of procs) await p.stop();
   });
 
+  test('the context budget reconciles to mock provider usage and counts cache only once', async () => {
+    const p = await make();
+    script = [
+      sseResponse(turn({ tools: [{ id: 'context-read', name: 'read', args: { path: 'hello.txt' } }], stop: 'tool_use', input: 1000, output: 20 })),
+      sseResponse(turn({ text: 'I read the file.', input: 14990, cacheRead: 3050, output: 85 })),
+    ];
+    await send(p, 'Read hello.txt and consider this attached draft.', { attachments: [{ path: 'draft.md', text: 'This is my attached draft.' }] });
+    const { data } = await p.request({ type: 'get_context_budget' });
+    const u = data.contextUsage;
+    assert.deepEqual(u.lastRequest, { provider: 'anthropic', model: 'claude-test', input: 18040, output: 85 });
+    assert.equal(u.contextWindow, 200000);
+    assert.ok(Math.abs(u.tokens - 18125) / 18125 <= 0.05, 'current usage agrees with reported prompt plus reply');
+    assert.equal(u.breakdown.reduce((n, r) => n + r.tokens, 0), u.tokens);
+    assert.deepEqual(u.breakdown.map((r) => r.key), ['system', 'rules', 'files', 'history', 'results']);
+    assert.ok(u.breakdown.every((r) => r.tokens > 0));
+    const expected = ((1000 + 14990) * 3 + (20 + 85) * 15 + 3050 * 0.3) / 1e6;
+    assert.ok(Math.abs(data.cost - expected) < 1e-9);
+  });
+
+  test('manual compaction saves context, keeps six complete turns and never consumes an approval', async () => {
+    const p = await make();
+    for (let i = 0; i < 8; i++) {
+      script = [sseResponse(turn({ text: `Reply ${i}.`, input: 10000 + i * 400, output: 12 }))];
+      await send(p, i < 2 ? `Old turn ${i}\n${'Earlier notes. '.repeat(350)}` : `Keep this request ${i} exactly.`);
+    }
+    const snapshot = structuredClone(p.messages);
+    assert.equal(snapshot.filter((m) => m.role === 'user').length, 8);
+    const before = (await p.request({ type: 'get_context_budget' })).data;
+    const approval = () => assert.fail('compaction must not answer an approval');
+    p.pendingAsk.set('approval', approval);
+    const calls = requests.length;
+    try {
+      await assert.rejects(p.request({ type: 'compact' }), /pending approval/);
+      assert.equal(p.pendingAsk.get('approval'), approval);
+      assert.equal(requests.length, calls);
+      assert.deepEqual(p.messages, snapshot);
+    } finally {
+      p.pendingAsk.delete('approval');
+    }
+    script = [sseResponse(turn({ text: 'Earlier turns discussed project notes.', input: 1900, output: 15 }))];
+    const end = await runCmd(p, { type: 'compact' });
+    const result = p.events.findLast((e) => e.type === 'auto_compaction_end')?.result;
+    assert.ok(result?.tokensSaved > 0);
+    assert.equal(result.tokensSaved, result.tokensBefore - result.tokensAfter);
+    assert.equal(end.usage.input, 1900, 'the activity bills the summary, not the last old reply');
+    assert.match(JSON.stringify(lastBody().messages), /Old turn 0/);
+    assert.doesNotMatch(JSON.stringify(lastBody().messages), /Keep this request/);
+    const marker = compact.lastMarker(p.messages);
+    assert.equal(marker, 4);
+    assert.deepEqual(p.messages.slice(marker + 1), snapshot.slice(4), 'all six kept turns, including the latest user message, are unchanged');
+    assert.deepEqual(p.messages.slice(0, marker), snapshot.slice(0, 4), 'the older transcript remains available on screen');
+    const restored = compact.rebuildSession(p.session.file).messages;
+    assert.deepEqual(restored.slice(marker + 1), snapshot.slice(4), 'same retained messages after reopening');
+    const after = (await p.request({ type: 'get_context_budget' })).data;
+    assert.equal(after.contextUsage.tokens, result.tokensAfter);
+    assert.equal(after.contextUsage.estimated, true, 'old provider count is not reused after compaction');
+    assert.ok(after.cost > before.cost, 'summary spend is included');
+    await assert.rejects(p.request({ type: 'compact' }), /seven turns/);
+  });
+
   test('a plain reply: system prompt with environment and project rules, cache breakpoints, status and cost', async () => {
     const p = await make();
     script = [sseResponse(turn({ text: 'Hi there.', input: 1000, output: 10 }))];

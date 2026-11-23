@@ -90,7 +90,7 @@ export async function environmentFacts(backend, workspace, { git: withGit = true
  * The full system prompt. `rules`: [{ path, text, truncated }] nearest first (as loadInstructions returns them);
  * `skills`: the skills section text; `mcp`: the MCP section text.
  */
-export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex = [], skills = '', mcp = '', planMode = false, noCoAuthor = false, modelRules = [] }) {
+export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex = [], skills = '', mcp = '', planMode = false, noCoAuthor = false, modelRules = [], onRules }) {
   const parts = [CORE];
   parts.push(
     [
@@ -110,6 +110,7 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex
   else if (approvals === 'edits') parts.push('# Approvals\nwrite and edit run without asking (each can be undone); bash asks the user each time, except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   else if (approvals) parts.push('# Approvals\nwrite, edit and bash ask the user for approval each time (read-only tools do not), except commands the user has marked as trusted. A denied call means: do not do that; ask the user how to proceed if unsure.');
   if (noCoAuthor) parts.push('# Commits\nWrite commit messages and pull request descriptions as the user: no Co-authored-by lines, no "generated with" lines and no mention of an AI or of ORBIX.');
+  const rulesStart = parts.length;
   if (rules.length) {
     const ordered = [...rules].reverse(); // repository root first, the folder closest to the project last (it wins)
     parts.push(`# Project instructions\nFollow these instructions from the project. When they conflict, the later (more specific) file wins.\n\n${ordered.map((r) => `<instructions path="${r.path}"${r.truncated ? ' truncated="true"' : ''}>\n${r.text}\n</instructions>`).join('\n\n')}`);
@@ -117,6 +118,7 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex
   if (ruleIndex.length) {
     parts.push(`# Project rules that apply sometimes\nThese rules from .agents/rules are not loaded yet. When one applies (by its description, or because you work on files matching its patterns), read its file with the read tool first and follow it.\n${ruleIndex.map((r) => `- ${r.path}${r.trigger === 'glob' ? ` (for files matching ${r.globs || 'its patterns'})` : ''}${r.description ? `: ${r.description}` : ''}`).join('\n')}`);
   }
+  onRules?.(parts.slice(rulesStart).join('\n\n'));
   // Settings → Instructions → For some models: added when the model id contains the rule's text.
   const forModel = (modelRules || []).filter((r) => r.match && r.text && String(model || '').toLowerCase().includes(r.match.toLowerCase()));
   if (forModel.length) parts.push(`# Instructions for this model\n${forModel.map((r) => r.text).join('\n\n')}`);

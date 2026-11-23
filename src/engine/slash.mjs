@@ -65,10 +65,15 @@ export async function runSlash(agent, text) {
       if (agent.streaming) return busy();
       agent._out((await agent._undoLastTurn()).text);
       return true;
-    case 'compact':
-      if (agent.streaming) return busy();
+    case 'compact': {
+      const blocked = agent._compactBlock();
+      if (blocked) {
+        agent._emit({ type: 'notice', level: 'info', message: blocked });
+        return true;
+      }
       agent._exclusive(() => agent._compactCmd(args)).catch((e) => agent.emit('stderr', String(e?.stack || e)));
       return true;
+    }
     case 'plan':
       agent.planMode = !agent.planMode;
       if (agent.session) agent._persistRaw({ type: 'plan', on: agent.planMode });

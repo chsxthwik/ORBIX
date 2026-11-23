@@ -8,6 +8,7 @@ import { h, icon, iconBtn, wordmark, logo, baseName, fmtElapsed, timeAgo, projTi
 import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 import { contextMenu } from './context.js';
+import { contextLevel, openContextBudget } from './context-popover.js';
 import { gitState, showTab } from './panels.js';
 import { firstKey } from './keys.mjs';
 import { onMachine, backToThisPc } from './machines.js';
@@ -176,8 +177,8 @@ function crumbs(t, hub) {
 
 // ================= context meter =================
 
-/** How full the conversation's context is: a ring and the tokens used ("96k"); a click opens the Context tab. */
-const meter = h('button', { class: 'tb-ctx', type: 'button', hidden: true });
+/** How full the conversation's context is: open the breakdown, cost and compact action. */
+const meter = h('button', { class: 'tb-ctx', type: 'button', hidden: true, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' });
 const RING = 2 * Math.PI * 6;
 const arc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
 {
@@ -193,25 +194,25 @@ const arc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
   arc.setAttribute('stroke-dasharray', `0 ${RING}`);
   meter.append(svg, h('span', { class: 'num' }));
 }
-function usage(t) {
-  const cu = t?.stats?.contextUsage;
-  if (!t || t.dead || !cu?.contextWindow || !(cu.tokens > 0)) return null;
-  return { ...cu, pct: Math.min(100, cu.percent ?? (cu.tokens / cu.contextWindow) * 100) };
-}
 function syncMeter(t) {
-  const u = usage(t);
-  meter.hidden = !u;
-  if (!u) return;
-  meter.classList.toggle('hot', u.pct > 70 && u.pct <= 90);
-  meter.classList.toggle('crit', u.pct > 90);
-  arc.setAttribute('stroke-dasharray', `${((RING * u.pct) / 100).toFixed(2)} ${RING.toFixed(2)}`);
-  const label = fmtTokens(u.tokens);
+  meter.hidden = !t || t.dead;
+  if (meter.hidden) return;
+  const u = t.stats?.contextUsage;
+  const pct = u?.percent;
+  const level = contextLevel(pct);
+  meter.classList.toggle('hot', level === 'hot');
+  meter.classList.toggle('crit', level === 'crit');
+  arc.setAttribute('stroke-dasharray', `${((RING * Math.min(100, pct || 0)) / 100).toFixed(2)} ${RING.toFixed(2)}`);
+  const label = u?.tokens > 0 ? `${fmtTokens(u.tokens)}${Number.isFinite(pct) ? ` · ${Math.floor(pct)}%` : ''}` : 'Context';
   if (meter.lastChild.textContent !== label) meter.lastChild.textContent = label;
-  meter.title = `Context: ${fmtTokens(u.tokens)} of ${fmtTokens(u.contextWindow)} tokens (${u.pct < 1 ? u.pct.toFixed(1) : Math.round(u.pct)}%)${u.estimated ? ', estimated' : ''}`;
+  meter.title = u?.contextWindow ? `Context and cost · ${fmtTokens(u.tokens)} of ${fmtTokens(u.contextWindow)} tokens (${pct.toFixed(1)}%)${u.estimated ? ', estimated' : ''}` : 'Context and cost';
   meter.setAttribute('aria-label', meter.title);
 }
-// A click opens the Context tab: tokens by kind, cost, the system prompt, and Compact.
-meter.addEventListener('click', () => showTab('context'));
+meter.addEventListener('click', () => {
+  const tab = activeTab();
+  if (tab && !tab.dead) openContextBudget(meter, tab, () => showTab('context'));
+});
+on('tab:state', (tab) => { if (tab === activeTab()) syncMeter(tab); });
 
 let topSig = '';
 export function drawToolbar(el, { force = false } = {}) {

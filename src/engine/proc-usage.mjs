@@ -1,16 +1,25 @@
 // One conversation's token usage, cost and context fill. Part of AgentProc (see proc.mjs and mixin.mjs): these
 // methods read and write the agent's messages, usage, cost, costKnown, dropped and meta.
-import { contextTokens } from './compact.mjs';
+import { manualCut } from './compact.mjs';
 import { costOf } from './catalog.mjs';
+import { contextBudget } from './context-budget.mjs';
 
 export const zeroUsage = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
 
 export class UsageAccounting {
   _contextUsage() {
-    const cw = this.meta?.contextWindow;
-    if (!cw) return undefined;
-    const tokens = contextTokens(this.messages);
-    return { tokens, contextWindow: cw, percent: Math.min(100, (tokens / cw) * 100), estimated: !this.meta?.contextWindowKnown };
+    return contextBudget({
+      messages: this.messages, context: this._context(), prompt: this.contextPromptWeights,
+      provider: this.provider, model: this.model, window: this.meta?.contextWindow || null,
+      windowKnown: this.meta?.contextWindowKnown, planMode: this.planMode,
+    });
+  }
+
+  _compactBlock({ busy = true } = {}) {
+    if (this.pendingAsk.size || this.openUi?.size) return 'Answer the pending approval or question first.';
+    if ((busy && this.streaming) || this.compacting) return 'Wait for the agent to finish first.';
+    if (manualCut(this.messages) < 0) return 'At least seven turns are needed. The latest six stay verbatim.';
+    return '';
   }
 
   _stats() {
@@ -28,6 +37,7 @@ export class UsageAccounting {
       tokens: { ...u, total: u.input + u.output + u.cacheRead + u.cacheWrite },
       cost: this.costKnown ? this.cost : undefined,
       contextUsage: this._contextUsage(),
+      compactBlock: this._compactBlock(),
     };
   }
 

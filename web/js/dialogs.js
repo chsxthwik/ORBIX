@@ -252,7 +252,7 @@ export const thinkingLevels = (x) => (x?.thinking?.efforts?.length ? [...(x.thin
  * A small panel anchored to `anchor` (above it when there is no room below). Esc, an outside click or a resize close
  * it and focus goes back to the anchor. Returns { el, close }.
  */
-export function popover(anchor, content, { align = 'start', cls = '', label = '' } = {}) {
+export function popover(anchor, content, { align = 'start', cls = '', label = '', onClose } = {}) {
   document.querySelector('.menu:not(.leaving)')?._close?.();
   const el = h('div', { class: `menu pop-panel${cls ? ' ' + cls : ''}`, role: 'dialog', 'aria-label': label || null }, content);
   document.body.append(el);
@@ -275,6 +275,7 @@ export function popover(anchor, content, { align = 'start', cls = '', label = ''
     document.removeEventListener('mousedown', off, true);
     document.removeEventListener('keydown', onKey, true);
     removeEventListener('resize', close);
+    onClose?.();
     if (refocus) anchor.focus?.({ preventScroll: true });
   };
   const off = (e) => !el.contains(e.target) && !anchor.contains(e.target) && close(false);

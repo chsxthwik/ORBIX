@@ -12,7 +12,8 @@ import * as providers from './providers.mjs';
 import { NEEDS_APPROVAL, READ_ONLY, createTools, toolDefsFor, invalidArgsText } from './tools.mjs';
 import { createSession, appendEntry, closeSession, loadSession, repairTail, branchSession } from './store.mjs';
 import { loadInstructions, readMentions, promptAttachments, promptImages, loadUserInstructions, loadRules } from './context.mjs';
-import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, pruneOutputs, rebuildSession, summarize, tokenScale, transcript } from './compact.mjs';
+import { compactLimit, contextMessages, contextTokens, estimateTokens, findCut, isOverflow, lastMarker, manualCut, pruneOutputs, rebuildSession, summarize, tokenScale, transcript } from './compact.mjs';
+import { contextEpoch, contextWeights, promptWeights } from './context-budget.mjs';
 import { runTasks, SUBAGENT_TOOLS } from './subagent.mjs';
 import { TurnAssembler, collectTurn } from './assemble.mjs';
 import { HookRunner } from './hooks.mjs';
@@ -221,6 +222,11 @@ export class AgentProc extends EventEmitter {
         return ok({ commands: this.cache.commands });
       case 'get_session_stats':
         return ok(this._stats());
+      case 'get_context_budget': {
+        const parts = await this._system({ budget: true });
+        this.contextPromptWeights = promptWeights(parts.text, parts.rules, this._toolDefs());
+        return ok(this._stats());
+      }
       // The Context tab: the system prompt this conversation sends with its next turn.
       case 'get_system_prompt':
         return ok({ text: await this._system() });
@@ -234,7 +240,8 @@ export class AgentProc extends EventEmitter {
       case 'set_thinking_level':
         return ok({ level: await this._setThinking(String(cmd.level || 'off')) });
       case 'compact': {
-        if (this.streaming) throw new Error('Wait for the agent to finish (or stop it), then compact.');
+        const blocked = this._compactBlock();
+        if (blocked) throw Object.assign(new Error(blocked), { status: 409 });
         this._exclusive(() => this._compactCmd(cmd.customInstructions || cmd.focus || '')).catch((e) => this.emit('stderr', String(e?.stack || e)));
         return ok({});
       }
@@ -467,7 +474,7 @@ export class AgentProc extends EventEmitter {
         run.stopReason = 'aborted';
       }
       this.streaming = false;
-      const spent = this._usageOf(this.messages.slice(run.from));
+      const spent = this._usageOf([...this.messages.slice(run.from), ...(run.earlierCompactions || [])]);
       const summary = {
         status: run.status,
         stopReason: run.stopReason,
@@ -524,7 +531,7 @@ export class AgentProc extends EventEmitter {
   /** The agent loop from the current conversation: model turn, tools, repeat until the model stops. */
   async _loop(conn) {
     const run = this.run;
-    const system = await this._system();
+    const { text: system, rules } = await this._system({ budget: true });
     const once = { compactions: 0, overflow: false, empty: false, midStream: false, continues: 0, stop: false };
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       await this._drainSteer();
@@ -544,7 +551,7 @@ export class AgentProc extends EventEmitter {
       }
       this._emit({ type: 'turn_start' });
       run.turns++;
-      const asst = await this._streamAssistant({ conn, system, retryEmpty: !once.empty, retryError: !once.midStream });
+      const asst = await this._streamAssistant({ conn, system, rules, retryEmpty: !once.empty, retryError: !once.midStream });
       const calls = asst.content.filter((c) => c.type === 'toolCall');
       const end = (results = []) => this._emit({ type: 'turn_end', message: asst, toolResults: results });
       if (asst.stopReason === 'error' && !once.overflow && isOverflow(asst.errorMessage)) {
@@ -657,7 +664,7 @@ export class AgentProc extends EventEmitter {
     return this.envFacts;
   }
 
-  async _system({ subagent = false, tools } = {}) {
+  async _system({ subagent = false, tools, budget = false } = {}) {
     const [env, found, skills] = await Promise.all([this._envFacts().catch(() => ({ workspace: this.workspace, shell: shellFact(this.backend, this.workspace), os: 'Windows', date: new Date().toISOString().slice(0, 10), git: null })), Promise.all([loadInstructions(this.backend, this.workspace).catch(() => []), loadUserInstructions().catch(() => null), loadRules(this.backend, this.workspace).catch(() => ({ always: [], listed: [] }))]), subagent ? [] : this._skills()]);
     const [own, mine, projectRules] = found;
     // Nearest first (as loadInstructions returns them): .agents/rules that always apply, then AGENTS.md up the tree, then yours.
@@ -666,8 +673,10 @@ export class AgentProc extends EventEmitter {
     const model = this.model ? `${this.provider ? this.provider + '/' : ''}${this.model}` : '';
     if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules, ruleIndex }), tools);
     // A run has its own phase instructions; the generic plan-mode text would contradict them.
-    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, ruleIndex, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo, noCoAuthor: this.config.data.noCoAuthor === true, modelRules: this.config.data.modelRules || [] });
-    return this.runInfo ? `${base}\n\n${runPrompt({ phase: this.runInfo.phase(), branch: this.worktree?.branch, baseBranch: this.worktree?.baseBranch })}` : base;
+    let ruleText = '';
+    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, ruleIndex, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo, noCoAuthor: this.config.data.noCoAuthor === true, modelRules: this.config.data.modelRules || [], onRules: budget ? (s) => { ruleText = s; } : undefined });
+    const text = this.runInfo ? `${base}\n\n${runPrompt({ phase: this.runInfo.phase(), branch: this.worktree?.branch, baseBranch: this.worktree?.baseBranch })}` : base;
+    return budget ? { text, rules: ruleText } : text;
   }
 
   _skills() {
@@ -689,7 +698,7 @@ export class AgentProc extends EventEmitter {
    * Stream one assistant turn into a message (shown live, then saved). With `retryEmpty` an empty reply, and with
    * `retryError` a reply whose connection broke mid-stream, is marked `discard` (kept for the record, not sent again).
    */
-  async _streamAssistant({ conn, system, retryEmpty = false, retryError = false }) {
+  async _streamAssistant({ conn, system, rules = '', retryEmpty = false, retryError = false }) {
     const signal = this.abortCtl.signal;
     const msg = { role: 'assistant', content: [], api: this.config.type(conn.provider || this.provider), provider: conn.provider || this.provider, model: conn.model || this.model, usage: { ...zeroUsage(), totalTokens: 0 }, stopReason: 'stop', timestamp: Date.now() };
     if (conn.thinking) msg.thinkingLevel = conn.thinking;
@@ -708,9 +717,14 @@ export class AgentProc extends EventEmitter {
       asm.refreshPartial(); // partial tool arguments are parsed only when a snapshot goes out
       this._emit({ type: 'message_update', message: structuredClone(msg), assistantMessageEvent: { type: r.kind, contentIndex: r.index, delta: r.delta } });
     };
+    const messages = this._context();
+    const tools = this._toolDefs();
+    this.contextPromptWeights = promptWeights(system, rules, tools);
+    const weights = contextWeights(messages, this.contextPromptWeights);
+    const epoch = contextEpoch(this.messages);
     this._emit({ type: 'message_start', message: structuredClone(msg) });
     try {
-      for await (const ev of conn.stream({ system, messages: this._context(), tools: this._toolDefs(), signal })) {
+      for await (const ev of conn.stream({ system, messages, tools, signal })) {
         if (ev.type === 'retry') {
           retrying = true;
           this._emit({ type: 'auto_retry_start', attempt: ev.attempt, maxAttempts: ev.maxAttempts, delayMs: ev.delayMs, errorMessage: ev.reason });
@@ -744,6 +758,10 @@ export class AgentProc extends EventEmitter {
       msg.discardReason = 'empty';
     }
     msg.usage.totalTokens = msg.usage.input + msg.usage.output + msg.usage.cacheRead + msg.usage.cacheWrite;
+    const input = msg.usage.totalTokens - msg.usage.output;
+    if (input > 0 && msg.stopReason !== 'error' && msg.stopReason !== 'aborted') {
+      msg.contextMeasure = { input, output: msg.usage.output, weights, epoch, plan: this.planMode, window: conn.contextWindow, windowKnown: !!conn.info?.contextWindow };
+    }
     const cost = this._costOf(msg.usage, conn.info);
     if (cost !== undefined) msg.usage.cost = { total: cost };
     this._addUsage(msg.usage, cost);
@@ -830,13 +848,12 @@ export class AgentProc extends EventEmitter {
   }
 
   async _compactCmd(focus) {
-    const conn = await this._connect();
-    await this._compact({ conn, reason: 'manual', focus });
+    await this._compact({ reason: 'manual', focus });
   }
 
   /** Summarize older messages and insert a compaction marker. Returns true when something was compacted. */
   async _compact({ conn, reason, focus = '' }) {
-    if (this.compacting) return false;
+    if (this.compacting || this.pendingAsk.size || this.openUi?.size) return false;
     this.compacting = true;
     this._emit({ type: 'auto_compaction_start', reason });
     let result = null;
@@ -845,11 +862,16 @@ export class AgentProc extends EventEmitter {
       const cw = this.meta?.contextWindow || 128000;
       let keep = Math.min(Math.floor(cw * 0.25), 60000);
       if (reason !== 'threshold') keep = Math.min(keep, Math.floor(estimateTokens(contextMessages(this.messages)) * 0.3));
-      const cut = findCut(this.messages, Math.max(500, keep / tokenScale(this.messages)));
-      if (cut < 0) throw new Error('Nothing to compact yet: the conversation is too short.');
+      const cut = reason === 'manual' ? manualCut(this.messages) : findCut(this.messages, Math.max(500, keep / tokenScale(this.messages)));
+      if (cut < 0) throw new Error(reason === 'manual' ? 'Nothing to compact: the latest six turns are kept verbatim.' : 'Nothing to compact yet: no older turns to summarize.');
       const from = Math.max(0, lastMarker(this.messages));
       const older = this.messages.slice(from, cut);
-      const tokensBefore = contextTokens(this.messages);
+      conn ||= await this._connect();
+      if (reason === 'manual' && !this.contextPromptWeights) {
+        const parts = await this._system({ budget: true });
+        this.contextPromptWeights = promptWeights(parts.text, parts.rules, this._toolDefs());
+      }
+      const tokensBefore = this._contextUsage().tokens;
       // Summaries are written by the fast model when one is chosen.
       const sconn = (await this._roleConnSafe('fast')) || conn;
       const { summary, usage } = await summarize({
@@ -861,13 +883,19 @@ export class AgentProc extends EventEmitter {
         onRetry: (ev) => this._emit({ type: 'auto_retry_start', attempt: ev.attempt, maxAttempts: ev.maxAttempts, delayMs: ev.delayMs, errorMessage: ev.reason }),
       });
       if (this.abortCtl?.signal.aborted) throw new Error('Stopped');
+      if (this.pendingAsk.size || this.openUi?.size) throw new Error('Answer the pending approval or question first.');
       const cost = this._costOf(usage, sconn.info);
-      const marker = { role: 'compactionSummary', summary, tokensBefore, timestamp: Date.now(), usage, ...(cost !== undefined ? { cost } : {}) };
+      const marker = { role: 'compactionSummary', id: uid('cmp'), summary, tokensBefore, timestamp: Date.now(), usage, ...(cost !== undefined ? { cost } : {}) };
       const keptCount = this.messages.length - cut;
+      this._persistRaw({ type: 'compaction', id: marker.id, summary, keptCount, tokensBefore, timestamp: marker.timestamp, usage, ...(cost !== undefined ? { cost } : {}) });
       this.messages.splice(cut, 0, marker);
-      this._persistRaw({ type: 'compaction', summary, keptCount, tokensBefore, timestamp: marker.timestamp, usage, ...(cost !== undefined ? { cost } : {}) });
+      if (this.run && cut < this.run.from) {
+        this.run.from++;
+        (this.run.earlierCompactions ||= []).push(marker);
+      }
       this._addUsage(usage, cost);
-      result = { summary, tokensBefore, tokensAfter: contextTokens(this.messages), firstKeptIndex: cut + 1 };
+      const tokensAfter = this._contextUsage().tokens;
+      result = { summary, tokensBefore, tokensAfter, tokensSaved: Math.max(0, tokensBefore - tokensAfter), estimated: true, firstKeptIndex: cut + 1 };
       return true;
     } catch (e) {
       error = this.abortCtl?.signal.aborted ? 'Stopped' : e?.message || String(e);
