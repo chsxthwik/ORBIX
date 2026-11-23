@@ -58,7 +58,7 @@
 .home-box-h .home-status .ibtn { width: var(--sp-6); height: var(--sp-6); min-height: var(--sp-6); }
 .home-box-h .home-status .ibtn[hidden] { display: none; }
 .home-box-h .home-status .ibtn[aria-disabled=true] { opacity: .55; cursor: wait; }
-.home-box-h .home-status:empty, .home-box-h .home-status-details:empty { display: none; }
+.home-box-h .home-status:empty, .home-box-h .home-status-details:empty, .home-box-h .home-status:has(> .home-status-details:empty) { display: none; } /* a folder that is not a git repository has nothing to show: no empty chip */
 .home .home-composer .c-ta { min-height: 72px; padding: var(--sp-4) var(--sp-4) var(--sp-1); font-size: var(--fs); }
 /* On Home, Start says what comes first ("Open folder") until everything is ready, then it is the round button. */
 .home .send.start.text { display: inline-flex; align-items: center; width: auto; height: var(--ctl-h); padding: 0 var(--sp-4); border-radius: var(--sp-4); font-size: var(--fs-13); font-weight: var(--fw); white-space: nowrap; }
