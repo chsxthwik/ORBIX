@@ -628,7 +628,6 @@ function drawSidebar() {
           sideIcon(view), h('span', { class: 'side-l' }, label), count ? h('span', { class: `side-count num${view === 'runs' ? ' quiet' : ''}`, title: status, 'aria-label': status }, count) : null, keyHint(shortcut));
       })),
     h('div', { class: 'side-scroll', onkeydown: listKeys, onfocusin: (e) => e.target.dataset?.rove === '-1' && rove(e.target) },
-      runningList(),
       pinnedList(term),
       h('div', { class: 'side-h' }, h('span', null, 'Projects'),
         h('span', { class: 'side-h-acts' },
@@ -644,7 +643,8 @@ function drawSidebar() {
           iconBtn('folder-plus', 'Open a project folder', openFolder, 'sm'))),
       showFilter ? h('div', { class: 'side-search' }, icon('search', 14), search) : null,
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'No projects yet.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
-    weekCard() || '',
+    // The agents at work sit in a dock above the footer: one appearing or finishing never moves the list above it.
+    runningList() || weekCard() || '',
     h('div', { class: 'side-foot' },
       h('button', { class: 'side-link foot-set', type: 'button', title: `Settings${firstKey(S.ui.keys, 'settings') ? ` (${firstKey(S.ui.keys, 'settings')})` : ''}`, onclick: () => settingsDialog() }, sideIcon('settings'), h('span', { class: 'side-l' }, 'Settings'), keyHint(firstKey(S.ui.keys, 'settings'))),
       footStatus()),
@@ -669,7 +669,7 @@ function drawSidebar() {
 function runningList() {
   const live = [...S.tabs.values()].filter(onBoard);
   if (!live.length || !showRunningSection()) return null;
-  return h('div', { class: 'run-sec' },
+  return h('div', { class: 'run-sec side-dock' },
     h('div', { class: 'side-h' }, h('span', null, 'Running')),
     live.map((t) => {
       const st = boardState(t);

@@ -66,7 +66,10 @@ export function modal({ title, body, actions = [], size = '', cls = '', onClose,
     setTimeout(() => scrim.remove(), 180);
     onClose?.(val);
     try {
-      const target = returnFocus?.() || prev;
+      let target = returnFocus?.() || prev;
+      // The opener was redrawn while the dialog was open (Home rebuilds its composer row as models load): return to
+      // the button that took its place, found by its classes and tooltip, instead of losing focus to the page.
+      if (target && !target.isConnected && target.classList?.length) target = document.querySelector([...target.classList].map((c) => '.' + CSS.escape(c)).join('') + (target.title ? `[title="${CSS.escape(target.title)}"]` : ''));
       if (target?.isConnected && !target.closest('[inert]')) target.focus({ preventScroll: true });
     } catch {}
   }

@@ -155,7 +155,11 @@ function updateStart(box) {
   box.comp.el.classList.toggle('busy', starting);
 }
 
+// A control is found again after a redraw by its classes and tooltip, so the focus stays on it (the model button
+// keeps the focus while the model list loads and Home redraws its row).
+const keyOf = (el) => (el?.classList?.length ? [...el.classList].map((c) => '.' + CSS.escape(c)).join('') + (el.title ? `[title="${CSS.escape(el.title)}"]` : '') : '');
 export function drawHome(root, H) {
+  const focusKey = root.contains(document.activeElement) && document.activeElement !== root ? keyOf(document.activeElement) : '';
   const agentOk = engineReady();
   const w = shell(root);
   drawLast = () => !root.hidden && drawHome(root, H);
@@ -292,7 +296,9 @@ export function drawHome(root, H) {
     emit('home:project');
   }
   const active = document.activeElement;
-  if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
+  const again = focusKey && (!active || active === document.body || !active.isConnected) ? root.querySelector(focusKey) : null;
+  if (again) again.focus({ preventScroll: true });
+  else if (!active || active === document.body || !active.isConnected) queueMicrotask(() => {
     if (!root.hidden && !document.querySelector('.scrim')) comp.focus();
   });
 }

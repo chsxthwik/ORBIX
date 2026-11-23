@@ -187,3 +187,7 @@
 /* Provider marks whose own colours fall under 3:1 on light surfaces use one colour there (js/brands.js); on their
    dark tiles they keep their colours. */
 :root[data-mode=light] .bm-lowlight:not(.btile .bm-lowlight) * { fill: currentColor; }
+
+/* The Running dock: above the footer, outside the scrolling list, so it never pushes rows; up to four rows show. */
+.app .sidebar .side-dock { flex: none; max-height: calc(4 * 46px + 30px); margin: 0; padding: 6px var(--sb-pad) 4px; overflow-y: auto; border-top: 1px solid var(--line); scrollbar-width: thin; }
+.app .sidebar .side-dock .side-h { margin-top: 0; }
