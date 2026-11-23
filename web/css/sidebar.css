@@ -65,8 +65,8 @@
 .sidebar .proj-btn[aria-expanded=false] .ptile { opacity: .8; }
 .sidebar .proj-name { min-width: 0; }
 .sidebar .proj-meta { display: inline-flex; align-items: center; gap: var(--sp-2); flex: 0 1 auto; min-width: 0; margin-left: auto; transition: opacity var(--dur-hover) var(--ease-out); }
-.sidebar .proj-br { max-width: 96px; height: var(--sp-5); padding: 0 6px; border-radius: var(--sp-1); background: var(--bg-hover); color: var(--fg-3); font: var(--fw) var(--fs-12)/20px var(--mono); }
-.sidebar .proj-live { display: inline-flex; align-items: center; gap: 6px; color: var(--working); font-size: var(--fs-12); }
+.sidebar .proj-br { max-width: 96px; height: var(--sp-5); padding: 0 8px; border-radius: var(--sp-1); background: var(--bg-hover); color: var(--fg-3); font: var(--fw) var(--fs-12)/20px var(--mono); }
+.sidebar .proj-live { display: inline-flex; align-items: center; gap: 8px; color: var(--working); font-size: var(--fs-12); }
 /* the row's actions fade in over its meta, so nothing moves */
 .sidebar .row-acts { position: absolute; right: var(--sp-1); top: 50%; display: flex; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity var(--dur-hover) var(--ease-out); }
 .sidebar .row-acts .ibtn { width: var(--sp-6); height: var(--sp-6); min-height: var(--sp-6); color: var(--fg-3); }

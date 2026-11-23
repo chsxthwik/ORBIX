@@ -6,7 +6,7 @@
 .drop .composer { border-color: var(--fg-2); border-style: dashed; }
 .composer .attach { margin: 0; padding: var(--sp-3) var(--sp-4) 0; }
 .composer .c-ta { min-height: 48px; max-height: min(320px, 40vh); padding: var(--sp-3) var(--sp-4) var(--sp-1); font-size: var(--fs); line-height: 1.6; }
-.composer.shell .c-ta { padding-top: 6px; font-family: var(--mono); }
+.composer.shell .c-ta { padding-top: 8px; font-family: var(--mono); }
 .composer.shell .c-mode { display: flex; animation: settle var(--t2) var(--ease-out); }
 .c-ta::placeholder { color: var(--fg-3); }
 
@@ -16,3 +16,5 @@
 
 /* "Latest": 12px above the message box, centred, never over the box's own text. */
 .dock .jump { bottom: calc(100% + var(--sp-3)); }
+
+@media (prefers-reduced-motion: reduce) { .composer { transition: none; } .composer.shell .c-mode { animation: none; } }

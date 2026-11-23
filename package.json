@@ -14,7 +14,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "e2e": "node e2e/run.mjs && node e2e/conversation.mjs",
+    "e2e": "node e2e/run.mjs && node e2e/conversation.mjs && node e2e/ship.mjs",
     "dist": "electron-builder --win nsis --publish never",
     "release": "electron-builder --win nsis --publish always",
     "shots": "node tools/shots.mjs",

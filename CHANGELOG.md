@@ -18,10 +18,19 @@ The unified open-source ADE: every coding agent and every model in one environme
 **Control**
 - **Four permission levels:** Supervised, Auto edits, Guarded (file changes and read-only commands such as `ls`, `grep`, `git status` and pipes of them) and Full access. Destructive commands ask at every level, for every agent.
 - **No server in the Windows app.** The engine runs in the app's own process and talks to the window over Electron IPC. Nothing listens on a port.
-- **No personal details from Windows.** Home greets you only by a name you set yourself.
+- **No personal details from Windows.** Nothing in the app reads your Windows account name, and Home has no greeting.
+
+**Interface**
+- **One 40px top row:** the logo, menus, sidebar toggle, back/forward and search on the left, the breadcrumb in the middle, the context ring and panel toggles on the right, and the Windows caption buttons after them. The row still drags the window.
+- **A smaller sidebar:** 260px by default, 220-360px by dragging (remembered). New conversation, Search, Runs and one **Customize** item that opens Plugins, Skills, Loops and Review as tabs. Project rows are 28px with the time in muted text and a 2px bar on the current row. A line above Settings ("52k tokens this week") opens a 7-day chart.
+- **Type, space and colour from tokens:** sizes 12/13/14/16/20/28, weight 400 (500 for headings), a 4px grid, 120ms hovers and 180ms panels with no bounce, and colour only for state (the accent is for focus, the current row, send and progress). `test/design-tokens.test.mjs` checks the stylesheets and `node tools/shots.mjs --audit` the rendered screens: sizes, weights, spacing, accent use, 4.5:1 text contrast, clipped or overlapping text.
+- **A plainer transcript:** your messages are right-aligned pills, replies plain text, Copy always visible and thumbs, time, model and speed on hover or focus. The steps fold into one row ("Worked for 44s · Read 8 files · Ran 2 commands") that opens on a click. Tables have hairlines and no fill.
+- **A flat message box:** one border, the accent only while it has focus, no glow. Placeholder "Ask anything · / commands · @ context · ! shell". Ctrl+Enter sends, Esc stops a run.
+- **Home and empty conversations:** a muted ORBIX mark, "Where should we pick up?", three suggestions as rows, and the project and branch chips on top of the message box.
+- **Review and ship:** the Changes panel lists changed files with +/- counts and opens an inline diff on click. **Commit & push** (Ctrl+Enter) writes the title and body, commits, pushes (setting the upstream on the first push) and shows the pull request as a link. Each run's header shows its branch as a chip.
 
 **Workspace**
-- **Conversation timeline:** a dot per message at the left edge (yours hollow, replies filled, the ones on screen lit). Hover shows the first line, a click scrolls to it, Alt+↑/↓ jumps between your messages; one tab stop with arrow keys, hidden on narrow windows.
+- **Conversation timeline:** one dot per message of yours, in a thin column 24px left of the text (hidden in windows under 1100px). Hover shows the first 60 characters, a click scrolls to it, the current turn's dot is filled; Alt+↑/↓ jumps between your messages; one tab stop with arrow keys.
 - **Long conversations are fast:** 2,000 messages open in about 0.3 s with every one in the page (older ones drawn while idle), so Find and copy reach all of it; off-screen messages skip layout, scrolling holds 60 fps.
 - **Context budget:** the toolbar meter opens a popover with what fills the model's window, its cost and Compact.
 - **Made for Windows:** Mica, the Windows accent colour, text size and high contrast; taskbar progress, a needs-you badge, a jump list and notifications you can act on.

@@ -16,7 +16,7 @@
   --ok: #9ECE6A; --ok-soft: rgba(158,206,106,.1); --ok-line: rgba(158,206,106,.32);
   --warn: #E0AF68; --warn-soft: rgba(224,175,104,.1); --warn-line: rgba(224,175,104,.45);
   --err: #F7768E; --err-soft: rgba(247,118,142,.1); --err-line: rgba(247,118,142,.4);
-  --add-bg: rgba(158,206,106,.1); --del-bg: rgba(247,118,142,.1); --code-ink: #E0AF68; --scrim: rgba(10,10,16,.7);
+  --add-bg: rgba(158,206,106,.1); --del-bg: rgba(247,118,142,.1); --scrim: rgba(10,10,16,.7);
   --t-kw: #BB9AF7; --t-str: #9ECE6A; --t-num: #FF9E64; --t-com: #565F89; --t-fn: #7AA2F7; --t-type: #2AC3DE; --t-prop: #73DACA; --t-var: #C0CAF5; --t-tag: #F7768E; --t-attr: #BB9AF7;
 }
 
@@ -32,7 +32,7 @@
   --ok: #A6E3A1; --ok-soft: rgba(166,227,161,.1); --ok-line: rgba(166,227,161,.32);
   --warn: #F9E2AF; --warn-soft: rgba(249,226,175,.1); --warn-line: rgba(249,226,175,.45);
   --err: #F38BA8; --err-soft: rgba(243,139,168,.1); --err-line: rgba(243,139,168,.4);
-  --add-bg: rgba(166,227,161,.1); --del-bg: rgba(243,139,168,.1); --code-ink: #FAB387; --scrim: rgba(10,10,18,.7);
+  --add-bg: rgba(166,227,161,.1); --del-bg: rgba(243,139,168,.1); --scrim: rgba(10,10,18,.7);
   --t-kw: #CBA6F7; --t-str: #A6E3A1; --t-num: #FAB387; --t-com: #9399B2; --t-fn: #89B4FA; --t-type: #F9E2AF; --t-prop: #B4BEFE; --t-var: #CDD6F4; --t-tag: #89B4FA; --t-attr: #F9E2AF;
 }
 
@@ -48,7 +48,7 @@
   --ok: #9CCFD8; --ok-soft: rgba(156,207,216,.1); --ok-line: rgba(156,207,216,.32);
   --warn: #F6C177; --warn-soft: rgba(246,193,119,.1); --warn-line: rgba(246,193,119,.45);
   --err: #EB6F92; --err-soft: rgba(235,111,146,.1); --err-line: rgba(235,111,146,.4);
-  --add-bg: rgba(156,207,216,.1); --del-bg: rgba(235,111,146,.1); --code-ink: #EBBCBA; --scrim: rgba(8,7,14,.7);
+  --add-bg: rgba(156,207,216,.1); --del-bg: rgba(235,111,146,.1); --scrim: rgba(8,7,14,.7);
   --t-kw: #C4A7E7; --t-str: #F6C177; --t-num: #EB6F92; --t-com: #6E6A86; --t-fn: #EBBCBA; --t-type: #9CCFD8; --t-prop: #9CCFD8; --t-var: #E0DEF4; --t-tag: #9CCFD8; --t-attr: #C4A7E7;
 }
 
@@ -64,7 +64,7 @@
   --ok: #A3BE8C; --ok-soft: rgba(163,190,140,.12); --ok-line: rgba(163,190,140,.34);
   --warn: #EBCB8B; --warn-soft: rgba(235,203,139,.12); --warn-line: rgba(235,203,139,.45);
   --err: #BF616A; --err-soft: rgba(191,97,106,.14); --err-line: rgba(191,97,106,.45);
-  --add-bg: rgba(163,190,140,.12); --del-bg: rgba(191,97,106,.14); --code-ink: #EBCB8B; --scrim: rgba(20,23,30,.7);
+  --add-bg: rgba(163,190,140,.12); --del-bg: rgba(191,97,106,.14); --scrim: rgba(20,23,30,.7);
   --t-kw: #81A1C1; --t-str: #A3BE8C; --t-num: #B48EAD; --t-com: #7B88A1; --t-fn: #88C0D0; --t-type: #8FBCBB; --t-prop: #D8DEE9; --t-var: #D8DEE9; --t-tag: #81A1C1; --t-attr: #8FBCBB;
 }
 
@@ -80,7 +80,7 @@
   --ok: #50FA7B; --ok-soft: rgba(80,250,123,.1); --ok-line: rgba(80,250,123,.32);
   --warn: #FFB86C; --warn-soft: rgba(255,184,108,.1); --warn-line: rgba(255,184,108,.45);
   --err: #FF5555; --err-soft: rgba(255,85,85,.11); --err-line: rgba(255,85,85,.4);
-  --add-bg: rgba(80,250,123,.1); --del-bg: rgba(255,85,85,.1); --code-ink: #F1FA8C; --scrim: rgba(12,12,16,.7);
+  --add-bg: rgba(80,250,123,.1); --del-bg: rgba(255,85,85,.1); --scrim: rgba(12,12,16,.7);
   --t-kw: #FF79C6; --t-str: #F1FA8C; --t-num: #BD93F9; --t-com: #6272A4; --t-fn: #50FA7B; --t-type: #8BE9FD; --t-prop: #66D9EF; --t-var: #F8F8F2; --t-tag: #FF79C6; --t-attr: #50FA7B;
 }
 
@@ -96,7 +96,7 @@
   --ok: #B8BB26; --ok-soft: rgba(184,187,38,.1); --ok-line: rgba(184,187,38,.32);
   --warn: #FABD2F; --warn-soft: rgba(250,189,47,.1); --warn-line: rgba(250,189,47,.45);
   --err: #FB4934; --err-soft: rgba(251,73,52,.1); --err-line: rgba(251,73,52,.4);
-  --add-bg: rgba(184,187,38,.1); --del-bg: rgba(251,73,52,.1); --code-ink: #FABD2F; --scrim: rgba(12,12,12,.7);
+  --add-bg: rgba(184,187,38,.1); --del-bg: rgba(251,73,52,.1); --scrim: rgba(12,12,12,.7);
   --t-kw: #FB4934; --t-str: #B8BB26; --t-num: #D3869B; --t-com: #928374; --t-fn: #FABD2F; --t-type: #8EC07C; --t-prop: #83A598; --t-var: #83A598; --t-tag: #8EC07C; --t-attr: #FABD2F;
 }
 
@@ -112,7 +112,7 @@
   --ok: #40A02B; --ok-soft: rgba(64,160,43,.1); --ok-line: rgba(64,160,43,.35);
   --warn: #B35F00; --warn-soft: rgba(223,142,29,.12); --warn-line: rgba(223,142,29,.45);
   --err: #D20F39; --err-soft: rgba(210,15,57,.08); --err-line: rgba(210,15,57,.35);
-  --add-bg: rgba(64,160,43,.1); --del-bg: rgba(210,15,57,.08); --code-ink: #FE640B; --scrim: rgba(76,79,105,.3);
+  --add-bg: rgba(64,160,43,.1); --del-bg: rgba(210,15,57,.08); --scrim: rgba(76,79,105,.3);
   --t-kw: #8839EF; --t-str: #40A02B; --t-num: #FE640B; --t-com: #7C7F93; --t-fn: #1E66F5; --t-type: #DF8E1D; --t-prop: #7287FD; --t-var: #4C4F69; --t-tag: #1E66F5; --t-attr: #DF8E1D;
 }
 
@@ -128,7 +128,7 @@
   --ok: #286983; --ok-soft: rgba(40,105,131,.1); --ok-line: rgba(40,105,131,.35);
   --warn: #B26A16; --warn-soft: rgba(234,157,52,.14); --warn-line: rgba(234,157,52,.5);
   --err: #B4637A; --err-soft: rgba(180,99,122,.1); --err-line: rgba(180,99,122,.4);
-  --add-bg: rgba(86,148,159,.12); --del-bg: rgba(180,99,122,.1); --code-ink: #D7827E; --scrim: rgba(87,82,121,.28);
+  --add-bg: rgba(86,148,159,.12); --del-bg: rgba(180,99,122,.1); --scrim: rgba(87,82,121,.28);
   --t-kw: #286983; --t-str: #EA9D34; --t-num: #B4637A; --t-com: #9893A5; --t-fn: #D7827E; --t-type: #56949F; --t-prop: #56949F; --t-var: #575279; --t-tag: #56949F; --t-attr: #907AA9;
 }
 
@@ -150,5 +150,5 @@
 :root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox], [data-theme=latte], [data-theme=dawn]) :is(.btn.primary, .send:not(.stop):not(:disabled)) { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
 :root:is([data-theme=tokyo], [data-theme=mocha], [data-theme=rosepine], [data-theme=nord], [data-theme=dracula], [data-theme=gruvbox], [data-theme=latte], [data-theme=dawn]) :is(.btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover) { background: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); border-color: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); }
 /* Changed words in a diff: a lighter wash on light palettes, so coloured code on it still reads. */
-:root:is([data-theme=latte], [data-theme=dawn]) mark.wd.add { background: color-mix(in srgb, var(--ok) 16%, transparent); }
-:root:is([data-theme=latte], [data-theme=dawn]) mark.wd.del { background: color-mix(in srgb, var(--err) 16%, transparent); }
+:root:is([data-mode=light], [data-theme=latte], [data-theme=dawn]) mark.wd.add { background: color-mix(in srgb, var(--ok) 16%, transparent); }
+:root:is([data-mode=light], [data-theme=latte], [data-theme=dawn]) mark.wd.del { background: color-mix(in srgb, var(--err) 16%, transparent); }

@@ -8,6 +8,10 @@
 //                                   images go to test/visual/diff/; it fails when more than 0.1% of a screen's pixels change
 //   node tools/shots.mjs --visual --approve   take the same screens and save them as the new baselines
 //   node tools/shots.mjs --visual --only NAME  only the screens whose name starts with NAME (or one of A,B,...) (with or without --approve)
+//   node tools/shots.mjs --audit    the same screens, no comparison: checks every screen in every theme against the design
+//                                   rules (type scale, weights, 4px spacing, accent only where it belongs, 4.5:1 text
+//                                   contrast, clipped or overlapping text) and lists what breaks them (tools/ui-audit.mjs)
+//   node tools/shots.mjs --visual --size 2560x1440 --keep   a different window size (the folder with the captures is kept)
 //
 // Visual mode is deterministic: the clock is frozen (in the browser and in ORBIX), Math.random is seeded, animations,
 // transitions and the caret are off, the sample project lives at a fixed path and git uses fixed dates.
@@ -24,17 +28,25 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { decodePng, encodePng, comparePixels } from './visual-png.mjs';
+import { auditPage, focusPrepare, focusProbe, inPage, summarize } from './ui-audit.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const KEEP = args.includes('--keep');
-const VISUAL = args.includes('--visual');
-const APPROVE = VISUAL && args.includes('--approve');
+const AUDIT = args.includes('--audit');
+const COMPARE = args.includes('--visual');
+const VISUAL = COMPARE || AUDIT; // the audit takes the same deterministic screens
+const APPROVE = COMPARE && args.includes('--approve');
 const ONLY = args.includes('--only') ? args[args.indexOf('--only') + 1] || '' : '';
 const BASELINES = path.join(ROOT, 'test', 'visual');
 let PNG_DIR = path.join(ROOT, 'docs', 'img', 'shots');
 const WEBP_DIR = path.join(ROOT, 'site', 'assets', 'img', 'shots');
 const VIEW = { width: 1200, height: 759 }; // every shot is this window; the scale sets the pixel size
+if (args.includes('--size')) {
+  const m = /^(\d+)x(\d+)$/.exec(args[args.indexOf('--size') + 1] || '');
+  if (!m) throw new Error('--size takes WIDTHxHEIGHT, for example 1280x800');
+  [VIEW.width, VIEW.height] = [+m[1], +m[2]];
+} else if (AUDIT) [VIEW.width, VIEW.height] = [1280, 800];
 // The sample project lives in a temporary folder whose path names the user's account. Screens show it as this instead.
 const SHOWN_ROOT = process.platform === 'win32' ? 'C:\\Projects' : '/home/you/projects';
 let tmpRoot = '';
@@ -612,6 +624,7 @@ const VIS_SCALES = [[1, '1x']]; // display scaling is covered by e2e/ui-stress.m
 // Animations end at once (on their last frame, and their end events still fire); nothing moves after that.
 const VIS_STYLE = '*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; transition-delay: 0s !important; caret-color: transparent !important; scroll-behavior: auto !important; } .term-host > * { visibility: hidden !important; }';
 const visualNames = [];
+const audited = {}; // screen -> findings of tools/ui-audit.mjs
 
 /** One screen in every theme and scale. `prep` runs after each theme change (and may reopen what it closed). */
 async function vshot(page, name, prep = async () => {}) {
@@ -621,13 +634,38 @@ async function vshot(page, name, prep = async () => {}) {
     await page.eval("await (await import('/js/store.js')).loadSessions();");
     await setTheme(page, theme);
     await prep();
+    if (AUDIT) {
+      await page.settle();
+      audited[`${name}-${theme}`] = await page.eval(inPage(auditPage));
+    }
     for (const [dsf, tag] of VIS_SCALES) {
       const file = `${name}-${theme}-${tag}`;
       await page.capture(file, { dsf, blur: !prep.keepFocus });
       visualNames.push(file);
     }
+    if (AUDIT && theme === 'dark' && /^(home|session|hub-|settings-look|panel-changes|model-picker|review)/.test(name)) audited[`${name}-${theme}-keys`] = await tabWalk(page);
   }
   say(`  ${name}`);
+}
+
+/** Tab through the screen like a keyboard user: every stop must be keyboard focus that shows. Returns audit findings. */
+async function tabWalk(page) {
+  const n = await page.eval(inPage(focusPrepare));
+  const seen = new Set();
+  const bad = [];
+  let first = null;
+  for (let i = 0; i < Math.min(n + 4, 90); i++) {
+    await page.key('Tab', { code: 'Tab', keyCode: 9 });
+    const r = await page.eval(inPage(focusProbe));
+    if (!r) continue;
+    if (first === null) first = r.key;
+    else if (r.key === first && seen.size > 1) break;
+    if (seen.has(r.key)) continue;
+    seen.add(r.key);
+    if (!r.fv || !r.changed) bad.push({ k: 'focus', s: r.sel, v: r.fv ? 'focus does not show' : 'not keyboard focus', n: 1, t: r.label });
+  }
+  await page.eval('document.activeElement?.blur?.()');
+  return bad;
 }
 
 const noLoading = (root) => `!document.querySelector('${root} .skel, ${root} .loading-state, ${root} .spin')`;
@@ -752,6 +790,19 @@ async function visualScenes(page, project, project2) {
 }
 
 /** Compare the captures in `dir` with test/visual/, or save them there (approve). Returns the number of failures. */
+/** Print what the audit found, one row per kind of finding with the screens it was on, and save it as JSON. */
+function reportAudit() {
+  const rows = summarize(audited);
+  const file = path.join(os.tmpdir(), 'orbix-ui-audit.json');
+  fs.writeFileSync(file, JSON.stringify({ size: VIEW, screens: Object.keys(audited).length, rows: rows.map((r) => ({ ...r, screens: [...r.screens] })) }, null, 1));
+  const kinds = {};
+  for (const r of rows) kinds[r.k] = (kinds[r.k] || 0) + 1;
+  say(`Audit: ${Object.keys(audited).length} screens at ${VIEW.width}x${VIEW.height}, ${rows.length} findings (${Object.entries(kinds).map(([k, n]) => `${k} ${n}`).join(', ') || 'none'})`);
+  for (const r of rows.slice(0, +(args[args.indexOf('--rows') + 1]) || 400)) say(`  ${r.k.padEnd(8)} ${String(r.screens.size).padStart(3)} screens  ${r.n} el  ${r.v}  ${r.s}${r.t ? `  "${r.t}"` : ''}`);
+  say(`Full list: ${file}`);
+  return rows.length && args.includes('--strict') ? 1 : 0;
+}
+
 function visualCompare(dir) {
   const diffDir = path.join(BASELINES, 'diff');
   fs.rmSync(diffDir, { recursive: true, force: true });
@@ -880,7 +931,8 @@ async function main() {
     const errs = page.errors.filter(Boolean);
     if (errs.length) say(`Console errors:\n  ${errs.join('\n  ')}`);
     else say('Console: no errors');
-    if (VISUAL) failures = visualCompare(PNG_DIR);
+    if (COMPARE) failures = visualCompare(PNG_DIR);
+    if (AUDIT) failures = reportAudit();
   } finally {
     await stop();
   }

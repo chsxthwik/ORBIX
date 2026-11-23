@@ -49,7 +49,7 @@ One set of routes serves both ways in: in-process over IPC in the Windows app, a
 | Sessions | `/api/proc/start`, `/api/proc/stop`, `/api/procs`, `/api/proc/ui`, `/api/rpc`, `/api/reply` | open, drive and close agent sessions |
 | AI providers | `/api/engine*` | keys, OpenRouter sign-in, models, approvals, web search |
 | Tools | `/api/mcp*`, `/api/hooks*` | MCP servers and hooks |
-| Files and git | `/api/fs/*`, `/api/git/*` | file browser, viewer, @-mentions, the Changes panel |
+| Files and git | `/api/fs/*`, `/api/git/*` | file browser, viewer, @-mentions, the Changes panel (status, `numstat` for +/- per file, `patch` for the message's source, stage, discard, commit, `push`) |
 
 ## Other agents (`src/harness/`)
 
@@ -164,18 +164,19 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | Module | Role |
 |---|---|
 | `main.js` | start-up, layout, sidebar, keyboard shortcuts, routing events to views |
-| `shell.js`, `controls.js` | the window chrome (menu row, toolbar with back/forward, the project tile and breadcrumbs, the context meter, the sidebar's preview card) and the message box's "+", model button, reasoning menu and permission chip |
+| `shell.js`, `controls.js` | the window chrome, one 40px row (logo, menus, sidebar toggle, back/forward and search on the left; the breadcrumb in the middle; the context meter and panel toggles on the right; the caption buttons of the Windows app after it) and the message box's "+", model button, reasoning menu and permission chip (Full access is a neutral chip with a warning icon) |
 | `context.js` | the toolbar's Context menu: where the project runs, MCP servers, skills and rule files, each in a submenu (`cascade()` in dialogs.js) |
 | `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
 | `web/css/themes.css` | the editor palettes (Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula, Gruvbox): surfaces, ink, status and syntax colours, and their Settings previews |
-| `web/css/side.css`, `side-icons.js` | the sidebar and brand: the lit mark tile, duotone page icons, project colours, the This week card; provider tiles and the Connect dialog's styles |
+| `web/css/tokens.css` | loaded first: the type scale (12/13/14/16/20/28 px), weights (400; 500 for headings), the 4px spacing grid (`--sp-*`), row and bar heights, motion (120ms hovers, 180ms panels, ease-out) and the 760px reading column. Every later stylesheet asks for these (`test/design-tokens.test.mjs`, and `node tools/shots.mjs --audit` on the rendered page) |
+| `web/css/sidebar.css`, `ui.css`, `transcript.css`, `composer.css`, `home.css`, `side-icons.js` | the stylesheets of the redesign: the 260px sidebar (resizable 220-360px, rows of 28px, a 2px bar on the current row) and the tokens-this-week line; project tiles, the Customize tabs, the week chart, provider tiles, the Connect dialog and the Changes panel; the transcript (pill messages, the one-row work summary, hairline tables, the timeline); the flat message box; Home and the empty conversation |
 | `updates.js` | update status: the pill at the top right of the menu row, and Settings → About |
 | `store.js` | client state and the reducer that turns session events into UI state |
 | `api.js` | HTTP calls and the SSE connection |
-| `home.js` | Home: the ORBIX mark and a greeting, suggestions from the project, and the message box with the project and branch strip |
+| `home.js` | Home: the muted ORBIX mark, "Where should we pick up?", three suggestions from the project as rows, and the message box with the project and branch chips on top of it |
 | `session.js`, `tools.js`, `markdown.js`, `highlight.js`, `ansi.js` | conversation view and tool steps |
 | `composer.js` | message box: attachments, history, `/` and `@` pop-ups |
-| `panels.js` | side panel (on Home and in conversations), as browser-like tabs of the surfaces you opened (prefs `panelTabs`) and a New tab page listing them all with their Ctrl+Alt shortcuts: Changes (git), Files, Terminal (terminal.js), Browser (Default, Incognito, Device), Tasks (todos and helper agents), Inspect, Side question, Review (a session on its own branch only) |
+| `panels.js` | side panel (on Home and in conversations), as browser-like tabs of the surfaces you opened (prefs `panelTabs`) and a New tab page listing them all with their Ctrl+Alt shortcuts: Changes (git: changed files with +/- counts, an inline diff on click, and Commit & push with Ctrl+Enter, which writes the title and body with a side question and links the pull request; `pr-link.mjs` builds the GitHub compare or GitLab merge request address), Files, Terminal (terminal.js), Browser (Default, Incognito, Device), Tasks (todos and helper agents), Inspect, Side question, Review (a session on its own branch only) |
 | `terminal.js` | the side panel's Terminal tab: xterm.js (`web/vendor/xterm`, loaded on first use) over `/api/pty/*`; several terminals per project, split; xterm's style tags are mirrored into a constructed stylesheet so the CSP needs no inline styles |
 | `project.js` | the project popover: environment, Open in (`/api/project/open`), project scripts (run in the Terminal), Initialize Git (`/api/git/init`) |
 | `settings.js`, `engine.js`, `models.js`, `mcp.js`, `toolset.js` | Settings (the whole window under the menu row; `settingsSearchItems` feeds Ctrl+K) |
@@ -188,10 +189,10 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `ascii.js` | the COM-X mark in About (characters on a canvas) and the working loader (the ORBIX mark swapping O ↔ X); one still frame under reduced motion or screen reader mode |
 | `dialogs.js`, `cleanup.js`, `diagnostics.js`, `help.js`, `notify.js` | dialogs and notifications |
 | `dom.js` | DOM helpers, icons and logo |
-| `workbench.js`, `timeline.js`, `quote.js` | find in a conversation, the outline of your messages, the wide column and focus mode; jumping to a message and Alt+↑/↓ between yours; and asking about selected text |
+| `workbench.js`, `timeline.js`, `quote.js` | find in a conversation; the timeline (one dot per message of yours, 24px left of the column, the first 60 characters on hover, the current turn filled, hidden under 1100px; `timeline-text.mjs`); the wide column and focus mode; jumping to a message and Alt+↑/↓ between yours; and asking about selected text |
 | `review.js` | sessions on their own branch: the sidebar board and the Review view (merge, keep or discard) |
 | `run-inspector.js`, `run-summary.mjs` | the side panel's Inspect tab: the session's tool activity |
-| `customize.js`, `catalog.mjs` | the Plugins page (Marketplace and Installed); the marketplace's MCP servers and the exact config each one saves |
+| `customize.js`, `customize-tabs.js`, `catalog.mjs` | the Customize page (Plugins, Skills, Loops and Review as tabs, `customize-tabs.js`) and its Plugins tab (Marketplace and Installed); the marketplace's MCP servers and the exact config each one saves |
 | `skills.js` | the Skills page: the project's skills and yours; add, edit, delete (to the trash) |
 | `hub-nav.js`, `hub-projects.js` | the page links shared by the sidebar, View menu and command palette; the projects list those pages use |
 | `automations.js`, `schedule.mjs` | the Loops page; Create with Prompt, which turns one sentence into a schedule and a task with plain rules (no model) |

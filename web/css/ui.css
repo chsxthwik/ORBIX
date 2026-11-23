@@ -3,16 +3,8 @@
 
 /* ---- state colours (the accent is not one of them): working is blue; needs you, done and failed use --warn, --ok
    and --err from the theme ---- */
-:root { --working: #6CA6FF; }
-:root[data-mode=light] { --working: #1F63D6; }
+:root { --working: var(--a4); }
 :root[data-theme=graphite] { --working: var(--live); }
-:root:is([data-theme=tokyo], [data-theme=mocha]) { --working: #89B4FA; }
-:root[data-theme=nord] { --working: #81A1C1; }
-:root[data-theme=dracula] { --working: #8BE9FD; }
-:root[data-theme=gruvbox] { --working: #83A598; }
-:root[data-theme=rosepine] { --working: #9CCFD8; }
-:root[data-theme=latte] { --working: #1E66F5; }
-:root[data-theme=dawn] { --working: #286983; }
 
 /* ---- a project's tile: its letter on one of eight low-saturation colours picked from its name (js/tile.mjs) ---- */
 :root { --tile-sat: 34%; --tile-bg-l: 52%; --tile-bg-a: .2; --tile-fg-l: 76%;
@@ -59,9 +51,8 @@
 .btile.plain { background: var(--bg-raise-2); color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--line-2); }
 .btile svg { display: block; }
 /* the model picker's provider rail: tiles sit flat until the rail button is hovered or current */
-.mp-pv .btile { --bt: 24px; opacity: .82; transition: opacity var(--t2) var(--ease), transform var(--t2) var(--ease-out); }
+.mp-pv .btile { --bt: 24px; opacity: .82; transition: opacity var(--t2) var(--ease); }
 .mp-pv:hover .btile, .mp-pv.on .btile { opacity: 1; }
-.mp-pv.on .btile { transform: scale(1.06); }
 .mp-pv.dim .btile { opacity: .3; filter: grayscale(1); }
 :root[data-theme=graphite] .btile:not(.plain) { filter: grayscale(1); }
 @media (forced-colors: active) { .btile { forced-color-adjust: none; } }
@@ -69,18 +60,18 @@
 /* ================= Connect (js/connect.js) ================= */
 .modal.connect-dlg { width: min(640px, 100%); height: min(720px, calc(100vh - 48px)); }
 .connect-dlg > .modal-b { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
-.cn-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; flex: none; padding: 0 20px 14px; border-bottom: 1px solid var(--line); }
-.cn-sub { margin: 0; color: var(--fg-3); font-size: 13px; }
+.cn-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; flex: none; padding: 0 20px 16px; border-bottom: 1px solid var(--line); }
+.cn-sub { margin: 0; color: var(--fg-3); font-size: var(--fs-13); }
 .cn-seg button[aria-selected=true] { background: var(--bg-active); color: var(--fg); }
-.cn-pane { flex: 1 1 auto; min-height: 0; padding: 14px 20px 20px; overflow: auto; }
-.cn-pane .pv-tools { position: sticky; top: -14px; z-index: 1; margin: -14px -20px 10px; padding: 14px 20px 10px; background: var(--bg-modal); }
+.cn-pane { flex: 1 1 auto; min-height: 0; padding: 16px 20px 20px; overflow: auto; }
+.cn-pane .pv-tools { position: sticky; top: -14px; z-index: 1; margin: -16px -20px 12px; padding: 16px 20px 12px; background: var(--bg-modal); }
 .cn-pane .set-note:first-child { margin-top: 0; }
 /* the model picker's way to Connect */
 .mp-pv.mp-add { color: var(--fg-3); border: 1px dashed var(--line-3); }
 .mp-pv.mp-add:hover { color: var(--fg); border-color: var(--fg-3); border-style: solid; }
 .mp-empty p { margin: 0; }
-.pv-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.pv-via { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg-2); font-size: 11px; font-weight: 500; }
+.pv-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pv-via { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 5px; background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg-2); font-size: var(--fs-12); font-weight: var(--fw); }
 
 /* Provider marks whose own colours fall under 3:1 on light surfaces use one colour there (js/brands.js); on their
    dark tiles they keep their colours. */
@@ -115,3 +106,9 @@
 /* A run's own branch, as a chip in its header. */
 .chip-br { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; max-width: 280px; height: var(--sp-5); padding: 0 var(--sp-2); border: 1px solid var(--line-2); border-radius: var(--sp-1); color: var(--fg-2); font: var(--fw) var(--fs-12)/1 var(--mono); }
 .chip-br svg { flex: none; margin-left: 0; }
+
+/* ================= Focus: a field or control inside a wrapper that draws the border shows it too ================= */
+.hub .cz-search :is(.cz-q, .sk-q):focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
+.mp-search:focus-within { border-bottom-color: var(--accent); box-shadow: 0 1px 0 var(--accent); }
+.clr:focus-within { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 0; }
+.resizer:focus-visible::after { opacity: 1; background: var(--accent); }

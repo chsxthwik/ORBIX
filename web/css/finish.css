@@ -15,11 +15,11 @@
 /* Tool steps: one quiet line each, like a log. The icon tile and the rail go; status keeps its colour only when it
    needs you (waiting, failed). Durations and the success tick appear under the pointer. */
 .tool::before { display: none; }
-.tool + .tool { margin-top: -10px; }
-.tool-head { height: 30px; gap: 8px; padding: 0 6px; }
+.tool + .tool { margin-top: -12px; }
+.tool-head { height: 30px; gap: 8px; padding: 0 8px; }
 .tool-ico { width: 16px; height: 16px; background: none; outline: 0; color: var(--fg-3); }
-.tool-name { color: var(--fg-2); font-weight: 500; }
-.tool-sum { color: var(--fg-3); font-size: 12.5px; }
+.tool-name { color: var(--fg-2); font-weight: var(--fw); }
+.tool-sum { color: var(--fg-3); font-size: var(--fs-13); }
 .tool-head:hover .tool-name { color: var(--fg); }
 .tool-head:hover .tool-sum { color: var(--fg-2); }
 .tool.done .tool-dur, .tool.done .st.ok { opacity: 0; transition: opacity var(--t2) var(--ease); }
@@ -32,7 +32,7 @@
 details.think > summary { color: var(--fg-3); }
 
 /* Errors read as a line of red text with a thin rule, not a red box. */
-.msg .errbox { border: 0; border-left: 2px solid var(--err-line); border-radius: 0; background: transparent; box-shadow: none; padding: 2px 0 2px 14px; }
+.msg .errbox { border: 0; border-left: 2px solid var(--err-line); border-radius: 0; background: transparent; box-shadow: none; padding: 2px 0 2px 16px; }
 
 /* ---- the message box: chips without outlines ---- */
 .c-row .cbtn:hover:not(:disabled) { border-color: transparent; }
@@ -57,5 +57,5 @@ details.think > summary { color: var(--fg-3); }
 }
 
 /* "Show earlier messages" is a quiet link, not a button. */
-.earlier { border-color: transparent; background: transparent; color: var(--fg-3); font-weight: 500; }
+.earlier { border-color: transparent; background: transparent; color: var(--fg-3); font-weight: var(--fw); }
 .earlier:hover { background: var(--bg-hover); color: var(--fg); }
