@@ -2,7 +2,7 @@
    what needs you, as rows; three suggestions, as rows; the project and where it works, as chips on top of the message
    box; the box; the project's latest conversations. Sizes and spacing are the tokens in tokens.css. */
 
-.home { container: ws / inline-size; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 100%; margin: 0 auto; padding: var(--sp-8) var(--sp-6) 8vh; overflow-x: clip; }
+.home { container: ws / inline-size; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 100%; margin: 0 auto; padding: var(--sp-8) var(--sp-6) calc(var(--sp-10) + var(--sp-6)); overflow-x: clip; }
 /* Each part fills the column, 760px at most. */
 .home > * { width: 100%; min-width: 0; max-width: var(--col); }
 :is(.set-title, .set-sub, .an-h) { text-wrap: balance; }
@@ -114,7 +114,7 @@
   .home-box-h .home-status-summary { display: none; }
 }
 @media (max-height: 720px) {
-  .home { padding-block: var(--sp-4) 4vh; }
+  .home { padding-block: var(--sp-4) var(--sp-8); }
   .home-hero { padding-bottom: var(--sp-4); }
 }
 @media (prefers-reduced-motion: reduce) { .home-hero, .home-dock { animation: none; } }

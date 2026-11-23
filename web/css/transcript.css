@@ -2,7 +2,8 @@
    line. The reading column is 760px at most. Under a message only Copy is always there; thumbs, retry, the time, the
    model and its speed appear on hover or keyboard focus (their buttons stay focusable, and focusing one shows them). */
 .msg-acts { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-1) 0 0 calc(-1 * var(--sp-2)); }
-.msg.user .msg-acts { justify-content: flex-end; margin: var(--sp-1) calc(-1 * var(--sp-2)) 0 0; }
+/* Your message: Copy at the pill's right edge, the hover actions growing to its left. */
+.msg.user .msg-acts { flex-direction: row-reverse; justify-content: flex-start; margin: var(--sp-1) calc(-1 * var(--sp-2)) 0 0; }
 .msg-acts > :not(.copy) { opacity: 0; transition: opacity var(--dur-hover) var(--ease-out); }
 .msg:is(:hover, :focus-within) > .msg-acts > :not(.copy) { opacity: 1; }
 .msg-acts .msg-time { order: 10; }

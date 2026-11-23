@@ -67,6 +67,8 @@
 .run-side h2 { margin: 0 8px 8px; font-size: var(--fs-12); font-weight: var(--fw-h); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); }
 .rsteps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .rstep-row { position: relative; flex: none; } /* a long list scrolls; its rows never shrink into each other */
+/* A step row is also a .tool (the transcript's steps, stacked 12px into each other): a list of steps keeps its rows apart. */
+.rsteps > .rstep-row + .rstep-row { margin-top: 0; }
 .rstep-row::before { content: ''; position: absolute; left: 16px; top: 26px; bottom: -4px; width: 1px; background: var(--line); }
 .rstep-row:last-child::before { display: none; }
 .rstep-btn { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: start; width: 100%; padding: 4px 8px; border-radius: 8px; text-align: left; }

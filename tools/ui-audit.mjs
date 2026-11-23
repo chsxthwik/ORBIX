@@ -217,12 +217,14 @@ export function auditPage() {
     }
   }
   // controls that overlap controls
+  const layered = (e) => { for (let x = e, i = 0; x && i < 4; x = x.parentElement, i++) if (/(sticky|fixed)/.test(getComputedStyle(x).position)) return true; return false; };
   const ctl = all.filter((e) => e.matches('button, a[href], input:not([type=hidden]), select, textarea, [role=button], [role=tab], [role=menuitem], [role=option]') && !e.closest(SKIP) && !e.closest('[hidden], [aria-hidden=true]')).map((e) => ({ e, r: e.getBoundingClientRect(), cs: getComputedStyle(e) })).filter((x) => x.r.width > 3 && x.r.height > 3 && x.cs.visibility !== 'hidden' && x.cs.display !== 'none' && opacityOf(x.e) >= 0.05 && x.cs.pointerEvents !== 'none' && shows(x.e, x.r.left, x.r.right, x.r.top, x.r.bottom));
   for (let i = 0; i < ctl.length; i++) {
     for (let j = i + 1; j < ctl.length; j++) {
       const [a, b] = [ctl[i], ctl[j]];
       if (a.e.contains(b.e) || b.e.contains(a.e)) continue;
       if (a.e.parentElement === b.e.parentElement && (a.cs.position === 'absolute' || b.cs.position === 'absolute')) continue; // laid over its sibling on purpose
+      if (layered(a.e) || layered(b.e)) continue; // a sticky or fixed bar over what scrolls under it
       const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left);
       const hh = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
       if (w > 3 && hh > 3 && w * hh > 24) add('overlap', a.e, `control with ${path(b.e)}`, a.e.textContent || a.e.getAttribute('aria-label'));

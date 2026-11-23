@@ -14,7 +14,9 @@
 .c-row .cbtn.c-perm.risky { color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-3); }
 .c-row .cbtn.c-perm.risky > svg:first-child { color: var(--warn); }
 
-/* "Latest": 12px above the message box, centred, never over the box's own text. */
-.dock .jump { bottom: calc(100% + var(--sp-3)); }
+/* "Latest": centred, 12px above the message box, in a band of the dock's own (28px pill + 12px gap): the dock grows by
+   that band while the pill is there, so the pill never covers the transcript's text. */
+.dock:has(> .jump:not([hidden], .leaving)) { padding-top: var(--sp-10); }
+.dock .jump { top: 0; bottom: auto; }
 
 @media (prefers-reduced-motion: reduce) { .composer { transition: none; } .composer.shell .c-mode { animation: none; } }
