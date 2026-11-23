@@ -1,6 +1,6 @@
 // ORBIX website. Small and optional: the page is complete without it. Header state, the narrow-screen menu, the
-// permission demo and screen tabs (WAI-ARIA, arrow keys, Home, End), the copy button, staggered scroll reveals, the
-// current section in the header and a pointer light on cards.
+// permission and screen tabs (WAI-ARIA, arrow keys, Home, End), the copy buttons, the current section in the header
+// and the colour theme switch.
 (() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -55,32 +55,11 @@
     const perm = document.querySelector('.perm');
     const list = perm?.querySelector('[role=tablist]');
     if (!list) return;
-    const pick = tabs(list, (t) => {
+    tabs(list, (t) => {
       perm.classList.remove('mode-ask', 'mode-edits', 'mode-safe', 'mode-auto');
       perm.classList.add('mode-' + t.dataset.mode);
       perm.querySelector('[role=tabpanel]')?.setAttribute('aria-labelledby', t.id);
     });
-    // While it is on screen and nobody has touched it, the demo steps through the four levels by itself. Any click,
-    // key or focus inside hands it to the visitor for good; hovering pauses it. Screen readers hear only their own picks.
-    if (reduced.matches || !('IntersectionObserver' in window)) return;
-    const all = [...list.querySelectorAll('[role=tab]')];
-    const desc = perm.querySelector('.perm-desc');
-    let timer = null; let stopped = false; let visible = false; let hover = false;
-    const pause = () => { clearInterval(timer); timer = null; };
-    const run = () => {
-      if (stopped || timer || !visible || hover || document.hidden) return;
-      desc?.setAttribute('aria-live', 'off');
-      timer = setInterval(() => {
-        const i = all.findIndex((t) => t.getAttribute('aria-selected') === 'true');
-        pick(all[(i + 1) % all.length], false);
-      }, 3200);
-    };
-    const stop = () => { if (stopped) return; stopped = true; pause(); desc?.setAttribute('aria-live', 'polite'); };
-    for (const ev of ['pointerdown', 'keydown', 'focusin']) perm.addEventListener(ev, stop);
-    perm.addEventListener('pointerenter', () => { hover = true; pause(); });
-    perm.addEventListener('pointerleave', () => { hover = false; run(); });
-    new IntersectionObserver(([e]) => { visible = e.isIntersecting; visible ? run() : pause(); }, { threshold: 0.5 }).observe(perm);
-    document.addEventListener('visibilitychange', () => (document.hidden ? pause() : run()));
   }
 
   function gallery() {
@@ -121,29 +100,6 @@
     }
   }
 
-  function reveals() {
-    if (reduced.matches || !('IntersectionObserver' in window)) return;
-    const els = [...document.querySelectorAll('[data-reveal]')];
-    const below = els.filter((el) => el.getBoundingClientRect().top > innerHeight * 0.92);
-    if (!below.length) return;
-    // Elements that come into view together arrive one after another, 80 ms apart.
-    const io = new IntersectionObserver((entries) => {
-      let k = 0;
-      for (const e of entries) {
-        if (!e.isIntersecting) continue;
-        const el = e.target;
-        if (k) el.style.setProperty('--d', String(Math.min(k, 5)));
-        k++;
-        el.classList.add('in');
-        io.unobserve(el);
-        setTimeout(() => el.style.removeProperty('--d'), 1400);
-      }
-    }, { rootMargin: '0px 0px -8% 0px' });
-    document.documentElement.classList.add('reveal-on');
-    for (const el of els) {
-      if (below.includes(el)) io.observe(el); else el.classList.add('in');
-    }
-  }
 
   // Which section you are in, shown in the header.
   function current() {
@@ -163,26 +119,7 @@
     if (hero) io.observe(hero);
   }
 
-  // A soft light that follows the pointer across a card. Mouse only.
-  function spotlight() {
-    if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    for (const grid of document.querySelectorAll('.bento')) {
-      grid.addEventListener('pointermove', (e) => {
-        const card = e.target.closest('.card');
-        if (!card) return;
-        const r = card.getBoundingClientRect();
-        card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
-        card.style.setProperty('--my', (e.clientY - r.top) + 'px');
-      }, { passive: true });
-    }
-  }
 
-  // The hero's two satellites stop when the hero is off screen.
-  function idle() {
-    const hero = document.querySelector('.hero');
-    if (!hero || !('IntersectionObserver' in window)) return;
-    new IntersectionObserver(([e]) => hero.classList.toggle('away', !e.isIntersecting)).observe(hero);
-  }
 
   // The footer's colour theme: System (follow the device), Light or Dark, remembered on this browser.
   function themeSwitch() {
@@ -218,7 +155,7 @@
     show();
   }
 
-  function ready() { topBar(); menu(); permissions(); gallery(); copy(); reveals(); current(); spotlight(); idle(); themeSwitch(); }
+  function ready() { topBar(); menu(); permissions(); gallery(); copy(); current(); themeSwitch(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready);
   else ready();
 })();

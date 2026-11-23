@@ -31,9 +31,9 @@
   <link rel="preload" href="assets/fonts/google-sans-flex-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/geist-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" as="image" type="image/webp" href="assets/img/shots/run.webp?v=3" imagesrcset="assets/img/shots/run-800.webp?v=3 800w, assets/img/shots/run-1200.webp?v=3 1200w, assets/img/shots/run.webp?v=3 1600w" imagesizes="(max-width: 1280px) calc(100vw - 32px), 1200px" fetchpriority="high">
-  <link rel="stylesheet" href="assets/css/site.css?v=36">
+  <link rel="stylesheet" href="assets/css/site.css?v=37">
   <script src="assets/js/boot.js?v=2"></script>
-  <script src="assets/js/site.js?v=8" defer></script>
+  <script src="assets/js/site.js?v=9" defer></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","@id":"https://orbix-agent.vercel.app/#app","name":"ORBIX","url":"https://orbix-agent.vercel.app/","description":"The unified open-source agentic development environment: the ORBIX agent with any model, plus Claude Code, Codex, OpenCode and any ACP agent on the plans you already pay for. Every agent asks before it acts.","applicationCategory":"DeveloperApplication","applicationSubCategory":"AI coding agent","operatingSystem":"Windows 10, Windows 11","processorRequirements":"x64","softwareVersion":"4","datePublished":"2026-11-21","fileSize":"116 MB","downloadUrl":"https://github.com/chsxthwik/ORBIX/releases/latest","installUrl":"https://github.com/chsxthwik/ORBIX/releases/latest","releaseNotes":"https://github.com/chsxthwik/ORBIX/blob/main/CHANGELOG.md","license":"https://github.com/chsxthwik/ORBIX/blob/main/LICENSE","codeRepository":"https://github.com/chsxthwik/ORBIX","image":"https://orbix-agent.vercel.app/assets/img/og.png","screenshot":"https://orbix-agent.vercel.app/assets/img/shots/run.webp?v=3","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"publisher":{"@id":"https://orbix-agent.vercel.app/#org"},"featureList":["Runs Claude Code, Codex, OpenCode, Gemini CLI and any ACP agent","17 model providers plus any OpenAI-compatible server","Supervised, Auto edits, Guarded and Full access permission levels","A real terminal in the side panel","Open a project in File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal","Undo for every file edit","Runs in separate git worktrees","ORBIX Cloud on a Linux machine you own","WSL, PowerShell or cmd.exe","No local server: nothing listens on a port","Conversation timeline; 2,000-message conversations open in a third of a second","Mica, taskbar progress, a jump list and actionable notifications","MIT licensed"],"author":{"@type":"Person","name":"QUANTUM","sameAs":["https://x.com/chsxthwik","https://linktr.ee/sxthwik"]}},{"@type":"Organization","@id":"https://orbix-agent.vercel.app/#org","name":"COM-X Innovations, Inc.","url":"https://orbix-agent.vercel.app/","logo":"https://orbix-agent.vercel.app/assets/img/icon-512.png","sameAs":["https://github.com/chsxthwik/ORBIX","https://x.com/comxhq","https://discord.gg/TcZ2MGCQ","https://t.me/rootmaxhackers"]},{"@type":"WebSite","@id":"https://orbix-agent.vercel.app/#site","url":"https://orbix-agent.vercel.app/","name":"ORBIX","publisher":{"@id":"https://orbix-agent.vercel.app/#org"},"inLanguage":"en"},{"@type":"FAQPage","@id":"https://orbix-agent.vercel.app/#faq","mainEntity":[{"@type":"Question","name":"Do I need an account?","acceptedAnswer":{"@type":"Answer","text":"ORBIX has no account of its own. You bring a model: an API key from a provider, a sign-in such as your ChatGPT plan or OpenRouter, or a model running on your own PC."}},{"@type":"Question","name":"Can I undo what the agent changed?","acceptedAnswer":{"@type":"Answer","text":"Yes. Every file change has its own undo, and /undo reverts a whole reply. Commands cannot be undone, which is why they ask first by default."}},{"@type":"Question","name":"Will it change files or run commands without asking?","acceptedAnswer":{"@type":"Answer","text":"Not by default. Reading and searching run without asking (Settings → Preferences → Network access rules limits the sites it may read); edits and commands wait for your OK. The permission chip can let file edits run on their own (Auto edits), file edits and read-only commands such as git status (Guarded), or everything (Full access). Full access asks you to confirm first, and destructive commands (deleting folders, pushing, publishing) still ask at every level."}},{"@type":"Question","name":"Can I use Claude Code or Codex in it?","acceptedAnswer":{"@type":"Answer","text":"Yes, if it is installed and signed in on that computer: ORBIX finds it (Settings → Agents shows what it found) and lists it in the model picker. The agent uses its own plan or key; ORBIX does not see or store its login. OpenCode, Gemini CLI and any ACP agent work the same way."}},{"@type":"Question","name":"Can it work while I am away?","acceptedAnswer":{"@type":"Answer","text":"On a machine (ORBIX Cloud), yes, with your PC off. On your PC, loops send a prompt on a schedule (every few minutes, every hour, every day, on weekdays or every week) or once at a time you choose, while ORBIX is open. A time missed while it was closed is skipped. Each run is a normal conversation, so in Supervised it waits for your OK in Review before it edits or runs anything."}},{"@type":"Question","name":"What is ORBIX Cloud?","acceptedAnswer":{"@type":"Answer","text":"The ORBIX server on a Linux machine you own. It runs the same agents, keeps working while your PC is off, and opens in the app from Settings → Machines. There is no hosted service and no account; you run the machine."}},{"@type":"Question","name":"Do I need WSL?","acceptedAnswer":{"@type":"Answer","text":"No. Commands, tools, MCP servers, git and hooks run in one place: a WSL distribution, or Windows with cmd.exe or PowerShell."}},{"@type":"Question","name":"Why does Windows warn about the installer?","acceptedAnswer":{"@type":"Answer","text":"The installer is not code-signed yet, so SmartScreen asks the first time. Choose More info, then Run anyway. Later updates install without the warning."}},{"@type":"Question","name":"How does it update?","acceptedAnswer":{"@type":"Answer","text":"It checks GitHub when it opens and every 4 hours, downloads in the background and installs when you close ORBIX. Restart to update, in the top right corner, installs at once. You can turn this off in Settings → About."}},{"@type":"Question","name":"Is it free?","acceptedAnswer":{"@type":"Answer","text":"ORBIX is free to use, with no subscription. Your model provider charges for its own usage, or nothing at all with a local model."}},{"@type":"Question","name":"Is ORBIX open source?","acceptedAnswer":{"@type":"Answer","text":"Yes. The full source is on GitHub under the MIT License: use, read, modify and share it for any purpose."}}]}]}</script>
 </head>
 <body>
@@ -84,25 +84,14 @@
 
   <main id="main">
     <section class="hero" id="top" aria-labelledby="hero-t">
-      <svg class="hero-orbit" viewBox="-60 -10 210 120" aria-hidden="true" focusable="false">
-        <circle class="draw" pathLength="1" cx="0" cy="50" r="50"/><circle class="draw d2" pathLength="1" cx="0" cy="50" r="32"/>
-        <circle class="draw d3" pathLength="1" cx="90" cy="50" r="50"/><circle class="draw d4" pathLength="1" cx="90" cy="50" r="32"/>
-        <ellipse cx="45" cy="50" rx="45" ry="17" class="ring"/>
-        <circle class="sat" r="1.5"/><circle class="sat s2" r="1"/>
-      </svg>
       <div class="hero-in wrap">
-        <a class="pill rise r1" href="#releases">
-          <span class="pill-v">ORBIX 4</span>
-          <span>The unified open-source ADE</span>
-          <svg class="pill-go" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
-        <h1 id="hero-t" class="hero-t"><span class="w w1">Every agent.</span> <span class="w w2">Every model.</span> <span class="dim w w3">One environment.</span></h1>
-        <p class="hero-lead rise r3">Run the ORBIX agent on any model, or Claude Code, Codex, OpenCode and any ACP agent on the plans you already pay for. Every agent asks before it acts, and every edit can be undone. Open source, local-first, under human command.</p>
-        <div class="actions rise r4">
+        <h1 id="hero-t" class="hero-t">One workspace for every coding agent and every model.</h1>
+        <p class="hero-lead">Run the ORBIX agent on any model, or Claude Code, Codex, OpenCode and any ACP agent on the plans you already pay for. Every agent asks before it acts, and every edit can be undone. Open source, local-first, under human command.</p>
+        <div class="actions">
           <a class="btn lg" href="https://github.com/chsxthwik/ORBIX/releases/latest"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.4 4.5v7H3zM11.4 4.35 21 3v8.5h-9.6zM3 12.5h7.4v7L3 18.5zM11.4 12.5H21V21l-9.6-1.35z"/></svg>Download for Windows</a>
           <a class="btn lg ghost" href="https://github.com/chsxthwik/ORBIX"><svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>View source on GitHub</a>
         </div>
-        <div class="runs-on rise r5">
+        <div class="runs-on">
           <p class="label">Runs in ORBIX</p>
           <ul aria-label="Agents ORBIX runs">
             <li><i class="d own" aria-hidden="true"></i>ORBIX agent</li>
@@ -114,7 +103,7 @@
           </ul>
         </div>
       </div>
-      <figure class="shot wrap rise r7">
+      <figure class="shot wrap">
         <div class="window">
           <span class="win-bar" aria-hidden="true"><span class="win-title">ORBIX</span><span class="win-ctl"><svg viewBox="0 0 10 10"><path d="M0 5.5h10" stroke="currentColor" fill="none"/></svg><svg viewBox="0 0 10 10"><rect x=".5" y=".5" width="9" height="9" stroke="currentColor" fill="none"/></svg><svg viewBox="0 0 10 10"><path d="M.5.5l9 9M9.5.5l-9 9" stroke="currentColor" fill="none"/></svg></span></span>
           <img src="assets/img/shots/run.webp?v=3" srcset="assets/img/shots/run-800.webp?v=3 800w, assets/img/shots/run-1200.webp?v=3 1200w, assets/img/shots/run.webp?v=3 1600w" sizes="(max-width: 1280px) calc(100vw - 32px), 1200px" alt="A finished run in ORBIX: the menu row and toolbar at the top, a timeline of every step on the left, the walkthrough on the right, and Apply changes and Discard above them." width="1600" height="1012" fetchpriority="high" decoding="async">
@@ -126,21 +115,21 @@
 
     <section id="get" class="get wrap" aria-label="Get ORBIX">
       <ul class="get-grid">
-        <li class="get-card" data-reveal>
+        <li class="get-card">
           <p class="get-k"><span>Windows app</span><span class="tag">4.0.0</span></p>
           <h2 class="get-t">On your PC</h2>
           <p>The full app with every agent, a terminal and the review queue. Installs for your account and updates itself.</p>
           <a class="btn" href="https://github.com/chsxthwik/ORBIX/releases/latest"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 5.5 10.4 4.5v7H3zM11.4 4.35 21 3v8.5h-9.6zM3 12.5h7.4v7L3 18.5zM11.4 12.5H21V21l-9.6-1.35z"/></svg>Download for Windows</a>
           <p class="get-m">116 MB · Windows 10 and 11, x64 · no admin rights</p>
         </li>
-        <li class="get-card" data-reveal>
+        <li class="get-card">
           <p class="get-k"><span>ORBIX Cloud</span><span class="tag new">New</span></p>
           <h2 class="get-t">On a machine you own</h2>
           <p>The same engine as a service on Linux. It keeps working while your PC is off; open it from the app.</p>
           <div class="cmd sm"><span class="cmd-p" aria-hidden="true">$</span><code id="get-cloud">curl -fsSL https://orbix-agent.vercel.app/install.sh | bash</code><button type="button" class="copy" data-copy="get-cloud" aria-label="Copy the ORBIX Cloud install command"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.4"/></svg><span class="copy-l">Copy</span></button></div>
           <p class="get-m">Ubuntu or Debian · <a class="u" href="install.sh">read the script</a> · <a class="u" href="#cloud">how it works</a></p>
         </li>
-        <li class="get-card" data-reveal>
+        <li class="get-card">
           <p class="get-k"><span>Source</span><span class="tag">MIT</span></p>
           <h2 class="get-t">From the code</h2>
           <p>Read it, change it, run it. Plain modules with no build step and one runtime dependency.</p>
@@ -153,51 +142,39 @@
     <section id="agents" class="sec wrap" aria-labelledby="agents-t">
       <div class="agents-top">
       <header class="sec-head">
-        <p class="eyebrow" data-reveal>Agents · bring your own subscription</p>
-        <h2 id="agents-t" data-reveal>The agents and plans you already pay for.</h2>
-        <p class="lead" data-reveal>Pick an agent in the model picker as you pick a model. It keeps its own loop, tools, login and history. ORBIX shows its work as steps, asks before it runs a command or changes a file, and resumes the agent’s own session when you reopen the conversation.</p>
+        <p class="eyebrow">Agents · bring your own subscription</p>
+        <h2 id="agents-t">The agents and plans you already pay for.</h2>
+        <p class="lead">Pick an agent in the model picker as you pick a model. It keeps its own loop, tools, login and history. ORBIX shows its work as steps, asks before it runs a command or changes a file, and resumes the agent’s own session when you reopen the conversation.</p>
       </header>
-      <div class="orbit" aria-hidden="true" data-reveal>
-        <div class="o-ring o-in"><i></i><i></i><i></i></div>
-        <div class="o-ring o-out">
-          <span class="o-sat s1"><b>Claude Code</b></span>
-          <span class="o-sat s2"><b>Codex</b></span>
-          <span class="o-sat s3"><b>OpenCode</b></span>
-          <span class="o-sat s4"><b>Gemini CLI</b></span>
-          <span class="o-sat s5"><b>Any ACP agent</b></span>
-        </div>
-        <div class="o-core"><svg viewBox="0 0 90 100" aria-hidden="true" focusable="false"><path d="M0 100V82C17.67 82 32 67.67 32 50C32 32.33 17.67 18 0 18V0C19.79 0 36.9 11.5 45 28.18C53.1 11.5 70.21 0 90 0V18C72.33 18 58 32.33 58 50C58 67.67 72.33 82 90 82V100C70.21 100 53.1 88.5 45 71.82C36.9 88.5 19.79 100 0 100Z"/></svg></div>
-      </div>
       </div>
       <ul class="bento agents">
-        <li class="card span-2 own" data-reveal>
+        <li class="card span-2 own">
           <span class="ag-mark" aria-hidden="true"><svg viewBox="0 0 90 100" aria-hidden="true" focusable="false"><path d="M0 100V82C17.67 82 32 67.67 32 50C32 32.33 17.67 18 0 18V0C19.79 0 36.9 11.5 45 28.18C53.1 11.5 70.21 0 90 0V18C72.33 18 58 32.33 58 50C58 67.67 72.33 82 90 82V100C70.21 100 53.1 88.5 45 71.82C36.9 88.5 19.79 100 0 100Z"/></svg></span>
           <h3>The ORBIX agent</h3>
           <p>Its own loop with any of 17 providers, local models or your own server: undo per edit, plans, runs in worktrees, self-checks.</p>
           <p class="how"><code>API key</code><code>sign-in</code><code>local model</code></p>
         </li>
-        <li class="card" data-reveal>
+        <li class="card">
           <h3>Claude Code</h3>
           <p>On your Claude plan or API key. Its permission questions become ORBIX approval cards; effort and model switch from the composer.</p>
           <p class="how"><code>claude -p</code><code>stream-json</code></p>
         </li>
-        <li class="card" data-reveal>
+        <li class="card">
           <h3>Codex</h3>
           <p>On your ChatGPT plan, through <code>codex app-server</code>. Its sandbox stays on; its command and file approvals ask you in ORBIX.</p>
           <p class="how"><code>codex app-server</code></p>
         </li>
-        <li class="card" data-reveal>
+        <li class="card">
           <h3>OpenCode</h3>
           <p>75+ providers over the Agent Client Protocol, with its own model list in the picker.</p>
           <p class="how"><code>opencode acp</code></p>
         </li>
-        <li class="card" data-reveal>
+        <li class="card">
           <h3>Any ACP agent</h3>
           <p>Gemini CLI, Hermes, Kimi, Droid, Goose or your own: add its command in Settings → Agents.</p>
           <p class="how"><code>session/request_permission</code></p>
         </li>
-        <li class="card span-2 rules" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.9 7.8 7 9.5 4.1-1.7 7-5.3 7-9.5V6z"/></svg>
+        <li class="card span-2 rules">
           <h3>One set of rules</h3>
           <p>Supervised, Auto edits, Guarded and Full access apply to every agent. A destructive command asks at every level, and Command Guard never runs one that would wipe a disk or a home folder, approved or not.</p>
         </li>
@@ -207,16 +184,16 @@
     <section id="models" class="sec wrap" aria-labelledby="models-t">
       <div class="two">
         <header class="sec-head">
-          <p class="eyebrow" data-reveal>Models</p>
-          <h2 id="models-t" data-reveal>Or bring your own model.</h2>
-          <p class="lead" data-reveal>17 providers and any OpenAI-compatible server. Model lists come live from each provider; prices and context sizes come from the models.dev catalog. Keys are checked before they are saved. <kbd>Ctrl+Shift+M</kbd> opens Connect, where every provider and agent is added in place.</p>
-          <ul class="auth-key" data-reveal aria-label="Ways to connect">
+          <p class="eyebrow">Models</p>
+          <h2 id="models-t">Or bring your own model.</h2>
+          <p class="lead">17 providers and any OpenAI-compatible server. Model lists come live from each provider; prices and context sizes come from the models.dev catalog. Keys are checked before they are saved. <kbd>Ctrl+Shift+M</kbd> opens Connect, where every provider and agent is added in place.</p>
+          <ul class="auth-key" aria-label="Ways to connect">
             <li><b>Sign in</b><span>ChatGPT Plus or Pro, xAI, OpenCode, OpenRouter. No API key.</span></li>
             <li><b>API key</b><span>Encrypted for your Windows account, sent only to its provider.</span></li>
             <li><b>On this PC</b><span>Ollama or LM Studio: your messages and code stay here.</span></li>
           </ul>
         </header>
-        <ul class="prov" data-reveal aria-label="Model providers">
+        <ul class="prov" aria-label="Model providers">
           <li><span>Anthropic</span><i>API key</i></li>
           <li><span>OpenAI</span><i>API key or ChatGPT sign-in</i></li>
           <li><span>Google Gemini</span><i>API key</i></li>
@@ -237,16 +214,16 @@
           <li class="loc"><span>Custom server</span><i>Any OpenAI-compatible URL</i></li>
         </ul>
       </div>
-      <p class="note" data-reveal>Custom server covers vLLM, llama.cpp or a company gateway. The ChatGPT sign-in uses the same sign-in and endpoint as the OpenAI Codex CLI, which is unofficial and can change.</p>
+      <p class="note">Custom server covers vLLM, llama.cpp or a company gateway. The ChatGPT sign-in uses the same sign-in and endpoint as the OpenAI Codex CLI, which is unofficial and can change.</p>
     </section>
 
     <section id="control" class="sec wrap" aria-labelledby="control-t">
       <div class="perm mode-ask">
         <div class="perm-text">
-          <p class="eyebrow" data-reveal>Permissions</p>
-          <h2 id="control-t" data-reveal>It asks before it acts.</h2>
-          <p class="lead" data-reveal>Reading and searching run freely. Edits and commands follow one chip in the message box: four levels, from asking about everything to full access.</p>
-          <div class="seg" role="tablist" aria-label="Permission chip" data-reveal>
+          <p class="eyebrow">Permissions</p>
+          <h2 id="control-t">It asks before it acts.</h2>
+          <p class="lead">Reading and searching run freely. Edits and commands follow one chip in the message box: four levels, from asking about everything to full access.</p>
+          <div class="seg" role="tablist" aria-label="Permission chip">
             <button type="button" role="tab" id="pm-ask" aria-controls="pm-panel" aria-selected="true" data-mode="ask">Supervised</button>
             <button type="button" role="tab" id="pm-edits" aria-controls="pm-panel" aria-selected="false" tabindex="-1" data-mode="edits">Auto edits</button>
             <button type="button" role="tab" id="pm-safe" aria-controls="pm-panel" aria-selected="false" tabindex="-1" data-mode="safe">Guarded</button>
@@ -259,7 +236,7 @@
             <span class="m-auto">Edits and commands run without asking, also outside the project. Turning it on asks you to confirm. Destructive commands still ask.</span>
           </p>
         </div>
-        <div class="perm-card" id="pm-panel" role="tabpanel" aria-labelledby="pm-ask" data-reveal>
+        <div class="perm-card" id="pm-panel" role="tabpanel" aria-labelledby="pm-ask">
           <div class="perm-bar"><span>shop-api</span><span class="perm-chip"><svg class="m-ask" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><svg class="m-edits" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M10.5 2.5l3 3L6 13H3v-3z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><svg class="m-safe" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1.5 3 3.5v4c0 3 2.1 5.6 5 6.5 2.9-.9 5-3.5 5-6.5v-4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="m5.8 8 1.6 1.6 2.9-3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><svg class="m-auto" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M5 2.8 8 1.5l5 2v4c0 1.1-.3 2.2-.8 3.1M10.9 12.4A7 7 0 0 1 8 14c-2.9-.9-5-3.5-5-6.5V3.8M1.5 1.5l13 13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><b class="m-ask">Supervised</b><b class="m-edits">Auto edits</b><b class="m-safe">Guarded</b><b class="m-auto">Full access</b></span></div>
           <ul class="perm-rows">
             <li><span class="pr-what">Read and search the project</span><span class="st run">Runs</span></li>
@@ -276,108 +253,96 @@
 
     <section id="how" class="sec wrap" aria-labelledby="how-t">
       <header class="sec-head">
-        <p class="eyebrow" data-reveal>How a run works</p>
-        <h2 id="how-t" data-reveal>From a task to changes you have read.</h2>
-        <p class="lead" data-reveal>Every run works in its own git worktree, so your checkout is untouched until you apply. Several runs can work at once.</p>
+        <p class="eyebrow">How a run works</p>
+        <h2 id="how-t">From a task to changes you have read.</h2>
+        <p class="lead">Every run works in its own git worktree, so your checkout is untouched until you apply. Several runs can work at once.</p>
       </header>
       <ol class="steps-grid">
-        <li class="step" data-reveal>
+        <li class="step">
           <h3>Describe the task</h3>
           <p>Open a Git project in Runs (<kbd>Ctrl</kbd>+<kbd>2</kbd>) and write what should change. Choose Plan first or Straight to work.</p>
           <span class="chip">Ctrl+2</span>
         </li>
-        <li class="step" data-reveal>
+        <li class="step">
           <h3>Read the plan</h3>
           <p>The agent reads the code and writes a plan, changing nothing. Comment on any passage and it writes a new revision.</p>
           <span class="chip">Revisions kept</span>
         </li>
-        <li class="step" data-reveal>
+        <li class="step">
           <h3>Approve a scope</h3>
           <p>Allow file edits, or edits and commands, inside the run’s own worktree and branch. Deleting, pushing or publishing still asks every time.</p>
           <span class="chip">Own worktree</span>
         </li>
-        <li class="step" data-reveal>
+        <li class="step">
           <h3>Review, then apply</h3>
           <p>Read the diff, the test log and the walkthrough. Apply merges into your branch and keeps your own uncommitted work. Discard removes it all.</p>
           <span class="chip">Apply or discard</span>
         </li>
       </ol>
-      <ol class="track" aria-label="Stages of a run" data-reveal><li>Plan</li><li>Approve</li><li>Work</li><li>Review</li><li>Apply</li></ol>
+      <ol class="track" aria-label="Stages of a run"><li>Plan</li><li>Approve</li><li>Work</li><li>Review</li><li>Apply</li></ol>
     </section>
 
     <section id="features" class="sec wrap" aria-labelledby="features-t">
       <header class="sec-head">
-        <p class="eyebrow" data-reveal>Features</p>
-        <h2 id="features-t" data-reveal>An agent, a diff viewer, a terminal and git in one window.</h2>
-        <p class="lead" data-reveal>Bring a model or an agent. Everything else is in the app.</p>
+        <p class="eyebrow">Features</p>
+        <h2 id="features-t">An agent, a diff viewer, a terminal and git in one window.</h2>
+        <p class="lead">Bring a model or an agent. Everything else is in the app.</p>
       </header>
       <ul class="bento feats">
-        <li class="card span-2 shot-card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.9 7.8 7 9.5 4.1-1.7 7-5.3 7-9.5V6z"/></svg>
+        <li class="card span-2 shot-card">
           <h3>Review queue <kbd>Ctrl+3</kbd></h3>
           <p>One list across projects of everything that waits for you: approvals, plans, finished changes, interrupted runs.</p>
           <div class="crop" aria-hidden="true"><img src="assets/img/shots/review-queue.webp?v=3" srcset="assets/img/shots/review-queue-800.webp?v=3 800w, assets/img/shots/review-queue-1200.webp?v=3 1200w, assets/img/shots/review-queue.webp?v=3 1600w" sizes="(max-width: 640px) 88vw, (max-width: 1080px) 460px, 600px" alt="" width="1600" height="1012" loading="lazy" decoding="async"></div>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+        <li class="card">
           <h3>Runs <kbd>Ctrl+2</kbd></h3>
           <p>A task planned, approved and done in its own worktree, with a timeline, a test log and a walkthrough to review.</p>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3v12M6 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9c0 5-6 4-12 6"/></svg>
+        <li class="card">
           <h3>Changes panel</h3>
           <p>Every edit as a diff next to the chat. Stage, discard and commit without leaving. A folder without Git gets Initialize Git right there.</p>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="m7 9.5 3 2.5-3 2.5M12.5 15H17"/></svg>
+        <li class="card">
           <h3>Terminal <kbd>Ctrl+`</kbd></h3>
           <p>A real shell in the side panel, on a pseudo-terminal in WSL and Linux: your prompt, colours, history, vim and htop. Several per project, two side by side with Split. PowerShell for Windows folders.</p>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 7.5A2 2 0 0 1 5.5 5.5H10l2 2h6.5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M14 13h5M16.5 10.5 19 13l-2.5 2.5"/></svg>
+        <li class="card">
           <h3>Project menu</h3>
           <p>Where the project runs (Windows, or which WSL distribution), Open in File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal, and project scripts that run in its terminal.</p>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.5 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.5-3.5-8.5s1-5.9 3.5-8.5z"/></svg>
+        <li class="card">
           <h3>Built-in browser</h3>
           <p>Any site next to the conversation, with its own session and downloads, starting on the web apps running on your PC. Incognito views keep nothing; Device shows the page at phone size.</p>
         </li>
-        <li class="card span-2 shot-card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+        <li class="card span-2 shot-card">
           <h3>Loops <kbd>Ctrl+U</kbd></h3>
           <p>A prompt ORBIX sends by itself every few minutes, every hour, day, weekday or week, or once at a time you set, as a new conversation in its project. Create one from a sentence: “every weekday at 9am, run the tests”. Unless permissions are Full access, a run still waits for your OK.</p>
           <div class="crop" aria-hidden="true"><img src="assets/img/shots/automations.webp?v=3" srcset="assets/img/shots/automations-800.webp?v=3 800w, assets/img/shots/automations-1200.webp?v=3 1200w, assets/img/shots/automations.webp?v=3 1600w" sizes="(max-width: 640px) 88vw, (max-width: 1080px) 460px, 600px" alt="" width="1600" height="1012" loading="lazy" decoding="async"></div>
         </li>
-        <li class="card span-2 shot-card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3v4M15 3v4M7 7h10v4a5 5 0 0 1-10 0zM12 16v5"/></svg>
+        <li class="card span-2 shot-card">
           <h3>Plugins and skills</h3>
           <p>A marketplace of MCP servers added in one click (Playwright, Chrome DevTools, Context7, GitHub, Supabase, Figma, Notion, Stripe and more). Skills have their own page, for the project or for every project, next to rules, slash commands and hooks.</p>
           <div class="crop" aria-hidden="true"><img src="assets/img/shots/customizations.webp?v=3" srcset="assets/img/shots/customizations-800.webp?v=3 800w, assets/img/shots/customizations-1200.webp?v=3 1200w, assets/img/shots/customizations.webp?v=3 1600w" sizes="(max-width: 640px) 88vw, (max-width: 1080px) 460px, 600px" alt="" width="1600" height="1012" loading="lazy" decoding="async"></div>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17A8.5 8.5 0 0 0 12 3.5z" class="fill"/></svg>
+        <li class="card">
           <h3>Themes</h3>
           <p>System, Dark, Light, Midnight, Frost and Graphite, a quiet monochrome. Tokyo Night, Catppuccin, Rosé Pine, Nord, Dracula and Gruvbox in their published colours. Four animated scenes, and Windows high-contrast support.</p>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+        <li class="card">
           <h3>Analytics</h3>
           <p>Tokens per day by kind, agent time, the models used and when in the week you prompt, for the last 7, 30 or 90 days. Read from the conversations on your PC.</p>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18a8 8 0 1 1 14 0"/><path d="M12 14l4-5"/></svg>
+        <li class="card">
           <h3>Context</h3>
           <p>The toolbar meter opens what fills the model’s window, its cost and Compact. The side panel adds tokens by kind, tool calls and the exact system prompt. Every reply shows its model, thinking level, time and tokens per second.</p>
         </li>
-        <li class="card" data-reveal>
-          <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="6" cy="19" r="2"/><path d="M11 5h9M11 12h6M11 19h8"/></svg>
+        <li class="card">
           <h3>Conversation timeline</h3>
           <p>A dot per message at the left edge: hover for its first line, click to jump, <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> between your messages. A 2,000-message conversation opens in a third of a second, every message searchable.</p>
         </li>
       </ul>
-      <p class="more" data-reveal><a class="u" href="https://github.com/chsxthwik/ORBIX#readme">Read the docs</a> · <a class="u" href="https://github.com/chsxthwik/ORBIX/blob/main/docs/ARCHITECTURE.md">How it is built</a></p>
-      <div class="cmds" data-reveal>
+      <p class="more"><a class="u" href="https://github.com/chsxthwik/ORBIX#readme">Read the docs</a> · <a class="u" href="https://github.com/chsxthwik/ORBIX/blob/main/docs/ARCHITECTURE.md">How it is built</a></p>
+      <div class="cmds">
         <p class="label">Slash commands</p>
         <ul aria-label="Slash commands">
           <li><code>/plan</code></li><li><code>/undo</code></li><li><code>/retry</code></li><li><code>/compact</code></li><li><code>/model</code></li><li><code>/cost</code></li><li><code>/init</code></li><li><code>/review</code></li><li><code>/commit</code></li><li><code>/branch</code></li><li><code>/btw</code></li><li><code>/goal</code></li><li><code>/memory</code></li><li><code>/mcp</code></li><li><code>/skills</code></li>
@@ -388,47 +353,47 @@
     <section id="windows" class="sec wrap" aria-labelledby="windows-t">
       <div class="two win-sec">
         <header class="sec-head">
-          <p class="eyebrow" data-reveal>Built for Windows</p>
-          <h2 id="windows-t" data-reveal>Made for Windows, not ported to it.</h2>
-          <p class="lead" data-reveal>A real installer, your shell of choice, and keys sealed to your Windows account. No Node.js to install and no administrator rights.</p>
-          <div class="shells" data-reveal aria-label="Where commands run">
+          <p class="eyebrow">Built for Windows</p>
+          <h2 id="windows-t">A Windows app first.</h2>
+          <p class="lead">A real installer, your shell of choice, and keys sealed to your Windows account. No Node.js to install and no administrator rights.</p>
+          <div class="shells" aria-label="Where commands run">
             <span><b>WSL</b> bash</span><span><b>PowerShell</b></span><span><b>cmd.exe</b></span>
           </div>
         </header>
         <ul class="win-list">
-          <li data-reveal><h3>Installs for your account</h3><p>Start menu and desktop shortcuts, no administrator rights, no Node.js. Settings and conversations live in <code>%LOCALAPPDATA%\ORBIX</code> and stay through every update.</p></li>
-          <li data-reveal><h3>WSL or native Windows</h3><p>Commands, tools, MCP servers, git and hooks run in a WSL distribution or in <code>cmd.exe</code> or PowerShell, with paths translated between the two. Output streams live; <kbd>Esc</kbd> stops it.</p></li>
-          <li data-reveal><h3>Keys sealed with DPAPI</h3><p>API keys are encrypted for your Windows account, sent only to their own provider and never written to the log.</p></li>
-          <li data-reveal><h3>Updates itself</h3><p>Checks GitHub releases when it opens and every 4 hours, downloads in the background, verifies with SHA-512 and installs when you close ORBIX.</p></li>
-          <li data-reveal><h3>Works like a Windows app</h3><p>Mica and your accent colour, taskbar progress and a needs-you badge, a jump list, notifications you can act on, the tray, no sleep while an agent works, high contrast and a screen reader mode.</p></li>
+          <li><h3>Installs for your account</h3><p>Start menu and desktop shortcuts, no administrator rights, no Node.js. Settings and conversations live in <code>%LOCALAPPDATA%\ORBIX</code> and stay through every update.</p></li>
+          <li><h3>WSL or native Windows</h3><p>Commands, tools, MCP servers, git and hooks run in a WSL distribution or in <code>cmd.exe</code> or PowerShell, with paths translated between the two. Output streams live; <kbd>Esc</kbd> stops it.</p></li>
+          <li><h3>Keys sealed with DPAPI</h3><p>API keys are encrypted for your Windows account, sent only to their own provider and never written to the log.</p></li>
+          <li><h3>Updates itself</h3><p>Checks GitHub releases when it opens and every 4 hours, downloads in the background, verifies with SHA-512 and installs when you close ORBIX.</p></li>
+          <li><h3>Works like a Windows app</h3><p>Mica and your accent colour, taskbar progress and a needs-you badge, a jump list, notifications you can act on, the tray, no sleep while an agent works, high contrast and a screen reader mode.</p></li>
         </ul>
       </div>
     </section>
 
     <section id="cloud" class="sec wrap" aria-labelledby="cloud-t">
       <header class="sec-head">
-        <p class="eyebrow" data-reveal>ORBIX Cloud</p>
-        <h2 id="cloud-t" data-reveal>Close the lid. It keeps working.</h2>
-        <p class="lead" data-reveal>Run ORBIX on a Linux machine you own, such as a VPS. Open it from the app, and move a conversation there with its project. Nothing goes through our servers: there are none.</p>
+        <p class="eyebrow">ORBIX Cloud</p>
+        <h2 id="cloud-t">Keep working on a machine you own.</h2>
+        <p class="lead">Run ORBIX on a Linux machine you own, such as a VPS. Open it from the app, and move a conversation there with its project. Nothing goes through our servers: there are none.</p>
       </header>
       <ol class="steps-grid three">
-        <li class="step" data-reveal>
+        <li class="step">
           <h3>Install on the machine</h3>
           <p>One command on Ubuntu or Debian sets ORBIX up as a service and prints its address and token.</p>
           <span class="chip">Ubuntu · Debian</span>
         </li>
-        <li class="step" data-reveal>
+        <li class="step">
           <h3>Add it in the app</h3>
           <p>Settings → Machines → Add, with the address and the token. Open switches the window to the machine; Back to this PC returns.</p>
           <span class="chip">Settings → Machines</span>
         </li>
-        <li class="step" data-reveal>
+        <li class="step">
           <h3>Move a conversation</h3>
           <p>Conversation menu → Move to a machine. The project goes with its git history and uncommitted changes, and the conversation continues there.</p>
           <span class="chip">Git history included</span>
         </li>
       </ol>
-      <div class="cmd" data-reveal>
+      <div class="cmd">
         <span class="cmd-p" aria-hidden="true">$</span>
         <code id="cloud-cmd">curl -fsSL https://orbix-agent.vercel.app/install.sh | bash</code>
         <button type="button" class="copy" data-copy="cloud-cmd" aria-label="Copy the install command">
@@ -436,15 +401,15 @@
           <span class="copy-l">Copy</span>
         </button>
       </div>
-      <p class="note" data-reveal>Ubuntu or Debian, as your user. The server listens on 127.0.0.1 only. Reach it with Tailscale, an SSH tunnel or HTTPS in front of it; the app refuses plain http:// across the internet. The token is stored encrypted on your PC and sent only to that machine. <a class="u" href="install.sh">Read the script</a>.</p>
+      <p class="note">Ubuntu or Debian, as your user. The server listens on 127.0.0.1 only. Reach it with Tailscale, an SSH tunnel or HTTPS in front of it; the app refuses plain http:// across the internet. The token is stored encrypted on your PC and sent only to that machine. <a class="u" href="install.sh">Read the script</a>.</p>
     </section>
 
     <section id="screens" class="sec wrap" aria-labelledby="shots-t">
       <header class="sec-head">
-        <p class="eyebrow" data-reveal>See it work</p>
-        <h2 id="shots-t" data-reveal>See ORBIX at work.</h2>
+        <p class="eyebrow">See it work</p>
+        <h2 id="shots-t">See ORBIX at work.</h2>
       </header>
-      <div class="gallery" data-reveal>
+      <div class="gallery">
         <div class="g-tabs" role="tablist" aria-label="ORBIX at work">
           <button type="button" role="tab" id="g-t1" aria-controls="g-p1" aria-selected="true">Ask</button>
           <button type="button" role="tab" id="g-t2" aria-controls="g-p2" aria-selected="false" tabindex="-1">Run</button>
@@ -462,17 +427,17 @@
           <div id="g-p6" role="tabpanel" aria-labelledby="g-t6" tabindex="0"><div class="demo"><div class="demo-t"><h3>MCP servers in one click.</h3><p>A marketplace of MCP servers, and skills for one project or all of them, next to rules, slash commands and hooks.</p><ul class="ticks"><li>Playwright, GitHub, Context7, Supabase and more</li><li>Project servers start only after you approve</li><li>Skills as plain SKILL.md files</li></ul></div><figure class="window"><img src="assets/img/shots/customizations.webp?v=3" srcset="assets/img/shots/customizations-800.webp?v=3 800w, assets/img/shots/customizations-1200.webp?v=3 1200w, assets/img/shots/customizations.webp?v=3 1600w" sizes="(max-width: 980px) calc(100vw - 32px), 780px" alt="The Plugins page: a featured Playwright card and MCP servers by category, each with an add button." width="1600" height="1012" loading="lazy" decoding="async"></figure></div></div>
         </div>
       </div>
-      <p class="note" data-reveal>Taken from the real app on a sample project with a scripted local model. The tools in them really ran.</p>
+      <p class="note">Taken from the real app on a sample project with a scripted local model. The tools in them really ran.</p>
     </section>
 
     <section id="safety" class="sec wrap" aria-labelledby="safety-t">
       <header class="sec-head">
-        <p class="eyebrow" data-reveal>Privacy</p>
-        <h2 id="safety-t" data-reveal>What stays on your PC, and what doesn’t.</h2>
-        <p class="lead" data-reveal>Approvals are a checkpoint, not a sandbox. The agent runs with your own user permissions, so read what you approve.</p>
+        <p class="eyebrow">Privacy</p>
+        <h2 id="safety-t">What stays on your PC, and what doesn’t.</h2>
+        <p class="lead">Approvals are a checkpoint, not a sandbox. The agent runs with your own user permissions, so read what you approve.</p>
       </header>
       <div class="split">
-        <div class="card" data-reveal>
+        <div class="card">
           <h3><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5V20H4z"/><path d="M10 20v-5h4v5"/></svg>Stays here</h3>
           <ul class="ticks">
             <li>API keys, encrypted for your Windows account and never logged.</li>
@@ -481,7 +446,7 @@
             <li>Your messages and the files the agent reads, when you use Ollama or LM Studio.</li>
           </ul>
         </div>
-        <div class="card" data-reveal>
+        <div class="card">
           <h3><svg class="ic sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"/></svg>Leaves your PC</h3>
           <ul class="ticks out">
             <li>Your messages, project rules and the files the agent reads, to the model provider you chose.</li>
@@ -493,53 +458,52 @@
           </ul>
         </div>
       </div>
-      <p class="note strong" data-reveal>There is no ORBIX account and no telemetry. To report a vulnerability, see <a class="u" href="https://github.com/chsxthwik/ORBIX/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+      <p class="note strong">There is no ORBIX account and no telemetry. To report a vulnerability, see <a class="u" href="https://github.com/chsxthwik/ORBIX/blob/main/SECURITY.md">SECURITY.md</a>.</p>
     </section>
 
     <section id="releases" class="sec wrap" aria-labelledby="rel-t">
       <header class="sec-head">
-        <p class="eyebrow" data-reveal>Releases</p>
-        <h2 id="rel-t" data-reveal>Shipping in the open.</h2>
+        <p class="eyebrow">Releases</p>
+        <h2 id="rel-t">Releases</h2>
       </header>
       <ol class="rel">
-        <li data-reveal><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v4.0.0"><time datetime="2026-11-21">Nov 21, 2026</time><b>ORBIX 4</b><span>Every agent in one environment: Claude Code, Codex, OpenCode and any ACP agent on your own plans. ORBIX Cloud on a machine you own. Four permission levels, a real Terminal, the project menu, the new identity, and the MIT License.</span><em>Latest</em></a></li>
-        <li data-reveal><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.9.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.9.0</b><span>A new Home, a marketplace of MCP servers, scheduled prompts from one sentence, and Appearance and Application settings.</span></a></li>
-        <li data-reveal><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.8.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.8.0</b><span>Chat first: the side panel starts closed, a narrower sidebar and column, sharper replies with quieter inline code, and thumbs up or down on every reply.</span></a></li>
-        <li data-reveal><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.7.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.7.0</b><span>Settings rebuilt, shortcuts you can change, network access rules for web reads, a built-in browser and project pages.</span></a></li>
-        <li data-reveal><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.6.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.6.0</b><span>Scheduled prompts, a Browser tab for the apps running on your PC, side questions with <code>/btw</code>, and rule files with triggers.</span></a></li>
-        <li data-reveal><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.3.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.3.0</b><span>Runs: a task planned, approved and done in its own git worktree, then reviewed and applied. One Review queue, recovery after a restart, folded steps.</span></a></li>
-        <li data-reveal><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.0.0"><time datetime="2026-11-04">Nov 4, 2026</time><b>3.0.0</b><span>First release of ORBIX as a Windows app with its own agent.</span></a></li>
+        <li><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v4.0.0"><time datetime="2026-11-21">Nov 21, 2026</time><b>ORBIX 4</b><span>Every agent in one environment: Claude Code, Codex, OpenCode and any ACP agent on your own plans. ORBIX Cloud on a machine you own. Four permission levels, a real Terminal, the project menu, the new identity, and the MIT License.</span><em>Latest</em></a></li>
+        <li><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.9.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.9.0</b><span>A new Home, a marketplace of MCP servers, scheduled prompts from one sentence, and Appearance and Application settings.</span></a></li>
+        <li><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.8.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.8.0</b><span>Chat first: the side panel starts closed, a narrower sidebar and column, sharper replies with quieter inline code, and thumbs up or down on every reply.</span></a></li>
+        <li><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.7.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.7.0</b><span>Settings rebuilt, shortcuts you can change, network access rules for web reads, a built-in browser and project pages.</span></a></li>
+        <li><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.6.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.6.0</b><span>Scheduled prompts, a Browser tab for the apps running on your PC, side questions with <code>/btw</code>, and rule files with triggers.</span></a></li>
+        <li><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.3.0"><time datetime="2026-11-20">Nov 20, 2026</time><b>3.3.0</b><span>Runs: a task planned, approved and done in its own git worktree, then reviewed and applied. One Review queue, recovery after a restart, folded steps.</span></a></li>
+        <li><a href="https://github.com/chsxthwik/ORBIX/releases/tag/v3.0.0"><time datetime="2026-11-04">Nov 4, 2026</time><b>3.0.0</b><span>First release of ORBIX as a Windows app with its own agent.</span></a></li>
       </ol>
-      <p class="note" data-reveal>Every release, fixes included, is in <a class="u" href="https://github.com/chsxthwik/ORBIX/blob/main/CHANGELOG.md">CHANGELOG.md</a> and on <a class="u" href="https://github.com/chsxthwik/ORBIX/releases">GitHub</a>.</p>
+      <p class="note">Every release, fixes included, is in <a class="u" href="https://github.com/chsxthwik/ORBIX/blob/main/CHANGELOG.md">CHANGELOG.md</a> and on <a class="u" href="https://github.com/chsxthwik/ORBIX/releases">GitHub</a>.</p>
     </section>
 
     <section id="faq" class="sec wrap" aria-labelledby="faq-t">
       <div class="faq-grid">
         <header class="sec-head">
-          <p class="eyebrow" data-reveal>Questions</p>
-          <h2 id="faq-t" data-reveal>Before you install.</h2>
-          <p class="lead" data-reveal>Something else? Ask on <a class="u" href="https://github.com/chsxthwik/ORBIX/issues">GitHub</a> or <a class="u" href="https://discord.gg/TcZ2MGCQ" rel="noopener">Discord</a>.</p>
+          <p class="eyebrow">Questions</p>
+          <h2 id="faq-t">Questions</h2>
+          <p class="lead">Something else? Ask on <a class="u" href="https://github.com/chsxthwik/ORBIX/issues">GitHub</a> or <a class="u" href="https://discord.gg/TcZ2MGCQ" rel="noopener">Discord</a>.</p>
         </header>
         <div class="faq">
-          <details data-reveal><summary>Do I need an account?</summary><p>ORBIX has no account of its own. You bring a model: an API key from a provider, a sign-in such as your ChatGPT plan or OpenRouter, or a model running on your own PC.</p></details>
-          <details data-reveal><summary>Can I undo what the agent changed?</summary><p>Yes. Every file change has its own undo, and <code>/undo</code> reverts a whole reply. Commands cannot be undone, which is why they ask first by default.</p></details>
-          <details data-reveal><summary>Will it change files or run commands without asking?</summary><p>Not by default. Reading and searching run without asking (Settings → Preferences → Network access rules limits the sites it may read); edits and commands wait for your OK. The permission chip can let file edits run on their own (Auto edits), file edits and read-only commands such as git status (Guarded), or everything (Full access). Full access asks you to confirm first, and destructive commands (deleting folders, pushing, publishing) still ask at every level.</p></details>
-          <details data-reveal><summary>Can I use Claude Code or Codex in it?</summary><p>Yes, if it is installed and signed in on that computer: ORBIX finds it (Settings → Agents shows what it found) and lists it in the model picker. The agent uses its own plan or key; ORBIX does not see or store its login. OpenCode, Gemini CLI and any ACP agent work the same way.</p></details>
-          <details data-reveal><summary>Can it work while I am away?</summary><p>On a machine (ORBIX Cloud), yes, with your PC off. On your PC, loops send a prompt on a schedule (every few minutes, every hour, every day, on weekdays or every week) or once at a time you choose, while ORBIX is open. A time missed while it was closed is skipped. Each run is a normal conversation, so in Supervised it waits for your OK in Review before it edits or runs anything.</p></details>
-          <details data-reveal><summary>What is ORBIX Cloud?</summary><p>The ORBIX server on a Linux machine you own. It runs the same agents, keeps working while your PC is off, and opens in the app from Settings → Machines. There is no hosted service and no account; you run the machine.</p></details>
-          <details data-reveal><summary>Do I need WSL?</summary><p>No. Commands, tools, MCP servers, git and hooks run in one place: a WSL distribution, or Windows with <code>cmd.exe</code> or PowerShell.</p></details>
-          <details data-reveal><summary>Why does Windows warn about the installer?</summary><p>The installer is not code-signed yet, so SmartScreen asks the first time. Choose More info, then Run anyway. Later updates install without the warning.</p></details>
-          <details data-reveal><summary>How does it update?</summary><p>It checks GitHub when it opens and every 4 hours, downloads in the background and installs when you close ORBIX. Restart to update, in the top right corner, installs at once. You can turn this off in Settings → About.</p></details>
-          <details data-reveal><summary>Is it free?</summary><p>ORBIX is free to use, with no subscription. Your model provider charges for its own usage, or nothing at all with a local model.</p></details>
-          <details data-reveal><summary>Is ORBIX open source?</summary><p>Yes. The full source is on GitHub under the MIT License: use, read, modify and share it for any purpose.</p></details>
+          <details><summary>Do I need an account?</summary><p>ORBIX has no account of its own. You bring a model: an API key from a provider, a sign-in such as your ChatGPT plan or OpenRouter, or a model running on your own PC.</p></details>
+          <details><summary>Can I undo what the agent changed?</summary><p>Yes. Every file change has its own undo, and <code>/undo</code> reverts a whole reply. Commands cannot be undone, which is why they ask first by default.</p></details>
+          <details><summary>Will it change files or run commands without asking?</summary><p>Not by default. Reading and searching run without asking (Settings → Preferences → Network access rules limits the sites it may read); edits and commands wait for your OK. The permission chip can let file edits run on their own (Auto edits), file edits and read-only commands such as git status (Guarded), or everything (Full access). Full access asks you to confirm first, and destructive commands (deleting folders, pushing, publishing) still ask at every level.</p></details>
+          <details><summary>Can I use Claude Code or Codex in it?</summary><p>Yes, if it is installed and signed in on that computer: ORBIX finds it (Settings → Agents shows what it found) and lists it in the model picker. The agent uses its own plan or key; ORBIX does not see or store its login. OpenCode, Gemini CLI and any ACP agent work the same way.</p></details>
+          <details><summary>Can it work while I am away?</summary><p>On a machine (ORBIX Cloud), yes, with your PC off. On your PC, loops send a prompt on a schedule (every few minutes, every hour, every day, on weekdays or every week) or once at a time you choose, while ORBIX is open. A time missed while it was closed is skipped. Each run is a normal conversation, so in Supervised it waits for your OK in Review before it edits or runs anything.</p></details>
+          <details><summary>What is ORBIX Cloud?</summary><p>The ORBIX server on a Linux machine you own. It runs the same agents, keeps working while your PC is off, and opens in the app from Settings → Machines. There is no hosted service and no account; you run the machine.</p></details>
+          <details><summary>Do I need WSL?</summary><p>No. Commands, tools, MCP servers, git and hooks run in one place: a WSL distribution, or Windows with <code>cmd.exe</code> or PowerShell.</p></details>
+          <details><summary>Why does Windows warn about the installer?</summary><p>The installer is not code-signed yet, so SmartScreen asks the first time. Choose More info, then Run anyway. Later updates install without the warning.</p></details>
+          <details><summary>How does it update?</summary><p>It checks GitHub when it opens and every 4 hours, downloads in the background and installs when you close ORBIX. Restart to update, in the top right corner, installs at once. You can turn this off in Settings → About.</p></details>
+          <details><summary>Is it free?</summary><p>ORBIX is free to use, with no subscription. Your model provider charges for its own usage, or nothing at all with a local model.</p></details>
+          <details><summary>Is ORBIX open source?</summary><p>Yes. The full source is on GitHub under the MIT License: use, read, modify and share it for any purpose.</p></details>
         </div>
       </div>
     </section>
 
     <section id="install" class="cta wrap" aria-labelledby="start-t">
-      <div class="cta-card" data-reveal>
+      <div class="cta-card">
         <div class="cta-in">
-          <svg class="mark-live" viewBox="-8 -24 120 152" width="96" height="122" aria-hidden="true" focusable="false"><path class="sw sw-l" d="M0 52C0 23.28 23.28 0 52 0C52.12 0 52.23 0 52.35 0V18C52.23 18 52.12 18 52 18C33.22 18 18 33.22 18 52C18 70.78 33.22 86 52 86C52.12 86 52.23 86 52.35 86V104C52.23 104 52.12 104 52 104C23.28 104 0 80.72 0 52Z"/><path class="sw sw-r" d="M51.65 104V86C51.77 86 51.88 86 52 86C70.78 86 86 70.78 86 52C86 33.22 70.78 18 52 18C51.88 18 51.77 18 51.65 18V0C51.77 0 51.88 0 52 0C80.72 0 104 23.28 104 52C104 80.72 80.72 104 52 104C51.88 104 51.77 104 51.65 104Z"/></svg>
           <h2 id="start-t">Install ORBIX</h2>
           <ol class="steps">
             <li><kbd>1</kbd><span>Run <code>ORBIX-Setup-4.0.0.exe</code>. It installs for your account only. The installer is not code-signed yet: if SmartScreen asks, choose More info, then Run anyway.</span></li>
@@ -569,7 +533,6 @@
         <div><p class="label">Community</p><a href="https://x.com/chsxthwik" rel="noopener">X · QUANTUM</a><a href="https://x.com/comxhq" rel="noopener">X · COM-X</a><a href="https://discord.gg/TcZ2MGCQ" rel="noopener">Discord</a><a href="https://t.me/rootmaxhackers" rel="noopener">Telegram</a><a href="https://linktr.ee/sxthwik" rel="noopener">Linktree</a></div>
       </nav>
     </div>
-    <p class="foot-word" aria-hidden="true"><svg class="wm big" viewBox="0 -1470 6580 1500" width="1316" height="300" aria-hidden="true" focusable="false"><path class="b" d="M818 34Q509 34 293 -177Q76 -388 76 -718Q76 -1048 294 -1257Q511 -1466 817 -1466Q1123 -1466 1341 -1256Q1558 -1046 1558 -718Q1558 -392 1342 -179Q1126 34 818 34ZM817 -224Q1019 -224 1155 -364Q1290 -504 1290 -718Q1290 -934 1154 -1071Q1017 -1208 817 -1208Q618 -1208 481 -1070Q345 -932 345 -718Q345 -503 480 -363Q616 -224 817 -224ZM1907 0Q1907 0 1907 0Q1907 0 1907 0V-1432Q1907 -1432 1907 -1432Q1907 -1432 1907 -1432H2444Q2644 -1432 2785 -1307Q2926 -1183 2926 -982Q2926 -787 2789 -661Q2653 -536 2432 -536H2024V-740H2421Q2518 -740 2588 -805Q2658 -870 2658 -972Q2658 -1064 2591 -1128Q2524 -1192 2431 -1192H2173V0Q2173 0 2173 0Q2173 0 2173 0ZM2699 0Q2699 0 2699 0Q2699 0 2699 0L2274 -647L2559 -657L3013 0Q3013 0 3013 0Q3013 0 3013 0ZM3295 0Q3295 0 3295 0Q3295 0 3295 0V-1432Q3295 -1432 3295 -1432Q3295 -1432 3295 -1432H3873Q4050 -1432 4171 -1324Q4292 -1216 4292 -1054Q4292 -944 4237 -864Q4183 -784 4091 -743V-737Q4202 -703 4272 -614Q4342 -525 4342 -406Q4342 -234 4217 -117Q4093 0 3906 0ZM3561 -222H3864Q3951 -222 4012 -281Q4073 -341 4073 -427Q4073 -515 4010 -572Q3946 -629 3857 -629H3481V-828H3831Q3919 -828 3976 -883Q4033 -939 4033 -1017Q4033 -1095 3977 -1150Q3922 -1205 3838 -1205H3561ZM4683 0Q4683 0 4683 0Q4683 0 4683 0V-1432Q4683 -1432 4683 -1432Q4683 -1432 4683 -1432H4952Q4952 -1432 4952 -1432Q4952 -1432 4952 -1432V0Q4952 0 4952 0Q4952 0 4952 0ZM6246 0Q6246 0 6246 0Q6246 0 6246 0L5840 -617H5810L5264 -1432Q5264 -1432 5264 -1432Q5264 -1432 5264 -1432H5574Q5574 -1432 5574 -1432Q5574 -1432 5574 -1432L5944 -853H5981L6558 0Q6558 0 6558 0Q6558 0 6558 0ZM5243 0Q5243 0 5243 0Q5243 0 5243 0L5807 -853H5840L6219 -1432Q6219 -1432 6219 -1432Q6219 -1432 6219 -1432H6513Q6513 -1432 6513 -1432Q6513 -1432 6513 -1432L5971 -617H5943L5535 0Q5535 0 5535 0Q5535 0 5535 0Z"/></svg></p>
     <div class="foot-row small">
       <p>© 2026 QUANTUM, <span class="nw">COM-X Innovations, Inc.</span> MIT License.</p>
       <div class="theme-seg" role="radiogroup" aria-label="Colour theme"><button type="button" role="radio" data-theme-pick="system" aria-checked="true">System</button><button type="button" role="radio" data-theme-pick="light" aria-checked="false">Light</button><button type="button" role="radio" data-theme-pick="dark" aria-checked="false">Dark</button></div>
