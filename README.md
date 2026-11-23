@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/logo-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/img/logo-light.svg">
-  <img alt="ORBIX" src="docs/img/logo-light.svg" width="279" height="60">
+  <img alt="ORBIX" src="docs/img/logo-light.svg" width="193" height="44">
 </picture>
 
 ### The unified open-source ADE.
@@ -33,6 +33,7 @@ Use the ORBIX agent with any of 17 model providers or a model on your own machin
 - **Nothing is final until you say so.** Every edit can be undone. Larger tasks run in their own git worktree and reach your branch only when you apply them.
 - **Any model.** Anthropic, OpenAI, Gemini, xAI, OpenRouter, Ollama and more, or any OpenAI-compatible server. Sign in with ChatGPT, xAI, OpenCode or OpenRouter, or paste a key.
 - **Your PC or your machine.** **ORBIX Cloud** runs the same engine on a Linux machine you own and keeps working while your PC is off.
+- **Made for Windows.** Mica and your accent colour, taskbar progress, a jump list and notifications you can act on. No admin rights, and it updates itself.
 - **Private by default.** No account, no telemetry, and nothing in the Windows app listens on a network port. Keys are encrypted and sent only to their own provider.
 
 ## Install
@@ -64,6 +65,8 @@ It starts ORBIX as a service on `127.0.0.1:47821` and prints the address and tok
 | **Review** | One queue across projects for everything that waits for you: approvals, plans, finished changes. |
 | **Loops** | Prompts on a schedule, or once at a set time. "Every weekday at 9am, run the tests" sets one up. |
 | **Terminal** | Real shells (<kbd>Ctrl</kbd>+<kbd>&#96;</kbd>) in WSL, Linux or PowerShell, beside the conversation. |
+| **Timeline** | A dot per message at the left edge. Hover for its first line, click to jump, <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> between your messages. A 2,000-message conversation opens in about 0.3 s. |
+| **Context** | The toolbar meter opens what fills the model's window, its cost and **Compact**. |
 | **Plugins and Skills** | Add MCP servers in one click, and write skills the agent can use. |
 | **Context and Analytics** | The side panel's Context tab shows how full the model's window is, tokens, cost and the system prompt. Settings → Analytics shows tokens per day, agent time, models used and when you prompt. |
 

@@ -22,6 +22,9 @@ The unified open-source ADE: every coding agent and every model in one environme
 
 **Workspace**
 - **Conversation timeline:** a dot per message at the left edge (yours hollow, replies filled, the ones on screen lit). Hover shows the first line, a click scrolls to it, Alt+↑/↓ jumps between your messages; one tab stop with arrow keys, hidden on narrow windows.
+- **Long conversations are fast:** 2,000 messages open in about 0.3 s with every one in the page (older ones drawn while idle), so Find and copy reach all of it; off-screen messages skip layout, scrolling holds 60 fps.
+- **Context budget:** the toolbar meter opens a popover with what fills the model's window, its cost and Compact.
+- **Made for Windows:** Mica, the Windows accent colour, text size and high contrast; taskbar progress, a needs-you badge, a jump list and notifications you can act on.
 - **Terminal** (<kbd>Ctrl</kbd>+<kbd>`</kbd>): real shells on a pseudo-terminal, several per project, two side by side. Your login shell in WSL and Linux, PowerShell for a Windows folder.
 - **Side panel tabs, like a browser's**, kept across restarts. **+** opens a page of every surface with its shortcut: Browser (or Incognito), Terminal, Files, Changes, Review, Tasks, Inspect, Device and Side question.
 - **Project menu:** where the project runs, **Open in** File Explorer, VS Code, Cursor, Windsurf, Zed or Windows Terminal, project scripts that run in the Terminal, and Initialize Git.
@@ -66,6 +69,8 @@ The unified open-source ADE: every coding agent and every model in one environme
 
 **Website**
 - Rebuilt on the new identity: the agents ORBIX runs, three ways to connect a model, the four permission levels, Windows and Cloud, responsive screenshots and strict security headers.
+- Install cards for the Windows app, ORBIX Cloud and the source; See ORBIX at work; a System, Light or Dark switch; community links.
+- **ORBIX in capitals** everywhere it is written: the wordmark on the site, in the README and on the share image.
 
 **License**
 - ORBIX is now licensed under **MIT**.
