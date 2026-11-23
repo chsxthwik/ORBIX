@@ -3,11 +3,12 @@
 // network) and talks to the engine over Electron IPC. Nothing listens on a port. ORBIX Cloud (src/headless.mjs) is a
 // separate program that serves the same engine over HTTPS-fronted HTTP on a machine you own.
 import { app, BrowserWindow, Menu, nativeTheme, shell, ipcMain, screen, Tray, powerSaveBlocker, protocol } from 'electron';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startUpdates, installOnQuit } from './updater.mjs';
 import { setupBrowser } from './browser.mjs';
+import { windowPlacement } from './windows-place.mjs';
+import { titleBarArgs } from './windows-input.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -40,33 +41,23 @@ if (!primary) app.quit();
 let win = null;
 let orbix = null;
 let quitting = false;
+// Windows-only shell integration (Mica, taskbar, jump list, toasts): loaded only on Windows, never elsewhere.
+const WIN = process.platform === 'win32';
+let winShell = null;
 
 const DARK = { bg: '#151515', fg: '#E9E9E7' };
 const LIGHT = { bg: '#E9E8E2', fg: '#151514' };
 
-// The window opens where it was last closed: same size, same place, maximized or not (if that screen is still there).
+// The window opens where it was last closed, on the same monitor, with the size and place it had there (each monitor
+// remembers its own). A monitor that is gone moves the window to the main one, and so does unplugging it while open.
 const STATE = () => path.join(app.getPath('userData'), 'window.json');
-function lastPlace() {
-  try {
-    const s = JSON.parse(fs.readFileSync(STATE(), 'utf8'));
-    const b = s.bounds;
-    const seen = screen.getAllDisplays().some((d) => { const a = d.workArea; return b.x < a.x + a.width - 80 && b.x + b.width > a.x + 80 && b.y >= a.y - 8 && b.y < a.y + a.height - 80; });
-    return seen && b.width >= 760 && b.height >= 520 ? s : null;
-  } catch {
-    return null;
-  }
-}
-function keepPlace(w) {
-  try {
-    fs.writeFileSync(STATE(), JSON.stringify({ bounds: w.getNormalBounds(), maximized: w.isMaximized() }));
-  } catch {}
-}
 
-function createWindow(url) {
+function createWindow(url, extra = {}) {
   const c = nativeTheme.shouldUseDarkColors ? DARK : LIGHT;
-  const place = lastPlace();
+  const placement = windowPlacement(screen, STATE());
+  const place = placement.place;
   win = new BrowserWindow({
-    ...(place ? place.bounds : { width: 1440, height: 920 }),
+    ...place.bounds,
     minWidth: 760,
     minHeight: 520,
     show: false,
@@ -80,7 +71,7 @@ function createWindow(url) {
     webPreferences: {
       preload: path.join(HERE, 'preload.cjs'),
       // The page picks its automatic interface size from the screen width.
-      additionalArguments: [`--orbix-screen=${Math.round(screen.getPrimaryDisplay().workAreaSize.width)}`],
+      additionalArguments: [`--orbix-screen=${Math.round(place.display.workAreaSize.width)}`],
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -88,12 +79,16 @@ function createWindow(url) {
       // The side panel's Browser tab (see browser.mjs: each <webview> is locked down when it attaches).
       webviewTag: true,
     },
+    ...extra,
   });
+  // Created on another monitor with a different scale, Windows may size the window for the wrong DPI: set it again.
+  win.setBounds(place.bounds);
+  placement.attach(win);
+  winShell?.attach(win);
   win.once('ready-to-show', () => {
-    if (place?.maximized) win.maximize();
+    if (place.maximized) win.maximize();
     win.show();
   });
-  win.on('close', () => keepPlace(win));
 
   // Links to anything but ORBIX itself (this PC's, or a machine you opened from Settings → Machines) open in the
   // default browser; the window never leaves the app.
@@ -163,12 +158,14 @@ ipcMain.handle('orbix:machine:home', () => {
 });
 
 // The page tells the window its theme, so the window buttons match it (light, dark, midnight, frost, graphite).
-ipcMain.on('orbix:titlebar', (e, { bg, fg }) => {
+ipcMain.on('orbix:titlebar', (e, value) => {
   const w = BrowserWindow.fromWebContents(e.sender);
-  if (!w || typeof bg !== 'string' || typeof fg !== 'string') return;
+  const t = titleBarArgs(value);
+  if (!w || w !== win || !t) return;
+  if (winShell) return winShell.setTitleBar(w, t); // Mica and high contrast decide the final colours
   try {
-    w.setTitleBarOverlay({ color: bg, symbolColor: fg });
-    w.setBackgroundColor(bg);
+    w.setTitleBarOverlay({ color: t.bg, symbolColor: t.fg, height: t.height });
+    w.setBackgroundColor(t.bg);
   } catch {}
 });
 
@@ -231,7 +228,7 @@ async function quit() {
   }
 }
 
-app.on('second-instance', () => showWin());
+app.on('second-instance', (_e, argv) => winShell?.jump(argv) || showWin());
 app.on('window-all-closed', () => quit());
 app.on('before-quit', (e) => {
   if (quitting) return;
@@ -270,5 +267,11 @@ app.whenReady().then(async () => {
     if (win && !win.isDestroyed()) win.webContents.send('orbix:event', msg);
   });
   ipcMain.handle('orbix:hello', (e) => (fromApp(e) ? { g: 'hello', procs: engine.procList(), t: Date.now() } : null));
-  createWindow(APP_URL);
+  let extra = {};
+  if (WIN) {
+    const ws = await import('./windows-shell.mjs');
+    extra = await ws.windowOptions().catch(() => ({}));
+    winShell = ws.setupWindowsShell({ getWin: () => win, appUrl: APP_URL, engine: () => orbix?.server, show: showWin, icon: path.join(ROOT, 'assets', 'icon.png'), mica: extra.backgroundMaterial === 'mica' });
+  }
+  createWindow(APP_URL, extra);
 });

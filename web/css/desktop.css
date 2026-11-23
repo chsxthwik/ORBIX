@@ -18,3 +18,19 @@
 
 /* Settings starts right under the menu row, whatever height Windows gives it. */
 .desktop .scrim:has(> .modal.settings-card) { top: env(titlebar-area-height, var(--mb-h)); }
+
+/* Windows 11 Mica (html.win-mica, see desktop.js): the window's frame, the menu row, the toolbar and the sidebar let
+   the desktop's tint show through; the conversation itself stays solid so text keeps its contrast. Off when Windows'
+   Transparency effects are off, in high contrast, under a scene theme, or in Settings → Appearance → Windows. */
+html.win-mica, html.win-mica body { background: transparent; }
+html.win-mica :is(.chrome, .menubar) { background: color-mix(in srgb, var(--chrome) 45%, transparent); }
+html.win-mica .sidebar { background: color-mix(in srgb, var(--bg-side) 40%, transparent); }
+html.win-mica.zen .app { background: var(--bg); }
+
+/* Windows high contrast: use the system colours and drop decoration that hides edges. */
+@media (forced-colors: active) {
+  .desktop :is(.main, .sidebar, .menubar, .chrome) { forced-color-adjust: auto; }
+  .desktop :is(button, [role=button], .btn):focus-visible { outline: 2px solid Highlight; outline-offset: 1px; }
+  .desktop .main { border-color: CanvasText; }
+}
+html.win-hc * { box-shadow: none !important; text-shadow: none !important; }

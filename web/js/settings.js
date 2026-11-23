@@ -107,6 +107,9 @@ const FIND = [
   ['Conversation steps', 'look', 'verbose fold steps worked for'],
   ['Screen reader mode', 'look', 'accessibility a11y motion narrator'],
   ['Interface size', 'look', 'scale zoom ui size'],
+  ['Mica', 'look', 'windows transparency acrylic'],
+  ['Use the Windows accent colour', 'look', 'windows accent color'],
+  ['Follow Windows text size', 'look', 'windows text size accessibility scale'],
   ['Density', 'look', 'compact comfortable spacing rows'],
   ['Conversation width', 'look', 'reading column wide narrow fill width'],
   ['Your ratings', 'models', 'thumbs up down rating feedback model'],
@@ -590,7 +593,7 @@ function tabNotify(el) {
     group('Sound', null,
       row('Play a sound', sound, 'A soft chime when the agent finishes or needs you.'),
       row('Volume', h('div', { class: 'row range-row' }, volume, volVal), 'Moving the slider plays the chime.')),
-    group(null, null, row('Try it', btn('Send a test', () => attention('ORBIX', 'This is how ORBIX gets your attention.', { force: true }), 'sm'), 'Uses the choices above, even while ORBIX is in front.')));
+    group(null, null, row('Try it', btn('Send a test', () => attention('ORBIX', 'This is how ORBIX gets your attention.', { force: true, meta: { kind: 'test' } }), 'sm'), 'Uses the choices above, even while ORBIX is in front.')));
 }
 
 // ================= browser =================
@@ -829,6 +832,11 @@ function tabLook(el) {
       window.orbixDesktop ? row('Interface size', scaleSelect(u), 'Scales the whole window. 100% respects Windows display scaling without enlarging it again.') : null,
       row('Density', seg('Density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], u.density === 'compact' ? 'compact' : 'comfortable', (v) => savePrefs({ density: v })), 'Compact fits more rows and steps on screen.')),
     ...lookExtraGroups(),
+    // Windows app only: how closely ORBIX follows Windows' own look.
+    window.orbixDesktop?.windows ? group('Windows', null,
+      row('Mica', toggle(u.winMica !== false, (v) => savePrefs({ winMica: v }), 'Mica'), 'Windows 11: the desktop tint shows through the sidebar and title bar. Off when Windows’ Transparency effects are off.'),
+      row('Use the Windows accent colour', toggle(u.winAccent === true, (v) => savePrefs({ winAccent: v }), 'Use the Windows accent colour'), 'Replaces the theme’s accent. Your own accent under Colors still wins.'),
+      row('Follow Windows text size', toggle(u.winTextSize !== false, (v) => savePrefs({ winTextSize: v }), 'Follow Windows text size'), 'Settings → Accessibility → Text size in Windows enlarges ORBIX too.')) : null,
     group('Sidebar', null,
       row('Sort projects', seg('Sort projects', [['recent', 'Recent activity'], ['name', 'Name']], u.sortProjects === 'name' ? 'name' : 'recent', (v) => savePrefs({ sortProjects: v }))),
       row('Show archived conversations', toggle(u.showArchived === true, (v) => savePrefs({ showArchived: v }), 'Show archived conversations'))),

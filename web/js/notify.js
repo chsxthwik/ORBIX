@@ -40,12 +40,18 @@ export function chime(volume = notifyPrefs().volume) {
   } catch {}
 }
 
-/** Get your attention in every way you allowed. `force` skips the "only in the background" rule (the test button). */
-export function attention(title, body, { force = false } = {}) {
+/**
+ * Get your attention in every way you allowed. `force` skips the "only in the background" rule (the test button).
+ * `meta` ({ kind, proc, ask, secs }) lets the Windows app show its own notification instead, with Open and Approve
+ * buttons that go straight to the conversation; it writes the text itself from what the engine knows.
+ */
+export function attention(title, body, { force = false, meta = null } = {}) {
   const p = notifyPrefs();
   if (!force && p.onlyAway && !away()) return false;
+  const win = window.orbixDesktop?.windows;
   try {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body, silent: true, tag: 'orbix' });
+    if (win && meta) win.notify(meta);
+    else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body, silent: true, tag: 'orbix' });
   } catch {}
   if (p.sound) chime();
   if (p.flash) window.orbixDesktop?.flash?.();
@@ -81,17 +87,18 @@ export function initNotify() {
       if (!tab.dead && last?.stopReason === 'error') {
         if (notifyPrefs().errors) {
           const why = String(last.errorMessage || 'The request failed.').slice(0, 140);
-          attention('The agent stopped with an error', `${tab.name}: ${why}`);
+          attention('The agent stopped with an error', `${tab.name}: ${why}`, { meta: { kind: 'error', proc: tab.id } });
           inApp(tab, `Failed: ${tab.name}`);
         }
       } else if (!tab.dead && notifyPrefs().done) {
-        attention('Agent finished', secs >= 5 ? `${tab.name} · worked ${took(secs)}` : tab.name);
+        attention('Agent finished', secs >= 5 ? `${tab.name} · worked ${took(secs)}` : tab.name, { meta: { kind: 'done', proc: tab.id, secs } });
         inApp(tab, `Finished: ${tab.name}`);
       }
     }
   });
   on('tab:dialog', (tab) => {
-    if (tab.dialogs.length && notifyPrefs().input) attention('The agent needs your input', tab.dialogs[0].title || tab.name);
+    const d = tab.dialogs[0];
+    if (d && notifyPrefs().input) attention('The agent needs your input', d.title || tab.name, { meta: { kind: 'input', proc: tab.id, ask: d.id } });
     if (tab.dialogs.length && notifyPrefs().input) inApp(tab, `Needs you: ${tab.name}`);
   });
 }

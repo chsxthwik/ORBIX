@@ -8,6 +8,25 @@ const { contextBridge, ipcRenderer, webFrame } = require('electron');
 const arg = process.argv.find((a) => a.startsWith('--orbix-screen='));
 const screenWidth = arg ? Number(arg.slice('--orbix-screen='.length)) || 0 : 0;
 
+// Interface size (Settings → Appearance) times Windows' text size (Settings → Accessibility → Text size).
+let uiZoom = 1;
+let textScale = 1;
+let bar = null; // the page's last title bar colours and its height in CSS pixels
+const sendBar = () => {
+  if (!bar) return;
+  const height = Math.max(30, Math.min(135, Math.round(bar.css * webFrame.getZoomFactor())));
+  ipcRenderer.send('orbix:titlebar', { bg: bar.bg, fg: bar.fg, height });
+};
+const applyZoom = () => {
+  webFrame.setZoomFactor(Math.min(3, Math.max(0.5, uiZoom * textScale)));
+  sendBar(); // the window buttons stay as tall as the scaled menu row
+};
+const listen = (ch, fn) => {
+  const f = (_e, v) => fn(v);
+  ipcRenderer.on(ch, f);
+  return () => ipcRenderer.removeListener(ch, f);
+};
+
 contextBridge.exposeInMainWorld('orbixDesktop', {
   // The engine, in the app's own process: API calls and live events over IPC (no server, no port). The main process
   // answers only the interface at orbix://app/.
@@ -23,10 +42,16 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
   // For Settings → About and bug reports.
   versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
   screenWidth,
-  setTitleBar: (bg, fg) => ipcRenderer.send('orbix:titlebar', { bg: String(bg), fg: String(fg) }),
+  setTitleBar: (bg, fg, cssHeight = 30) => {
+    bar = { bg: String(bg), fg: String(fg), css: Number(cssHeight) || 30 };
+    sendBar();
+  },
   // Flash the taskbar button until the window is focused (Settings → Notifications).
   flash: () => ipcRenderer.send('orbix:flash'),
-  setZoom: (factor) => webFrame.setZoomFactor(Math.min(2, Math.max(0.5, Number(factor) || 1))),
+  setZoom: (factor) => {
+    uiZoom = Math.min(2, Math.max(0.5, Number(factor) || 1));
+    applyZoom();
+  },
   // Settings → About: keep the PC awake while agents work, keep running in the tray, Windows' notification settings.
   system: {
     keepAwake: (kind) => ipcRenderer.send('orbix:keep-awake', kind === 'screen' || kind === 'work' ? kind : kind === true ? 'work' : ''),
@@ -59,4 +84,20 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
       return () => ipcRenderer.removeListener('orbix:update', f);
     },
   },
+  // Windows only: Mica, accent colour, high contrast, text size, taskbar, jump list and notifications.
+  windows: process.platform === 'win32' ? {
+    ready: () => ipcRenderer.invoke('orbix:win:ready'),
+    onState: (fn) => listen('orbix:win:state', fn),
+    onJump: (fn) => listen('orbix:win:jump', fn),
+    onOpen: (fn) => listen('orbix:win:open', fn),
+    // Follow Windows' text size or not (Settings → Appearance).
+    textScale: (n) => {
+      textScale = Math.min(2.25, Math.max(1, Number(n) || 1));
+      applyZoom();
+    },
+    theme: (src) => ipcRenderer.send('orbix:win:theme', src === 'dark' || src === 'light' ? src : 'system'),
+    progress: (working, waiting) => ipcRenderer.send('orbix:win:progress', { working: Math.trunc(Number(working)) || 0, waiting: Math.trunc(Number(waiting)) || 0 }),
+    recent: (ids) => ipcRenderer.send('orbix:win:recent', Array.isArray(ids) ? ids.slice(0, 20).map(String) : []),
+    notify: (n) => ipcRenderer.send('orbix:win:notify', { kind: String(n?.kind || ''), proc: String(n?.proc || ''), ask: String(n?.ask || ''), secs: Math.trunc(Number(n?.secs)) || 0 }),
+  } : null,
 });
