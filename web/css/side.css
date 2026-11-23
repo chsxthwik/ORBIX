@@ -191,3 +191,7 @@
 /* The Running dock: above the footer, outside the scrolling list, so it never pushes rows; up to four rows show. */
 .app .sidebar .side-dock { flex: none; max-height: calc(4 * 46px + 30px); margin: 0; padding: 6px var(--sb-pad) 4px; overflow-y: auto; border-top: 1px solid var(--line); scrollbar-width: thin; }
 .app .sidebar .side-dock .side-h { margin-top: 0; }
+
+/* Home's live strip follows the same status colours: working in --working, needs you in --warn. */
+.home-alert.run .home-alert-s { color: var(--working); }
+.home-alert.wait .home-alert-s { color: var(--warn); }

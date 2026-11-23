@@ -206,6 +206,19 @@ npm run dist    # build the installer into dist/
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request.
 
+### Visual tests
+
+```bash
+npm run visual           # capture every screen and compare it with test/visual/
+npm run visual:approve   # accept the current screens as the new baselines
+```
+
+`npm run visual` starts ORBIX on sample data with a scripted local model, opens it in headless Chromium (Edge, Chrome, Brave or Chromium; or set `ORBIX_BROWSER`) and captures each screen in Dark, Light and Graphite at scale 1: Home; a conversation that is finished, still streaming and waiting for approval; the right panel's tabs; the model picker; the Runs views, a run in each of its tabs and the Review queue; every Settings page; and the sidebar rail.
+
+Each capture is compared pixel by pixel with its baseline in `test/visual/` (`<screen>-<theme>-1x.png`; display scaling is covered by `e2e/ui-stress.mjs`). A screen fails when more than 0.1% of its pixels change or its size changes. For every screen that changed, `test/visual/diff/` gets `<name>.png` (changed pixels in magenta over a dimmed copy) and `<name>.actual.png`. Add `--only <prefix>` to `node tools/shots.mjs --visual` to check some screens only.
+
+The captures are deterministic: the clock is frozen in the page and in ORBIX, `Math.random` is seeded, animations, transitions and the caret are off, the terminal's contents are hidden, and the sample projects live at a fixed path with fixed git dates. Fonts and the browser's rendering still differ between machines, so approve baselines on the machine (or CI image) that checks them. After an intended change to the interface, run `npm run visual`, look at the diff images, then `npm run visual:approve` and commit the new baselines.
+
 ## Community
 
 Questions, ideas and show-and-tell are welcome.

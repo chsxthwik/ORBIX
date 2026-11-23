@@ -18,6 +18,8 @@
     "dist": "electron-builder --win nsis --publish never",
     "release": "electron-builder --win nsis --publish always",
     "shots": "node tools/shots.mjs",
+    "visual": "node tools/shots.mjs --visual",
+    "visual:approve": "node tools/shots.mjs --visual --approve",
     "server": "node src/headless.mjs"
   },
   "keywords": [

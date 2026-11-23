@@ -90,7 +90,8 @@ One turn combines the user's message, project rules (`context.mjs`: `AGENTS.md` 
 
 - **Approvals:** `write`, `edit` and `bash` ask first unless approvals are off. Reading and searching never ask.
 - **Undo:** every edit records the previous file contents, so `/undo` and the Undo buttons can restore them.
-- **Compaction** (`compact.mjs`): older messages are summarised when context fills. The full history stays on disk and on screen.
+- **Compaction** (`compact.mjs`): older messages are summarised when context fills. Manual compaction keeps the six latest user-led turns intact and refuses to run during an approval or question. The full history stays on disk and on screen.
+- **Context and cost** (`context-budget.mjs`, `context-popover.js`): the toolbar shows the model window, with warnings at 80% and 95%. The provider's last input and output totals are shown separately. Per-part counts allocate those totals using estimates of the actual request parts; amounts after a context change or compaction are estimates until another provider report. Session spend includes paid summary calls and uses reported charges when available, then model pricing. Agent CLIs do not expose the input needed for this breakdown or guarantee six-turn retention.
 - **Subagents** (`subagent.mjs`): the `task` tool runs read-only helper agents side by side and returns their answers.
 - **Slash commands** (`slash.mjs`, `commands.mjs`): built-in commands such as `/plan`, `/undo` and `/compact`, plus Markdown prompt files from the project.
 

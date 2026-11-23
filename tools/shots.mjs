@@ -3,8 +3,14 @@
 //
 //   node tools/shots.mjs            regenerate docs/img/shots/*.png and site/assets/img/shots/*.webp (full, -1200 and -800)
 //   node tools/shots.mjs --keep     keep the temporary folder afterwards (it holds the server log)
-//   node tools/shots.mjs --ui DIR   interface review: the sidebar (empty, busy, rail), the side panel's launcher, Home and a
-//                                   conversation, in Dark, Light and Graphite at scale 1 and 1.5, as PNGs in DIR only
+//   node tools/shots.mjs --visual   visual regression test (npm run visual): every screen in Dark, Light and Graphite at
+//                                   scale 1, compared pixel by pixel with the approved PNGs in test/visual/. Diff
+//                                   images go to test/visual/diff/; it fails when more than 0.1% of a screen's pixels change
+//   node tools/shots.mjs --visual --approve   take the same screens and save them as the new baselines
+//   node tools/shots.mjs --visual --only NAME  only the screens whose name starts with NAME (or one of A,B,...) (with or without --approve)
+//
+// Visual mode is deterministic: the clock is frozen (in the browser and in ORBIX), Math.random is seeded, animations,
+// transitions and the caret are off, the sample project lives at a fixed path and git uses fixed dates.
 //
 // It starts ORBIX with ORBIX_DATA in a temporary folder, a small sample project ("shop-api", a git repository) and a
 // scripted local model: a tiny OpenAI-compatible server in this file that streams the replies of each scenario
@@ -17,24 +23,86 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { decodePng, encodePng, comparePixels } from './visual-png.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const KEEP = args.includes('--keep');
-const UI_DIR = args.includes('--ui') ? path.resolve(args[args.indexOf('--ui') + 1] || path.join(ROOT, 'data', 'ui-shots')) : '';
-const PNG_DIR = UI_DIR || path.join(ROOT, 'docs', 'img', 'shots');
+const VISUAL = args.includes('--visual');
+const APPROVE = VISUAL && args.includes('--approve');
+const ONLY = args.includes('--only') ? args[args.indexOf('--only') + 1] || '' : '';
+const BASELINES = path.join(ROOT, 'test', 'visual');
+let PNG_DIR = path.join(ROOT, 'docs', 'img', 'shots');
 const WEBP_DIR = path.join(ROOT, 'site', 'assets', 'img', 'shots');
 const VIEW = { width: 1200, height: 759 }; // every shot is this window; the scale sets the pixel size
 // The sample project lives in a temporary folder whose path names the user's account. Screens show it as this instead.
 const SHOWN_ROOT = process.platform === 'win32' ? 'C:\\Projects' : '/home/you/projects';
 let tmpRoot = '';
+// Visual mode: one moment for every clock. It is before any real file time, so "how long ago" always reads "now".
+const FROZEN_ISO = '2026-01-15T10:30:00.000Z';
+const SEED = 20260115;
+// The project's check: in visual mode a script whose output has no timings in it.
+const CHECK = VISUAL ? 'npm test' : 'node --test';
+/**
+ * Source that freezes Date at FROZEN_ISO and seeds Math.random, for the page and (with `tick`) for ORBIX's own process.
+ * ORBIX's clock steps one second at each streamed model request: its messages need distinct times (the page tells them
+ * apart by role and time), and the requests come in the same order on every run, so every time is the same each run.
+ */
+const clockSource = (tick) => `(() => {
+  let T = Date.parse(${JSON.stringify(FROZEN_ISO)});
+  const D = Date;
+  globalThis.Date = new Proxy(D, {
+    construct: (t, a, nt) => Reflect.construct(t, a.length ? a : [T], nt),
+    apply: () => new D(T).toString(),
+    get: (t, k) => (k === 'now' ? () => T : Reflect.get(t, k)),
+  });
+  ${tick ? `const f = globalThis.fetch;
+  globalThis.fetch = (url, init) => {
+    if (/\\/chat\\/completions$/.test(String(url)) && /"stream":true/.test(String(init?.body || ''))) T += 1000;
+    return f(url, init);
+  };` : ''}
+  let s = ${SEED};
+  Math.random = () => { s = (s + 0x6D2B79F5) | 0; let x = Math.imul(s ^ (s >>> 15), 1 | s); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; };
+})();`;
+const freezeClock = clockSource(false);
+/** The temporary folder as screens may show it: as is, and under WSL also as Windows writes it. */
+function tmpRoots() {
+  const list = [tmpRoot];
+  if (process.env.WSL_DISTRO_NAME && tmpRoot.startsWith('/mnt/')) {
+    try {
+      list.push(execFileSync('wslpath', ['-w', tmpRoot], { encoding: 'utf8' }).trim());
+    } catch {}
+  }
+  return list;
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const say = (s) => process.stdout.write(s + '\n');
 
 // ============================================================================ sample project
 
+const VERIFY_JS = [
+  '// The checks, without timings in the output (the visual tests compare screens that show it).',
+  "import assert from 'node:assert/strict';",
+  "import fs from 'node:fs';",
+  "const { login } = await import('./src/auth.js');",
+  "assert.equal(login('mia@shop.test', 'tulip')?.name, 'Mia');",
+  "assert.equal(login('mia@shop.test', 'oak'), null);",
+  "assert.equal(login('Mia@Shop.test', 'tulip')?.name, 'Mia');",
+  'let n = 3;',
+  "if (fs.existsSync('src/limit.js')) {",
+  "  const { allowed, failed } = await import('./src/limit.js');",
+  "  for (let i = 0; i < 5; i++) failed('sam@shop.test', 1000);",
+  "  assert.equal(allowed('Sam@Shop.test', 2000), false);",
+  "  assert.equal(allowed('sam@shop.test', 62000), true);",
+  '  n++;',
+  '}',
+  'console.log(`${n} checks passed`);',
+  '',
+].join('\n');
+
 const PROJECT_FILES = {
-  'package.json': JSON.stringify({ name: 'shop-api', version: '0.3.0', private: true, type: 'module', scripts: { test: 'node --test' } }, null, 2) + '\n',
+  'package.json': JSON.stringify({ name: 'shop-api', version: '0.3.0', private: true, type: 'module', scripts: { test: VISUAL ? 'node verify.js' : 'node --test' } }, null, 2) + '\n',
+  ...(VISUAL ? { 'verify.js': VERIFY_JS } : {}),
   'README.md': '# shop-api\n\nAccounts and sign-in for the shop.\n\n    npm test\n',
   'src/users.js': [
     '// Accounts, keyed by lower-case email address.',
@@ -81,12 +149,19 @@ const PROJECT_FILES = {
   ].join('\n'),
 };
 
+// Fixed commit dates, so commits (and their hashes) are the same on every visual run.
+const GIT_DATES = VISUAL ? { GIT_AUTHOR_DATE: FROZEN_ISO, GIT_COMMITTER_DATE: FROZEN_ISO, GIT_AUTHOR_NAME: 'ORBIX', GIT_AUTHOR_EMAIL: 'shots@orbix.invalid', GIT_COMMITTER_NAME: 'ORBIX', GIT_COMMITTER_EMAIL: 'shots@orbix.invalid' } : {};
+// Under WSL, git.exe sees only the variables WSLENV names.
+if (VISUAL && process.env.WSL_DISTRO_NAME) GIT_DATES.WSLENV = [process.env.WSLENV, ...Object.keys(GIT_DATES)].filter(Boolean).join(':');
+
 function makeProject(dir) {
   for (const [rel, text] of Object.entries(PROJECT_FILES)) {
     fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
     fs.writeFileSync(path.join(dir, rel), text);
   }
-  const git = (...a) => execFileSync('git', ['-c', 'user.name=ORBIX', '-c', 'user.email=shots@orbix.invalid', '-c', 'commit.gpgsign=false', ...a], { cwd: dir, stdio: 'ignore' });
+  // Under WSL a project on the Windows drive gets Windows' git, the one ORBIX uses for it.
+  const exe = process.env.WSL_DISTRO_NAME && dir.startsWith('/mnt/') ? 'git.exe' : 'git';
+  const git = (...a) => execFileSync(exe, ['-c', 'user.name=ORBIX', '-c', 'user.email=shots@orbix.invalid', '-c', 'commit.gpgsign=false', ...a], { cwd: dir, stdio: 'ignore', env: { ...process.env, ...GIT_DATES } });
   try {
     git('init', '-q', '-b', 'main');
     git('add', '-A');
@@ -114,7 +189,7 @@ const SCENARIOS = [
     steps: [
       { text: 'I will find where login looks users up.', tools: [['grep', { pattern: 'findByEmail', path: 'src' }], ['read', { path: 'src/auth.js' }], ['read', { path: 'src/users.js' }]] },
       { text: '`login()` looks the email up exactly as typed, and `users` is keyed by lower-case addresses, so `Mia@Shop.test` never matches `mia@shop.test`. Lower-casing it before the lookup fixes that.', tools: [['edit', { path: 'src/auth.js', old_string: 'findByEmail(email.trim())', new_string: 'findByEmail(email.trim().toLowerCase())' }]] },
-      { text: '', tools: [['bash', { command: 'node --test' }]] },
+      { text: '', tools: [['bash', { command: CHECK }]] },
       { text: 'Fixed: `login()` now lower-cases the email before the lookup, and all three tests pass.' },
     ],
   },
@@ -142,10 +217,17 @@ SCENARIOS.push({
     { text: '', tools: [['edit', { path: 'src/auth.js', old_string: "import { findByEmail } from './users.js';", new_string: "import { findByEmail } from './users.js';\nimport { allowed, failed } from './limit.js';" }]] },
     { text: '', tools: [['edit', { path: 'src/auth.js', old_string: '  const user = findByEmail(email.trim());\n  if (!user || user.password !== `h4sh:${password}`) return null;', new_string: '  if (!allowed(email)) return null;\n  const user = findByEmail(email.trim());\n  if (!user || user.password !== `h4sh:${password}`) return (failed(email), null);' }]] },
     { text: '', tools: [['write', { path: 'test/limit.test.js', content: LIMIT_TEST }]] },
-    { text: '', tools: [['bash', { command: 'node --test test/limit.test.js' }]] },
+    { text: '', tools: [['artifact', { kind: 'tasks', title: 'Steps', content: '# Steps\n\n- [x] Read how sign-in works\n- [x] Add `src/limit.js`\n- [x] Check the limit in `login()`\n- [x] Add `test/limit.test.js`\n- [x] Run the tests\n' }]] },
+    { text: '', tools: [['bash', { command: VISUAL ? CHECK : 'node --test test/limit.test.js' }]] },
     { text: '', tools: [['artifact', { kind: 'walkthrough', content: '# Walkthrough\n\n## What changed\n- `src/limit.js`: counts failed sign-ins per lower-cased email in a one-minute window; five failures lock the email.\n- `src/auth.js`: `login()` checks the limit first and records each wrong password.\n- `test/limit.test.js`: five failures lock the email, and it opens again after a minute.\n\n## Verification\n`node --test test/limit.test.js` passes: 1 test, 0 failures.\n' }]] },
     { text: 'Done. Five wrong passwords lock an email for a minute; the tests pass.' },
   ],
+});
+
+// Visual mode's "streaming" screen: the reply stops half way and the stream stays open until the end.
+SCENARIOS.push({
+  match: /health check endpoint/i,
+  steps: [{ text: 'A health check needs no state of its own. I will add `GET /health`, which answers', hold: true }],
 });
 
 const textOfContent = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => x?.text || '').join('') : '');
@@ -162,6 +244,7 @@ function scriptFor(body) {
 
 function startModelServer() {
   let calls = 0;
+  const held = new Set();
   const server = http.createServer((req, res) => {
     if (req.method === 'GET' && /\/models$/.test(req.url)) {
       res.writeHead(200, { 'content-type': 'application/json' });
@@ -188,11 +271,14 @@ function startModelServer() {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
       res.write(chunk({ delta: { role: 'assistant' }, finish_reason: null }));
       // Text arrives in a few pieces, as from a real model.
+      // (A held reply comes in one piece: ORBIX shows stream updates at most every 30 ms of its clock, which visual
+      // mode stops, so only the first piece of a reply that never ends would show.)
       const words = (step.text || '').split(/(?<= )/);
-      for (let i = 0; i < words.length; i += 6) {
-        res.write(chunk({ delta: { content: words.slice(i, i + 6).join('') }, finish_reason: null }));
+      for (let i = 0; i < words.length; i += step.hold ? words.length : 6) {
+        res.write(chunk({ delta: { content: words.slice(i, step.hold ? undefined : i + 6).join('') }, finish_reason: null }));
         await sleep(8);
       }
+      if (step.hold) return held.add(res);
       (step.tools || []).forEach(([name, a], i) => {
         res.write(chunk({ delta: { tool_calls: [{ index: i, id: `call_${calls}_${i}`, type: 'function', function: { name, arguments: JSON.stringify(a) } }] }, finish_reason: null }));
       });
@@ -202,6 +288,11 @@ function startModelServer() {
       res.end('data: [DONE]\n\n');
     });
   });
+  const close = server.close.bind(server);
+  server.close = () => {
+    for (const r of held) r.destroy();
+    return close();
+  };
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
@@ -212,16 +303,16 @@ async function startOrbix(data, modelPort) {
   fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ version: 1, backend: { kind: 'native', distro: '' }, backendChosen: true, ui: { theme: 'dark', rightPanel: true, rightTab: 'files', showThinking: true, autoScroll: true } }, null, 2));
   fs.writeFileSync(path.join(data, 'engine.json'), JSON.stringify({
     approvals: 'edits',
-    trusted: ['node --test'],
+    trusted: ['node --test', 'npm test'],
     providers: { custom: { enabled: true, baseUrl: `http://127.0.0.1:${modelPort}/v1`, models: 1 } },
     defaultModel: `custom/${MODEL}`,
-    verify: 'off',
+    verify: VISUAL ? 'always' : 'off', // visual: the run's Test log tab
     review: false,
   }, null, 2));
   const log = fs.openSync(path.join(data, 'orbix.out.log'), 'a');
   // ORBIX's own start-up (src/app.mjs) in a separate Node process, so the sample data folder is the only one it sees.
-  const start = `const { startOrbix } = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'app.mjs')).href)}); await startOrbix({ port: 47990 });`;
-  const proc = spawn(process.execPath, ['--input-type=module', '-e', start], { cwd: ROOT, env: { ...process.env, ORBIX_DATA: data }, stdio: ['ignore', log, log], windowsHide: true });
+  const start = `${VISUAL ? clockSource(true) : ''} const { startOrbix } = await import(${JSON.stringify(pathToFileURL(path.join(ROOT, 'src', 'app.mjs')).href)}); await startOrbix({ port: 47990 });`;
+  const proc = spawn(process.execPath, ['--input-type=module', '-e', start], { cwd: ROOT, env: { ...process.env, ...GIT_DATES, ...(VISUAL ? { TZ: 'UTC', LANG: 'en_US.UTF-8' } : {}), ORBIX_DATA: data }, stdio: ['ignore', log, log], windowsHide: true });
   const lock = path.join(data, 'instance.json');
   for (let i = 0; i < 150; i++) {
     await sleep(100);
@@ -266,7 +357,10 @@ function findBrowser() {
 async function startBrowser(dir) {
   const exe = findBrowser();
   fs.mkdirSync(dir, { recursive: true });
-  const proc = spawn(exe, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars', '--force-color-profile=srgb', '--font-render-hinting=none', `--window-size=${VIEW.width},${VIEW.height}`, 'about:blank'], { stdio: 'ignore', windowsHide: true });
+  const proc = spawn(exe, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--hide-scrollbars', '--force-color-profile=srgb', '--font-render-hinting=none', `--window-size=${VIEW.width},${VIEW.height}`,
+    // Visual mode: software drawing in one pass, so the same page gives the same pixels every time.
+    ...(VISUAL ? ['--disable-gpu', '--disable-gpu-compositing', '--disable-partial-raster', '--disable-skia-runtime-opts', '--run-all-compositor-stages-before-draw', '--disable-threaded-animation', '--disable-threaded-scrolling', '--disable-checker-imaging', '--disable-lcd-text', '--disable-font-subpixel-positioning'] : []),
+    'about:blank'], { stdio: 'ignore', windowsHide: true });
   const portFile = path.join(dir, 'DevToolsActivePort');
   let port = 0;
   for (let i = 0; i < 150 && !port; i++) {
@@ -280,7 +374,7 @@ async function startBrowser(dir) {
   const page = pages.find((p) => p.type === 'page');
   const cdp = await connect(page.webSocketDebuggerUrl);
   say(`Browser: ${exe}`);
-  return { proc, cdp, name: path.basename(exe) };
+  return { proc, cdp, dir, name: path.basename(exe) };
 }
 
 function connect(url) {
@@ -345,22 +439,31 @@ function pageOf(cdp) {
     type: (text) => cdp.send('Input.insertText', { text }),
     /** Show the temporary folder as SHOWN_ROOT in every text and tooltip on screen. */
     tidyPaths: () => P.eval(`
-      const from = ${JSON.stringify(tmpRoot)}, to = ${JSON.stringify(SHOWN_ROOT)};
-      const fix = (s) => s.split(from).join(to);
+      const froms = ${JSON.stringify(tmpRoots())}, to = ${JSON.stringify(SHOWN_ROOT)};
+      const has = (s) => froms.some((f) => s.includes(f));
+      const fix = (s) => froms.reduce((a, f) => a.split(f).join(to), s);
       const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-      for (let n = w.nextNode(); n; n = w.nextNode()) if (n.data.includes(from)) n.data = fix(n.data);
-      for (const el of document.querySelectorAll('[title]')) if (el.title.includes(from)) el.title = fix(el.title);`),
+      for (let n = w.nextNode(); n; n = w.nextNode()) if (has(n.data)) n.data = fix(n.data);
+      for (const el of document.querySelectorAll('[title]')) if (has(el.title)) el.title = fix(el.title);`),
     /** Let pending work settle and draw: fonts, two frames, then a short pause. */
     async settle(ms = 400) {
       await P.eval('await document.fonts.ready; await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));');
       await sleep(ms);
     },
     /** `webp`: also write the website's WebP, at `webpDsf` when it is smaller than the PNG. */
-    async capture(name, { dsf, webp = false, webpDsf = dsf } = {}) {
+    async capture(name, { dsf, webp = false, webpDsf = dsf, blur = VISUAL } = {}) {
+      if (blur) await P.eval('document.activeElement?.blur?.()');
       await P.tidyPaths();
       await P.scale(dsf);
       await P.settle();
-      const png = await cdp.send('Page.captureScreenshot', { format: 'png' });
+      let png = await cdp.send('Page.captureScreenshot', { format: 'png' });
+      // Visual mode: capture again until two captures in a row match, so a late update never lands in a baseline.
+      for (let i = 0; VISUAL && i < 8; i++) {
+        await P.settle(250);
+        const again = await cdp.send('Page.captureScreenshot', { format: 'png' });
+        if (again.data === png.data) break;
+        png = again;
+      }
       fs.writeFileSync(path.join(PNG_DIR, `${name}.png`), Buffer.from(png.data, 'base64'));
       if (webp) {
         // The full size, then the 1200 and 800 px wide copies the website's srcset lists.
@@ -372,7 +475,7 @@ function pageOf(cdp) {
           fs.writeFileSync(path.join(WEBP_DIR, `${name}${suffix}.webp`), Buffer.from(w.data, 'base64'));
         }
       }
-      say(`  ${name}.png${webp ? ` + ${name}.webp` : ''}`);
+      if (!VISUAL) say(`  ${name}.png${webp ? ` + ${name}.webp` : ''}`);
     },
   };
   return P;
@@ -384,6 +487,7 @@ const PROMPTS = {
   explain: 'Explain how this project is put together.',
   done: 'Customers cannot log in when their email has capital letters. Find out why and fix it.',
   approval: 'Password reset links expire after a minute instead of an hour. Fix it.',
+  stream: 'Add a health check endpoint.',
 };
 
 /** Start a conversation in the sample project and wait until the agent is done or waits for an approval. */
@@ -395,8 +499,16 @@ async function converse(page, key, { waitFor = 'done' } = {}) {
     await st.sendPrompt(tab, ${JSON.stringify(PROMPTS[key])});`);
   const tab = `(await import('/js/store.js')).S.tabs.get(window.__tabs.${key})`;
   await sleep(300);
-  if (waitFor === 'approval') await page.until(`document.querySelector('.approval') && ${tab}.dialogs.length`, 'the approval card');
-  else await page.until(`(${tab}) && !(${tab}).streaming && (${tab}).messages.at(-1)?.role === 'assistant' && (${tab}).messages.at(-1).content?.some?.((c) => c.type === 'text')`, `the "${key}" reply`);
+  if (waitFor === 'stream') await page.until(`document.querySelector('.session:not([hidden]) .transcript')?.innerText.includes('which answers')`, 'the streaming reply').catch(async (e) => {
+    const t = await page.eval(`return document.querySelector('.session:not([hidden]) .transcript')?.innerText.slice(-400) ?? 'no transcript'`).catch(() => null);
+    throw new Error(`${e.message}: ${JSON.stringify(t)}`);
+  });
+  else if (waitFor === 'approval') await page.until(`document.querySelector('.approval') && ${tab}.dialogs.length`, 'the approval card');
+  // The last message from the model (ORBIX may add its own after it, such as "Checks passed").
+  else await page.until(`(${tab}) && !(${tab}).streaming && (${tab}).messages.filter((m) => m.role !== 'custom').at(-1)?.role === 'assistant' && (${tab}).messages.filter((m) => m.role !== 'custom').at(-1).content?.some?.((c) => c.type === 'text')`, `the "${key}" reply`).catch(async (e) => {
+    const t = await page.eval(`const t = ${tab}; return t && { streaming: t.streaming, roles: t.messages.map((m) => m.role + (m.customType ? ':' + m.customType : '')) };`).catch(() => null);
+    throw new Error(`${e.message}: ${JSON.stringify(t)}`);
+  });
   await page.settle(600);
 }
 
@@ -492,19 +604,35 @@ async function scenes(page, project) {
 
 // ============================================================================ main
 
-// ============================================================================ interface review (--ui)
+// ============================================================================ visual regression test (--visual)
 
-const UI_THEMES = ['dark', 'light', 'graphite'];
-const UI_SCALES = [1, 1.5];
-async function uiMatrix(page, name, prep = async () => {}) {
-  for (const theme of UI_THEMES) {
+const VIS_THEMES = ['dark', 'light', 'graphite'];
+const VIS_SCALES = [[1, '1x']]; // display scaling is covered by e2e/ui-stress.mjs (100-175%)
+// Volatile pieces masked in every capture: the terminal runs a real shell, whose prompt and output are not ours.
+// Animations end at once (on their last frame, and their end events still fire); nothing moves after that.
+const VIS_STYLE = '*, *::before, *::after { animation-duration: 0s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; transition-delay: 0s !important; caret-color: transparent !important; scroll-behavior: auto !important; } .term-host > * { visibility: hidden !important; }';
+const visualNames = [];
+
+/** One screen in every theme and scale. `prep` runs after each theme change (and may reopen what it closed). */
+async function vshot(page, name, prep = async () => {}) {
+  if (ONLY && !ONLY.split(',').some((p) => name.startsWith(p))) return;
+  for (const theme of VIS_THEMES) {
+    // The sidebar's conversation list is read again every 30 s; read it now so a capture never has an older list.
+    await page.eval("await (await import('/js/store.js')).loadSessions();");
     await setTheme(page, theme);
     await prep();
-    for (const dsf of UI_SCALES) await page.capture(`${name}-${theme}-${String(dsf).replace('.', '_')}x`, { dsf });
+    for (const [dsf, tag] of VIS_SCALES) {
+      const file = `${name}-${theme}-${tag}`;
+      await page.capture(file, { dsf, blur: !prep.keepFocus });
+      visualNames.push(file);
+    }
   }
+  say(`  ${name}`);
 }
 
-async function uiScenes(page, project, project2) {
+const noLoading = (root) => `!document.querySelector('${root} .skel, ${root} .loading-state, ${root} .spin')`;
+
+async function visualScenes(page, project, project2) {
   await page.eval(`const { api } = await import('/js/api.js');
     await api.post('/api/workspaces', { path: ${JSON.stringify(project)} });
     await api.post('/api/workspaces', { path: ${JSON.stringify(project2)} });`);
@@ -512,56 +640,209 @@ async function uiScenes(page, project, project2) {
   await sleep(500);
   await page.until("document.readyState === 'complete' && document.querySelector('.home .home-composer')", 'Home');
   await page.eval(`window.__shotProject = ${JSON.stringify(project)};`);
-  say('Empty sidebar and Home');
-  await uiMatrix(page, 'home-empty');
+  await setTheme(page, 'dark');
 
-  say('Busy sidebar: working, needs you, unread, pinned');
+  say('Conversations');
   await converse(page, 'explain');
   await page.eval(`const st = await import('/js/store.js'); await st.closeTab(window.__tabs.explain);`);
   await converse(page, 'done');
+  await page.eval(`window.__shotProject = ${JSON.stringify(project2)};`);
+  await converse(page, 'stream', { waitFor: 'stream' });
+  await page.eval(`window.__shotProject = ${JSON.stringify(project)};`);
   await page.eval("const { api } = await import('/js/api.js'); await api.post('/api/engine/settings', { approvals: 'ask' }); await (await import('/js/store.js')).loadEngine();");
   await converse(page, 'approval', { waitFor: 'approval' });
-  await page.eval(`const st = await import('/js/store.js');
-    await st.loadSessions?.();
-    const first = st.S.sessions.find((x) => /put together|Explain/i.test(x.title || ''));
-    if (first) st.savePrefs({ pinned: [first.path] });
-    const done = st.S.tabs.get(window.__tabs.done);
-    done.unread = true;
-    const t = await st.openTab({ workspace: ${JSON.stringify(project2)} });
-    t.name = 'Add a health check endpoint'; t.streaming = true; window.__tabs.live = t.id;
-    st.setActive(window.__tabs.approval);
-    st.emit('tabs');`);
-  await page.settle(500);
-  await uiMatrix(page, 'sidebar-busy');
 
-  say('A conversation');
-  await page.eval(`const st = await import('/js/store.js'); st.setActive(window.__tabs.done); st.savePrefs({ rightPanel: false });`);
-  await page.settle(400);
-  await uiMatrix(page, 'session', () => page.eval("const tr = document.querySelector('.session:not([hidden]) .transcript'); if (tr) tr.scrollTop = tr.scrollHeight;"));
+  say('A run');
+  const runId = await page.eval(`const { api } = await import('/js/api.js'); const j = await api.post('/api/runs/start', { workspace: window.__shotProject, task: 'Limit failed sign-ins: lock an email for a minute after 5 wrong passwords.', mode: 'plan' }); return j.run.id;`);
+  const runIs = (st) => `fetch('/api/runs', { headers: { 'x-orbix': '1' } }).then((r) => r.json()).then((j) => j.runs.find((x) => x.id === ${JSON.stringify(runId)})?.status === '${st}')`;
+  await page.until(`await ${runIs('awaiting_plan')}`, 'the plan');
+  await page.eval(`const { api } = await import('/js/api.js'); await api.post('/api/run/approve', { id: ${JSON.stringify(runId)}, commands: true, confirm: true });`);
+  await page.until(`await ${runIs('review')}`, 'the finished run', 30000);
+  await page.settle(800);
 
-  say('Side panel launcher');
-  await page.eval(`const st = await import('/js/store.js'); st.savePrefs({ rightPanel: true }); await new Promise((r) => setTimeout(r, 300)); (await import('/js/panels.js')).showTab('new');`);
-  await page.settle(500);
-  await uiMatrix(page, 'launcher');
+  say('Screens');
+  const st = "const st = await import('/js/store.js');";
+  const wait = (ms) => `await new Promise((r) => setTimeout(r, ${ms}));`;
+  // From the top first: the offset at the end then never depends on where the transcript was before.
+  const toEnd = "const tr = document.querySelector('.session:not([hidden]) .transcript'); if (tr) { tr.scrollTop = 0; tr.scrollTop = tr.scrollHeight; }";
 
-  say('Rail');
-  const rail = await page.eval(`const st = await import('/js/store.js'); st.savePrefs({ rightPanel: false, sideRail: true }); await new Promise((r) => setTimeout(r, 400)); return !!document.querySelector('.app.side-rail');`);
-  if (rail) await uiMatrix(page, 'sidebar-rail');
-  else say('  (no rail mode yet)');
-  await page.eval(`(await import('/js/store.js')).savePrefs({ sideRail: false });`);
+  await page.eval(`${st} st.emit('home'); ${wait(300)}`);
+  await page.until("document.querySelector('.home .home-composer') && document.querySelector('.home .home-status')", 'Home');
+  await vshot(page, 'home', () => page.eval("document.querySelector('.welcome')?.scrollTo({ top: 0 })"));
+
+  await page.eval(`${st} st.savePrefs({ rightPanel: false }); st.setActive(window.__tabs.done); ${wait(300)}`);
+  await vshot(page, 'session-done', () => page.eval(toEnd));
+  await page.eval(`${st} st.setActive(window.__tabs.stream); ${wait(300)}`);
+  await vshot(page, 'session-streaming', () => page.eval(toEnd));
+  await page.eval(`${st} st.setActive(window.__tabs.approval); ${wait(300)}`);
+  await page.until("document.querySelector('.session:not([hidden]) .approval')", 'the approval card');
+  await vshot(page, 'session-approval', () => page.eval(toEnd));
+
+  // The right panel, each tab, next to the finished conversation.
+  await page.eval(`${st} st.setActive(window.__tabs.done); st.savePrefs({ rightPanel: true }); ${wait(400)}`);
+  for (const name of ['review', 'changes', 'files', 'console', 'browser', 'todos', 'run', 'ask', 'context', 'new']) {
+    const shown = await page.eval(`const p = await import('/js/panels.js'); p.showTab(${JSON.stringify(name)}); ${wait(500)} return p.panelTab();`);
+    if (shown !== name) {
+      say(`  panel-${name}: not offered for this conversation (it has no worktree), skipped`);
+      continue;
+    }
+    await page.settle(300);
+    await vshot(page, `panel-${name}`, () => page.settle(200));
+  }
+
+  // The model picker, open on the conversation's model button.
+  await page.eval(`${st} st.savePrefs({ rightPanel: false }); ${wait(300)}`);
+  const openPicker = async () => {
+    await page.eval(`if (!document.querySelector('.modal.model-picker')) { [...document.querySelectorAll('.session:not([hidden]) button[aria-haspopup="dialog"]')].find((b) => b.textContent.includes(${JSON.stringify(MODEL)}))?.click(); }`);
+    await page.until(`document.querySelector('.model-picker') && ${noLoading('.model-picker')}`, 'the model picker').catch(async (e) => {
+      const d = await page.eval(`return document.querySelector('.model-picker')?.outerHTML.slice(0, 1500) ?? 'no picker'`);
+      throw new Error(`${e.message}: ${JSON.stringify(d)}`);
+    });
+    await page.settle(200);
+  };
+  await openPicker();
+  openPicker.keepFocus = false;
+  await vshot(page, 'model-picker', openPicker);
+  await page.key('Escape', { code: 'Escape', keyCode: 27 });
+  await page.settle(300);
+
+  // The Runs hub: its views, a run in each of its tabs, and the Review queue.
+  // The hub shows when no conversation is in front: go Home first.
+  await page.eval(`${st} st.emit('home'); ${wait(300)}`);
+  for (const view of ['runs', 'automations', 'customizations', 'skills']) {
+    await page.eval(`(await import('/js/runs.js')).openHub(${JSON.stringify(view)}); ${wait(400)}`);
+    await page.until(noLoading('#runs'), `the ${view} view`, 30000);
+    await vshot(page, `hub-${view}`, () => page.settle(200));
+  }
+  await page.eval(`(await import('/js/runs.js')).openHub('run', ${JSON.stringify(runId)}); ${wait(400)}`);
+  await page.until("document.querySelector('#runs .run-tab')", 'the run');
+  const runTabs = await page.eval("return [...document.querySelectorAll('#runs .run-tab')].map((b) => b.textContent.trim())");
+  for (const label of ['Plan', 'Tasks', 'Changes', 'Test log', 'Walkthrough', 'Note']) {
+    if (!runTabs.some((t) => t.startsWith(label))) continue;
+    const click = () => page.eval(`[...document.querySelectorAll('#runs .run-tab')].find((b) => b.textContent.trim().startsWith(${JSON.stringify(label)})).click(); ${wait(300)}`);
+    await click();
+    await page.until(noLoading('#runs'), `the run's ${label} tab`);
+    await vshot(page, `run-${label.toLowerCase().replace(/\s+/g, '-')}`, click);
+  }
+  await page.eval(`(await import('/js/runs.js')).openHub('review'); ${wait(400)}`);
+  await page.until("document.querySelector('#runs .rq-item')", 'the Review queue');
+  await vshot(page, 'review-queue', () => page.settle(200));
+  await page.eval(`(await import('/js/runs.js')).closeHub(); ${wait(300)}`);
+
+  // Settings, each page.
+  const pages = ['general', 'behavior', 'network', 'look', 'notify', 'keys', 'engine', 'models', 'agents', 'tools', 'rules', 'checks', 'projects', 'worktrees', 'conversations', 'machines', 'browser', 'usage', 'feedback', 'application'];
+  for (const key of pages) {
+    const open = async () => {
+      await page.eval(`${st} st.emit('settings', ${JSON.stringify(key)}); ${wait(300)}`);
+      await page.until(`document.querySelector('.settings') && ${noLoading('.settings')}`, `the ${key} settings`, 30000);
+      await page.eval("document.querySelector('.settings .set-main, .settings main')?.scrollTo?.({ top: 0 })");
+      await page.settle(200);
+    };
+    await open();
+    await vshot(page, `settings-${key}`, open);
+  }
+  await page.key('Escape', { code: 'Escape', keyCode: 27 });
+  await page.settle(300);
+
+  // The sidebar as a rail, next to the finished conversation.
+  await page.eval(`${st} st.setActive(window.__tabs.done); st.savePrefs({ sideRail: true }); ${wait(400)}`);
+  await page.until("document.querySelector('.app.side-rail')", 'the sidebar rail');
+  await vshot(page, 'sidebar-rail', () => page.eval(toEnd));
+  await page.eval(`${st} st.savePrefs({ sideRail: false });`).catch(() => {});
+}
+
+/** Compare the captures in `dir` with test/visual/, or save them there (approve). Returns the number of failures. */
+function visualCompare(dir) {
+  const diffDir = path.join(BASELINES, 'diff');
+  fs.rmSync(diffDir, { recursive: true, force: true });
+  fs.mkdirSync(BASELINES, { recursive: true });
+  if (APPROVE) {
+    for (const name of visualNames) fs.copyFileSync(path.join(dir, `${name}.png`), path.join(BASELINES, `${name}.png`));
+    // Baselines of screens that are gone (only on a full run: --only takes some of them).
+    let stale = 0;
+    if (!ONLY) for (const f of fs.readdirSync(BASELINES)) if (f.endsWith('.png') && !visualNames.includes(f.slice(0, -4))) (fs.rmSync(path.join(BASELINES, f)), stale++);
+    say(`Approved ${visualNames.length} baselines in ${path.relative(ROOT, BASELINES)}${stale ? `, removed ${stale} stale` : ''}`);
+    return 0;
+  }
+  let failed = 0, worst = 0;
+  for (const name of visualNames) {
+    const base = path.join(BASELINES, `${name}.png`);
+    if (!fs.existsSync(base)) {
+      failed++;
+      say(`  MISSING  ${name}.png (no baseline: run npm run visual:approve)`);
+      continue;
+    }
+    const r = comparePixels(decodePng(fs.readFileSync(base)), decodePng(fs.readFileSync(path.join(dir, `${name}.png`))));
+    const pct = r.sizeChanged ? 100 : (r.changed / r.total) * 100;
+    worst = Math.max(worst, pct);
+    if (r.changed || r.sizeChanged) {
+      fs.mkdirSync(diffDir, { recursive: true });
+      if (r.diff) fs.writeFileSync(path.join(diffDir, `${name}.png`), encodePng(r.diff));
+      fs.copyFileSync(path.join(dir, `${name}.png`), path.join(diffDir, `${name}.actual.png`));
+    }
+    if (r.failed) {
+      failed++;
+      say(`  FAIL     ${name}.png  ${r.sizeChanged ? 'size changed' : `${r.changed} of ${r.total} pixels changed (${pct.toFixed(3)}%)`}`);
+    } else if (r.changed) say(`  ok       ${name}.png  ${r.changed} pixels changed (${pct.toFixed(4)}%, under 0.1%)`);
+  }
+  const changed = fs.existsSync(diffDir) ? ` Diff images: ${path.relative(ROOT, diffDir)}` : '';
+  say(failed ? `Visual test FAILED: ${failed} of ${visualNames.length} screens differ.${changed}` : `Visual test passed: ${visualNames.length} screens, largest change ${worst.toFixed(4)}%.${changed}`);
+  return failed;
+}
+
+/**
+ * Where visual mode keeps its sample projects. Under WSL that is Windows' temp folder: ORBIX (a Windows app) runs git
+ * for Linux paths only through its WSL backend, so a project on the Windows drive is the one its git panels can read.
+ */
+function visualTmp() {
+  if (process.platform === 'linux' && fs.existsSync('/mnt/c') && /microsoft/i.test(fs.readFileSync('/proc/version', 'utf8'))) {
+    try {
+      const win = execFileSync('cmd.exe', ['/d', '/c', 'echo %TEMP%'], { cwd: '/mnt/c', encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      const linux = execFileSync('wslpath', ['-u', win], { encoding: 'utf8' }).trim();
+      if (fs.existsSync(linux)) return linux;
+    } catch {}
+  }
+  return os.tmpdir();
+}
+
+// One visual run at a time per folder: a second run would empty the folder under the first one.
+function takeVisualLock(file) {
+  for (let i = 0; i < 2; i++) {
+    try {
+      fs.writeFileSync(file, String(process.pid), { flag: 'wx' });
+      process.on('exit', () => { try { if (fs.readFileSync(file, 'utf8') === String(process.pid)) fs.rmSync(file); } catch {} });
+      return;
+    } catch (e) {
+      if (e.code !== 'EEXIST') throw e;
+      const pid = Number(fs.readFileSync(file, 'utf8'));
+      let alive = false;
+      try { process.kill(pid, 0); alive = true; } catch (k) { alive = k.code === 'EPERM'; }
+      if (alive) throw new Error(`Another visual run (process ${pid}) is using ${path.dirname(file)}. Wait for it to finish.`);
+      fs.rmSync(file, { force: true }); // left by a run that ended without cleaning up
+    }
+  }
 }
 
 async function main() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-shots-'));
+  // Visual mode: always the same folder, so every path (and anything derived from one) is the same on every run.
+  // Under WSL the folder is on the Windows drive, so it gets its own name: a run from Windows never shares it.
+  const tmp = VISUAL ? path.join(visualTmp(), process.platform === 'win32' ? 'orbix-visual' : 'orbix-visual-wsl') : fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-shots-'));
+  if (VISUAL) {
+    takeVisualLock(`${tmp}.lock`);
+    fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    fs.mkdirSync(tmp, { recursive: true });
+    PNG_DIR = path.join(tmp, 'captures');
+  }
   tmpRoot = tmp;
   const project = path.join(tmp, 'shop-api');
   const project2 = path.join(tmp, 'billing-service');
   const data = path.join(tmp, 'data');
   makeProject(project);
-  if (UI_DIR) makeProject(project2);
+  if (VISUAL) makeProject(project2);
   const model = await startModelServer();
   const orbix = await startOrbix(data, model.address().port);
   let browser = null;
+  let failures = 0;
   const stop = async () => {
     try {
       browser?.cdp.close();
@@ -571,28 +852,43 @@ async function main() {
     model.close();
     await sleep(800);
     if (!KEEP) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    if (browser?.dir && !browser.dir.startsWith(tmp)) fs.rmSync(browser.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   };
   try {
-    browser = await startBrowser(path.join(tmp, 'browser'));
+    // Visual mode keeps the browser's profile out of the fixed folder (under WSL, on the Windows drive): a profile
+    // there can stay locked for a moment after the browser exits, and the next run must empty the folder.
+    browser = await startBrowser(VISUAL ? fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-visual-browser-')) : path.join(tmp, 'browser'));
     const { cdp } = browser;
     await Promise.all([cdp.send('Page.enable'), cdp.send('Runtime.enable'), cdp.send('Log.enable')]);
     // Still frames: no motion, so a capture never lands mid-animation.
     await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }, { name: 'prefers-color-scheme', value: 'dark' }] });
+    if (VISUAL) {
+      await cdp.send('Page.setBypassCSP', { enabled: true }); // ORBIX's CSP would block the style below
+      await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `${freezeClock}
+        document.addEventListener('DOMContentLoaded', () => document.head.append(Object.assign(document.createElement('style'), { textContent: ${JSON.stringify(VIS_STYLE)} })));` });
+      await cdp.send('Emulation.setTimezoneOverride', { timezoneId: 'UTC' });
+      await cdp.send('Emulation.setLocaleOverride', { locale: 'en-US' });
+    }
     const page = pageOf(cdp);
     await page.scale(1);
     await cdp.send('Page.navigate', { url: orbix.url });
     await page.until("document.readyState === 'complete' && document.querySelector('.app')", 'ORBIX to load');
     fs.mkdirSync(PNG_DIR, { recursive: true });
-    if (!UI_DIR) fs.mkdirSync(WEBP_DIR, { recursive: true });
-    if (UI_DIR) await uiScenes(page, project, project2);
+    if (!VISUAL) fs.mkdirSync(WEBP_DIR, { recursive: true });
+    if (VISUAL) await visualScenes(page, project, project2);
     else await scenes(page, project);
     const errs = page.errors.filter(Boolean);
     if (errs.length) say(`Console errors:\n  ${errs.join('\n  ')}`);
     else say('Console: no errors');
+    if (VISUAL) failures = visualCompare(PNG_DIR);
   } finally {
     await stop();
   }
-  say(UI_DIR ? `Done. PNG: ${PNG_DIR}` : `Done. PNG: ${path.relative(ROOT, PNG_DIR)}  WebP: ${path.relative(ROOT, WEBP_DIR)}`);
+  if (VISUAL) {
+    if (failures) process.exitCode = 1;
+    return;
+  }
+  say(`Done. PNG: ${path.relative(ROOT, PNG_DIR)}  WebP: ${path.relative(ROOT, WEBP_DIR)}`);
 }
 
 main().catch((e) => {

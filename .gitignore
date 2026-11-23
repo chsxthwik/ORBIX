@@ -4,3 +4,4 @@ data/
 dist/
 # End-to-end evidence (screenshots, the run log): local only, they show local paths
 docs/evidence/
+/test/visual/diff/
