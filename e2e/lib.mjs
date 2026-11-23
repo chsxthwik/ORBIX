@@ -317,6 +317,7 @@ async function connectPage(exe, proc, target, metrics, profile = '') {
     errors,
     proc,
     exe,
+    cdp, // the raw DevTools connection, for tools that need more than the helpers below (tools/perf.mjs)
     async eval(expr) {
       const r = await cdp.send('Runtime.evaluate', { expression: `(async () => { ${expr} })()`, awaitPromise: true, returnByValue: true });
       if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);

@@ -379,6 +379,12 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px va
 .session-inner { position: relative; display: flex; flex-direction: column; height: 100%; }
 .transcript { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .tin { display: flex; flex-direction: column; max-width: calc(var(--col) + 48px); margin: 0 auto; padding: 32px 24px 28px; }
+/* Long conversations: a message off screen skips style, layout and paint until it comes near, at the size it last had
+   (or an estimate). It stays in the page, so Find, copy and selection reach it. The newest ones drawn at opening
+   always render (.cv-keep, set once by session.js: a :nth-last-child rule would restyle every message on each new
+   one), so opening at the bottom lands exactly there. The clip margin keeps hover rows and outlines past the edge. */
+.tin > .msg { content-visibility: auto; contain-intrinsic-size: auto 160px; overflow-clip-margin: 24px; }
+.tin > .cv-keep, .tin > .msg.live, .tin > .tl-flash, .tin > .cv-measure { content-visibility: visible; }
 .dock { position: relative; flex: none; padding: 0 24px 12px; }
 .dock::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 32px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; }
 .dock-col { display: flex; flex-direction: column; gap: 8px; max-width: var(--col); margin: 0 auto; }

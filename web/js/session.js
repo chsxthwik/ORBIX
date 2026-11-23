@@ -9,7 +9,7 @@ import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, 
 import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval, approvalLabel, thinkingLevels, thinkingName } from './dialogs.js';
 import { asciiSpin } from './ascii.js';
-import { fmtMsgTime } from './prefs-extra.js';
+import { fmtMsgTime, dateFormat } from './prefs-extra.js';
 import { viewFile, reviewChanges, askSide } from './panels.js';
 import { runInTerminal } from './terminal.js';
 import { conversationToMarkdown } from './exporter.js';
@@ -244,12 +244,12 @@ function checkCard(m) {
 const clock = (ts) => {
   if (!ts) return '';
   const d = new Date(ts);
-  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = dateFormat({ hour: '2-digit', minute: '2-digit' }).format(d);
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const ago = Math.round((day(new Date()) - day(d)) / 86400000);
   if (ago === 0) return time;
   if (ago === 1) return `Yesterday ${time}`;
-  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })}, ${time}`;
+  return `${dateFormat({ month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) }).format(d)}, ${time}`;
 };
 
 /** "now", "5m ago", "2h ago", then the date: when a message was sent, kept fresh by the minute (the exact time is the hint). */
@@ -257,7 +257,13 @@ const ago = (ts) => {
   const s = Math.max(0, (Date.now() - ts) / 1000);
   return s < 45 ? 'now' : s < 3600 ? `${Math.round(s / 60)}m ago` : s < 86400 ? `${Math.round(s / 3600)}h ago` : clock(ts);
 };
-const msgTime = (ts) => h('time', { class: 'msg-time', dataset: { ts: String(ts) }, datetime: new Date(ts).toISOString(), title: new Date(ts).toLocaleString() }, fmtMsgTime(ts, ago));
+// The hint is toLocaleString()'s text, from one shared formatter.
+const NUM = new Intl.NumberFormat();
+const FIRST_DRAW = 160; // messages drawn when a conversation opens; the rest follow while the browser is idle
+const FILL_CHUNK = 240; // messages drawn per idle slice after that
+const SETTLE_CHUNK = 40; // drawn messages shown for one frame per idle slice, so their heights are remembered
+const FULL = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' };
+const msgTime = (ts) => h('time', { class: 'msg-time', dataset: { ts: String(ts) }, datetime: new Date(ts).toISOString(), title: dateFormat(FULL).format(ts) }, fmtMsgTime(ts, ago));
 setInterval(() => {
   if (document.hidden) return;
   for (const el of document.querySelectorAll('#session time.msg-time[data-ts]')) {
@@ -269,7 +275,9 @@ setInterval(() => {
 export class TabView {
   constructor(tab) {
     this.tab = tab;
-    this.limit = 120;
+    // How many messages are drawn at once. Off-screen ones cost little (content-visibility in app.css), and all of them
+    // stay in the page so Find and copy reach the whole conversation; only very long ones start with "Show earlier".
+    this.limit = 3000;
     this.stick = true;
     this.liveBlocks = [];
     this.liveEl = null;
@@ -332,15 +340,19 @@ export class TabView {
 
     // Follow new output only while the reader is at the bottom; any upward scroll stops it until they return.
     // Content growing never moves scrollTop, so only a decrease (with room left below) is the reader scrolling up.
+    // Checked once per frame, not per scroll event: the read needs fresh layout, and a long transcript makes each
+    // forced layout expensive.
     this.lastTop = 0;
-    this.scroller.addEventListener('scroll', () => {
+    this.onScroll = rafThrottle(() => {
       const sc = this.scroller;
+      if (!sc.isConnected) return;
       const d = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
       if (d <= 4) this.stick = true;
       else if (sc.scrollTop < this.lastTop - 1) this.stick = false;
       this.lastTop = sc.scrollTop;
       this.showJump(!this.stick);
-    }, { passive: true });
+    });
+    this.scroller.addEventListener('scroll', this.onScroll, { passive: true });
     // A window, panel or composer resize keeps a reader who was at the bottom at the bottom.
     this.scrollerRo = new ResizeObserver(() => {
       if (this.stick && this.scroller.isConnected) this.scroller.scrollTop = this.scroller.scrollHeight;
@@ -392,6 +404,8 @@ export class TabView {
 
   /** The tab is closed for good: release observers and callbacks that would keep this view and its DOM alive. */
   destroy() {
+    this.fillGen = (this.fillGen || 0) + 1; // stop drawing earlier messages
+    this.onScroll?.cancel?.();
     this.removeEmpty();
     clearInterval(this.pendingTimer);
     clearInterval(this.foldTimer);
@@ -640,16 +654,14 @@ export class TabView {
     const msgs = t.messages;
     const start = Math.max(0, msgs.length - this.limit);
     if (start > 0) this.tin.append(h('button', { class: 'btn sm earlier', type: 'button', onclick: () => ((this.limit += 150), this.renderAll()) }, `Show ${Math.min(150, start)} earlier messages`));
-    const frag = document.createDocumentFragment();
-    for (let i = start; i < msgs.length; i++) {
-      const el = this.renderMessage(msgs[i], i);
-      if (el) {
-        this.els.set(msgs[i], el);
-        frag.append(el);
-      }
-    }
-    this.tin.append(frag);
-    this.foldTurns(start);
+    // The newest messages are drawn now, from the start of a turn; older ones follow in the background (fillEarlier),
+    // so a long conversation opens as fast as a short one.
+    let cut = Math.max(start, msgs.length - FIRST_DRAW);
+    while (cut > start && msgs[cut].role !== 'user') cut--;
+    this.tin.append(this.drawRange(cut, msgs.length));
+    for (const el of [...this.tin.children].slice(-10)) el.classList.add('cv-keep'); // always rendered: see app.css
+    this.foldTurns(cut);
+    this.fillEarlier(start, cut);
     this.timeline.refresh();
     if (t.dead) this.showDead(false);
     this._renderLive();
@@ -657,6 +669,71 @@ export class TabView {
     if (fromBottom != null) sc.scrollTop = sc.scrollHeight - fromBottom;
     else this.scrollBottom(true);
   }
+
+  /** Draw messages [from, to) into a fragment, remembering each one's element. */
+  drawRange(from, to) {
+    const msgs = this.tab.messages;
+    const frag = document.createDocumentFragment();
+    for (let i = from; i < to; i++) {
+      const el = this.renderMessage(msgs[i], i);
+      if (el) {
+        this.els.set(msgs[i], el);
+        frag.append(el);
+      }
+    }
+    return frag;
+  }
+
+  /**
+   * Draw the messages before `cut` (down to `start`) in chunks while the browser is idle, newest first, each chunk
+   * inserted above what is drawn. Scroll anchoring keeps the reader's place. A new renderAll cancels a fill in progress.
+   */
+  fillEarlier(start, cut) {
+    const gen = (this.fillGen = (this.fillGen || 0) + 1);
+    const msgs = this.tab.messages;
+    const idle = window.requestIdleCallback ? (fn) => requestIdleCallback(fn, { timeout: 120 }) : (fn) => setTimeout(fn, 16);
+    const chunk = (size) => {
+      const anchor = this.els.get(msgs[cut]);
+      if (anchor?.parentNode !== this.tin) return (cut = start); // redrawn meanwhile: nothing left to do here
+      let from = Math.max(start, cut - size);
+      while (from > start && msgs[from].role !== 'user') from--;
+      anchor.before(this.drawRange(from, cut));
+      this.foldTurns(from, cut);
+      cut = from;
+    };
+    const step = () => {
+      if (gen !== this.fillGen || !this.tin.isConnected) return;
+      if (cut > start) chunk(FILL_CHUNK);
+      if (cut > start) idle(step);
+      else settle();
+    };
+    // Then, still while idle, show each drawn message for one frame so the browser remembers its real height
+    // (contain-intrinsic-size: auto). Scrolling into old messages then never changes their size, which would make
+    // the whole column lay out again on that frame.
+    const settle = () => {
+      const kids = [...this.tin.children].filter((el) => !el.classList.contains('cv-sized'));
+      let i = 0;
+      const pass = () => {
+        if (gen !== this.fillGen || i >= kids.length || !this.tin.isConnected) return;
+        const part = kids.slice(i, (i += SETTLE_CHUNK));
+        for (const el of part) el.classList.add('cv-measure');
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          for (const el of part) el.classList.replace('cv-measure', 'cv-sized');
+          idle(pass);
+        }));
+      };
+      idle(pass);
+    };
+    // Find and jumps need every message in the page: they finish the fill at once.
+    this.finishFill = () => {
+      if (gen !== this.fillGen) return;
+      while (cut > start) chunk(Infinity);
+    };
+    idle(step);
+  }
+
+  /** Draw any earlier messages still waiting (see fillEarlier). */
+  finishFill() {}
 
   appendMsg(msg) {
     const idx = this.tab.messages.lastIndexOf(msg);
@@ -957,14 +1034,14 @@ export class TabView {
     if (!text && !ended) return wrap;
     if (m.timestamp) acts.prepend(msgTime(m.timestamp));
     // Which model wrote it, how long the turn took and how fast it wrote, at the end of the row.
-    const meta = this.replyMeta(m);
+    const meta = this.replyMeta(m, idx);
     if (meta) acts.append(meta);
     wrap.append(acts);
     return wrap;
   }
 
   /** "Claude Opus 5.5 Medium · 5s · 103.5 tok/s": the model and its reasoning, the turn's time, the writing speed. */
-  replyMeta(m) {
+  replyMeta(m, idx) {
     const t = this.tab;
     const id = typeof m.model === 'string' ? m.model : '';
     if (!id) return null;
@@ -972,14 +1049,14 @@ export class TabView {
     const lvl = m.thinkingLevel && m.thinkingLevel !== 'off' ? ` ${thinkingName(m.thinkingLevel)}` : '';
     const bits = [`${known?.name || id}${lvl}`];
     // The turn: from your message to the end of this reply.
-    let u = t.messages.indexOf(m);
+    let u = t.messages[idx] === m ? idx : t.messages.indexOf(m); // the index is known when drawing: no search per reply
     while (u > 0 && t.messages[u].role !== 'user') u--;
     const start = t.messages[u]?.role === 'user' ? t.messages[u].timestamp : m.timestamp;
     if (start && m.doneAt > start) bits.push(fmtDuration(m.doneAt - start));
     const out = m.usage?.output || 0;
     const writing = m.doneAt && m.firstTokenAt ? (m.doneAt - m.firstTokenAt) / 1000 : 0;
     if (out > 0 && writing > 0.25) bits.push(`${(out / writing).toFixed(1)} tok/s`);
-    const tip = [m.provider ? `${m.provider}/${id}` : id, m.firstTokenAt && m.timestamp ? `First token after ${fmtDuration(m.firstTokenAt - m.timestamp)}` : '', out ? `${out.toLocaleString()} output tokens` : ''].filter(Boolean).join('\n');
+    const tip = [m.provider ? `${m.provider}/${id}` : id, m.firstTokenAt && m.timestamp ? `First token after ${fmtDuration(m.firstTokenAt - m.timestamp)}` : '', out ? `${NUM.format(out)} output tokens` : ''].filter(Boolean).join('\n');
     return h('span', { class: 'msg-model num', title: tip }, bits.join(' · '));
   }
 
@@ -1043,7 +1120,11 @@ export class TabView {
     const t = this.tab;
     const last = t.messages[t.messages.length - 1];
     const can = !t.streaming && !t.dead;
-    this.tin.querySelectorAll('.retry').forEach((b) => (b.hidden = !can || b.closest('.msg') !== this.els.get(last)));
+    // Only the last reply's Retry shows. Touch just the buttons that change: setting `hidden` on every reply's button
+    // (a thousand in a long conversation) restyles each of them, on every message.
+    const show = can ? this.els.get(last)?.querySelector('.retry') : null;
+    for (const b of this.tin.querySelectorAll('.retry:not([hidden])')) if (b !== show) b.hidden = true;
+    if (show?.hidden) show.hidden = false;
     this.refreshSummary();
   }
 
@@ -1125,12 +1206,12 @@ export class TabView {
   }
 
   /** Fold every finished turn from message `from` on (the turn still running stays open). */
-  foldTurns(from = 0) {
+  foldTurns(from = 0, to = this.tab.messages.length) {
     const t = this.tab;
     const users = [];
-    for (let i = from; i < t.messages.length; i++) if (t.messages[i].role === 'user') users.push(i);
+    for (let i = from; i < to; i++) if (t.messages[i].role === 'user') users.push(i);
     users.forEach((u, k) => {
-      const end = users[k + 1] ?? t.messages.length;
+      const end = users[k + 1] ?? to;
       if (end === t.messages.length && (t.streaming || t.live?.message)) return;
       this.foldTurn(u, end);
     });

@@ -6,6 +6,8 @@
 // Nothing here runs on scroll. An IntersectionObserver on the transcript lights the dots of the messages in view, and
 // the dot list is rebuilt only when the transcript's top-level children change (a MutationObserver, one frame later).
 // Existing dots are kept and reused, so a new message adds one button instead of redrawing the strip.
+// Nothing here reads layout either: sizes come from ResizeObservers and dot positions from arithmetic, because a
+// layout read with a long transcript waiting to be laid out costs hundreds of milliseconds.
 import { h } from './dom.js';
 import { NARROW, firstLine, dotLabel } from './timeline-text.mjs';
 
@@ -28,13 +30,29 @@ export class Timeline {
     this.view = view;
     this.el = h('nav', { class: 'turn-map', 'aria-label': 'Conversation timeline', hidden: true });
     this.tip = h('div', { class: 'tm-tip', 'aria-hidden': 'true' });
+    // The dots sit on a track that slides (a transform) when there are more than fit: moving it never forces layout,
+    // which setting scrollTop would on every change of the current message.
+    this.track = h('div', { class: 'tm-track' });
+    this.el.append(this.track);
     view.root.append(this.el, this.tip);
     this.marks = []; // { target, button, you }
     this.byTarget = new Map();
     this.seen = new Set(); // targets on screen
     this.active = -1;
     this.narrow = false;
+    this.width = 0; // the transcript's width, from a ResizeObserver
+    this.stripH = 0; // the strip's height, from a ResizeObserver
+    this.stripTop = 0; // how far the track is slid up
     this.frame = 0;
+    this.ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        if (e.target === view.scroller) this.width = e.contentRect.width;
+        else this.stripH = e.contentRect.height;
+      }
+      this.measure();
+    });
+    this.ro.observe(view.scroller);
+    this.ro.observe(this.el);
     this.io = new IntersectionObserver((entries) => this.onSeen(entries), { root: view.scroller, threshold: 0 });
     this.mo = new MutationObserver(() => this.refreshSoon());
     this.mo.observe(view.tin, { childList: true });
@@ -74,19 +92,20 @@ export class Timeline {
       if (!mark) {
         const you = target.classList.contains('user');
         const button = h('button', { type: 'button', class: `turn-mark ${you ? 'you' : 'agent'}`, tabindex: '-1', onclick: () => this.jumpTo(target) });
-        mark = { target, button, you, line: '' };
+        mark = { target, button, you, line: null, label: '' };
         this.byTarget.set(target, mark);
         this.io.observe(target);
       }
-      // The text of the newest reply can still change as it settles, so labels are read again on every refresh.
-      mark.line = firstLine(messageText(target));
-      mark.button.setAttribute('aria-label', dotLabel(mark.you, i + 1, total, mark.line));
+      // A message's first line is read once; the last two (the newest reply can still settle) are read again.
+      if (mark.line === null || i >= total - 2) mark.line = firstLine(messageText(target));
+      const label = dotLabel(mark.you, i + 1, total, mark.line);
+      if (label !== mark.label) mark.button.setAttribute('aria-label', (mark.label = label));
       mark.button.dataset.i = String(i);
       return mark;
     });
     const buttons = this.marks.map((m) => m.button);
-    const same = buttons.length === this.el.children.length && buttons.every((b, i) => this.el.children[i] === b);
-    if (!same) this.el.replaceChildren(...buttons);
+    const same = buttons.length === this.track.children.length && buttons.every((b, i) => this.track.children[i] === b);
+    if (!same) this.track.replaceChildren(...buttons);
     this.active = -1;
     this.measure();
     this.markCurrent();
@@ -95,11 +114,10 @@ export class Timeline {
 
   /** Show the strip only with two or more messages and room beside the text. */
   measure() {
-    const sc = this.view.scroller;
-    if (!sc.isConnected) return;
-    this.narrow = sc.clientWidth > 0 && sc.clientWidth < NARROW;
-    this.el.hidden = this.marks.length < 2 || this.narrow;
-    if (this.el.hidden) this.hideTip();
+    this.narrow = this.width > 0 && this.width < NARROW;
+    const hide = this.marks.length < 2 || this.narrow;
+    if (this.el.hidden !== hide) this.el.hidden = hide;
+    if (hide) this.hideTip();
   }
 
   onSeen(entries) {
@@ -120,28 +138,39 @@ export class Timeline {
     if (index < 0) index = this.marks.length - 1;
     if (index === this.active) return;
     const was = this.marks[this.active];
+    const now = this.marks[index];
+    const inside = this.el.contains(document.activeElement);
     if (was) {
       was.button.removeAttribute('aria-current');
-      if (was.button !== document.activeElement) was.button.tabIndex = -1;
+      if (!inside) was.button.tabIndex = -1;
     }
-    const now = this.marks[index];
     now.button.setAttribute('aria-current', 'true');
-    if (!this.el.contains(document.activeElement)) {
-      for (const m of this.marks) m.button.tabIndex = -1;
+    // The tab stop follows the current dot, unless the reader is moving through the dots with the keyboard.
+    if (!inside) {
+      if (this.stop && this.stop !== now.button) this.stop.tabIndex = -1;
       now.button.tabIndex = 0;
+      this.stop = now.button;
     }
     this.active = index;
-    this.keepInStrip(now.button);
+    this.keepInStrip(index);
   }
 
-  /** A long conversation scrolls the strip itself; keep the current dot inside it. */
-  keepInStrip(b) {
-    const strip = this.el;
-    if (strip.scrollHeight <= strip.clientHeight) return;
-    const top = b.offsetTop;
-    const bottom = top + b.offsetHeight;
-    if (top < strip.scrollTop) strip.scrollTop = top - 8;
-    else if (bottom > strip.scrollTop + strip.clientHeight) strip.scrollTop = bottom - strip.clientHeight + 8;
+  /** A long conversation slides the track; keep dot `i` in view. Positions are arithmetic, not layout reads. */
+  keepInStrip(i) {
+    const DOT = 14; // .turn-mark height in shell.css
+    const view = this.stripH; // the strip's content height, inside its padding
+    const total = this.marks.length * DOT;
+    if (!view || total <= view + 1) {
+      if (this.stripTop) this.track.style.transform = '';
+      this.stripTop = 0;
+      return;
+    }
+    const top = i * DOT;
+    let to = this.stripTop;
+    if (top < to + DOT) to = top - DOT;
+    else if (top + DOT > to + view - DOT) to = top + 2 * DOT - view;
+    to = Math.max(0, Math.min(total - view, to));
+    if (to !== this.stripTop) this.track.style.transform = `translateY(${-(this.stripTop = to)}px)`;
   }
 
   /** Up and Down move between dots (a roving tab stop), Home and End go to the ends; Enter or Space activates. */
@@ -153,8 +182,9 @@ export class Timeline {
     e.preventDefault();
     const next = this.marks[Math.max(0, Math.min(this.marks.length - 1, to))].button;
     for (const m of this.marks) m.button.tabIndex = m.button === next ? 0 : -1;
-    next.focus();
-    this.keepInStrip(next);
+    next.focus({ preventScroll: true }); // the track slides instead (keepInStrip)
+    this.stop = next;
+    this.keepInStrip(this.marks.indexOf(this.marks.find((m) => m.button === next)));
   }
 
   showTip(button) {
@@ -178,6 +208,7 @@ export class Timeline {
     this.frame = 0;
     this.io.disconnect();
     this.mo.disconnect();
+    this.ro.disconnect();
     this.tip.remove();
   }
 
@@ -197,6 +228,7 @@ export class Timeline {
 
   /** Jump to the previous (-1) or next (+1) message of yours, relative to what is on screen. */
   stepYou(dir) {
+    this.view.finishFill?.(); // every message of yours must be in the page to step through them
     const sc = this.view.scroller;
     const scTop = sc.getBoundingClientRect().top;
     const pos = (el) => el.getBoundingClientRect().top - scTop + sc.scrollTop;

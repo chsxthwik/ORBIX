@@ -68,17 +68,29 @@ export function applyExtraPrefs(u, root = document.documentElement) {
   else delete root.dataset.diff;
 }
 
+/**
+ * A date formatter for these options, made once and reused. toLocaleString() builds a new formatter on every call,
+ * which costs milliseconds each across the thousands of messages a long conversation shows.
+ */
+const formatters = new Map();
+export function dateFormat(opts) {
+  const key = JSON.stringify(opts);
+  let f = formatters.get(key);
+  if (!f) formatters.set(key, (f = new Intl.DateTimeFormat([], opts)));
+  return f;
+}
+
 /** A message's time as chosen in Settings → Preferences: relative ("5m ago"), or the clock in 12 or 24 hours. */
 export function fmtMsgTime(ts, relative) {
   const f = S.ui.timeFormat;
   if (f !== '12h' && f !== '24h') return relative(ts);
   const d = new Date(ts);
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: f === '12h' });
+  const time = dateFormat({ hour: 'numeric', minute: '2-digit', hour12: f === '12h' }).format(d);
   const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const days = Math.round((day(new Date()) - day(d)) / 86400000);
   if (days === 0) return time;
   if (days === 1) return `Yesterday ${time}`;
-  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) })}, ${time}`;
+  return `${dateFormat({ month: 'short', day: 'numeric', ...(d.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) }).format(d)}, ${time}`;
 }
 
 /** Whether deleting a conversation asks first (it goes to Recently deleted either way). */

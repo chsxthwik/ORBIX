@@ -117,6 +117,7 @@ export class SessionBar {
     const q = this.q.value.trim().toLowerCase();
     const hits = [];
     if (q) {
+      this.view.finishFill?.(); // a long conversation may still be drawing its earliest messages
       const walker = document.createTreeWalker(this.view.tin, NodeFilter.SHOW_TEXT);
       const seen = new Map(); // element -> visible? (many text nodes share a parent)
       for (let n = walker.nextNode(); n && hits.length < MAX_HITS; n = walker.nextNode()) {
