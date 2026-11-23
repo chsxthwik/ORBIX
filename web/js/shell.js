@@ -1,8 +1,9 @@
-// The window chrome, laid out like a desktop app: a menu row (ORBIX, Workspace, View, Window; in the Windows app the
-// window buttons sit at its right end), then the toolbar: the sidebar switch, back and forward, search, and where you
-// are (the project's tile and name / the conversation, its ··· menu, state and branch); on the right how full the
-// context is, the Context menu (MCP, skills, rules) and the side panel. Also here: back/forward history across
-// conversations and views, and the card that previews a conversation when you rest the pointer on it in the sidebar.
+// The window chrome: one 40px row, like a desktop app's title bar. On the left the mark and the menus (Workspace, View,
+// Window), the sidebar switch, back and forward, and search; in the middle where you are (the project's tile and name,
+// the conversation, its ··· menu, state and branch); on the right how full the context is, the MCP, skills and rules
+// menu and the side panel's switches, then the update pill; in the Windows app the window buttons sit at the far
+// right. Also here: back/forward history across conversations and views, and the card that previews a conversation
+// when you rest the pointer on it in the sidebar.
 // main.js owns the actions and passes them in through `H`.
 import { h, icon, iconBtn, logo, baseName, fmtElapsed, timeAgo, projTile, fmtTokens } from './dom.js';
 import { S, on, emit, activeTab, savePrefs } from './store.js';
@@ -13,7 +14,7 @@ import { gitState, showTab } from './panels.js';
 import { firstKey } from './keys.mjs';
 import { onMachine, backToThisPc } from './machines.js';
 import { homeProject } from './home.js';
-import { HUB_LINKS } from './hub-nav.js';
+import { HUB_LINKS, isCustomize } from './hub-nav.js';
 import { updatesSupported, checkForUpdates, updatePill } from './updates.js';
 
 /** The key of a shortcut as you set it (Settings → Shortcuts), for menus and hints. */
@@ -127,12 +128,20 @@ function menus() {
   ];
 }
 
-// The brand at the top left of the menu row is the mark alone (it swaps O and X while an agent works).
+// The brand at the top left is the mark alone (it swaps O and X while an agent works). Under 1000px the three menus
+// fold into the mark's menu, so the row keeps its room for the breadcrumb.
+const narrowMenus = matchMedia('(max-width: 1000px)');
 export function drawMenubar(el) {
-  const row = menus().map(([name]) => {
+  if (!el._menuWatch) (el._menuWatch = true), narrowMenus.addEventListener('change', () => drawMenubar(el));
+  // Folded: one menu holding all of them, each under its own heading.
+  const all = () => {
+    const [brand, ...rest] = menus();
+    return [...brand[1], ...rest.flatMap(([name, items]) => ['-', { header: name }, ...items])];
+  };
+  const row = menus().filter(([name]) => !narrowMenus.matches || name === 'ORBIX').map(([name]) => {
     const b = h('button', { class: 'mb-it', type: 'button', 'aria-haspopup': 'menu', onclick: (e) => {
       if (menuOpenFrom === b) return document.querySelector('.menu:not(.leaving)')?._close?.();
-      openMenu(b, menus().find((m) => m[0] === name)[1]);
+      openMenu(b, narrowMenus.matches ? all() : menus().find((m) => m[0] === name)[1]);
       e.stopPropagation();
     } }, ...(name === 'ORBIX' ? [logo(18, { alive: true })] : [name]));
     if (name === 'ORBIX') (b.classList.add('mb-brand'), b.setAttribute('aria-label', 'ORBIX'));
@@ -145,7 +154,7 @@ export function drawMenubar(el) {
     });
     return b;
   });
-  el.replaceChildren(h('nav', { class: 'mb-row', 'aria-label': 'Menu' }, row), h('span', { class: 'mb-drag grow' }), updatePill);
+  el.replaceChildren(h('nav', { class: 'mb-row', 'aria-label': 'Menu' }, row));
 }
 
 // ================= toolbar =================
@@ -160,7 +169,7 @@ function crumbs(t, hub) {
     const branch = t.worktree?.branch || g?.branch;
     const n = g?.files?.length || 0;
     return [
-      h('button', { class: 'crumb crumb-proj', type: 'button', title: t.workspace, 'aria-haspopup': 'menu', onclick: (e) => H.projectMenu(t, e.currentTarget) }, projTile(baseName(t.workspace), 18), h('bdi', null, baseName(t.workspace) || 'No folder')),
+      h('button', { class: 'crumb crumb-proj', type: 'button', title: t.workspace, 'aria-haspopup': 'menu', onclick: (e) => H.projectMenu(t, e.currentTarget) }, projTile(baseName(t.workspace), 20), h('bdi', null, baseName(t.workspace) || 'No folder')),
       h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'),
       h('span', { class: 'crumb cur', title: `${t.name}\nDouble-click to rename`, ondblclick: () => H.rename(t) }, h('span', { class: 'ell' }, t.name)),
       iconBtn('more', 'Conversation actions', (e) => H.sessionMenu(t, e.currentTarget), 'sm tb-more'),
@@ -168,9 +177,13 @@ function crumbs(t, hub) {
       branch ? h('button', { class: 'crumb-br', type: 'button', title: n ? `Branch ${branch} · ${n} changed file${n === 1 ? '' : 's'}` : `Branch ${branch}`, onclick: () => showTab(t.worktree ? 'review' : 'changes') }, icon('branch', 12), h('span', { class: 'ell' }, h('bdi', null, branch)), n ? h('b', { class: 'num' }, n) : null) : null,
     ];
   }
-  if (hub) return [h('span', { class: 'crumb cur static' }, HUB_LINKS.find(({ view }) => view === hub.view)?.label || 'Runs')];
+  if (hub) {
+    const label = HUB_LINKS.find(({ view }) => view === hub.view)?.label || 'Runs';
+    // The Customize page's four tabs read as Customize / the tab.
+    return isCustomize(hub.view) ? [h('span', { class: 'crumb static' }, 'Customize'), h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/'), h('span', { class: 'crumb cur static' }, label)] : [h('span', { class: 'crumb cur static' }, label)];
+  }
   const ws = homeProject();
-  return [ws ? h('span', { class: 'crumb crumb-proj static', title: ws }, projTile(baseName(ws), 18), h('bdi', null, baseName(ws))) : null, ws ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/') : null, h('span', { class: 'crumb cur static' }, 'New conversation')].filter(Boolean);
+  return [ws ? h('span', { class: 'crumb crumb-proj static', title: ws }, projTile(baseName(ws), 20), h('bdi', null, baseName(ws))) : null, ws ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/') : null, h('span', { class: 'crumb cur static' }, 'New conversation')].filter(Boolean);
 }
 
 // ================= context meter =================
@@ -222,7 +235,7 @@ export function drawToolbar(el, { force = false } = {}) {
   if (!force && sig === topSig && el.childElementCount) return;
   topSig = sig;
   el.classList.toggle('busy', !!t?.streaming && !t.dead);
-  // Across the window, the panel takes the conversation's place: its switches end the toolbar like any other button.
+  // Across the window, the panel takes the conversation's place; docked beside it, the switches stay the same.
   const wide = H.panelMax();
   const docked = H.panelShown() && !wide && !document.getElementById('app')?.classList.contains('overlay-panel');
   const panelBtn = () => iconBtn('panel-right', tip('Side panel', 'panel'), H.togglePanel, 'tb-panel' + (H.panelShown() ? ' on' : ''));
@@ -241,15 +254,9 @@ export function drawToolbar(el, { force = false } = {}) {
     h('div', { class: 'crumbs' }, crumbs(t, hub)),
     // This window shows a machine (ORBIX Cloud): say which, and lead back to this PC.
     onMachine() ? h('button', { class: 'tb-machine', type: 'button', title: window.orbixDesktop?.machines ? 'Back to the ORBIX on this PC' : 'ORBIX on a machine', onclick: () => (window.orbixDesktop?.machines ? backToThisPc() : H.settings('machines')) }, icon('cloud', 13), location.hostname, window.orbixDesktop?.machines ? h('span', { class: 'muted' }, '· Back to this PC') : null) : null,
-    h('span', { class: 'grow tb-drag' }),
     // The side panel works for a conversation, and on Home for the project chosen there.
-    t || (!hub && homeProject()) ? h('div', { class: 'tb-end' },
-      t ? meter : null,
-      docked ? null : cxBtn(),
-      wide ? maxBtn() : null,
-      docked ? null : panelBtn()) : null,
-    // With the side panel docked, the right-hand group sits above it: MCP, skills and rules, then the panel's switches.
-    (t || (!hub && homeProject())) && docked ? h('div', { class: 'tb-pz' }, cxBtn(), maxBtn(), panelBtn()) : null,
+    t || (!hub && homeProject()) ? h('div', { class: 'tb-end' }, t ? meter : null, cxBtn(), docked || wide ? maxBtn() : null, panelBtn()) : null,
+    updatePill,
   ].filter(Boolean));
 }
 

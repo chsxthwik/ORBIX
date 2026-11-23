@@ -1,0 +1,18 @@
+/* The message box: a flat surface with a 1px border; the border turns the accent only while the box has focus (no glow,
+   no shadow). The bottom row reads left to right: + attach, provider and model, reasoning effort, mode, then the
+   permission chip and send on the right. Text follows the message text size (--fs, 14px). */
+.composer { padding: 0; border: 1px solid var(--line-3); border-radius: var(--sp-3); background: var(--bg-field, var(--bg-raise)); box-shadow: none; transition: border-color var(--dur-hover) var(--ease-out); }
+.composer:focus-within { border-color: var(--accent); outline: 0; }
+.drop .composer { border-color: var(--fg-2); border-style: dashed; }
+.composer .attach { margin: 0; padding: var(--sp-3) var(--sp-4) 0; }
+.composer .c-ta { min-height: 48px; max-height: min(320px, 40vh); padding: var(--sp-3) var(--sp-4) var(--sp-1); font-size: var(--fs); line-height: 1.6; }
+.composer.shell .c-ta { padding-top: 6px; font-family: var(--mono); }
+.composer.shell .c-mode { display: flex; animation: settle var(--t2) var(--ease-out); }
+.c-ta::placeholder { color: var(--fg-3); }
+
+/* Full access is a neutral chip with a small warning icon, not orange text. */
+.c-row .cbtn.c-perm.risky { color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-3); }
+.c-row .cbtn.c-perm.risky > svg:first-child { color: var(--warn); }
+
+/* "Latest": 12px above the message box, centred, never over the box's own text. */
+.dock .jump { bottom: calc(100% + var(--sp-3)); }

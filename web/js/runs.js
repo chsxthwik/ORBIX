@@ -6,6 +6,7 @@
 import { drawAutomations, leaveAutomations } from './automations.js';
 import { drawSkills, leaveSkills } from './skills.js';
 import { drawCustomizations, leaveCustomizations } from './customize.js';
+import { customizeTabs, waiting } from './customize-tabs.js';
 import { h, icon, iconBtn, replace, toast, timeAgo, baseName, spinner, skeleton, errorState, fmtDuration, debounce } from './dom.js';
 import { api } from './api.js';
 import { S, on, emit, setActive, replyUi } from './store.js';
@@ -63,6 +64,7 @@ function reviewItems() {
   return out.sort((a, b) => urgent(b) - urgent(a) || b.at - a.at);
 }
 export const reviewCount = () => reviewItems().length;
+waiting.count = reviewCount;
 export const workingCount = () => [...runs.values()].filter((r) => WORKING.has(r.status)).length;
 /** Every run ORBIX knows, newest first (Settings → Worktrees lists the ones that still have a worktree). */
 export const allRuns = () => [...runs.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
@@ -345,7 +347,9 @@ function drawReview() {
   const items = reviewItems();
   replace(el(),
     h('div', { class: 'hub' },
-      h('header', { class: 'hub-head' }, h('h1', null, 'Review'), h('p', { class: 'muted' }, 'Everything that waits for a decision from you, across all projects.')),
+      h('header', { class: 'hub-head' }, h('h1', null, 'Customize')),
+      customizeTabs('review'),
+      h('p', { class: 'muted hub-sub' }, 'Everything that waits for a decision from you, across all projects.'),
       loadError ? errorState(loadError, { retry: refresh }) : !loaded ? skeleton(4) : !items.length ? h('div', { class: 'empty' }, icon('check', 22), h('span', null, 'Nothing is waiting for you.'), workingCount() ? h('span', { class: 'small' }, `${workingCount()} run${workingCount() === 1 ? ' is' : 's are'} working.`) : null) :
         h('div', { class: 'rq' }, items.map((it) => {
           if (it.kind === 'conv-ask') {
@@ -566,7 +570,7 @@ class RunDetail {
       h('button', { class: 'run-back', type: 'button', onclick: () => openHub('runs'), title: 'All runs' }, icon('chevron-left', 15), 'Runs'),
       h('div', { class: 'run-head-main' },
         h('h1', { class: 'ell', title: r.title }, r.title),
-        h('div', { class: 'run-meta' }, icon('folder', 12), h('span', { title: r.project }, projName(r)), r.worktree?.branch ? [icon('branch', 12), h('span', null, r.worktree.branch)] : null, r.model ? [icon('cpu', 12), h('span', null, r.model)] : null, h('span', { class: 'num' }, `started ${timeAgo(r.createdAt)}`))),
+        h('div', { class: 'run-meta' }, icon('folder', 12), h('span', { title: r.project }, projName(r)), r.worktree?.branch ? h('span', { class: 'chip-br', title: `Its own branch${r.worktree.baseBranch ? `, cut from ${r.worktree.baseBranch}` : ''}` }, icon('branch', 12), h('span', { class: 'ell' }, r.worktree.branch)) : null, r.model ? [icon('cpu', 12), h('span', null, r.model)] : null, h('span', { class: 'num' }, `started ${timeAgo(r.createdAt)}`))),
       pill(r.status),
       iconBtn('more', 'More', more));
   }
@@ -784,6 +788,8 @@ export function draw() {
 }
 
 on('hub', draw);
+// A click on a Customize tab asks for the other page.
+on('hub:go', (view) => openHub(view));
 // A conversation asked for (or got) an approval: the queue and its count follow.
 on('tab:dialog', () => {
   emit('runs');

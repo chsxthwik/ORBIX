@@ -30,7 +30,7 @@ const BUILD = ['package.json', 'pyproject.toml', 'setup.py', 'requirements.txt',
 const README = /^readme(\.(md|markdown|txt|rst|adoc))?$/i;
 
 /**
- * Four first tasks for a project, from what is in its folder (`entries`, from /api/fs/list) and whether it has
+ * First tasks for a project (at most four; Home and an empty session show three), from what is in its folder (`entries`, from /api/fs/list) and whether it has
  * uncommitted changes (`changed`). An empty folder gets tasks for starting one.
  */
 export function projectTasks(entries, { changed = false } = {}) {
@@ -44,7 +44,7 @@ export function projectTasks(entries, { changed = false } = {}) {
   return out.slice(0, 4);
 }
 
-/** The suggestions row of an empty session. */
+/** The suggestions of an empty session: three rows, the same as under Home's message box. */
 export function sessionTasks(comp, tasks) {
-  return h('div', { class: 'ce-tasks', role: 'group', 'aria-label': 'Suggested first tasks' }, taskButtons(comp, tasks, 'ce-task'));
+  return h('div', { class: 'ws-recipes', role: 'group', 'aria-label': 'Suggested first tasks' }, taskButtons(comp, tasks.slice(0, 3), 'ws-recipe'));
 }

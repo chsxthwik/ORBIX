@@ -230,7 +230,8 @@ try {
   assert(model.seen.length === seenBefore + 1 && model.seen.at(-1).tools.length === 0, 'one model call, without tools');
   assert((await page.eval(`return document.querySelectorAll('#session .msg').length`)) === msgsBefore, 'nothing added to the conversation');
   // Loops: add one, run it now (a new conversation joins the sidebar), then delete it.
-  await page.click('Loops', '#sidebar .side-nav');
+  await page.click('Customize', '#sidebar .side-nav');
+  await page.click('Loops', '.cust-tabs');
   await page.until(`document.querySelector('#runs .au-new')`, 'the Loops page');
   await page.click('New loop', '#runs');
   await page.fill('#runs .au-form textarea', 'Say hello from the loop.');
@@ -279,9 +280,9 @@ try {
   assert(await page.eval(`return !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track, .session-inner > .tl') && [...document.querySelectorAll('.mb-brand .lg-h')].length === 2 && [...document.querySelectorAll('.mb-brand .lg-h')].every((p) => getComputedStyle(p).animationName === 'none')`), 'no loose calls, no dotted rail, no idle logo animation');
   await page.fill('#session textarea', 'Keep this as the second message.');
   await page.key('Enter', { keyCode: 13, code: 'Enter' });
-  await page.until(`document.querySelectorAll('.turn-map .turn-mark.you').length === 2 && document.querySelectorAll('.turn-map .turn-mark.agent').length >= 1 && document.querySelector('.turn-mark[aria-current]') && document.querySelector('.turn-mark.seen')`, 'the timeline has a dot per message and lights the ones on screen');
-  assert(await page.eval(`const d = [...document.querySelectorAll('.turn-mark')]; return d.every((b) => /^(Your message|Reply) \\d+ of \\d+/.test(b.getAttribute('aria-label'))) && d.filter((b) => b.tabIndex === 0).length === 1`), 'every dot is labelled, and the strip is one tab stop');
-  await page.mouse('.turn-mark.you');
+  await page.until(`document.querySelectorAll('.turn-map .turn-mark').length === 2 && document.querySelector('.turn-mark[aria-current]') && document.querySelector('.turn-mark.seen')`, 'the timeline has one dot per message of yours and marks the current one');
+  assert(await page.eval(`const d = [...document.querySelectorAll('.turn-mark')]; return d.every((b) => /^Your message \\d+ of \\d+/.test(b.getAttribute('aria-label'))) && d.filter((b) => b.tabIndex === 0).length === 1 && d.filter((b) => b.hasAttribute('aria-current')).length === 1`), 'every dot is labelled, the strip is one tab stop, and one dot is current');
+  await page.mouse('.turn-mark');
   await page.until(`document.querySelector('.tin .msg.user')?.classList.contains('tl-flash') && document.querySelector('.tm-tip.on')`, 'a dot shows its first line and jumps to its message');
   assert(await page.eval(`return document.querySelector('.turn-map').getBoundingClientRect().height <= 250`), 'the timeline is a short stack, not a full-height rail');
   say('conversation e2e: tools after an initial answer');

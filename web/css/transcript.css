@@ -1,0 +1,51 @@
+/* The transcript: your messages as right-aligned pills, replies as plain text (no bubble), the steps folded into one
+   line. The reading column is 760px at most. Under a message only Copy is always there; thumbs, retry, the time, the
+   model and its speed appear on hover or keyboard focus (their buttons stay focusable, and focusing one shows them). */
+.msg-acts { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-1) 0 0 calc(-1 * var(--sp-2)); }
+.msg.user .msg-acts { justify-content: flex-end; margin: var(--sp-1) calc(-1 * var(--sp-2)) 0 0; }
+.msg-acts > :not(.copy) { opacity: 0; transition: opacity var(--dur-hover) var(--ease-out); }
+.msg:is(:hover, :focus-within) > .msg-acts > :not(.copy) { opacity: 1; }
+.msg-acts .msg-time { order: 10; }
+.msg-acts .msg-model { order: 11; color: var(--fg-3); font-size: var(--fs-12); }
+.msg-act:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* "Worked for 44s · Read 8 files · Ran 2 commands": one row that opens on a click. */
+.work-h { max-width: 100%; white-space: nowrap; }
+.work-facts { overflow: hidden; text-overflow: ellipsis; }
+
+/* Tables: 1px hairlines between cells, no fill. */
+.table-wrap { max-width: 100%; overflow-x: auto; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
+.table-wrap :is(th, td) { padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); background: none; text-align: left; vertical-align: top; }
+.table-wrap th { color: var(--fg); font-weight: var(--fw-h); white-space: nowrap; }
+.table-wrap tbody tr:hover td { background: none; }
+
+/* An empty conversation: the Home stack in the reading column. The mark, one line, three suggestion rows (their rows
+   are styled with Home's, in home.css). */
+.chat-empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); padding: 12vh 0 0; text-align: center; }
+.chat-empty > * { width: 100%; }
+.chat-empty > .empty-mark { width: auto; }
+.ce-name { margin: 0; color: var(--fg); font: var(--fw-h) var(--fs-20)/1.25 var(--font); text-wrap: balance; }
+.ce-tasks-slot { min-height: calc(3 * var(--ctl-h)); margin-top: var(--sp-2); text-align: left; }
+
+@media (prefers-reduced-motion: reduce) { .msg-acts > :not(.copy) { transition: none; } }
+
+/* ================= conversation timeline ================= */
+/* One dot per turn (each of your messages starts one) in a thin column 24px outside the transcript's left edge
+   (web/js/timeline.js): hollow rings, the turns on screen a step stronger, the current turn filled with the accent.
+   Where the column leaves no room it sits 12px from the sheet's edge, inside the padding. Hidden under 1100px. Only
+   transform and opacity animate; a long conversation slides the track. */
+.turn-map { position: absolute; left: max(var(--sp-3), calc(50% - min(var(--col), 100% - 48px) / 2 - 24px)); top: 50%; transform: translate(-50%, -50%); z-index: 2; width: var(--sp-4); max-height: min(60%, 420px); padding: var(--sp-2) 0; overflow: hidden; }
+html.wide .turn-map { --col: 1140px; }
+.tm-track { display: flex; flex-direction: column; align-items: center; transition: transform var(--dur-panel) var(--ease-out); }
+.turn-map::before { content: ''; position: absolute; top: var(--sp-3); bottom: var(--sp-3); left: 50%; width: 1px; margin-left: -.5px; background: var(--line-2); pointer-events: none; }
+.turn-mark { position: relative; flex: none; display: grid; place-items: center; width: var(--sp-4); height: var(--sp-4); padding: 0; border: 0; border-radius: var(--sp-1); background: transparent; cursor: pointer; }
+.turn-mark::after { content: ''; box-sizing: border-box; width: var(--sp-2); height: var(--sp-2); border: 1.5px solid var(--fg-3); border-radius: 50%; background: var(--bg); transition: transform var(--dur-hover) var(--ease-out); }
+.turn-mark.seen::after { border-color: var(--fg-2); }
+.turn-mark[aria-current]::after { border-color: var(--accent-solid); background: var(--accent-solid); }
+.turn-mark:hover::after, .turn-mark:focus-visible::after { transform: scale(1.4); }
+.turn-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tm-tip { position: absolute; left: 0; top: 0; z-index: 6; max-width: min(340px, 60%); padding: var(--sp-1) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--sp-2); background: var(--bg-raise-2); color: var(--fg); font-size: var(--fs-12); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: 0; transform: translate(calc(var(--tip-x, 0px) - 4px), calc(var(--tip-y, 0px) - 50%)); transition: opacity var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-out); }
+.tm-tip.on { opacity: 1; transform: translate(var(--tip-x, 0px), calc(var(--tip-y, 0px) - 50%)); }
+@media (max-width: 1099px), (pointer: coarse) { .turn-map, .tm-tip { display: none; } }
+@media (prefers-reduced-motion: reduce) { .turn-mark::after, .tm-tip, .tm-track { transition: none; } }

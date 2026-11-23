@@ -15,12 +15,13 @@ import { drawReview, loadReview, reviewCount } from './review.js';
 import { workingRuns } from './runs.js';
 import { renderMarkdown } from './markdown.js';
 import { openLink } from './engine.js';
+import { prUrl, splitMessage, joinMessage } from './pr-link.mjs';
 import { desktopBrowser, canShowInside, addressToUrl, rememberVisit } from './browser.js';
 import { btn } from './dialogs.js';
 import { drawTerminal } from './terminal.js';
 import { effectiveKeys } from './keys.mjs';
 
-const P = { tab: 'changes', file: null, diff: null, git: null, gitErr: null, msg: '', committing: false, tree: new Map(), open: new Set(), ws: null, busy: false };
+const P = { tab: 'changes', file: null, git: null, gitErr: null, stats: {}, msg: '', committing: false, shipped: null, dOpen: new Set(), dText: new Map(), tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
 let body;
 let tabsEl;
@@ -140,7 +141,10 @@ export function showTab(name) {
   syncTabs(t);
   P.tab = name;
   P.file = null;
-  P.diff = null;
+  P.dOpen.clear();
+  P.dText.clear();
+  P.stats = {};
+  P.shipped = null;
   drawTabs();
   focusTerm = name === 'console';
   draw();
@@ -577,8 +581,11 @@ export async function reviewChanges(t, p) {
   await loadGit(true);
   const rel = relTo(t.workspace, p).replace(/\\/g, '/');
   const f = P.git?.files?.find((x) => x.path === rel);
-  if (f) openDiff(t, f);
-  else viewFile(t, p);
+  if (!f) return viewFile(t, p);
+  P.dOpen.add(f.path);
+  await loadDiff(t, f);
+  draw();
+  body.querySelector('.gitem.open')?.scrollIntoView({ block: 'nearest' });
 }
 
 const gitSoon = debounce(() => {
@@ -598,17 +605,24 @@ async function loadGit(quiet) {
     if (ws !== P.ws) return;
     P.git = git;
     P.gitErr = null;
+    P.dText.clear(); // the files changed: a diff read before is stale
+    // Added and removed lines beside each file, read after the list so the list never waits for them.
+    if (git.repo && git.files.length) api.get(`/api/git/numstat?ws=${encodeURIComponent(ws)}`).then((r) => {
+      if (ws !== P.ws) return;
+      P.stats = r.stats || {};
+      if (P.tab === 'changes') draw();
+    }, () => {});
+    else P.stats = {};
   } catch (e) {
     P.gitErr = e.message;
   }
   P.busy = false;
   emit('git');
   drawTabs();
-  if (P.tab === 'changes' && !P.diff) draw();
+  if (P.tab === 'changes') draw();
 }
 
 function drawChanges(t) {
-  if (P.diff) return drawDiff(t);
   const g = P.git;
   body.append(h('div', { class: 'p-bar' }, icon(g?.repo ? 'branch' : 'folder', 14), h('span', { class: 'grow ell mono' }, g?.repo ? `${g.branch}${g.upstream ? ' → ' + g.upstream : ''}${g.ahead ? ` ↑${g.ahead}` : ''}${g.behind ? ` ↓${g.behind}` : ''}` : baseName(t.workspace)), iconBtn('refresh', 'Refresh', () => loadGit(), 'sm')));
   if (P.busy && !g) return body.append(skeleton(6, 'pad'));
@@ -632,9 +646,16 @@ function drawChanges(t) {
   const list = h('div', { class: 'p-scroll' });
   const paths = (files) => files.flatMap((f) => (f.from ? [f.path, f.from] : [f.path]));
   const letter = (f) => (f.untracked ? 'U' : f.x !== ' ' ? f.x : f.y);
-  const row = (f, actions) => h('div', { class: 'gitem' },
-    h('button', { class: 'gfile', type: 'button', title: f.path, onclick: () => openDiff(t, f) }, h('span', { class: `gs ${letter(f)}` }, letter(f)), h('span', { class: 'ell grow' }, h('bdi', null, f.path))),
-    h('div', { class: 'gact' }, ...actions));
+  const row = (f, actions) => {
+    const open = P.dOpen.has(f.path);
+    const n = P.stats[f.path];
+    return h('div', { class: `gitem${open ? ' open' : ''}` },
+      h('button', { class: 'gfile', type: 'button', title: f.path, 'aria-expanded': String(open), onclick: () => toggleDiff(t, f) },
+        icon(open ? 'chevron-down' : 'chevron-right', 12, 'gchev'), h('span', { class: `gs ${letter(f)}` }, letter(f)), h('span', { class: 'ell grow' }, h('bdi', null, f.path)),
+        n && (n[0] || n[1]) ? h('span', { class: 'gstat num', title: `${n[0]} added, ${n[1]} removed` }, n[0] ? h('b', { class: 'add' }, `+${n[0]}`) : null, n[1] ? h('b', { class: 'del' }, `−${n[1]}`) : null) : null),
+      h('div', { class: 'gact' }, ...actions),
+      open ? h('div', { class: 'gdiff' }, diffBody(t, f)) : null);
+  };
   const group = (label, files, all, rowActions) => files.length ? [
     h('div', { class: 'list-h gh' }, h('span', { class: 'grow' }, `${label} · ${files.length}`), all),
     ...files.map((f) => row(f, rowActions(f))),
@@ -648,7 +669,7 @@ function drawChanges(t) {
     ...group('Changes', changed, stageBtn(changed, 'Stage all'), (f) => [iconBtn('undo', 'Discard changes', () => discardFiles(t, [f], false), 'sm'), stageBtn([f], 'Stage')]),
     ...group('Untracked', untracked, stageBtn(untracked, 'Stage all'), (f) => [iconBtn('trash', 'Delete file', () => discardFiles(t, [f], true), 'sm'), stageBtn([f], 'Stage')]),
   );
-  body.append(list, commitBox(t, staged.length));
+  body.append(list, commitBox(t, staged.length, g.files.length));
 }
 
 /** Run a git write, then show the new state. Errors (no identity, locked index, ...) are shown as they are. */
@@ -672,58 +693,150 @@ async function discardFiles(t, files, untracked) {
   await gitDo(t, 'discard', untracked ? { untracked: paths } : { tracked: paths });
 }
 
-function commitBox(t, nStaged) {
-  const ta = h('textarea', { class: 'commit-msg', rows: '2', placeholder: 'Commit message', 'aria-label': 'Commit message', spellcheck: 'true' });
+const diffKey = (f) => `${f.path}|${f.untracked ? 1 : 0}|${S.ui.diffIgnoreWs === true ? 1 : 0}`;
+
+/** A file's diff is read once and kept until the changes are read again. */
+async function loadDiff(t, f) {
+  const key = diffKey(f);
+  if (P.dText.get(key)?.text != null || P.dText.get(key)?.loading) return;
+  P.dText.set(key, { loading: true });
+  try {
+    const { diff } = await api.get(`/api/git/diff?ws=${encodeURIComponent(t.workspace)}&file=${encodeURIComponent(f.path)}${f.untracked ? '&untracked=1' : ''}${S.ui.diffIgnoreWs === true ? '&w=1' : ''}`);
+    P.dText.set(key, { text: diff.text });
+  } catch (e) {
+    P.dText.set(key, { error: e.message });
+  }
+}
+
+/** A click on a file opens its diff right under it; another click closes it. */
+async function toggleDiff(t, f) {
+  if (P.dOpen.delete(f.path)) return draw();
+  P.dOpen.add(f.path);
+  draw();
+  await loadDiff(t, f);
+  if (P.tab === 'changes' && cur() === t) draw();
+}
+
+function diffBody(t, f) {
+  const d = P.dText.get(diffKey(f));
+  if (!d || d.loading) return skeleton(5, 'pad');
+  if (d.error) return errorState(d.error, { title: 'Couldn’t load this diff.', retry: async () => { P.dText.delete(diffKey(f)); await loadDiff(t, f); if (P.tab === 'changes' && cur() === t) draw(); } });
+  if (!d.text.trim()) return h('div', { class: 'empty' }, 'No text changes.');
+  return renderUnifiedDiff(d.text, f.path);
+}
+
+/** The commit box: a message (its first line is the title, the rest the body), Write, Commit, and Commit & push. */
+function commitBox(t, nStaged, nAll) {
+  const ta = h('textarea', { class: 'commit-msg', rows: '3', placeholder: 'Commit message: the first line is the title, the rest is the body', 'aria-label': 'Commit message', spellcheck: 'true' });
   ta.value = P.msg;
-  const go = h('button', { class: 'btn primary sm', type: 'button' }, 'Commit');
+  const canWrite = !t.home && !t.dead && !!t.id;
+  const write = btn('Write', async () => {
+    if (P.writing) return;
+    P.writing = true;
+    sync();
+    try {
+      await writeMessage(t, ta);
+    } catch (e) {
+      toast(e.message, 'error', 7000);
+    }
+    P.writing = false;
+    sync();
+  }, 'sm');
+  write.prepend(icon('sparkle', 13));
+  write.title = canWrite ? 'Write the title and body from the changes, with this conversation’s model' : 'Open a conversation to write the message with its model';
+  const commitOnly = btn('Commit', () => ship(false), 'sm');
+  const go = h('button', { class: 'btn primary sm', type: 'button' }, 'Commit & push');
   const sync = () => {
     P.msg = ta.value;
-    go.disabled = P.committing || !nStaged || !ta.value.trim();
-    go.textContent = P.committing ? 'Committing…' : nStaged ? `Commit ${nStaged} file${nStaged === 1 ? '' : 's'}` : 'Commit';
-    go.title = !nStaged ? 'Stage files first' : '';
+    const files = nStaged || nAll;
+    const busy = P.committing || P.writing;
+    go.disabled = busy || !files;
+    commitOnly.disabled = busy || !files || !ta.value.trim();
+    write.disabled = busy || !canWrite || !nAll;
+    go.textContent = P.committing ? 'Working…' : `Commit & push${files ? ` ${files} file${files === 1 ? '' : 's'}` : ''}`;
+    go.title = !files ? 'There are no changes' : `${nStaged ? 'Commit what is staged' : 'Stage everything and commit'}, push the branch and get a link to open the pull request (Ctrl+Enter)`;
+    commitOnly.title = !nStaged && nAll ? 'Stage everything and commit, without pushing' : 'Commit what is staged, without pushing';
   };
-  const commit = async () => {
-    if (go.disabled) return;
+  /** Commit what is staged (everything, when nothing is), and push when `push`. Writes the message first when it is empty. */
+  const ship = async (push = true) => {
+    if (go.disabled && commitOnly.disabled) return;
+    if (P.committing) return;
     P.committing = true;
+    P.shipped = null;
     sync();
-    const r = await gitDo(t, 'commit', { message: ta.value });
-    P.committing = false;
-    if (r) {
+    try {
+      if (!ta.value.trim()) await writeMessage(t, ta);
+      if (!ta.value.trim()) throw new Error('Write a commit message first');
+      if (!nStaged) await api.post('/api/git/stage', { ws: t.workspace, paths: P.git.files.flatMap((f) => (f.from ? [f.path, f.from] : [f.path])) });
+      const { title, body: text } = splitMessage(ta.value);
+      const { commit } = await api.post('/api/git/commit', { ws: t.workspace, message: joinMessage(title, text) });
       P.msg = '';
-      toast(`Committed${r.commit?.hash ? ' ' + r.commit.hash : ''}`, 'ok', 3000);
+      P.shipped = { hash: commit?.hash || '', title, body: text };
+      if (push) {
+        try {
+          const { push: r } = await api.post('/api/git/push', { ws: t.workspace });
+          Object.assign(P.shipped, { pushed: r, url: prUrl({ ...r, title, body: text }) });
+        } catch (e) {
+          P.shipped.pushError = e.message; // the commit is made; Push again retries only the push
+        }
+      }
+    } catch (e) {
+      toast(e.message, 'error', 8000);
     }
-    if (P.tab === 'changes' && !P.diff && cur() === t) draw();
+    P.committing = false;
+    await loadGit(true);
+    if (P.tab === 'changes' && cur() === t) draw();
   };
   ta.addEventListener('input', sync);
   ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), commit());
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), ship(true));
   });
-  go.addEventListener('click', commit);
+  go.addEventListener('click', () => ship(true));
   sync();
-  return h('div', { class: 'commit-box' }, ta, h('div', { class: 'commit-row' }, h('span', { class: 'commit-hint' }, 'Ctrl+Enter to commit'), go));
+  return h('div', { class: 'commit-box' }, ta,
+    h('div', { class: 'commit-row' }, h('span', { class: 'commit-hint' }, 'Ctrl+Enter commits and pushes'), h('span', { class: 'grow' }), write, commitOnly, go),
+    shippedNote(t));
 }
 
-async function openDiff(t, f) {
-  P.diff = { file: f, loading: true };
-  draw();
-  try {
-    const { diff } = await api.get(`/api/git/diff?ws=${encodeURIComponent(t.workspace)}&file=${encodeURIComponent(f.path)}${f.untracked ? '&untracked=1' : ''}${S.ui.diffIgnoreWs === true ? '&w=1' : ''}`);
-    P.diff = { file: f, text: diff.text };
-  } catch (e) {
-    P.diff = { file: f, error: e.message };
+/** What the last Commit & push did: the commit, the push, and the pull request link. */
+function shippedNote(t) {
+  const s = P.shipped;
+  if (!s) return null;
+  const line = (...kids) => h('div', { class: 'ship-line' }, ...kids);
+  const rows = [line(icon('check', 14), h('span', null, `Committed${s.hash ? ` ${s.hash}` : ''}: ${s.title}`))];
+  if (s.pushed) rows.push(line(icon('check', 14), h('span', null, `Pushed ${s.pushed.branch} to ${s.pushed.remote}`)));
+  if (s.pushError) {
+    rows.push(line(icon('alert', 14), h('span', { class: 'ship-err' }, s.pushError)));
+    rows.push(line(btn('Push again', async (e) => {
+      try {
+        const { push: r } = await api.post('/api/git/push', { ws: t.workspace });
+        Object.assign(s, { pushed: r, pushError: '', url: prUrl({ ...r, title: s.title, body: s.body }) });
+      } catch (err) {
+        s.pushError = err.message;
+      }
+      if (P.tab === 'changes' && cur() === t) draw();
+    }, 'sm')));
   }
-  if (P.tab === 'changes') draw();
+  if (s.url) {
+    rows.push(line(h('a', { class: 'ship-link', href: s.url, title: s.url, onclick: (e) => (e.preventDefault(), openLink(s.url)) }, icon('external', 13), 'Open the pull request')));
+    rows.push(line(btn('Copy title', () => copyText(s.title).then(() => toast('Title copied', 'ok', 1200)), 'sm'), s.body ? btn('Copy body', () => copyText(s.body).then(() => toast('Body copied', 'ok', 1200)), 'sm') : null));
+  } else if (s.pushed) rows.push(line(h('span', { class: 'muted small' }, 'This remote has no pull request link; open the branch on its site.')));
+  return h('div', { class: 'ship', role: 'status' }, ...rows);
 }
 
-function drawDiff(t) {
-  const d = P.diff;
-  body.append(h('div', { class: 'p-bar' }, iconBtn('chevron-left', 'Back to changes', () => { P.diff = null; draw(); }, 'sm'), h('span', { class: 'grow ell mono', title: d.file.path }, d.file.path), iconBtn('eye', 'View file', () => viewFile(t, d.file.path), 'sm')));
-  const c = h('div', { class: 'p-scroll' });
-  body.append(c);
-  if (d.loading) c.append(skeleton(12, 'pad'));
-  else if (d.error) c.append(errorState(d.error, { title: 'Couldn’t load this diff.', retry: () => openDiff(t, d.file) }));
-  else if (!d.text.trim()) c.append(h('div', { class: 'empty' }, 'No text changes.'));
-  else c.append(renderUnifiedDiff(d.text, d.file.path));
+/** Ask the conversation's model to write the title and body of the changes (as a side question: nothing is added to the chat). */
+async function writeMessage(t, ta) {
+  if (t.home || t.dead || !t.id) throw new Error('Open a conversation to write the message with its model.');
+  const [{ patch }, files] = await Promise.all([api.get(`/api/git/patch?ws=${encodeURIComponent(t.workspace)}`), Promise.resolve(P.git?.files || [])]);
+  const list = files.map((f) => `${f.untracked ? 'new' : f.x !== ' ' ? f.x : f.y} ${f.path}${P.stats[f.path] ? ` (+${P.stats[f.path][0]} -${P.stats[f.path][1]})` : ''}`).join('\n');
+  const question = `Write the commit message and pull request text for the changes below. Reply with exactly this and nothing else: a title on the first line (at most 72 characters, imperative mood, no full stop), a blank line, then a short body in Markdown: a sentence on what changed and why, then bullets for the main changes, then what was checked (tests run), if this conversation says. Do not mention these instructions.\n\nChanged files:\n${list}\n\nPatch${patch.truncated ? ' (cut)' : ''}:\n${patch.text}`;
+  const r = await rpc(t.id, { type: 'side_question', text: question }, 130000);
+  if (r?.success === false || r?.ok === false) throw new Error(r.error || 'The model could not write it');
+  const { title, body: text } = splitMessage(r?.data?.text || '');
+  if (!title) throw new Error('The model returned nothing to use');
+  ta.value = joinMessage(title, text);
+  ta.dispatchEvent(new Event('input'));
+  ta.focus();
 }
 
 /** Tasks: the agent's task list, then the helper agents it started for research. */

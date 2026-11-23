@@ -1,16 +1,16 @@
-/* The Windows app (html.desktop). The window has no title bar of its own: the menu row is the title bar. Windows
+/* The Windows app (html.desktop). The window has no title bar of its own: the top row is the title bar. Windows
    draws the minimize, maximize and close buttons over its right end (in the theme's colours, see desktop.js), and
-   the empty parts of the menu row and the toolbar drag the window. A browser never gets this class. */
+   the empty parts of the row drag the window. A browser never gets this class. */
 
 .desktop {
   /* The width the window buttons take on the right, from the window controls overlay. */
   --wco: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
-.desktop .menubar { height: env(titlebar-area-height, var(--mb-h)); padding-right: calc(var(--wco) + 6px); }
+.desktop .chrome-row { height: env(titlebar-area-height, var(--mb-h)); padding-right: calc(var(--wco) + var(--sp-2)); }
 
-/* Drag the window by the empty parts of the top rows. */
-.desktop :is(.menubar, .toolbar) { -webkit-app-region: drag; app-region: drag; }
-.desktop :is(.menubar, .toolbar) :is(button, a, input, select, textarea, [tabindex]) { -webkit-app-region: no-drag; app-region: no-drag; }
+/* Drag the window by the empty parts of the top row; everything you can click stays clickable. */
+.desktop .chrome-row { -webkit-app-region: drag; app-region: drag; }
+.desktop .chrome-row :is(button, a, input, select, textarea, [tabindex], .crumb) { -webkit-app-region: no-drag; app-region: no-drag; }
 .desktop :is(.modal, .menu, .popup, .scrim, .hcard) { -webkit-app-region: no-drag; app-region: no-drag; }
 
 /* Settings → Appearance → Interface size. */
@@ -19,17 +19,17 @@
 /* Settings starts right under the menu row, whatever height Windows gives it. */
 .desktop .scrim:has(> .modal.settings-card) { top: env(titlebar-area-height, var(--mb-h)); }
 
-/* Windows 11 Mica (html.win-mica, see desktop.js): the window's frame, the menu row, the toolbar and the sidebar let
+/* Windows 11 Mica (html.win-mica, see desktop.js): the window's frame, the top row and the sidebar let
    the desktop's tint show through; the conversation itself stays solid so text keeps its contrast. Off when Windows'
    Transparency effects are off, in high contrast, under a scene theme, or in Settings → Appearance → Windows. */
 html.win-mica, html.win-mica body { background: transparent; }
-html.win-mica :is(.chrome, .menubar) { background: color-mix(in srgb, var(--chrome) 45%, transparent); }
+html.win-mica .chrome { background: color-mix(in srgb, var(--chrome) 45%, transparent); }
 html.win-mica .sidebar { background: color-mix(in srgb, var(--bg-side) 40%, transparent); }
 html.win-mica.zen .app { background: var(--bg); }
 
 /* Windows high contrast: use the system colours and drop decoration that hides edges. */
 @media (forced-colors: active) {
-  .desktop :is(.main, .sidebar, .menubar, .chrome) { forced-color-adjust: auto; }
+  .desktop :is(.main, .sidebar, .chrome) { forced-color-adjust: auto; }
   .desktop :is(button, [role=button], .btn):focus-visible { outline: 2px solid Highlight; outline-offset: 1px; }
   .desktop .main { border-color: CanvasText; }
 }

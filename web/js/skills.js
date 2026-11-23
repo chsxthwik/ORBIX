@@ -7,6 +7,7 @@ import { activeTab, emit } from './store.js';
 import { btn, confirmDialog } from './dialogs.js';
 import { homeProject } from './home.js';
 import { hubProjects } from './hub-projects.js';
+import { customizeTabs } from './customize-tabs.js';
 
 let host = null;
 let ws;
@@ -126,8 +127,9 @@ function draw() {
   replace(host,
     h('div', { class: 'hub' },
       h('header', { class: 'hub-head au-head' },
-        h('h1', null, 'Skills'),
+        h('h1', null, 'Customize'),
         h('div', { class: 'au-head-acts' }, pick, form ? null : h('button', { class: 'btn sm au-new', type: 'button', onclick: () => ((form = { scope: ws ? 'project' : 'user' }), draw()) }, icon('plus', 13), 'New skill'))),
+      customizeTabs('skills'),
       form ? editor() : h('div', { class: 'cz-search sk-search' }, icon('search', 14), search),
       h('div', { class: 'au-list sk-list' }, body())));
 }

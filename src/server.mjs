@@ -60,14 +60,6 @@ export function trackOpenUi(open, ev) {
   } else if (ev.type === 'agent_end' && ev.isTerminal !== false) open.clear();
 }
 
-/**
- * The name Home greets you with: only the one you typed in Settings → Preferences (never your Windows account name).
- * One line, at most 40 characters, no control characters; '' for none.
- */
-export function cleanDisplayName(raw) {
-  return String(raw ?? '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
-}
-
 const CSP = [
   "default-src 'self'",
   "img-src 'self' data: blob:",
@@ -691,7 +683,6 @@ export class AppServer {
 
       'POST /api/prefs': async ({ body }) => {
         if (body.ui && typeof body.ui === 'object') {
-          if ('displayName' in body.ui) body.ui.displayName = cleanDisplayName(body.ui.displayName);
           Object.assign(this.store.data.ui, body.ui);
         }
         this.store.saveSoon();

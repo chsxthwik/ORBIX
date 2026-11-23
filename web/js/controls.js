@@ -265,7 +265,8 @@ export function permissionChip() {
     shownMode = mode[0];
     btn.classList.toggle('risky', mode[0] === 'auto');
     btn.title = `Permissions: ${mode[1]}. ${mode[3]}`;
-    btn.replaceChildren(icon(mode[2], 13), h('span', null, mode[1]), icon('chevron-down', 12, 'cbtn-chev'));
+    // Full access wears a small warning triangle; the chip itself stays neutral.
+    btn.replaceChildren(icon(mode[0] === 'auto' ? 'alert' : mode[2], 13), h('span', null, mode[1]), icon('chevron-down', 12, 'cbtn-chev'));
   };
   update();
   return { el: btn, update };

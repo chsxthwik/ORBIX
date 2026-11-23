@@ -6,3 +6,9 @@ export const HUB_LINKS = [
   { view: 'runs', label: 'Runs', icon: 'activity', hint: 'Track work across projects', key: 'runs' },
   { view: 'review', label: 'Review', icon: 'shield', hint: 'Decisions and approvals waiting for you', key: 'review' },
 ];
+
+/** The four pages behind the sidebar's one "Customize" item, in tab order. */
+export const CUSTOMIZE = ['customizations', 'skills', 'automations', 'review'];
+export const isCustomize = (view) => CUSTOMIZE.includes(view);
+/** The tab Customize opens on: the last one you used. */
+export const lastCustomize = { view: 'customizations' };

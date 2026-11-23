@@ -22,7 +22,7 @@ import { browserPrefs, desktopBrowser, canShowInside } from './browser.js';
 import { settingsSearchItems, openFeedback } from './settings.js';
 import { applyExtraPrefs, keepAwakeMode, askBeforeClose, askBeforeArchive, askBeforeUnpin, showRunningSection } from './prefs-extra.js';
 import { H as shell, drawMenubar, drawToolbar, tickToolbar, navRecord, navGo, bindHoverCards, updatedLabel } from './shell.js';
-import { folderPicker, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, isApproval } from './dialogs.js';
+import { folderPicker, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, popover, isApproval } from './dialogs.js';
 import { onBoard, boardState } from './review.js';
 import { openSettings as settingsDialog } from './settings.js';
 import { toggleZen, toggleWide, zenOn } from './workbench.js';
@@ -30,7 +30,7 @@ import { initInterface } from './interface.js';
 import { initBackdrop, SCENES } from './backdrop.js';
 import { refreshAutomations } from './automations.js';
 import { selectPluginsTab } from './customize.js';
-import { HUB_LINKS } from './hub-nav.js';
+import { HUB_LINKS, isCustomize, lastCustomize } from './hub-nav.js';
 import { initRuns, openHub, closeHub, isHub, hubView, draw as drawHub, onRunEvent, reviewCount, workingCount } from './runs.js';
 
 let week = null, weekAt = 0; // the sidebar's This week card (see loadWeek)
@@ -65,11 +65,11 @@ const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light',
 /** Retired themes and what they became. */
 const THEME_ALIAS = { koi: 'latte', dusk: 'nebula' };
 // The sidebar can be dragged between these widths (double-click the edge to reset).
-const SIDE_MIN = 200, SIDE_MAX = 440, SIDE_W = 240, SIDE_RAIL = 56;
+const SIDE_MIN = 220, SIDE_MAX = 360, SIDE_W = 260, SIDE_RAIL = 56;
 
 /** Settings → Appearance: font, contrast, your own colours, and screen reader mode. */
 const FONTS = { google: '', segoe: "'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif", system: 'system-ui, sans-serif' };
-const LOOK_VARS = ['--bg', '--chrome', '--bg-side', '--bg-raise', '--bg-raise-2', '--bg-inset', '--bg-field', '--bg-modal', '--bubble', '--menubar', '--fg', '--fg-2', '--fg-3', '--accent', '--accent-solid', '--accent-soft', '--accent-line', '--on-accent'];
+const LOOK_VARS = ['--bg', '--chrome', '--bg-side', '--bg-raise', '--bg-raise-2', '--bg-inset', '--bg-field', '--bg-modal', '--bubble', '--fg', '--fg-2', '--fg-3', '--accent', '--accent-solid', '--accent-soft', '--accent-line', '--on-accent'];
 const hexOk = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 /** Black or white text on a colour, whichever reads better. */
 const onColor = (hex) => {
@@ -90,7 +90,6 @@ function applyLook(u, root) {
     set('--bg', c.bg);
     set('--chrome', `color-mix(in srgb, ${c.bg} 82%, ${light ? '#fff' : '#000'})`);
     set('--bg-side', `color-mix(in srgb, ${c.bg} 82%, ${light ? '#fff' : '#000'})`);
-    set('--menubar', `color-mix(in srgb, ${c.bg} 90%, ${toward})`);
     set('--bg-raise', `color-mix(in srgb, ${c.bg} 94%, ${toward})`);
     set('--bg-raise-2', `color-mix(in srgb, ${c.bg} 89%, ${toward})`);
     set('--bg-modal', `color-mix(in srgb, ${c.bg} 96%, ${toward})`);
@@ -140,8 +139,6 @@ function applyPrefs() {
   appEl.classList.toggle('no-panel', !panel);
   appEl.classList.toggle('overlay-side', side && narrowSide.matches);
   appEl.classList.toggle('overlay-panel', panel && narrowPanel.matches);
-  // The toolbar's lead (mark, sidebar, back, forward, search) spans the sidebar's width while the sidebar shows.
-  document.documentElement.classList.toggle('side-open', side && !narrowSide.matches && !rail);
   if (rail !== sideRailWas) (sideRailWas = rail), drawSidebar();
 }
 let sideRailWas = false;
@@ -249,14 +246,12 @@ function resizer(id, { target, varName, key, min, max, fromRight, reset, snapShu
       // A closing sidebar slides away (transitions back on); one that reopens follows the pointer again.
       root.classList.toggle('sizing', !on);
       appEl.classList.toggle('no-side', on);
-      root.classList.toggle('side-open', !on && !railed);
     };
     // Narrower than the sidebar's minimum it snaps to the rail; narrower than the rail it closes.
     const showRail = (on) => {
       if (on === railed) return;
       railed = on;
       appEl.classList.toggle('side-rail', on);
-      root.classList.toggle('side-open', !on && !shut);
       if (on) root.style.setProperty(varName, rail + 'px');
       drawSidebar();
     };
@@ -315,11 +310,6 @@ function resizer(id, { target, varName, key, min, max, fromRight, reset, snapShu
 }
 resizer('#rs-side', { target: '#sidebar', varName: '--side-w', key: 'sidebarW', min: SIDE_MIN, max: SIDE_MAX, fromRight: false, reset: SIDE_W, snapShut: true, rail: SIDE_RAIL });
 resizer('#rs-panel', { target: '#panel', varName: '--panel-w', key: 'panelW', min: 280, max: 720, fromRight: true, reset: 380 });
-// The toolbar puts the panel switch above the panel: it follows the panel's real width (CSS can narrow the panel).
-new ResizeObserver(([e]) => {
-  const w = Math.round(e.contentRect.width + 1); // + its left hairline
-  if (w > 1) document.documentElement.style.setProperty('--panel-live', `${w}px`);
-}).observe($('#panel'));
 
 // A session's status in the sidebar: ended, waiting for your OK, working, finished while you were away, or just open.
 const dotState = (t) => (t.dead ? 'dead' : t.dialogs?.some(isApproval) ? 'warn' : t.streaming ? 'run' : t.unread ? 'unread' : '');
@@ -509,12 +499,12 @@ function sidebarSig() {
     S.workspaces.map((w) => [w.id, w.path, w.name]),
     (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name),
     S.update ? [S.update.state, S.update.version, S.update.percent] : null,
-    week ? week.days.map((d) => d.input + d.output + d.cacheRead + d.cacheWrite + d.prompts * 7 + d.workMs) : null,
+    week ? week.days.map((d) => dayTokens(d) + d.prompts * 7 + d.workMs) : null,
     [...infoOf].map(([k, v]) => k + v.branch), S.ui.sideRail === true, navigator.onLine, S.ui.keys || null,
   ]);
 }
 
-// ---- This week: a small card above Settings with the week's tokens per day, your messages and agent time ----
+// ---- This week: one quiet line above Settings ("52k tokens this week"); a click opens the 7 days as a chart ----
 // From GET /api/analytics (the server caches each conversation file's sums, so this is cheap); read again every
 // five minutes while the sidebar redraws, and opened in full in Settings → Analytics.
 function loadWeek() {
@@ -526,26 +516,40 @@ function loadWeek() {
   }, () => {});
 }
 const weekTime = (ms) => (ms >= 3600000 ? `${(ms / 3600000).toFixed(1)} h` : ms >= 60000 ? `${Math.round(ms / 60000)} min` : `${Math.max(1, Math.round(ms / 1000))} s`);
-function weekCard() {
-  if (!week) return null;
-  const tok = (d) => d.input + d.output + d.cacheRead + d.cacheWrite;
-  const total = week.days.reduce((n, d) => n + tok(d), 0);
+const dayTokens = (d) => d.input + d.output + d.cacheRead + d.cacheWrite;
+
+/** The popover: seven bars on seven faint tracks, so one busy day never reads as a solid block; today in the accent. */
+function weekChart() {
+  const max = Math.max(1, ...week.days.map(dayTokens));
+  const cols = week.days.map((d, i) => {
+    const day = new Date(`${d.date}T12:00:00`);
+    const full = day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const bar = h('i', { class: i === week.days.length - 1 ? 'today' : '' });
+    bar.style.setProperty('--v', `${dayTokens(d) ? Math.max(6, (dayTokens(d) / max) * 100) : 0}%`);
+    return h('li', { class: 'wk-col', tabindex: '0', title: `${full}: ${dayTokens(d).toLocaleString()} tokens, ${d.prompts} message${d.prompts === 1 ? '' : 's'}`, 'aria-label': `${full}: ${dayTokens(d).toLocaleString()} tokens` },
+      h('span', { class: 'wk-track' }, bar), h('span', { class: 'wk-d' }, day.toLocaleDateString(undefined, { weekday: 'narrow' })));
+  });
+  const total = week.days.reduce((n, d) => n + dayTokens(d), 0);
   const msgs = week.days.reduce((n, d) => n + d.prompts, 0);
   const work = week.days.reduce((n, d) => n + d.workMs, 0);
-  if (!total && !msgs) return null; // nothing this week yet: the space stays calm
-  const max = Math.max(1, ...week.days.map(tok));
-  const bars = week.days.map((d, i) => {
-    const day = new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
-    const b = h('i', { class: `${tok(d) ? '' : 'z'}${i === week.days.length - 1 ? ' today' : ''}`.trim(), title: `${day}: ${tok(d).toLocaleString()} tokens, ${d.prompts} message${d.prompts === 1 ? '' : 's'}` });
-    b.style.setProperty('--v', `${tok(d) ? Math.max(10, (tok(d) / max) * 100) : 0}%`);
-    return b;
-  });
-  const label = `This week: ${total.toLocaleString()} tokens, ${msgs} messages, ${work ? weekTime(work) : 'no'} agent time. Open Analytics.`;
-  return h('button', { class: 'side-week', type: 'button', title: 'Open Analytics', 'aria-label': label, onclick: () => settingsDialog('usage') },
-    h('span', { class: 'sw-top' }, h('span', { class: 'sw-k' }, 'This week'), h('span', { class: 'sw-v num' }, total ? fmtTokens(total) : '0'), h('span', { class: 'sw-u' }, 'tokens')),
-    h('span', { class: 'sw-bars', 'aria-hidden': 'true' }, bars),
-    h('span', { class: 'sw-foot num' }, h('span', null, `${msgs} message${msgs === 1 ? '' : 's'}`), h('span', { class: 'sw-sep', 'aria-hidden': 'true' }), h('span', null, work ? `${weekTime(work)} agent time` : 'No agent time')));
+  return h('div', { class: 'wk' },
+    h('div', { class: 'wk-h' }, h('span', null, 'Last 7 days'), h('b', { class: 'num' }, `${total.toLocaleString()} tokens`)),
+    h('ol', { class: 'wk-cols', 'aria-label': 'Tokens per day' }, cols),
+    h('div', { class: 'wk-f num' }, `${msgs} message${msgs === 1 ? '' : 's'} · ${work ? `${weekTime(work)} agent time` : 'no agent time'}`),
+    h('button', { class: 'link wk-more', type: 'button', onclick: () => (document.querySelector('.pop-panel')?._close?.(), settingsDialog('usage')) }, 'Open Analytics'));
 }
+function weekLine() {
+  if (!week) return null;
+  const total = week.days.reduce((n, d) => n + dayTokens(d), 0);
+  return h('button', { class: 'side-week', type: 'button', 'aria-haspopup': 'dialog', title: 'Tokens over the last 7 days', onclick: (e) => popover(e.currentTarget, weekChart(), { cls: 'wk-pop', label: 'Tokens over the last 7 days' }) },
+    h('span', { class: 'num' }, total ? `${fmtTokens(total)} tokens this week` : 'No tokens this week'));
+}
+
+// The sidebar's pages: Runs, and one Customize item for Plugins, Skills, Loops and Review (tabs on its page).
+const SIDE_NAV = [
+  { view: 'runs', label: 'Runs', icon: 'runs', hint: 'Track work across projects', key: 'runs' },
+  { view: 'customize', label: 'Customize', icon: 'customizations', hint: 'Plugins, skills, loops and review' },
+];
 
 function drawSidebar() {
   loadWeek();
@@ -619,13 +623,14 @@ function drawSidebar() {
     h('button', { class: 'side-new' + (S.active || isHub() ? '' : ' cur'), type: 'button', title: 'New conversation (Ctrl+N)', 'aria-current': S.active || isHub() ? null : 'page', onclick: () => newSession() }, sideIcon('new'), h('span', { class: 'side-l' }, 'New conversation'), keyHint(firstKey(S.ui.keys, 'new'))),
     h('nav', { class: 'side-nav', 'aria-label': 'Main' },
       h('button', { class: 'side-link side-search-btn', type: 'button', title: `Search conversations (${firstKey(S.ui.keys, 'search') || 'Ctrl+K'})`, onclick: () => openSearch('conversations') }, sideIcon('search'), h('span', { class: 'side-l' }, 'Search'), keyHint(firstKey(S.ui.keys, 'search'))),
-      HUB_LINKS.map(({ view, label, hint, key }) => {
-        const cur = hubView()?.view === view || (view === 'runs' && hubView()?.view === 'run');
+      SIDE_NAV.map(({ view, label, hint, key, icon: glyph }) => {
+        const cur = view === 'customize' ? isCustomize(hubView()?.view) : hubView()?.view === view || (view === 'runs' && hubView()?.view === 'run');
         const shortcut = key && firstKey(S.ui.keys, key);
-        const count = view === 'runs' ? workingCount() : view === 'review' ? reviewCount() : 0;
+        // Runs shows how many are working; Customize carries what waits for you (the Review tab's count).
+        const count = view === 'runs' ? workingCount() : reviewCount();
         const status = `${count} ${view === 'runs' ? 'working' : 'waiting for you'}`;
-        return h('button', { class: `side-link${cur ? ' cur' : ''}`, type: 'button', title: shortcut ? `${hint} (${shortcut})` : hint, 'aria-current': cur ? 'page' : null, onclick: () => goHub(view) },
-          sideIcon(view), h('span', { class: 'side-l' }, label), count ? h('span', { class: `side-count num${view === 'runs' ? ' quiet' : ''}`, title: status, 'aria-label': status }, count) : null, keyHint(shortcut));
+        return h('button', { class: `side-link${cur ? ' cur' : ''}`, type: 'button', title: shortcut ? `${hint} (${shortcut})` : hint, 'aria-current': cur ? 'page' : null, onclick: () => goHub(view === 'customize' ? lastCustomize.view : view) },
+          sideIcon(glyph), h('span', { class: 'side-l' }, label), count ? h('span', { class: `side-count num${view === 'runs' ? ' quiet' : ''}`, title: status, 'aria-label': status }, count) : null, keyHint(shortcut));
       })),
     h('div', { class: 'side-scroll', onkeydown: listKeys, onfocusin: (e) => e.target.dataset?.rove === '-1' && rove(e.target) },
       pinnedList(term),
@@ -644,7 +649,8 @@ function drawSidebar() {
       showFilter ? h('div', { class: 'side-search' }, icon('search', 14), search) : null,
       projects.length ? projects : term ? h('div', { class: 'side-empty' }, 'No conversations match.') : h('div', { class: 'side-empty' }, h('span', null, 'No projects yet.'), h('button', { class: 'link', type: 'button', onclick: openFolder }, icon('folder-plus', 13), 'Open a folder'))),
     // The agents at work sit in a dock above the footer: one appearing or finishing never moves the list above it.
-    runningList() || weekCard() || '',
+    runningList() || '',
+    weekLine() || '',
     h('div', { class: 'side-foot' },
       h('button', { class: 'side-link foot-set', type: 'button', title: `Settings${firstKey(S.ui.keys, 'settings') ? ` (${firstKey(S.ui.keys, 'settings')})` : ''}`, onclick: () => settingsDialog() }, sideIcon('settings'), h('span', { class: 'side-l' }, 'Settings'), keyHint(firstKey(S.ui.keys, 'settings'))),
       footStatus()),
@@ -1202,7 +1208,7 @@ const canRun = (a, e) => {
 const KEY_SPOTS = [
   ['#sidebar .side-new', 'new'], ['#sidebar .side-search-btn', 'search'], ['#sidebar .foot-set', 'settings'],
   ['#topbar .tb-side', 'sidebar'], ['#topbar .tb-panel', 'panel'], ['#topbar .tb-search', 'search'],
-  [['#sidebar .side-link', 'Runs'], 'runs'], [['#sidebar .side-link', 'Review'], 'review'], [['#sidebar .side-link', 'Loops'], 'automations'],
+  [['#sidebar .side-link', 'Runs'], 'runs'], [['.cust-tab', 'Review'], 'review'], [['.cust-tab', 'Loops'], 'automations'],
   ['.ptabs .ptab[aria-label="Terminal"]', 'terminal'], ['.ptabs .ptab[aria-label="Browser"]', 'surfBrowser'], ['.ptabs .ptab[aria-label="Files"]', 'surfFiles'], ['.ptabs .ptab[aria-label="Changes"]', 'surfChanges'], ['.ptabs .ptab[aria-label="Context"]', 'surfContext'],
 ];
 let keyHintTimer = 0;

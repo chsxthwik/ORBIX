@@ -1,15 +1,16 @@
-// The conversation timeline: a thin column of dots at the left edge of the transcript, one per message. Your
-// messages are hollow, the agent's are filled, and the messages on screen are lit. Hover or focus shows the first
-// line; a click (or Enter) scrolls to the message; Up and Down move between dots; Alt+Up and Alt+Down (stepYou, bound
-// in keys.mjs) jump between your own messages from anywhere in the conversation.
+// The conversation timeline: a thin column of dots 24px outside the transcript's left edge, one per turn (each of your
+// messages starts one; the replies belong to it). The turn on screen has its dot filled with the accent. Hover or focus
+// shows the first 60 characters of your message; a click (or Enter) scrolls to it; Up and Down move between dots; Alt+Up
+// and Alt+Down (stepYou, bound in keys.mjs) jump between your own messages from anywhere in the conversation. Hidden in
+// windows under 1100px.
 //
-// Nothing here runs on scroll. An IntersectionObserver on the transcript lights the dots of the messages in view, and
+// Nothing here runs on scroll. An IntersectionObserver on the transcript lights the turns in view, and
 // the dot list is rebuilt only when the transcript's top-level children change (a MutationObserver, one frame later).
 // Existing dots are kept and reused, so a new message adds one button instead of redrawing the strip.
 // Nothing here reads layout either: sizes come from ResizeObservers and dot positions from arithmetic, because a
 // layout read with a long transcript waiting to be laid out costs hundreds of milliseconds.
 import { h } from './dom.js';
-import { NARROW, firstLine, dotLabel } from './timeline-text.mjs';
+import { MIN_WINDOW, TIP_CHARS, firstLine, dotLabel } from './timeline-text.mjs';
 
 const still = () => {
   const root = document.documentElement;
@@ -35,9 +36,12 @@ export class Timeline {
     this.track = h('div', { class: 'tm-track' });
     this.el.append(this.track);
     view.root.append(this.el, this.tip);
-    this.marks = []; // { target, button, you }
-    this.byTarget = new Map();
-    this.seen = new Set(); // targets on screen
+    this.marks = []; // one per turn: { target (your message), button, line, label }
+    this.byTarget = new Map(); // your message -> its mark
+    this.turnOf = new Map(); // every message in the transcript -> the index of its turn
+    this.observed = new Set(); // every message watched by the IntersectionObserver
+    this.seen = new Set(); // messages on screen
+    this.seenTurns = new Map(); // turn index -> how many of its messages are on screen
     this.active = -1;
     this.narrow = false;
     this.width = 0; // the transcript's width, from a ResizeObserver
@@ -74,35 +78,45 @@ export class Timeline {
     });
   }
 
-  /** Match the dots to the transcript's messages, reusing the dots that already exist. */
+  /** Match the dots to your messages, reusing the dots that already exist; replies map to the turn before them. */
   refresh() {
     const tin = this.view.tin;
-    const targets = [...tin.querySelectorAll(':scope > .msg.user, :scope > .msg.asst:not(.live)')];
-    const keep = new Set(targets);
-    for (const [target] of this.byTarget) {
-      if (keep.has(target)) continue;
-      this.io.unobserve(target);
-      this.byTarget.delete(target);
-      this.seen.delete(target);
+    const all = [...tin.querySelectorAll(':scope > .msg.user, :scope > .msg.asst:not(.live)')];
+    const keep = new Set(all);
+    for (const el of this.observed) {
+      if (keep.has(el)) continue;
+      this.io.unobserve(el);
+      this.observed.delete(el);
+      this.seen.delete(el);
+      this.byTarget.delete(el);
+    }
+    this.turnOf.clear();
+    const users = [];
+    for (const el of all) {
+      if (el.classList.contains('user')) users.push(el);
+      if (users.length) this.turnOf.set(el, users.length - 1);
+      if (!this.observed.has(el)) (this.observed.add(el), this.io.observe(el));
     }
     const focused = this.el.contains(document.activeElement) ? document.activeElement : null;
-    const total = targets.length;
-    this.marks = targets.map((target, i) => {
+    const total = users.length;
+    this.marks = users.map((target, i) => {
       let mark = this.byTarget.get(target);
       if (!mark) {
-        const you = target.classList.contains('user');
-        const button = h('button', { type: 'button', class: `turn-mark ${you ? 'you' : 'agent'}`, tabindex: '-1', onclick: () => this.jumpTo(target) });
-        mark = { target, button, you, line: null, label: '' };
+        const button = h('button', { type: 'button', class: 'turn-mark', tabindex: '-1', onclick: () => this.jumpTo(target) });
+        mark = { target, button, line: null, label: '' };
         this.byTarget.set(target, mark);
-        this.io.observe(target);
       }
-      // A message's first line is read once; the last two (the newest reply can still settle) are read again.
-      if (mark.line === null || i >= total - 2) mark.line = firstLine(messageText(target));
-      const label = dotLabel(mark.you, i + 1, total, mark.line);
+      // A message's first line is read once; your newest message can still be edited into the box, so it is read again.
+      if (mark.line === null || i >= total - 1) mark.line = firstLine(messageText(target), TIP_CHARS);
+      const label = dotLabel(i + 1, total, mark.line);
       if (label !== mark.label) mark.button.setAttribute('aria-label', (mark.label = label));
       mark.button.dataset.i = String(i);
       return mark;
     });
+    // Which turns are on screen, again (the turn numbers moved when older messages were added above).
+    this.seenTurns.clear();
+    for (const el of this.seen) this.countTurn(el, 1);
+    for (const m of this.marks) m.button.classList.toggle('seen', this.seenTurns.has(this.turnOf.get(m.target)));
     const buttons = this.marks.map((m) => m.button);
     const same = buttons.length === this.track.children.length && buttons.every((b, i) => this.track.children[i] === b);
     if (!same) this.track.replaceChildren(...buttons);
@@ -112,9 +126,17 @@ export class Timeline {
     if (focused && this.el.contains(focused)) focused.focus({ preventScroll: true });
   }
 
+  countTurn(el, delta) {
+    const turn = this.turnOf.get(el);
+    if (turn === undefined) return;
+    const n = (this.seenTurns.get(turn) || 0) + delta;
+    if (n > 0) this.seenTurns.set(turn, n);
+    else this.seenTurns.delete(turn);
+  }
+
   /** Show the strip only with two or more messages and room beside the text. */
   measure() {
-    this.narrow = this.width > 0 && this.width < NARROW;
+    this.narrow = innerWidth < MIN_WINDOW;
     const hide = this.marks.length < 2 || this.narrow;
     if (this.el.hidden !== hide) this.el.hidden = hide;
     if (hide) this.hideTip();
@@ -122,19 +144,21 @@ export class Timeline {
 
   onSeen(entries) {
     for (const e of entries) {
-      const mark = this.byTarget.get(e.target);
-      if (!mark) continue;
-      if (e.isIntersecting) this.seen.add(e.target);
-      else this.seen.delete(e.target);
-      mark.button.classList.toggle('seen', e.isIntersecting);
+      const el = e.target;
+      if (e.isIntersecting === this.seen.has(el)) continue;
+      if (e.isIntersecting) this.seen.add(el);
+      else this.seen.delete(el);
+      this.countTurn(el, e.isIntersecting ? 1 : -1);
+      const turn = this.turnOf.get(el);
+      if (turn !== undefined) this.marks[turn]?.button.classList.toggle('seen', this.seenTurns.has(turn));
     }
     this.markCurrent();
   }
 
-  /** The current message: the first one on screen (the last one when none is). One dot is tabbable: this one. */
+  /** The current turn: the first with a message on screen (the last turn when none is). One dot is tabbable: this one. */
   markCurrent() {
     if (!this.marks.length) return;
-    let index = this.marks.findIndex((m) => this.seen.has(m.target));
+    let index = this.marks.findIndex((_, i) => this.seenTurns.has(i));
     if (index < 0) index = this.marks.length - 1;
     if (index === this.active) return;
     const was = this.marks[this.active];
@@ -157,7 +181,7 @@ export class Timeline {
 
   /** A long conversation slides the track; keep dot `i` in view. Positions are arithmetic, not layout reads. */
   keepInStrip(i) {
-    const DOT = 14; // .turn-mark height in shell.css
+    const DOT = 16; // .turn-mark height in transcript.css
     const view = this.stripH; // the strip's content height, inside its padding
     const total = this.marks.length * DOT;
     if (!view || total <= view + 1) {
@@ -190,8 +214,7 @@ export class Timeline {
   showTip(button) {
     const mark = button && this.marks[Number(button.dataset.i)];
     if (!mark || mark.button !== button || this.el.hidden) return this.hideTip();
-    this.tip.textContent = mark.line || (mark.you ? 'Your message' : 'Reply');
-    this.tip.classList.toggle('you', mark.you);
+    this.tip.textContent = mark.line || 'Your message';
     const root = this.view.root.getBoundingClientRect();
     const r = button.getBoundingClientRect();
     this.tip.style.setProperty('--tip-x', `${Math.round(r.right - root.left + 6)}px`);

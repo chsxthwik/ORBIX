@@ -1,0 +1,24 @@
+/* Design tokens: the few numbers the whole interface is built from. Loaded first; every later file asks for these
+   instead of its own pixel values.
+   - Type: 12 / 13 / 14 / 16 / 20 / 28 px. 14 is body text, 13 is the sidebar and meta text, 12 is captions and hints,
+     16 a subhead, 20 a page title, 28 a display line. Weight 400 everywhere; headings 500.
+   - Space: a 4px grid (--sp-*). A hairline (1px) or a half step (2px) is allowed where a border or a bar needs it.
+   - Rows: 28px for lists (the sidebar, menus), 32px for controls, a 40px bar for the window's top row.
+   - Motion: 120ms for hovers and presses, 180ms for panels and pages, ease-out, nothing that overshoots; reduced
+     motion turns it all off (see the end of each file).
+   - Colour: the accent is for the focus ring, the current row's bar, the send button and progress; everything else is
+     neutral ink and surface, and colour means a state (working, needs you, done, failed). */
+:root {
+  --fs-12: 12px; --fs-13: 13px; --fs-14: 14px; --fs-16: 16px; --fs-20: 20px; --fs-28: 28px;
+  --fw: 400; --fw-h: 500;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  --bar-h: 40px; --row-h: 28px; --ctl-h: 32px;
+
+  --dur-hover: 120ms; --dur-panel: 180ms;
+  --ease-out: cubic-bezier(.2, .7, .2, 1);
+
+  /* Text on the sheet: the reading column's widest and the sidebar's default and limits. */
+  --col-max: 760px;
+}

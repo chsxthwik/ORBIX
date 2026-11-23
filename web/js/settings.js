@@ -69,7 +69,6 @@ const FIND = [
   ['Local models', 'engine', 'ollama lm studio offline server custom'],
   ['Machines', 'machines', 'cloud vps server remote teleport move self-host linux tailscale'],
   ['Agents', 'agents', 'claude code codex opencode gemini acp harness cli agent subscription plan'],
-  ['Your name', 'general', 'name greeting home display'],
   ['Analytics', 'usage', 'tokens usage stats statistics models prompts hours streak heatmap chart cost'],
   ['Fast model', 'models', 'titles summaries helper agents cheap'],
   ['Plan model', 'models', 'plan mode'],
@@ -337,16 +336,6 @@ function tabGeneral(el, show) {
       row('While the agent works', seg('While the agent works', [['steer', 'Steer'], ['queue', 'Queue']], u.whileBusy === 'queue' ? 'queue' : 'steer', (v) => savePrefs({ whileBusy: v })), 'Steer: read at the agent’s next step. Queue: sent when the turn ends. Alt+Enter does the other.'),
       row('Send messages with', seg('Send messages with', [['enter', 'Enter'], ['ctrl', 'Ctrl+Enter']], u.sendKey === 'ctrl' ? 'ctrl' : 'enter', (v) => savePrefs({ sendKey: v })), 'The other key adds a new line.'),
       row('Follow new output', toggle(u.autoScroll !== false, (v) => savePrefs({ autoScroll: v }), 'Follow new output'), 'Keep a streaming reply in view, unless you scroll up.')),
-    group('You', null,
-      row('Your name', (() => {
-        const input = h('input', { type: 'text', class: 'set-name', value: u.displayName || '', placeholder: 'Not set', maxlength: 40, spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Your name' });
-        let t = null;
-        input.addEventListener('input', () => {
-          clearTimeout(t);
-          t = setTimeout(() => savePrefs({ displayName: input.value.trim() }), 400);
-        });
-        return input;
-      })(), 'Shown in the greeting on Home.')),
     ...generalExtraGroups());
 }
 

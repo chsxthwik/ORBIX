@@ -67,7 +67,7 @@ function createWindow(url, extra = {}) {
     // The page draws its own menu row as the title bar; Windows keeps the real minimize, maximize and close buttons
     // over its right end, at the same height.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: c.bg, symbolColor: c.fg, height: 30 },
+    titleBarOverlay: { color: c.bg, symbolColor: c.fg, height: 40 },
     webPreferences: {
       preload: path.join(HERE, 'preload.cjs'),
       // The page picks its automatic interface size from the screen width.

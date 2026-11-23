@@ -9,6 +9,7 @@ import { homeProject } from './home.js';
 import { CATALOG, CATEGORIES, configFor } from './catalog.mjs';
 import { editMcpServer, mcpServerCard } from './mcp.js';
 import { hubProjects } from './hub-projects.js';
+import { customizeTabs } from './customize-tabs.js';
 
 let tab = 'market';
 let query = '';
@@ -149,7 +150,8 @@ export function drawCustomizations(root) {
   search.addEventListener('input', () => ((query = search.value), render()));
   const tabs = h('div', { class: 'cz-tabs', role: 'group', 'aria-label': 'Plugin view' }, [['market', 'Marketplace'], ['installed', 'Installed']].map(([t, l]) => h('button', { type: 'button', 'data-t': t, onclick: () => selectPluginsTab(t) }, l)));
   page = h('div', { class: 'hub cz' },
-    h('header', { class: 'cz-head' }, h('h1', null, 'Plugins'), h('span', { class: 'grow' }), scope, tabs),
+    h('header', { class: 'cz-head' }, h('h1', null, 'Customize'), h('span', { class: 'grow' }), scope, tabs),
+    customizeTabs('customizations'),
     h('label', { class: 'cz-search' }, icon('search', 14), search),
     h('div', { class: 'cz-body' }));
   replace(root, page);

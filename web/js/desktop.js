@@ -33,11 +33,11 @@ if (bridge) {
   const sync = () => {
     queued = false;
     const css = getComputedStyle(root);
-    const bg = getComputedStyle(document.getElementById('menubar') || root).backgroundColor || css.getPropertyValue('--bg').trim();
+    const bg = getComputedStyle(document.querySelector('.chrome') || root).backgroundColor || css.getPropertyValue('--bg').trim();
     const fg = css.getPropertyValue('--fg-2').trim();
     if (!bg || !fg) return;
     const [hb, hf] = [toHex(bg), toHex(fg)];
-    const height = parseFloat(css.getPropertyValue('--mb-h')) || 30;
+    const height = parseFloat(css.getPropertyValue('--mb-h')) || 40;
     if (`${hb}|${hf}|${height}` === last) return;
     last = `${hb}|${hf}|${height}`;
     bridge.setTitleBar(hb, hf, height);

@@ -40,7 +40,7 @@ test('the sidebar shows shortcuts only through the shared hint, the same for eve
   assert.doesNotMatch(side, /h\('kbd'/, 'no keycaps in the sidebar');
   for (const id of ['new', 'search', 'settings']) assert.match(side, new RegExp(`keyHint\\(firstKey\\(S\\.ui\\.keys, '${id}'\\)\\)`), id);
   assert.match(side, /keyHint\(shortcut\)/, 'every page link');
-  const css = read('web/css/side.css');
+  const css = read('web/css/sidebar.css');
   assert.match(css, /\.khint \{[^}]*color: var\(--fg-3\)[^}]*tabular-nums/);
 });
 

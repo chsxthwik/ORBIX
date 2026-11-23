@@ -1,7 +1,7 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, replace, clear, toast, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet, heroMark } from './dom.js';
+import { h, icon, replace, clear, toast, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet, logo } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { MarkdownBoundary, liveExcerpt, LIVE_MARKDOWN_LIMIT } from './markdown-stream.mjs';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
@@ -15,7 +15,7 @@ import { runInTerminal } from './terminal.js';
 import { conversationToMarkdown } from './exporter.js';
 import { rateModel } from './ratings.js';
 import { shellCommand } from './tool-title.mjs';
-import { Composer } from './composer.js';
+import { Composer, ASK } from './composer.js';
 import { addContext, permissionChip, modelLabel, effortChip } from './controls.js';
 import { Timeline } from './timeline.js';
 
@@ -302,7 +302,7 @@ export class TabView {
     this.jump = h('button', { class: 'jump', type: 'button', hidden: true, onclick: () => this.scrollBottom(true) }, icon('arrow-down', 14), 'Latest');
     this.queue = h('div', { class: 'queue' });
     this.composer = new Composer({
-      placeholder: 'Add a follow-up…  / for commands, @ for context, ! for a shell command',
+      placeholder: ASK,
       label: 'Message',
       state: t,
       workspace: () => t.workspace,
@@ -443,7 +443,7 @@ export class TabView {
     const m = t.model;
     const dead = t.dead;
     this.ta.disabled = dead;
-    this.ta.placeholder = dead ? 'This conversation has ended' : t.streaming ? (S.ui.whileBusy === 'queue' ? 'Queue a follow-up…' : 'Add guidance…') : t.messages?.length ? 'Add a follow-up…  / for commands, @ for context, ! for a shell command' : 'Ask anything…  / for commands, @ for context, ! for a shell command';
+    this.ta.placeholder = dead ? 'This conversation has ended' : t.streaming ? (S.ui.whileBusy === 'queue' ? 'Queue a follow-up…' : 'Add guidance…') : ASK;
     this.composer.el.classList.toggle('busy', !!t.streaming);
     this.updateSend();
 
@@ -767,8 +767,6 @@ export class TabView {
   }
 
   removeEmpty() {
-    this.emptyMark?.destroy();
-    this.emptyMark = null;
     this.emptyEl?.remove();
     this.emptyEl = null;
   }
@@ -778,15 +776,12 @@ export class TabView {
     const show = !t.messages.length && !t.live && !t.dead && !t.streaming;
     if (!show) return this.removeEmpty();
     if (this.emptyEl?.parentNode === this.tin) return;
-    // Suggested first tasks for this project; the row keeps its height while the folder is read, so nothing jumps.
+    // Three suggested first tasks for this project, as on Home; the slot keeps its height while the folder is read, so nothing jumps.
     const tasks = h('div', { class: 'ce-tasks-slot' });
-    this.emptyMark = heroMark(52);
     this.emptyEl = h('div', { class: 'chat-empty' },
-      this.emptyMark.el,
-      h('div', { class: 'ce-name' }, baseName(t.workspace)),
-      h('div', { class: 'ce-path' }, h('bdi', null, t.workspace)),
-      tasks,
-      h('div', { class: 'ce-keys' }, h('span', null, kbd('/'), ' commands'), h('span', null, kbd('@'), ' mention a file'), h('span', null, kbd('Shift+Enter'), ' new line')));
+      h('span', { class: 'empty-mark', 'aria-hidden': 'true' }, logo(48)),
+      h('h2', { class: 'ce-name' }, 'Where should we pick up?'),
+      tasks);
     const empty = this.emptyEl;
     this.tin.append(empty);
     if (!t.workspace) return;
@@ -979,7 +974,7 @@ export class TabView {
       });
       bubble.append(more);
     }
-    const copy = h('button', { class: 'msg-act', type: 'button', title: 'Copy message' }, icon('copy', 13), 'Copy');
+    const copy = h('button', { class: 'msg-act copy', type: 'button', title: 'Copy message' }, icon('copy', 13), 'Copy');
     copy.addEventListener('click', () => copyButtonFeedback(copy, text));
     const edit = h('button', { class: 'msg-act', type: 'button', title: 'Put this message in the message box to change and send it again' }, icon('pencil', 13), 'Edit');
     edit.addEventListener('click', () => {
@@ -999,7 +994,7 @@ export class TabView {
       branch.disabled = false;
     });
     const when = m.timestamp ? msgTime(m.timestamp) : null;
-    return h('div', { class: 'msg user' }, bubble, h('div', { class: 'msg-acts' }, when, copy, this.tab.dead ? null : edit, branch));
+    return h('div', { class: 'msg user' }, bubble, h('div', { class: 'msg-acts' }, copy, when, this.tab.dead ? null : edit, branch));
   }
 
   renderAssistant(m, idx, onPath, reuse = null) {
@@ -1016,7 +1011,7 @@ export class TabView {
     const text = blocks.filter((b) => b.type === 'text' && b.text?.trim()).map((b) => b.text.trim()).join('\n\n');
     const acts = h('div', { class: 'msg-acts' });
     if (text) {
-      const copy = h('button', { class: 'msg-act', type: 'button', title: 'Copy reply as Markdown' }, icon('copy', 13), 'Copy');
+      const copy = h('button', { class: 'msg-act copy', type: 'button', title: 'Copy reply as Markdown' }, icon('copy', 13), 'Copy');
       copy.addEventListener('click', () => copyButtonFeedback(copy, text));
       acts.append(copy);
     }
@@ -1032,7 +1027,7 @@ export class TabView {
     // one keeps it for Retry.
     const ended = m.stopReason === 'error' || m.stopReason === 'aborted';
     if (!text && !ended) return wrap;
-    if (m.timestamp) acts.prepend(msgTime(m.timestamp));
+    if (m.timestamp) acts.append(msgTime(m.timestamp));
     // Which model wrote it, how long the turn took and how fast it wrote, at the end of the row.
     const meta = this.replyMeta(m, idx);
     if (meta) acts.append(meta);

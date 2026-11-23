@@ -1,0 +1,117 @@
+/* Shared pieces: the state colours, the project tile, provider tiles, the Connect dialog, the Customize tabs and the
+   week chart. Loaded after the screens' own files; sizes and spacing come from tokens.css. */
+
+/* ---- state colours (the accent is not one of them): working is blue; needs you, done and failed use --warn, --ok
+   and --err from the theme ---- */
+:root { --working: #6CA6FF; }
+:root[data-mode=light] { --working: #1F63D6; }
+:root[data-theme=graphite] { --working: var(--live); }
+:root:is([data-theme=tokyo], [data-theme=mocha]) { --working: #89B4FA; }
+:root[data-theme=nord] { --working: #81A1C1; }
+:root[data-theme=dracula] { --working: #8BE9FD; }
+:root[data-theme=gruvbox] { --working: #83A598; }
+:root[data-theme=rosepine] { --working: #9CCFD8; }
+:root[data-theme=latte] { --working: #1E66F5; }
+:root[data-theme=dawn] { --working: #286983; }
+
+/* ---- a project's tile: its letter on one of eight low-saturation colours picked from its name (js/tile.mjs) ---- */
+:root { --tile-sat: 34%; --tile-bg-l: 52%; --tile-bg-a: .2; --tile-fg-l: 76%;
+  --tile-0: 212; --tile-1: 152; --tile-2: 32; --tile-3: 268; --tile-4: 340; --tile-5: 188; --tile-6: 52; --tile-7: 8; }
+:root[data-mode=light] { --tile-sat: 40%; --tile-bg-l: 50%; --tile-bg-a: .14; --tile-fg-l: 32%; }
+.ptile { --th: var(--tile-0); display: inline-grid; place-items: center; flex: none; width: var(--s, 20px); height: var(--s, 20px); border-radius: 6px; background: hsl(var(--th) var(--tile-sat) var(--tile-bg-l) / var(--tile-bg-a)); box-shadow: inset 0 0 0 1px hsl(var(--th) var(--tile-sat) var(--tile-bg-l) / .22); color: hsl(var(--th) calc(var(--tile-sat) + 14%) var(--tile-fg-l)); font: var(--fw-h) var(--fs-12)/1 var(--font); }
+.ptile[data-tile="1"] { --th: var(--tile-1); } .ptile[data-tile="2"] { --th: var(--tile-2); } .ptile[data-tile="3"] { --th: var(--tile-3); }
+.ptile[data-tile="4"] { --th: var(--tile-4); } .ptile[data-tile="5"] { --th: var(--tile-5); } .ptile[data-tile="6"] { --th: var(--tile-6); } .ptile[data-tile="7"] { --th: var(--tile-7); }
+:root[data-theme=graphite] .ptile { background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); }
+@media (forced-colors: active) { .ptile { forced-color-adjust: none; } }
+
+/* ---- the Customize page's tabs: Plugins, Skills, Loops, Review ---- */
+.cust-tabs { display: flex; gap: var(--sp-1); flex: none; border-bottom: 1px solid var(--line); }
+.cust-tab { position: relative; display: inline-flex; align-items: center; gap: var(--sp-2); height: var(--ctl-h); padding: 0 var(--sp-3); margin-bottom: -1px; border-radius: var(--sp-2) var(--sp-2) 0 0; color: var(--fg-2); font: var(--fw) var(--fs-14)/1 var(--font); transition: color var(--dur-hover) var(--ease-out), background-color var(--dur-hover) var(--ease-out); }
+.cust-tab:hover { background: var(--bg-hover); color: var(--fg); }
+.cust-tab[aria-selected=true] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--fg); }
+.cust-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cust-n { min-width: var(--sp-5); height: var(--sp-5); padding: 0 var(--sp-1); border-radius: var(--sp-2); background: var(--warn-soft); color: var(--warn); font: var(--fw) var(--fs-12)/20px var(--font); text-align: center; }
+.hub-sub { margin: 0; color: var(--fg-3); font-size: var(--fs-13); }
+
+/* ---- the week chart (the sidebar's token line opens it): seven bars on seven faint tracks, today in the accent ---- */
+.pop-panel.wk-pop { width: 280px; padding: var(--sp-3); }
+.wk-h { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-3); color: var(--fg-3); font-size: var(--fs-12); }
+.wk-h b { color: var(--fg); font-size: var(--fs-14); font-weight: var(--fw); }
+.wk-cols { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--sp-2); height: 96px; margin: 0; padding: 0; list-style: none; }
+.wk-col { display: grid; grid-template-rows: 1fr auto; gap: var(--sp-1); min-width: 0; border-radius: var(--sp-1); }
+.wk-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wk-track { position: relative; display: flex; align-items: flex-end; border-radius: var(--sp-1); background: var(--bg-hover); overflow: hidden; }
+.wk-track i { display: block; width: 100%; height: var(--v); border-radius: var(--sp-1); background: var(--fg-3); transform-origin: bottom; animation: wk-grow var(--dur-panel) var(--ease-out) both; }
+.wk-track i.today { background: var(--accent-solid); }
+.wk-d { color: var(--fg-3); font-size: var(--fs-12); text-align: center; }
+.wk-f { margin-top: var(--sp-3); color: var(--fg-3); font-size: var(--fs-12); }
+.wk-more { margin-top: var(--sp-2); padding: 0; font-size: var(--fs-12); }
+@keyframes wk-grow { from { transform: scaleY(0); } }
+@media (prefers-reduced-motion: reduce) { .wk-track i { animation: none; } }
+
+/* ================= provider tiles (js/brands.js brandTile) =================
+   A provider as an app icon: its mark on its brand colour, a soft top light and a hairline so a black or white
+   tile still has an edge on any theme. */
+.btile { display: grid; place-items: center; flex: none; width: var(--bt); height: var(--bt); border: 0; border-radius: calc(var(--bt) * .26);
+  background: var(--bt-bg); color: var(--bt-fg, #0B0B0C);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), inset 0 0 0 1px rgb(255 255 255 / .08), 0 0 0 1px color-mix(in srgb, var(--fg) 9%, transparent), 0 1px 2px rgb(0 0 0 / .22); }
+.btile.light { box-shadow: inset 0 -1px 0 rgb(0 0 0 / .06), 0 0 0 1px color-mix(in srgb, var(--fg) 10%, transparent), 0 1px 2px rgb(0 0 0 / .18); }
+.btile.plain { background: var(--bg-raise-2); color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+.btile svg { display: block; }
+/* the model picker's provider rail: tiles sit flat until the rail button is hovered or current */
+.mp-pv .btile { --bt: 24px; opacity: .82; transition: opacity var(--t2) var(--ease), transform var(--t2) var(--ease-out); }
+.mp-pv:hover .btile, .mp-pv.on .btile { opacity: 1; }
+.mp-pv.on .btile { transform: scale(1.06); }
+.mp-pv.dim .btile { opacity: .3; filter: grayscale(1); }
+:root[data-theme=graphite] .btile:not(.plain) { filter: grayscale(1); }
+@media (forced-colors: active) { .btile { forced-color-adjust: none; } }
+
+/* ================= Connect (js/connect.js) ================= */
+.modal.connect-dlg { width: min(640px, 100%); height: min(720px, calc(100vh - 48px)); }
+.connect-dlg > .modal-b { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.cn-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; flex: none; padding: 0 20px 14px; border-bottom: 1px solid var(--line); }
+.cn-sub { margin: 0; color: var(--fg-3); font-size: 13px; }
+.cn-seg button[aria-selected=true] { background: var(--bg-active); color: var(--fg); }
+.cn-pane { flex: 1 1 auto; min-height: 0; padding: 14px 20px 20px; overflow: auto; }
+.cn-pane .pv-tools { position: sticky; top: -14px; z-index: 1; margin: -14px -20px 10px; padding: 14px 20px 10px; background: var(--bg-modal); }
+.cn-pane .set-note:first-child { margin-top: 0; }
+/* the model picker's way to Connect */
+.mp-pv.mp-add { color: var(--fg-3); border: 1px dashed var(--line-3); }
+.mp-pv.mp-add:hover { color: var(--fg); border-color: var(--fg-3); border-style: solid; }
+.mp-empty p { margin: 0; }
+.pv-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pv-via { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg-2); font-size: 11px; font-weight: 500; }
+
+/* Provider marks whose own colours fall under 3:1 on light surfaces use one colour there (js/brands.js); on their
+   dark tiles they keep their colours. */
+:root[data-mode=light] .bm-lowlight:not(.btile .bm-lowlight) * { fill: currentColor; }
+
+
+/* ---- the Changes panel: files with added and removed lines, a diff that opens under the file, Commit & push ---- */
+.gfile { display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--row-h); padding: 0 var(--sp-3); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--mono); text-align: left; }
+.gfile:hover { background: var(--bg-hover); color: var(--fg); }
+.gfile:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.gchev { flex: none; color: var(--fg-3); }
+.gs { flex: none; width: var(--sp-4); text-align: center; color: var(--fg-3); font-size: var(--fs-12); }
+.gs.M { color: var(--warn); } .gs.A, .gs.U { color: var(--ok); } .gs.D { color: var(--err); } .gs.R, .gs.C { color: var(--fg-2); }
+.gstat { display: inline-flex; flex: none; gap: var(--sp-2); margin-left: auto; font-size: var(--fs-12); font-variant-numeric: tabular-nums; }
+.gstat b { font-weight: var(--fw); }
+.gstat .add { color: var(--ok); } .gstat .del { color: var(--err); }
+.gitem:hover .gstat, .gitem:focus-within .gstat { visibility: hidden; }
+.gdiff { max-height: 420px; overflow: auto; border-block: 1px solid var(--line); background: var(--bg-inset); }
+.gitem.open > .gfile { color: var(--fg); }
+.commit-box { flex: none; display: grid; gap: var(--sp-2); padding: var(--sp-3); border-top: 1px solid var(--line); }
+.commit-msg { width: 100%; min-height: 64px; max-height: 200px; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--sp-2); background: var(--bg-field); color: var(--fg); font: var(--fw) var(--fs-13)/1.5 var(--font); resize: vertical; }
+.commit-msg:focus { outline: none; border-color: var(--accent); box-shadow: none; }
+.commit-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.commit-hint { color: var(--fg-3); font-size: var(--fs-12); }
+.ship { display: grid; gap: var(--sp-2); padding-top: var(--sp-1); font-size: var(--fs-13); }
+.ship-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); min-width: 0; color: var(--fg-2); }
+.ship-line > svg { flex: none; color: var(--ok); }
+.ship-err { color: var(--err); }
+.ship-link { display: inline-flex; align-items: center; gap: var(--sp-2); color: var(--fg); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-3); }
+.ship-link:hover { text-decoration-color: currentColor; }
+
+/* A run's own branch, as a chip in its header. */
+.chip-br { display: inline-flex; align-items: center; gap: var(--sp-1); min-width: 0; max-width: 280px; height: var(--sp-5); padding: 0 var(--sp-2); border: 1px solid var(--line-2); border-radius: var(--sp-1); color: var(--fg-2); font: var(--fw) var(--fs-12)/1 var(--mono); }
+.chip-br svg { flex: none; margin-left: 0; }

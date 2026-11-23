@@ -1,75 +1,159 @@
-/* Sidebar layout (after finish.css; shell.css sets the final sizes). One column, three kinds of row:
-     links      New session, Home, Search, Settings: icon and label
-     projects   a folder and its name in secondary ink
-     sessions   the title in full ink, lined up with the project name; the time on the right
-   No tree lines: a session's status (open, working, waiting, unread) is a dot in the icon column under the folder,
-   and the current row is a filled pill. */
+/* The sidebar and its rail: the one place its look is decided. 260px by default, 220 to 360 when you drag it, 56px as
+   the icon rail. Top to bottom: New conversation, Search, Runs, Customize; the pinned and project lists; the agents at
+   work; one quiet line of this week's tokens; the connection status and Settings.
+   Sizes are the tokens in tokens.css: 13px text, 12px captions and hints, 28px list rows, 32px controls, a 4px grid.
+   Colour is for state: the focus ring and the current row's 2px bar are the accent; working is blue, needs you is
+   amber, unread is an ink dot; everything else is ink and surface. */
 
-/* ---- New session: its shortcut shows under the pointer ---- */
-.sidebar .side-new kbd { margin-left: auto; opacity: 0; transition: opacity var(--t2) var(--ease); }
-.sidebar .side-new:hover kbd, .sidebar .side-new:focus-visible kbd { opacity: .8; }
+.sidebar { --pad: var(--sp-2); display: flex; flex-direction: column; flex: none; width: var(--side-w); min-width: 0; background: var(--chrome); color: var(--fg-2); font-size: var(--fs-13); }
+.sidebar { transition: width var(--dur-panel) var(--ease-out), margin-left var(--dur-panel) var(--ease-out), visibility 0s; }
+.app.no-side .sidebar { transition: width var(--dur-panel) var(--ease-out), margin-left var(--dur-panel) var(--ease-out), visibility 0s var(--dur-panel); }
 
-/* ---- links (Home, Search, Settings) ---- */
-.sidebar .side-link { margin: 0; }
+/* ---- shared row bits ---- */
+.sidebar :is(.side-new, .side-link, .proj-btn, .s-btn, .s-more, .run-row, .side-week, .foot-status) { text-align: left; }
+.sidebar :is(.side-new, .side-link, .proj-btn, .s-btn, .s-more, .run-row, .side-week, .foot-status):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sidebar .side-l { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sidebar .sic { flex: none; width: 16px; height: 16px; overflow: visible; color: var(--fg-3); transition: color var(--dur-hover) var(--ease-out); }
+
+/* A shortcut, written one way everywhere ("Ctrl+K"): plain text, muted, right-aligned, shown under the pointer or the keyboard. */
+.khint { flex: none; margin-left: auto; padding-left: var(--sp-2); color: var(--fg-3); font: var(--fw) var(--fs-12)/1 var(--font); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sidebar .khint { opacity: 0; transition: opacity var(--dur-hover) var(--ease-out); }
+.sidebar :is(.side-new, .side-link):is(:hover, :focus-visible) .khint { opacity: 1; }
+.sidebar .side-count + .khint { display: none; }
+
+/* ---- New conversation: regular weight, a 1px border, no fill ---- */
+.sidebar .side-new { display: flex; align-items: center; gap: var(--sp-2); flex: none; height: var(--ctl-h); margin: var(--sp-2) var(--pad) var(--sp-1); padding: 0 var(--sp-3); border: 1px solid var(--line-3); border-radius: var(--sp-2); background: transparent; color: var(--fg); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out); }
+.sidebar .side-new .sic { color: var(--fg); }
+.sidebar .side-new:hover { background: var(--bg-hover); }
+
+/* ---- pages: Search, Runs, Customize ---- */
+.sidebar .side-nav { display: flex; flex-direction: column; flex: none; padding: var(--sp-1) var(--pad) var(--sp-2); }
+.sidebar .side-link { position: relative; display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--ctl-h); padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .side-link:hover { background: var(--bg-hover); color: var(--fg); }
-.sidebar .side-link:hover svg { color: var(--fg-2); }
-.sidebar .side-link.cur svg { color: var(--fg); }
-.sidebar .side-link kbd { opacity: 0; transition: opacity var(--t2) var(--ease); }
-.sidebar .side-link:hover kbd { opacity: .8; }
+.sidebar .side-link:hover .sic { color: var(--fg-2); }
+.sidebar .side-count { flex: none; min-width: var(--sp-5); height: var(--sp-5); margin-left: auto; padding: 0 var(--sp-1); border-radius: var(--sp-2); background: var(--warn-soft); color: var(--warn); font: var(--fw) var(--fs-12)/20px var(--font); text-align: center; }
+.sidebar .side-count.quiet { background: transparent; color: var(--fg-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 
-/* ---- section headers: Running, Pinned, Projects ---- */
-.sidebar .side-h { letter-spacing: 0; text-transform: none; }
-.sidebar .side-scroll > .side-h:first-child, .sidebar .side-scroll > :first-child .side-h { margin-top: 0; }
-.side-h-acts { display: flex; gap: 0; }
-.side-h-acts .ibtn { color: var(--fg-3); }
-.side-h-acts .ibtn:hover { color: var(--fg); }
-.side-h-acts .ibtn.on { background: var(--bg-active); color: var(--fg); }
+/* The current page or conversation: a soft fill and a 2px accent bar on its left edge. Only that row has colour. */
+.sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .run-row.cur) { background: var(--bg-active); color: var(--fg); }
+.sidebar :is(.side-link.cur, .s-row.cur > .s-btn)::before { content: ''; position: absolute; top: var(--sp-1); bottom: var(--sp-1); left: 0; width: 2px; border-radius: 1px; background: var(--accent-solid); }
 
-/* the filter, opened from the funnel beside Projects */
-.app .sidebar .side-search { margin: 2px 0 6px; }
-.sidebar .side-search input { height: 32px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-field); font-size: 13px; }
-.sidebar .side-search input:hover { border-color: var(--line-3); background: var(--bg-field); }
-.sidebar .side-search input:focus { border-color: var(--accent-line); background: var(--bg-field); }
+/* ---- lists ---- */
+.sidebar .side-scroll { flex: 1; min-height: 0; padding: 0 var(--pad) var(--sp-2); overflow-y: auto; border-bottom: 1px solid var(--line); scroll-padding-block: var(--sp-2); }
+.sidebar .side-h { display: flex; align-items: center; justify-content: space-between; height: var(--row-h); margin-top: var(--sp-3); padding: 0 var(--sp-1) 0 var(--sp-3); color: var(--fg-3); font: var(--fw-h) var(--fs-12)/1 var(--font); }
+.sidebar .side-scroll > :first-child .side-h, .sidebar .side-scroll > .side-h:first-child { margin-top: var(--sp-1); }
+.sidebar .side-h-acts { display: flex; }
+.sidebar .side-h-acts .ibtn { width: var(--ctl-h); height: var(--row-h); min-height: var(--row-h); color: var(--fg-3); }
+.sidebar .side-h-acts .ibtn:hover { color: var(--fg); }
+.sidebar .side-h-acts .ibtn.on { background: var(--bg-active); color: var(--fg); }
+.sidebar .side-search { position: relative; flex: none; margin: 0 0 var(--sp-1); }
+.sidebar .side-search svg { position: absolute; left: var(--sp-3); top: 50%; transform: translateY(-50%); color: var(--fg-3); pointer-events: none; }
+.sidebar .side-search input { height: var(--ctl-h); padding-left: var(--sp-8); font-size: var(--fs-13); }
+.sidebar .side-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); color: var(--fg-3); font-size: var(--fs-13); line-height: 1.5; }
 
-/* ---- projects ---- */
-.sidebar .proj { margin-bottom: 4px; }
-.sidebar .proj-head { padding: 0; }
-.sidebar .proj-btn { gap: 0; padding: 0 8px 0 0; border-radius: 8px; }
-.sidebar .proj-btn:hover { background: var(--bg-hover); }
-.sidebar .proj-n { color: var(--fg-3); font-size: 12px; font-weight: 400; }
+/* A project: a coloured letter tile, its name, and what is going on in it (the branch, agents at work). */
+.sidebar .proj + .proj { margin-top: var(--sp-1); }
+.sidebar .proj-head, .sidebar .s-row { position: relative; display: flex; align-items: center; }
+.sidebar .proj-btn { display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; height: var(--row-h); padding: 0 var(--sp-2); border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.sidebar .proj-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.sidebar .proj:has(.s-row.cur) > .proj-head .proj-btn { color: var(--fg); }
+.sidebar .proj-mark { display: grid; place-items: center; flex: none; width: var(--sp-5); height: var(--sp-5); }
+.sidebar .proj-mark > * { grid-area: 1 / 1; transition: opacity var(--dur-hover) var(--ease-out); }
+.sidebar .proj-mark .chev { opacity: 0; color: var(--fg-2); }
+.sidebar .proj-btn:is(:hover, :focus-visible) .proj-mark .ptile { opacity: 0; }
+.sidebar .proj-btn:is(:hover, :focus-visible) .proj-mark .chev { opacity: 1; }
+.sidebar .proj-btn[aria-expanded=false] .ptile { opacity: .8; }
+.sidebar .proj-name { min-width: 0; }
+.sidebar .proj-meta { display: inline-flex; align-items: center; gap: var(--sp-2); flex: 0 1 auto; min-width: 0; margin-left: auto; transition: opacity var(--dur-hover) var(--ease-out); }
+.sidebar .proj-br { max-width: 96px; height: var(--sp-5); padding: 0 6px; border-radius: var(--sp-1); background: var(--bg-hover); color: var(--fg-3); font: var(--fw) var(--fs-12)/20px var(--mono); }
+.sidebar .proj-live { display: inline-flex; align-items: center; gap: 6px; color: var(--working); font-size: var(--fs-12); }
+/* the row's actions fade in over its meta, so nothing moves */
+.sidebar .row-acts { position: absolute; right: var(--sp-1); top: 50%; display: flex; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity var(--dur-hover) var(--ease-out); }
+.sidebar .row-acts .ibtn { width: var(--sp-6); height: var(--sp-6); min-height: var(--sp-6); color: var(--fg-3); }
+.sidebar .row-acts .ibtn:hover { background: var(--bg-active); color: var(--fg); }
+.sidebar .row-acts .ibtn.on { color: var(--fg); }
+.sidebar :is(.proj-head, .s-row):is(:hover, :focus-within) .row-acts { opacity: 1; pointer-events: auto; }
+.sidebar .proj-head:is(:hover, :focus-within) .proj-meta { opacity: 0; }
+.sidebar .s-start { padding: 0; color: var(--fg-2); font: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-3); }
+.sidebar .s-start:hover { color: var(--fg); text-decoration-color: currentColor; }
 
-/* ---- sessions: titles start under the project name; status lives in the icon column ---- */
-.app .sidebar .proj > .s-row,
-.app .sidebar .proj > .s-more,
-.app .sidebar .proj > .s-none { margin: 0; padding: 0; border: 0; }
-.app .sidebar .s-row { margin-bottom: 1px; }
-.sidebar .s-btn { position: relative; gap: 8px; padding: 0 10px 0 var(--sb-ic); font-weight: 400; }
+/* A conversation: its title, and on the right its relative time (muted). Working shows the dot grid, needs you says so. */
+.sidebar .s-row { margin-bottom: 0; }
+.sidebar .s-btn { position: relative; display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; height: var(--row-h); padding: 0 var(--sp-2) 0 36px; border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .s-btn:hover { background: var(--bg-hover); color: var(--fg); }
-.sidebar .s-btn > .dot { position: absolute; left: calc(var(--sb-ic) / 2 - 3.5px); top: 50%; margin: 0; transform: translateY(-50%); }
-.proj > .s-row > .s-btn > .dot.open { background-color: transparent; }
-.sidebar .s-btn .s-br { color: var(--fg-3); }
-/* finished while you were elsewhere: the title stands out until you open it */
-.sidebar .s-row.unread .s-btn { color: var(--fg); font-weight: 550; }
-.sidebar .s-when { color: var(--fg-3); }
-.sidebar .s-more { height: 28px; padding: 0 10px 0 var(--sb-ic); border-radius: 8px; color: var(--fg-3); font-size: 12.5px; }
+.sidebar .s-row.unread .s-btn { color: var(--fg); }
+.sidebar .s-row.archived .s-btn { color: var(--fg-3); }
+.sidebar .s-btn > .dot { position: absolute; left: 15px; top: 50%; margin: 0; transform: translateY(-50%); }
+.sidebar .s-br { flex: none; color: var(--fg-3); }
+.sidebar .s-agent { display: inline-flex; flex: none; color: var(--fg-3); }
+.sidebar .s-when, .sidebar .s-where, .sidebar .s-you { flex: none; font-size: var(--fs-12); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sidebar .s-when, .sidebar .s-where { color: var(--fg-3); }
+.sidebar .s-where { max-width: 42%; overflow: hidden; text-overflow: ellipsis; }
+.sidebar .s-you { color: var(--warn); }
+.sidebar .s-live { margin-left: auto; }
+.sidebar .s-row:is(:hover, :focus-within) :is(.s-when, .s-where, .s-you, .s-live) { visibility: hidden; }
+.sidebar .s-more { display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--row-h); padding: 0 var(--sp-2) 0 36px; border-radius: var(--sp-2); color: var(--fg-3); font-size: var(--fs-13); }
+.sidebar .s-more:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .s-more svg { display: none; }
-.sidebar .s-none { padding: 4px 10px 6px var(--sb-ic); color: var(--fg-3); font-size: 12.5px; }
-.sidebar .row-acts { right: 4px; }
-.sidebar .side-empty { padding: 6px 10px; }
-/* a session pinned or in Running shows its project instead of a time */
-.sidebar .pin-sec .s-btn { padding-left: 10px; }
+.sidebar .s-none { padding: var(--sp-1) 0 var(--sp-1) 36px; color: var(--fg-3); font-size: var(--fs-13); white-space: nowrap; }
+/* pinned and agent-board rows have no project to hang under */
+.sidebar .pin-sec .s-btn { padding-left: var(--sp-3); }
 .sidebar .pin-sec .s-btn > .dot { position: static; transform: none; }
 
-/* ---- Running (the agents board) ---- */
-.sidebar .run-row { gap: 10px; padding: 6px 10px; }
-.sidebar .run-row.cur { background: var(--bg-active); }
+/* ---- status: one system ---- */
+.sidebar .dot.warn { background: var(--warn); }
+.sidebar .dot.unread { width: 6px; height: 6px; background: var(--fg); }
+.dgrid { color: var(--working); }
+.dot.run { background: var(--working); }
 
-/* ---- footer: Settings on the left, the model connection on the right ---- */
-.app .sidebar .side-foot { display: flex; align-items: center; gap: 4px; margin: 0; }
-.sidebar .foot-set { flex: 1 1 auto; width: auto; min-width: 0; }
-.sidebar .foot-status { flex: 0 1 auto; max-width: 55%; height: 30px; gap: 7px; padding: 0 9px; border: 0; border-radius: 999px; background: transparent; color: var(--fg-3); font-size: 12px; }
+/* ---- the agents at work: a dock above the footer, outside the scrolling list, so it never pushes a row ---- */
+.sidebar .side-dock { flex: none; max-height: calc(4 * 44px + var(--row-h)); padding: 0 var(--pad) var(--sp-1); overflow-y: auto; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.sidebar .run-row { gap: var(--sp-2); min-height: 44px; padding: var(--sp-1) var(--sp-3); border-radius: var(--sp-2); color: var(--fg); font-size: var(--fs-13); }
+.sidebar .run-row:hover { background: var(--bg-hover); }
+.sidebar .run-m .ell:first-child { font-size: var(--fs-13); }
+.sidebar .run-now, .sidebar .run-st { font-size: var(--fs-12); }
+.sidebar .run-st { font-variant-numeric: tabular-nums; }
+.sidebar .run-st.you { color: var(--warn); }
+.sidebar .run-st:not(.you) { color: var(--fg-3); }
+
+/* ---- this week: one quiet line; a click opens the chart ---- */
+.sidebar .side-week { flex: none; display: flex; align-items: center; height: var(--row-h); margin: var(--sp-1) var(--pad) 0; padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-3); font: var(--fw) var(--fs-12)/1 var(--font); font-variant-numeric: tabular-nums; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.sidebar .side-week:hover { background: var(--bg-hover); color: var(--fg-2); }
+
+/* ---- footer: what the model connection is, then Settings ---- */
+.sidebar .side-foot { display: flex; flex-direction: column; align-items: stretch; flex: none; padding: var(--sp-1) var(--pad) var(--sp-2); }
+.sidebar .foot-set { order: 2; }
+.sidebar .foot-status { order: 1; display: flex; align-items: center; align-self: flex-start; gap: var(--sp-2); flex: none; max-width: 100%; height: var(--row-h); padding: 0 var(--sp-3); border: 0; border-radius: var(--sp-2); background: transparent; color: var(--fg-3); font-size: var(--fs-12); }
 .sidebar .foot-status:hover { background: var(--bg-hover); color: var(--fg); }
-.sidebar .foot-status .ell { flex: 0 1 auto; }
+.sidebar .foot-status .dot.ok { background: var(--ok); }
+.sidebar .foot-status .dot.warn { background: var(--warn); }
+.sidebar .foot-status .dot.err { background: var(--err); }
+.sidebar .foot-status .fs-t { min-width: 0; }
 
-/* ---- compact density ---- */
-.compact .sidebar .side-link, .compact .sidebar .proj-btn, .compact .sidebar .s-btn { height: 28px; font-size: 13px; }
+/* ---- compact density: a row is 24px ---- */
+.compact .sidebar { --row-h: 24px; }
+.compact .sidebar :is(.side-link, .side-new) { height: 28px; }
+
+/* ---- the rail: icons only, 56px (Ctrl+B); states stay visible as dots ---- */
+.app.side-rail .sidebar { --pad: var(--sp-2); }
+.app.side-rail .sidebar :is(.side-l, .khint, .side-h, .side-week, .side-dock, .pin-sec, .proj > :not(.proj-head), .proj-name, .proj-meta, .row-acts, .side-search, .side-empty, .foot-status .fs-t, .proj-mark .chev, .side-count) { display: none !important; }
+.app.side-rail .sidebar :is(.side-new, .side-link, .proj-btn) { justify-content: center; width: 40px; height: 40px; min-height: 40px; margin-inline: auto; padding: 0; gap: 0; }
+.app.side-rail .sidebar .side-new { margin-top: var(--sp-2); }
+.app.side-rail .sidebar .side-nav { align-items: center; }
+.app.side-rail .sidebar .side-scroll { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2) 0; }
+.app.side-rail .sidebar .proj-head { justify-content: center; }
+.app.side-rail .sidebar .proj-mark .ptile { opacity: 1 !important; }
+.app.side-rail .sidebar .side-foot { align-items: center; gap: var(--sp-2); }
+.app.side-rail .sidebar .foot-set { flex: none; }
+.app.side-rail .sidebar .foot-status { justify-content: center; width: var(--sp-8); padding: 0; }
+.app.side-rail .sidebar :is(.side-link.cur, .s-row.cur > .s-btn)::before { left: calc(-1 * var(--pad)); }
+.app.side-rail .sidebar :is(.side-link, .proj-btn) { position: relative; }
+.app.side-rail .sidebar .side-link:has(.side-count)::after,
+.app.side-rail .sidebar .proj-btn[data-state]:not([data-state=""])::after { content: ''; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--chrome); background: var(--warn); }
+.app.side-rail .sidebar .side-link:has(.side-count.quiet)::after, .app.side-rail .sidebar .proj-btn[data-state=run]:not([data-state=""])::after { background: var(--working); }
+.app.side-rail .sidebar .proj-btn[data-state=unread]:not([data-state=""])::after { background: var(--fg); }
+
+@media (forced-colors: active) {
+  .sidebar :is(.side-link.cur, .s-row.cur > .s-btn) { outline: 2px solid Highlight; outline-offset: -2px; }
+  .app.side-rail .sidebar :is(.side-link, .proj-btn)::after { forced-color-adjust: none; background: Highlight; }
+}

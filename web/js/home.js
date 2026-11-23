@@ -1,11 +1,11 @@
-// Home: one centred stack. The ORBIX mark (its node circling slowly) and a greeting; what needs
-// you; the message box with the project and where it works (the project folder or a separate branch) under it; then a
-// few suggestions as chips.
+// Home: one centred stack. The ORBIX mark (48px, muted) and one line, "Where should we pick up?"; what needs you; three
+// suggestions as rows; the project and where it works (the project folder or a separate branch) as chips on top of the
+// message box; then the project's latest conversations. No cards.
 // Conversations and projects are in the sidebar. Before a model or a project is connected, Home offers setup.
 import { addContext, permissionChip, modelLabel, effortChip } from './controls.js';
 import { runInTerminal } from './terminal.js';
-import { h, icon, iconBtn, replace, baseName, toast, heroMark, timeAgo } from './dom.js';
-import { Composer, dropZone } from './composer.js';
+import { h, icon, iconBtn, replace, baseName, toast, logo, timeAgo } from './dom.js';
+import { Composer, ASK, dropZone } from './composer.js';
 import { api } from './api.js';
 import { S, openTab, sendPrompt, setThinking, tabForSession, engineReady, savePrefs, groupSessions, on, emit, setActive } from './store.js';
 import { popMenu, modelPicker, isApproval, thinkingLevels } from './dialogs.js';
@@ -99,7 +99,6 @@ async function loadLevels(m) {
 /** The page's skeleton, built once per mount. */
 function shell(root) {
   if (W && root.contains(W.wrap)) return W;
-  W?.mark.destroy();
   const title = h('h1', { class: 'home-title' });
   const sub = h('p', { class: 'home-sub' });
   const alertSlot = h('div', { class: 'home-alerts' });
@@ -108,11 +107,11 @@ function shell(root) {
   const under = h('div', { class: 'home-under' });
   const statusSlot = h('div', { class: 'home-status-slot' });
   const recentSlot = h('div', { class: 'home-recent-slot' });
-  const mark = heroMark(72);
-  const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, mark.el), h('header', { class: 'home-head' }, title, sub));
-  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, deckSlot, under, recentSlot);
+  const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, logo(48)), h('header', { class: 'home-head' }, title, sub));
+  // Top to bottom: what needs you, the suggestions, the project chips and the message box, the latest conversations.
+  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, under, deckSlot, recentSlot);
   const wrap = h('div', { class: 'home' }, hero, dock);
-  W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot, recentSlot, mark };
+  W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot, recentSlot };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {
     root._drop = true;
@@ -126,7 +125,7 @@ function shell(root) {
 function deck() {
   if (C) return C;
   const comp = new Composer({
-    placeholder: 'Ask anything…  / for commands, @ for context, ! for a shell command',
+    placeholder: ASK,
     label: 'Task for the new conversation',
     cls: 'home-composer',
     state: draft,
@@ -138,9 +137,9 @@ function deck() {
   });
   const row = h('div', { class: 'c-row' });
   comp.el.append(row);
-  // Under the box, one quiet line: the project, where the conversation works, and the working tree.
+  // On top of the box, chips: the project, where the conversation works, and the working tree.
   const head = h('div', { class: 'home-box-h' });
-  C = { comp, row, head, el: h('div', { class: 'home-box' }, comp.el, head) };
+  C = { comp, row, head, el: h('div', { class: 'home-box' }, head, comp.el) };
   return C;
 }
 
@@ -344,21 +343,10 @@ function drawSuggestions(w, comp, project) {
   });
 }
 
-// The greeting for the time of day, with the name you set in Settings → Preferences (none by default).
-const greeting = () => {
-  const name = String(S.ui?.displayName || '').trim();
-  const hour = new Date().getHours();
-  const part = hour < 5 ? 'evening' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
-  return name ? `Good ${part}, ${name}` : `Good ${part}`;
-};
-
-/** The greeting for an open project; otherwise the next setup step. */
+/** The one line for an open project; otherwise the next setup step. */
 function drawHead(w, ready, project) {
-  const text = project && ready ? greeting() : ready ? 'Open a project folder' : 'Connect a model';
-  if (w.title.textContent !== text) {
-    const at = text.indexOf(', ');
-    w.title.replaceChildren(...(project && ready && at > 0 ? [h('span', { class: 'home-hi' }, text.slice(0, at + 1)), ' ', h('span', { class: 'home-name' }, text.slice(at + 2))] : [text]));
-  }
+  const text = project && ready ? 'Where should we pick up?' : ready ? 'Open a project folder' : 'Connect a model';
+  if (w.title.textContent !== text) w.title.textContent = text;
   const sub = project ? '' : ready ? 'The agent works only inside a folder you choose.' : 'Add an API key, sign in, or use a model that runs on this PC. You can change it at any time.';
   if (w.sub.textContent !== sub) w.sub.textContent = sub;
   w.sub.hidden = !sub;

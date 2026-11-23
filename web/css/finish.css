@@ -12,10 +12,6 @@
 /* ---- frame ---- */
 .app:not(.overlay-side) .sidebar { background: var(--chrome); }
 
-/* Replies carry no name plate; the model shows in the reply's actions. Your own messages need no label either. */
-.msg-acts { margin-top: -2px; }
-.msg-model { padding: 0 6px; }
-
 /* Tool steps: one quiet line each, like a log. The icon tile and the rail go; status keeps its colour only when it
    needs you (waiting, failed). Durations and the success tick appear under the pointer. */
 .tool::before { display: none; }
@@ -48,16 +44,6 @@ details.think > summary { color: var(--fg-3); }
 .btn.primary:hover:not(:disabled), .send:not(.stop):not(:disabled):hover { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 86%, var(--bg)); box-shadow: none; transform: none; }
 .btn.primary:active:not(:disabled), .send:not(.stop):not(:disabled):active { transform: scale(.98); box-shadow: none; }
 
-/* ---- sidebar ---- */
-.side-link.cur, .s-row.cur .s-btn { background: var(--bg-active); box-shadow: none; }
-.side-search input { background: transparent; }
-.side-h { color: var(--fg-3); }
-.side-foot { border-top-color: transparent; }
-.foot-status { color: var(--fg-3); }
-
-/* ---- Home: the question in plain ink; the project name keeps the accent ---- */
-.home-title { background: none; -webkit-text-fill-color: currentColor; }
-
 /* ---- panels, menus and dialogs: flat surfaces over a dim, unblurred workspace ---- */
 .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .modal { box-shadow: 0 0 0 1px var(--line-2), var(--shadow-pop); }
@@ -73,5 +59,3 @@ details.think > summary { color: var(--fg-3); }
 /* "Show earlier messages" is a quiet link, not a button. */
 .earlier { border-color: transparent; background: transparent; color: var(--fg-3); font-weight: 500; }
 .earlier:hover { background: var(--bg-hover); color: var(--fg); }
-/* The guide line beside the current conversation stays neutral; the row's own fill marks it. */
-.proj > .s-row.cur { border-left-color: var(--line-3); }

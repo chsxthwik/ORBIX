@@ -11,7 +11,7 @@
 :root[data-theme=graphite] {
   color-scheme: dark;
   --pa: #E6E6E6;
-  --chrome: #0B0B0B; --bg-side: #0B0B0B; --menubar: #0B0B0B;
+  --chrome: #0B0B0B; --bg-side: #0B0B0B;
   --bg: #121212; --bg-raise: #1A1A1A; --bg-raise-2: #222222; --bg-modal: #171717; --bg-inset: #0E0E0E; --bg-field: #181818;
   --bg-hover: rgba(255,255,255,.045); --bg-active: rgba(255,255,255,.085);
   --bubble: #242424; --bubble-line: transparent;
@@ -42,22 +42,6 @@
 :root[data-theme=graphite] .mb-it:hover, :root[data-theme=graphite] .mb-it.open { color: var(--fg); }
 :root[data-theme=graphite] .crumb { color: var(--fg-3); }
 :root[data-theme=graphite] .crumb.cur { color: var(--fg-2); font-weight: 400; }
-
-/* ================= sidebar ================= */
-:root[data-theme=graphite] .app .sidebar .side-new { font-weight: 450; background: var(--bg-raise); box-shadow: inset 0 0 0 1px var(--line); }
-:root[data-theme=graphite] .app .sidebar .side-new svg { color: var(--fg-2); }
-:root[data-theme=graphite] .sidebar .side-link { color: var(--fg-2); }
-:root[data-theme=graphite] .sidebar .side-link.cur { color: var(--fg); font-weight: 450; background: var(--bg-active); }
-/* The current row is a filled chip; the coloured rail goes. */
-:root[data-theme=graphite] .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .side-new.cur)::before { display: none; }
-:root[data-theme=graphite] .sidebar .s-row.cur > .s-btn { background: var(--bg-active); color: var(--fg); font-weight: 450; }
-:root[data-theme=graphite] .sidebar .s-btn { color: var(--fg-2); }
-:root[data-theme=graphite] .sidebar .proj-btn { font-weight: 400; color: var(--fg-2); }
-/* Section heads in sentence case. */
-:root[data-theme=graphite] .sidebar .side-h { font: 450 12.5px/1 var(--font); letter-spacing: 0; text-transform: none; color: var(--fg-3); }
-:root[data-theme=graphite] .sidebar .s-when { color: var(--fg-3); }
-/* What waits on you is amber (the Review count, "Needs you"); the agent at work is blue. */
-:root[data-theme=graphite] .sidebar .side-count { background: var(--warn-soft); color: var(--warn); }
 :root[data-theme=graphite] .dgrid { color: var(--live); }
 :root[data-theme=graphite] .run-st.you { color: var(--warn); }
 :root[data-theme=graphite] .run-pill.you { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
@@ -74,14 +58,6 @@
 :root[data-theme=graphite] .code-head { background: transparent; color: var(--fg-3); }
 :root[data-theme=graphite] .md code.pathref { color: var(--fg); text-decoration-color: var(--line-3); }
 :root[data-theme=graphite] .md blockquote { border-left-color: var(--line-3); }
-
-/* ================= message box ================= */
-:root[data-theme=graphite] .composer { border-color: var(--line-2); border-radius: 18px; background: var(--bg-field); box-shadow: 0 8px 28px -18px rgba(0,0,0,.9); }
-:root[data-theme=graphite] .composer:hover { border-color: var(--line-3); }
-:root[data-theme=graphite] .composer:focus-within { border-color: var(--line-3); }
-/* Working: a blue hairline, the only colour while the agent runs. */
-:root[data-theme=graphite] .composer.busy, :root[data-theme=graphite] .composer.busy:focus-within { border-color: color-mix(in srgb, var(--live) 34%, var(--line-2)); }
-:root[data-theme=graphite] .composer.shell { border-color: var(--line-3); }
 :root[data-theme=graphite] .c-mode { color: var(--fg-2); }
 :root[data-theme=graphite] .c-row .cbtn { color: var(--fg-3); }
 :root[data-theme=graphite] .c-row .cbtn:hover:not(:disabled), :root[data-theme=graphite] .c-row .cbtn.on { color: var(--fg); }

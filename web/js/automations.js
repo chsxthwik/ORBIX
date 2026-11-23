@@ -6,6 +6,7 @@ import { S, emit } from './store.js';
 import { btn, confirmDialog, toggle, modal } from './dialogs.js';
 import { parseSchedule } from './schedule.mjs';
 import { hubProjects } from './hub-projects.js';
+import { customizeTabs } from './customize-tabs.js';
 
 let items = null;
 let error = '';
@@ -194,10 +195,11 @@ export function drawAutomations(root) {
   replace(root,
     h('div', { class: 'hub' },
       h('header', { class: 'hub-head au-head' },
-        h('h1', null, 'Loops'),
+        h('h1', null, 'Customize'),
         form ? null : h('div', { class: 'au-head-acts' },
           h('button', { class: 'btn sm au-ai', type: 'button', onclick: () => createWithPrompt(root) }, icon('bolt', 13), 'Create with Prompt'),
           h('button', { class: 'btn sm au-new', type: 'button', 'aria-label': 'New loop', onclick: () => ((form = withProject()), drawAutomations(root)) }, icon('plus', 13), 'New'))),
+      customizeTabs('automations'),
       !form ? h('div', { class: 'au-acts', role: 'group', 'aria-label': 'Loop templates' },
         h('span', { class: 'muted small' }, 'Templates'),
         TEMPLATES.map((t) => btn(t.name, () => ((form = withProject(t)), drawAutomations(root)), 'sm'))) : null,

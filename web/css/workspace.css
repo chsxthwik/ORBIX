@@ -2,14 +2,6 @@
 
 :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .ibtn:focus-visible, .ptab:focus-visible { outline-offset:-2px; }
-@media(forced-colors:active) {
-  .sidebar .side-link.cur { border:1px solid Highlight; }
-}
-/* Sidebar finish: depth belongs to controls, motion to small details. */
-.sidebar .side-nav { padding-inline:4px; }
-.sidebar .side-link { position:relative; }
-.sidebar .side-search { margin:8px 12px 2px; }
-.sidebar .side-foot { margin:0 10px 6px; padding:10px 0 0; border-top:1px solid var(--line); }
 .ibtn { transition:background-color var(--t2) var(--ease), color var(--t2) var(--ease), transform var(--t2) var(--ease); }
 .session .send { transition:transform var(--t2) var(--ease), filter var(--t2) var(--ease), box-shadow var(--t3) var(--ease); }
 .session .send:hover:not(:disabled) { filter:brightness(1.06); }
@@ -17,8 +9,6 @@
 @media(prefers-reduced-motion:reduce) {
   .ibtn, .send { transition:none !important; transform:none !important; }
 }
-
-.side-h { margin-top: 18px; font-size: 12px; }
 .ptab svg { display: block; }
 
 /* Shared interface controls and harness panels. */
@@ -101,7 +91,6 @@
   .app:not(.overlay-panel) .main { min-width:min(560px, 50vw); }
 }
 
-
 /* Hairlines: stroke contrast carries hierarchy, not glow.
    It stays out of the way of a system that asks for more contrast, so the stronger hairlines in app.css still apply. */
 @media not all and (prefers-contrast: more) {
@@ -135,10 +124,6 @@
 .msg .md { overflow-wrap: anywhere; }
 .msg .md pre { overflow-x: auto; overscroll-behavior-inline: contain; }
 .msg .md .md-stream-preview { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
-.msg .md table { max-width: 100%; }
-.msg-acts { opacity: 0; transform: none; }
-.msg:last-child > .msg-acts { opacity: 1; }
-.msg:hover > .msg-acts, .msg-acts:focus-within { opacity: 1; }
 .msg-act { min-height: var(--control-small); }
 .run-row-detail { min-width: 0; }
 .errbox { overflow-wrap: anywhere; }
@@ -146,7 +131,6 @@
   transform: none; box-shadow: none;
 }
 @media (hover: none) {
-  .msg-acts { opacity: 1; }
   .msg-act, .ibtn { min-height: 40px; }
 }
 @media (max-width: 600px) {
@@ -155,7 +139,6 @@
 
 /* Shared appearance controls and response surfaces. */
 .session .msg.user { padding:0; border:0; background:transparent; }
-.session .msg-acts { margin-top:-2px; margin-bottom:-8px; }
 .session .md pre { border:1px solid var(--line-2); border-radius:12px; }
 .session .md blockquote { border-left:2px solid var(--accent-line); padding-left:16px; }
 :root[data-density=compact] { --row-height:30px; }
@@ -168,11 +151,9 @@
 .c-row .cbtn > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .c-row .send, .c-row > .ibtn { flex-shrink:0; }
 .session .bubble { min-width:0; overflow-wrap:anywhere; }
-.session .msg-acts { flex-wrap:wrap; }
 .session .md pre { max-width:100%; }
 @media(max-width:600px) {
   .session .bubble { max-width:100%; }
-  .session .msg-acts { gap:4px; }
 }
 
 /* Control sizing: square icon buttons, aligned labels, and non-shrinking marks. */
@@ -188,7 +169,6 @@
 .cbtn > .cbtn-chev { width:12px; height:12px; }
 /* One height for sidebar rows, one for filters and pins; small controls round a little less than full-size ones. */
 :root { --row-height:34px; --control-radius-sm:7px; }
-.side-link, .proj-btn, .s-btn, .foot-status { height:var(--row-height); min-height:var(--row-height); border-radius:var(--control-radius-sm); }
 .ibtn { border-radius:var(--control-radius); }
 .btn.sm, .ibtn.sm { border-radius:var(--control-radius-sm); }
 

@@ -42,8 +42,8 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
   // For Settings → About and bug reports.
   versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
   screenWidth,
-  setTitleBar: (bg, fg, cssHeight = 30) => {
-    bar = { bg: String(bg), fg: String(fg), css: Number(cssHeight) || 30 };
+  setTitleBar: (bg, fg, cssHeight = 40) => {
+    bar = { bg: String(bg), fg: String(fg), css: Number(cssHeight) || 40 };
     sendBar();
   },
   // Flash the taskbar button until the window is focused (Settings → Notifications).

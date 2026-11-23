@@ -24,7 +24,12 @@ let page;
 try {
   page = await startDesktop(exe, data, path.join(tmp, 'profile'), ROOT);
   await page.until(`document.querySelector('#sidebar .side-nav')`, 'sidebar');
-  const open = (name) => page.click(name, '#sidebar .side-nav');
+  // Plugins, Skills, Loops and Review are the tabs of one Customize page; Runs has its own sidebar row.
+  const open = async (name) => {
+    if (name === 'Runs') return page.click(name, '#sidebar .side-nav');
+    await page.click('Customize', '#sidebar .side-nav');
+    await page.click(name, '.cust-tabs');
+  };
 
   await open('Plugins');
   await page.until(`document.querySelector('.cz-item')`, 'visible Marketplace cards');
