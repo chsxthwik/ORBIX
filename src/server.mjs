@@ -1138,6 +1138,13 @@ export class AppServer {
       'POST /api/git/unstage': async ({ body }) => (await gitapi.unstage(this.backend, wsPath(body), body.paths), {}),
       'POST /api/git/discard': async ({ body }) => (await gitapi.discard(this.backend, wsPath(body), { tracked: body.tracked, untracked: body.untracked }), {}),
       'POST /api/git/commit': async ({ body }) => ({ commit: await gitapi.commit(this.backend, wsPath(body), body.message) }),
+      'GET /api/git/numstat': async ({ q }) => {
+        const ws = wsPath(q);
+        const st = await gitapi.status(this.backend, ws).catch(() => null);
+        return { stats: st?.repo ? await gitapi.numstat(this.backend, ws, st.files.filter((f) => f.untracked).map((f) => f.path)) : {} };
+      },
+      'GET /api/git/patch': async ({ q }) => ({ patch: await gitapi.patch(this.backend, wsPath(q)) }),
+      'POST /api/git/push': async ({ body }) => ({ push: await gitapi.push(this.backend, wsPath(body)) }),
       'POST /api/git/init': async ({ body }) => (await gitapi.init(this.backend, wsPath(body)), {}),
       'GET /api/project/info': async ({ q }) => ({ info: await projectapi.info(this.backend, wsPath(q), gitapi) }),
       'POST /api/project/open': async ({ body }) => (await projectapi.open(this.backend, wsPath(body), String(body.app || 'explorer')), {}),

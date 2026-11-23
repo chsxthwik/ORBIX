@@ -202,6 +202,67 @@ export async function discard(backend, ws, { tracked = [], untracked = [] } = {}
   if (u.length) await run(backend, ws, ['clean', '-f', '-q', '--', ...u]);
 }
 
+/** What the Changes panel shows beside each file: added and removed lines (untracked files count as all added). */
+export async function numstat(backend, ws, untracked = []) {
+  const hasHead = (await git(backend, ws, ['rev-parse', '--verify', '-q', 'HEAD'])).code === 0;
+  const r = await git(backend, ws, ['diff', ...(hasHead ? ['HEAD'] : ['--cached']), '--numstat', '-z', '--no-renames', '--no-ext-diff', '--no-textconv', '--ignore-submodules=dirty']);
+  const stats = {};
+  if (r.code === 0) for (const [file, c] of parseNumstat(r.stdout.toString('utf8'))) stats[file] = [c.add ?? 0, c.del ?? 0]; // a binary file counts 0 and 0
+  const root = path.resolve(backend.hostPath(ws));
+  for (const rel of (untracked || []).slice(0, 200)) {
+    try {
+      const full = path.resolve(root, String(rel));
+      if (!full.startsWith(root + path.sep)) continue;
+      const buf = await fs.promises.readFile(full);
+      stats[rel] = looksBinary(buf) ? [0, 0] : [buf.toString('utf8').split('\n').length - (buf.length && buf[buf.length - 1] === 10 ? 1 : 0), 0];
+    } catch {
+      // gone or unreadable: no count
+    }
+  }
+  return stats;
+}
+
+/** The working tree against HEAD as one patch, cut to `max` characters, for writing a commit message or a pull request. */
+export async function patch(backend, ws, max = 24000) {
+  const hasHead = (await git(backend, ws, ['rev-parse', '--verify', '-q', 'HEAD'])).code === 0;
+  const r = await git(backend, ws, ['diff', ...(hasHead ? ['HEAD'] : ['--cached']), '--no-ext-diff', '--no-textconv', '--no-color', '--ignore-submodules=dirty', '-U2'], { maxBytes: 2 * 1024 * 1024 });
+  const text = r.code === 0 ? r.stdout.toString('utf8') : '';
+  return { text: text.slice(0, max), truncated: text.length > max };
+}
+
+/**
+ * Where a remote's web pages live: "https://github.com/o/r.git" and "git@github.com:o/r.git" both give
+ * { host: 'github', web: 'https://github.com/o/r' }. Other hosts keep their web address with no pull request link.
+ */
+export function parseRemote(url) {
+  const raw = String(url || '').trim();
+  const m = /^(?:https?:\/\/(?:[^@/]+@)?|ssh:\/\/(?:[^@/]+@)?|git@)([^/:]+)[/:](?:\d+\/)?(.+?)(?:\.git)?\/?$/.exec(raw);
+  if (!m) return { host: '', web: '' };
+  const domain = m[1].toLowerCase();
+  const web = `https://${m[1]}/${m[2]}`;
+  return { host: domain === 'github.com' ? 'github' : domain === 'gitlab.com' || domain.startsWith('gitlab.') ? 'gitlab' : '', web };
+}
+
+/**
+ * Push the current branch, setting its upstream on the first push. Returns what a pull request needs: the branch, the
+ * base branch (the remote's default) and the remote's web address. A project with no remote gets a plain explanation.
+ */
+export async function push(backend, ws) {
+  const info = await repoInfo(backend, ws);
+  if (!info) throw bad('This folder is not a Git repository');
+  if (!info.branch) throw bad('Check out a branch first: a detached HEAD cannot be pushed');
+  const remotes = (await run(backend, ws, ['remote'])).split('\n').map((x) => x.trim()).filter(Boolean);
+  if (!remotes.length) throw bad('This project has no remote to push to. Add one first: git remote add origin <address>');
+  const up = await git(backend, ws, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+  const remote = up.code === 0 ? up.stdout.toString('utf8').trim().split('/')[0] : remotes.includes('origin') ? 'origin' : remotes[0];
+  const r = await git(backend, ws, ['push', ...(up.code === 0 ? [] : ['-u', remote, 'HEAD']), '--no-verify'], { timeout: 180000 });
+  if (r.code !== 0) throw gitFailure(r.stderr.toString('utf8').trim() || r.stdout.toString('utf8').trim(), 'git push');
+  const url = (await git(backend, ws, ['remote', 'get-url', remote])).stdout.toString('utf8').trim();
+  const head = await git(backend, ws, ['symbolic-ref', '-q', '--short', `refs/remotes/${remote}/HEAD`]);
+  const base = head.code === 0 ? head.stdout.toString('utf8').trim().replace(new RegExp(`^${remote}/`), '') : 'main';
+  return { branch: info.branch, remote, base: base === info.branch ? '' : base, ...parseRemote(url) };
+}
+
 /** Commit what is staged. Repository hooks are skipped: a project folder is not trusted to run programs. */
 export async function commit(backend, ws, message) {
   const msg = String(message ?? '').trim();
