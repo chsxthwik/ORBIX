@@ -40,6 +40,15 @@ try {
   }
   await page.until(`document.querySelector('#welcome textarea')`, 'Home');
   assert(await page.eval(`return !(await import('/js/api.js')).recentCalls.includes('/api/engine')`), 'boot gets provider status in the initial state response');
+  // Mica (Windows 11): with html.win-mica the top row and the sidebar let the desktop show through; without it they are solid.
+  assert(await page.eval(`
+    const alpha = (e) => { const m = /\\/\\s*([\\d.]+)\\)$/.exec(getComputedStyle(e).backgroundColor); return m ? +m[1] : 1; };
+    const side = document.querySelector('#sidebar'), top = document.querySelector('.chrome');
+    const solid = alpha(side) === 1 && alpha(top) === 1;
+    document.documentElement.classList.add('win-mica');
+    const glass = alpha(side) < 1 && alpha(top) < 1;
+    document.documentElement.classList.remove('win-mica');
+    return solid && glass;`), 'Mica: the sidebar and the top row are see-through with html.win-mica and solid without it');
   await page.eval(`const trigger = document.querySelector('.home-model-pick'); trigger.focus(); trigger.click();`);
   await page.until(`document.querySelector('.mp-rail .mp-pv') && document.querySelector('.mp-list')?.textContent.includes('orbix-fixture')`, 'the Home provider and model');
   assert(await page.eval(`return (await import('/js/api.js')).recentCalls.includes('/api/engine/models') && !(await import('/js/api.js')).recentCalls.includes('/api/proc/start')`), 'Home lists models directly and starts no temporary agent');

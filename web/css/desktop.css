@@ -24,7 +24,8 @@
    Transparency effects are off, in high contrast, under a scene theme, or in Settings → Appearance → Windows. */
 html.win-mica, html.win-mica body { background: transparent; }
 html.win-mica .chrome { background: color-mix(in srgb, var(--chrome) 45%, transparent); }
-html.win-mica .sidebar { background: color-mix(in srgb, var(--bg-side) 40%, transparent); }
+/* (a narrow window's sidebar slides over the page and stays solid: sidebar.css) */
+html.win-mica .app:not(.overlay-side) .sidebar { background: color-mix(in srgb, var(--bg-side) 40%, transparent); }
 html.win-mica.zen .app { background: var(--bg); }
 
 /* Windows high contrast: use the system colours and drop decoration that hides edges. */
