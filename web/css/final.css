@@ -1,0 +1,93 @@
+/* The "Final" look (docs/design/DESIGN.md, final-home.html, final-conversation.html). Loaded last; visual only.
+   Every colour is a theme token, so Graphite gets the mockup's exact values (its tokens are those values) while Dark,
+   Light and the palettes keep their own colours with the same sizes, radii and spacing. No id, class or behaviour
+   changes here: the user's text size (--fs), the reading column setting, focus mode, rail mode, high contrast,
+   reduced motion and Mica keep working as before.
+   The `html:root:root` prefix lets these rules win over the theme files without !important. */
+
+/* ================= tokens ================= */
+:root { --side-w: 268px; --col-max: 720px; --panel-w: 440px; --f-dur: 120ms; --f-dur-panel: 180ms; }
+
+/* ================= window and menu row ================= */
+html:root:root .mb-it:not(.mb-brand) { color: var(--fg-3); font-weight: 400; }
+html:root:root .mb-it:not(.mb-brand):is(:hover, .open) { color: var(--fg); }
+html:root:root :is(.tb-side, .tb-panel, .tb-max, .tb-nav, .tb-search) { width: 32px; height: 32px; min-height: 32px; border-radius: 8px; }
+html:root:root :is(.tb-side, .tb-panel, .tb-max).on { background: var(--bg-active); color: var(--fg); }
+
+/* ================= sidebar ================= */
+html:root:root .sidebar { font-size: 13px; }
+html:root:root .sidebar .side-new { height: 34px; border: 0; border-radius: 8px; background: var(--bg-raise); font-weight: 400; }
+html:root:root .sidebar .side-new:hover { background: var(--bg-raise-2); }
+html:root:root .sidebar :is(.side-link, .s-btn) { height: 30px; font-weight: 400; }
+html:root:root .sidebar :is(.side-new, .side-link) :is(svg, .sic) { width: 16px; height: 16px; }
+html:root:root .sidebar .side-h { font: 400 12.5px/1 var(--font); letter-spacing: 0; text-transform: none; color: var(--fg-3); }
+/* The current row is a filled chip; no coloured bar. */
+html:root:root .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .run-row.cur) { background: var(--bg-active); color: var(--fg); box-shadow: none; }
+html:root:root .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .side-new.cur)::before { display: none; }
+
+/* ================= the sheet ================= */
+html:root:root .main { border: 0; border-radius: 12px; margin: 0 8px 8px 0; }
+html:root:root .app.no-side .main { margin-left: 8px; }
+html.zen:root:root .main { margin: 0; border-radius: 0; }
+html:root:root .app:not(.no-panel):not(.overlay-panel) .panel { border: 0; border-left: 1px solid var(--line); border-radius: 0; }
+
+/* ================= transcript ================= */
+html:root:root .tin .md { font-size: calc(var(--fs) + 1px); line-height: 1.65; }
+/* Your message: a pill. */
+html:root:root .bubble { padding: 9px 16px; border: 0; border-radius: 20px; background: var(--bubble); font-size: calc(var(--fs) + 1px); line-height: 1.55; }
+/* Actions under a message: 28px icon buttons. */
+html:root:root .msg-act { min-width: 28px; height: 28px; border-radius: 8px; }
+/* Tables: no outer box, hairlines between rows, muted headers. */
+html:root:root .table-wrap :is(th, td) { border: 0; border-bottom: 1px solid var(--line); padding: 8px 12px 8px 0; }
+html:root:root .table-wrap th { color: var(--fg-3); font-weight: 400; }
+html:root:root .table-wrap tr:last-child > td { border-bottom: 0; }
+/* Tool activity, opened: an inset block of mono rows. */
+html:root:root details.work[open]:not(.live) > .work-b { padding: 6px 12px; border-radius: 8px; background: var(--bg-inset); }
+html:root:root .work-b .tool-head { min-height: 24px; font: 400 12px/20px var(--mono); }
+html:root:root .work-h { color: var(--fg-3); }
+/* Timeline: muted dots, the current one in the accent. */
+html:root:root .turn-mark::after { border-color: var(--line-3); }
+html:root:root .turn-mark.seen::after { border-color: var(--fg-3); }
+html:root:root .turn-mark[aria-current]::after { border-color: var(--accent); background: var(--accent); }
+
+/* ================= composer ================= */
+html:root:root .composer { max-width: 760px; margin-inline: auto; width: 100%; padding: 12px 10px 8px 16px; border: 1px solid var(--line-2); border-radius: 16px; background: var(--bg-field); transition: border-color var(--f-dur) var(--ease-out), outline-color var(--f-dur) var(--ease-out); }
+html:root:root .composer:focus-within { border-color: var(--accent); outline: 2px solid var(--accent-soft); outline-offset: 2px; box-shadow: none; }
+html:root:root .composer .attach { padding: 0 6px 8px 0; }
+html:root:root .composer .c-ta { min-height: calc(2 * 1.6em); padding: 0 6px 0 0; font-size: calc(var(--fs) + 1px); line-height: 1.6; }
+html:root:root .composer .c-row { gap: 2px; padding: 8px 0 0; margin-left: -8px; }
+html:root:root .c-row .cbtn { height: 28px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; box-shadow: none; }
+html:root:root .c-row .cbtn.c-perm.risky { box-shadow: none; }
+html:root:root .c-row > .c-add { width: 28px; height: 28px; min-height: 28px; }
+html:root:root .send:not(.stop) { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
+html:root:root .send:not(.stop):disabled { background: var(--bg-active); color: var(--fg-3); }
+html:root:root .send:not(.stop):not(:disabled):hover { background: var(--accent-solid); color: var(--on-accent); }
+
+/* ================= effort chooser (restyled only: the same slider, levels and animation) ================= */
+html:root:root .menu.rs-pop { width: 248px; padding: 6px 10px 10px !important; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg-modal); }
+html:root:root .rs-name { font-size: 15px; font-weight: 500; }
+html:root:root .rs-model { margin: 2px 0 10px; font-size: 12px; }
+
+/* ================= side panel: Changes ================= */
+html:root:root .ptabs .ptab { height: 28px; border-radius: 8px; font-size: 13px; }
+html:root:root .ptab-w.cur .ptab { background: var(--bg-active); color: var(--fg); }
+html:root:root .gfile { height: 28px; font: 400 12px/1 var(--mono); }
+html:root:root .gstat.add { color: var(--ok); } html:root:root .gstat.del { color: var(--err); }
+html:root:root .gdiff { font: 400 12px/20px var(--mono); }
+html:root:root .commit-box { position: sticky; bottom: 0; background: var(--bg); }
+html:root:root .commit-msg { min-height: 34px; border-radius: 9px; }
+
+/* ================= Home ================= */
+html:root:root :is(.home-mark, .empty-mark) .logo { width: 40px; height: 40px; color: var(--fg-3); }
+html:root:root :is(.home-title, .ce-name) { font: 400 28px/1.2 var(--font); letter-spacing: -.01em; }
+html:root:root :is(.home, .chat-empty) .ws-recipes > * { min-height: 34px; }
+
+/* ================= motion: the existing animations stay; these only add hover and panel timing ================= */
+@media (prefers-reduced-motion: reduce) {
+  html:root:root .composer { transition: none; }
+}
+html.no-motion:root:root .composer { transition: none; }
+@media (forced-colors: active) {
+  html:root:root .composer:focus-within { outline-color: Highlight; }
+  html:root:root .sidebar :is(.side-link.cur, .s-row.cur > .s-btn) { outline: 2px solid Highlight; outline-offset: -2px; }
+}
