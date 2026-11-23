@@ -163,7 +163,6 @@ const svgEl = (tag, attrs, ...kids) => {
 // dark, Obsidian on light); Plasma only while an agent works.
 const HALF_L = 'M0 50C0 22.39 22.39 0 50 0C50.12 0 50.23 0 50.35 0V18C50.23 18 50.12 18 50 18C32.33 18 18 32.33 18 50C18 67.67 32.33 82 50 82C50.12 82 50.23 82 50.35 82V100C50.23 100 50.12 100 50 100C22.39 100 0 77.61 0 50Z';
 const HALF_R = 'M49.65 100V82C49.77 82 49.88 82 50 82C67.67 82 82 67.67 82 50C82 32.33 67.67 18 50 18C49.88 18 49.77 18 49.65 18V0C49.77 0 49.88 0 50 0C77.61 0 100 22.39 100 50C100 77.61 77.61 100 50 100C49.88 100 49.77 100 49.65 100Z';
-const WORDMARK = 'M227.77 0H245.77V50.65C254.89 42.77 266.77 38 279.77 38C308.49 38 331.77 61.28 331.77 90C331.77 118.72 308.49 142 279.77 142C266.77 142 254.89 137.23 245.77 129.35V140H227.77ZM0 90C0 61.28 23.28 38 52 38C80.72 38 104 61.28 104 90C104 118.72 80.72 142 52 142C23.28 142 0 118.72 0 90ZM382.77 142V124C401.55 124 416.77 108.78 416.77 90C416.77 71.22 401.55 56 382.77 56V38C403.35 38 421.14 49.96 429.57 67.31C438 49.96 455.79 38 476.37 38V56C457.59 56 442.37 71.22 442.37 90C442.37 108.78 457.59 124 476.37 124V142C455.79 142 438 130.04 429.57 112.69C421.14 130.04 403.35 142 382.77 142ZM245.77 90C245.77 108.78 260.99 124 279.77 124C298.55 124 313.77 108.78 313.77 90C313.77 71.22 298.55 56 279.77 56C260.99 56 245.77 71.22 245.77 90ZM18 90C18 108.78 33.22 124 52 124C70.78 124 86 108.78 86 90C86 71.22 70.78 56 52 56C33.22 56 18 71.22 18 90ZM122 40H140V50.65C149.12 42.77 161 38 174 38C188.36 38 201.36 43.82 210.77 53.23L198.04 65.96C191.89 59.81 183.39 56 174 56C155.22 56 140 71.22 140 90V140H122ZM350.77 40H368.77V140H350.77Z';
 
 /**
  * The mark. `alive`: the halves swap O ↔ X on the brand's 2.8 s loop while an agent works (.agent-busy), and
@@ -175,14 +174,7 @@ export function logo(size = 20, { alive = false, loop = false } = {}) {
     svgEl('path', { class: 'lg-h lg-r', fill: 'currentColor', d: HALF_R }));
 }
 
-/** The wordmark: "orbix" whose x is the mark; the i's dot is Plasma. `height` in px. */
-export function wordmark(height = 13) {
-  return svgEl('svg', { class: 'wordmark', viewBox: '0 0 476.37 142', height, width: Math.round((height * 476.37) / 142), role: 'img', 'aria-label': 'ORBIX', focusable: 'false' },
-    svgEl('path', { fill: 'currentColor', d: WORDMARK }),
-    svgEl('path', { class: 'wm-dot', d: 'M350.77 0H368.77V18H350.77V0Z' }));
-}
-
-/** The mark in its tile: the app icon's shape, and the only way the mark sits beside the name. */
+/** The mark in its tile: the app icon's shape (About). */
 export function logoTile(size = 44) {
   return h('span', { class: 'logo-tile', style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' }, logo(size));
 }

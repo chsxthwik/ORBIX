@@ -142,7 +142,7 @@ function applyPrefs() {
   appEl.classList.toggle('overlay-panel', panel && narrowPanel.matches);
   // The toolbar's lead (mark, sidebar, back, forward, search) spans the sidebar's width while the sidebar shows.
   document.documentElement.classList.toggle('side-open', side && !narrowSide.matches && !rail);
-  if (rail !== sideRailWas) (sideRailWas = rail), drawSidebar(), menuEl && drawMenubar(menuEl);
+  if (rail !== sideRailWas) (sideRailWas = rail), drawSidebar();
 }
 let sideRailWas = false;
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyPrefs);

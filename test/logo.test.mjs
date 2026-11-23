@@ -1,5 +1,5 @@
-// The logo system: the app icon has every size Windows asks for, the mark never sits beside the wordmark (the
-// wordmark's x is the mark), and every provider has a mark or a deliberate fallback.
+// The logo system: the app icon has every size Windows asks for, the menu row's top left is the mark alone, and
+// every provider has a mark or a deliberate fallback.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,18 +21,13 @@ test('assets/icon.png is 512 px', () => {
   assert.deepEqual(pngSize(read('assets/icon.png')), [512, 512]);
 });
 
-test('the mark is never shown next to the wordmark', () => {
+test('the top left of the menu row is the mark alone: the app has no wordmark', () => {
   const dir = new URL('web/js/', root);
   for (const f of fs.readdirSync(dir).filter((n) => /\.m?js$/.test(n))) {
-    const lines = fs.readFileSync(new URL(f, dir), 'utf8').split('\n');
-    lines.forEach((l, i) => {
-      if (!/\bwordmark\(/.test(l) || !/\b(logo|logoTile)\(/.test(l)) return;
-      // only "one or the other" is allowed: narrow ? mark : wordmark
-      assert.match(l, /\?\s*logo\([^)]*\)\)?\s*:\s*wordmark\(/, `${f}:${i + 1} shows both`);
-    });
+    assert.doesNotMatch(fs.readFileSync(new URL(f, dir), 'utf8'), /\bwordmark\b/i, `${f} still draws a wordmark`);
   }
   const shell = read('web/js/shell.js').toString();
-  assert.match(shell, /narrowBrand\.matches.*\? logo\(/, 'the menu row picks one');
+  assert.match(shell, /name === 'ORBIX' \? \[logo\(\d+, \{ alive: true \}\)\]/, 'the menu row shows the mark');
 });
 
 test('every provider has a mark, or a deliberate neutral one', () => {

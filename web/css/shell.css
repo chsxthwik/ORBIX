@@ -677,17 +677,13 @@ details.work > .work-b > .msg > .md { margin: 4px 0; padding-left: 6px; }
 /* The mark in its tile (About, the app icon): the only way it sits beside the name. */
 .logo-tile { display: grid; place-items: center; flex: none; border-radius: 22.5%; background: linear-gradient(#222226, #0A0A0B); box-shadow: inset 0 1px 0 rgb(255 255 255 / .12), 0 0 0 1px rgb(255 255 255 / .06); }
 .logo-tile .logo { width: 58%; height: 58%; color: #F4F4F0; }
-/* The wordmark: its x is the mark; the i's dot is Plasma, and it pulses while an agent works. */
-.wordmark { display: block; flex: none; color: var(--mark); }
-.wordmark .wm-dot { fill: var(--plasma); }
-.agent-busy .wordmark .wm-dot { animation: wm-pulse 1.4s var(--ease) infinite; }
-@keyframes wm-pulse { 50% { opacity: .3; } }
-@media (prefers-reduced-motion: reduce) { .logo .lg-h, .wordmark .wm-dot { animation: none !important; } }
-html.sr .logo .lg-h, html.sr .wordmark .wm-dot, :root[data-motion=off] .logo .lg-h { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .logo .lg-h { animation: none !important; } }
+html.sr .logo .lg-h, :root[data-motion=off] .logo .lg-h { animation: none !important; }
 
-/* Menu row: the wordmark leads it, then the menus. */
-.menubar { padding-left: 8px; }
-.mb-it.mb-brand { display: inline-flex; align-items: center; height: 26px; margin-right: 6px; padding: 0 10px; }
+/* Menu row: the mark leads it (18px, its centre over the sidebar button's below), then the menus. */
+.menubar { padding-left: 9px; }
+.mb-it.mb-brand { display: inline-flex; align-items: center; justify-content: center; height: 26px; margin-right: 4px; padding: 0 8px; border-radius: 8px; }
+.mb-brand .logo { width: 18px; height: 18px; }
 .mb-it.mb-brand:hover, .mb-it.mb-brand.open { background: var(--bg-active); }
 .mb-it { height: 24px; line-height: 24px; }
 /* Toolbar: its buttons line up with the sidebar rows below them (same left edge, same 30px squares). */

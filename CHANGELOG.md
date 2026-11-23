@@ -51,7 +51,7 @@ The unified open-source ADE: every coding agent and every model in one environme
 - **Updates** in the top right corner: progress while downloading, then **Restart to update**.
 
 **Identity and feel**
-- **The `)(` mark:** an O whose halves swap along one orbit and become the X. It is the app icon, installer, tray, favicon and wordmark.
+- **The `)(` mark:** an O whose halves swap along one orbit and become the X. It is the app icon, installer, tray and favicon, and it alone leads the menu row at the top left.
 - **Plasma `#FF2E7E`** is the one accent, with a deeper Plasma for text on light themes. Contrast meets WCAG AA in dark and light.
 - **Home hero made of light:** about 1,300 particles spiral into the mark, swap into the X and respond to the pointer. Still under reduced motion.
 - **One motion rhythm** (140/220/320/460 ms on a soft ease-out) and one set of controls: 32px buttons and fields with 8px corners and a clear focus ring.
@@ -59,7 +59,7 @@ The unified open-source ADE: every coding agent and every model in one environme
 - **Graphite:** a quiet monochrome dark theme. Ink instead of Plasma for the accent, the mark and the current item; colour only for state (amber waits on you, blue marks the agent at work, red stops); your message as a pill and a softer message box.
 - **Editor palettes:** Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula and Gruvbox, from each project's published colours, for surfaces, text, status and code.
 - **Nebula scene:** slow clouds of colour and twinkling stars in deep space. It replaces Koi pond and Halftone dusk; those settings move to Catppuccin Latte and Nebula.
-- **Sidebar and brand:** the mark in a lit tile beside the wordmark; icons drawn for ORBIX (outline over a soft fill, the current page in the accent); a pill inside the current row; each project in its own colour; shortcuts on hover; a **This week** card with tokens per day, your messages and agent time that opens Analytics.
+- **Sidebar and brand:** the mark alone at the top left; icons drawn for ORBIX (outline over a soft fill, the current page in the accent); a pill inside the current row; each project in its own colour; shortcuts on hover; a **This week** card with tokens per day, your messages and agent time that opens Analytics.
 - **Provider tiles:** every provider and agent as an app icon on its brand colour, in Providers, Agents, Home and the model picker.
 - **Connect** (Ctrl+Shift+M, the Workspace menu, the command palette or + in the model picker): providers and agent CLIs in one dialog, each connected in place, with how it is connected (API key, sign-in, on this PC) beside its name.
 - **No silent hangs:** a provider that sends nothing for 5 minutes counts as a lost connection, so the request is retried (or the turn starts over once) instead of waiting forever.

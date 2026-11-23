@@ -276,7 +276,7 @@ try {
   assert(await page.eval(`return document.querySelectorAll('.tin > details.work.live').length === 1 && !!document.querySelector('.tin > details.work.live .tool') && !document.querySelector('.tin > .msg .tool')`), 'late tools stay inside the live activity row');
   await page.click('Allow once', '.approval');
   await page.until(`document.querySelector('.tin > details.work:not(.live) + .msg .md')?.textContent.includes('Final answer after the check.')`, 'the final answer below the finished activity');
-  assert(await page.eval(`return !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track, .session-inner > .tl') && getComputedStyle(document.querySelector('.mb-brand .wm-dot')).animationName === 'none'`), 'no loose calls, no dotted rail, no idle logo animation');
+  assert(await page.eval(`return !document.querySelector('.tin > .msg .tool') && !document.querySelector('.tl-track, .session-inner > .tl') && [...document.querySelectorAll('.mb-brand .lg-h')].length === 2 && [...document.querySelectorAll('.mb-brand .lg-h')].every((p) => getComputedStyle(p).animationName === 'none')`), 'no loose calls, no dotted rail, no idle logo animation');
   await page.fill('#session textarea', 'Keep this as the second message.');
   await page.key('Enter', { keyCode: 13, code: 'Enter' });
   await page.until(`document.querySelectorAll('.turn-map .turn-mark.you').length === 2 && document.querySelectorAll('.turn-map .turn-mark.agent').length >= 1 && document.querySelector('.turn-mark[aria-current]') && document.querySelector('.turn-mark.seen')`, 'the timeline has a dot per message and lights the ones on screen');

@@ -4,7 +4,7 @@
 // context is, the Context menu (MCP, skills, rules) and the side panel. Also here: back/forward history across
 // conversations and views, and the card that previews a conversation when you rest the pointer on it in the sidebar.
 // main.js owns the actions and passes them in through `H`.
-import { h, icon, iconBtn, wordmark, logo, baseName, fmtElapsed, timeAgo, projTile, fmtTokens } from './dom.js';
+import { h, icon, iconBtn, logo, baseName, fmtElapsed, timeAgo, projTile, fmtTokens } from './dom.js';
 import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 import { contextMenu } from './context.js';
@@ -127,16 +127,14 @@ function menus() {
   ];
 }
 
-// The brand: the wordmark (its x is the mark), or the mark alone over the rail and in a narrow window. Never both.
-const narrowBrand = matchMedia('(max-width: 760px)');
+// The brand at the top left of the menu row is the mark alone (it swaps O and X while an agent works).
 export function drawMenubar(el) {
-  if (!el._brandWatch) (el._brandWatch = true), narrowBrand.addEventListener('change', () => drawMenubar(el));
   const row = menus().map(([name]) => {
     const b = h('button', { class: 'mb-it', type: 'button', 'aria-haspopup': 'menu', onclick: (e) => {
       if (menuOpenFrom === b) return document.querySelector('.menu:not(.leaving)')?._close?.();
       openMenu(b, menus().find((m) => m[0] === name)[1]);
       e.stopPropagation();
-    } }, ...(name === 'ORBIX' ? [narrowBrand.matches || document.getElementById('app')?.classList.contains('side-rail') ? logo(16, { alive: true }) : wordmark(13)] : [name]));
+    } }, ...(name === 'ORBIX' ? [logo(18, { alive: true })] : [name]));
     if (name === 'ORBIX') (b.classList.add('mb-brand'), b.setAttribute('aria-label', 'ORBIX'));
     // With one menu open, moving along the row opens the next, as in any desktop menu bar.
     b.addEventListener('pointerenter', () => menuOpenFrom && menuOpenFrom !== b && openMenu(b, menus().find((m) => m[0] === name)[1]));

@@ -1,5 +1,5 @@
 /* The sidebar, its rail and the brand, drawn last of the layout layers (graphite.css still overrides for its theme).
-   - The brand: the wordmark alone in the menu row (its x is the mark); the mark alone where there is no room.
+   - The brand: the mark alone at the top left of the menu row.
    - One icon family (js/side-icons.js): a 1.75 outline, nothing filled or boxed; the current page's icon in the accent.
    - Shortcuts as one quiet hint, "Ctrl+K", in --fg-3, right-aligned, shown on hover and keyboard focus.
    - One status system: working = live dots in --working, needs you = --warn dot and "Needs you", unread = ink dot.
@@ -19,10 +19,6 @@
 :root[data-theme=rosepine] { --working: #9CCFD8; }
 :root[data-theme=latte] { --working: #1E66F5; }
 :root[data-theme=dawn] { --working: #286983; }
-
-/* ================= brand ================= */
-.mb-it.mb-brand { padding: 0 10px; border-radius: 8px; }
-.mb-brand .wordmark { color: var(--mark); }
 
 /* ================= rows: labels, icons, hints ================= */
 .sidebar .side-l { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

@@ -21,7 +21,7 @@
   --accent: #E6E6E6; --accent-solid: #E6E6E6; --on-accent: #0B0B0B;
   --accent-soft: rgba(255,255,255,.08); --accent-line: rgba(255,255,255,.32);
   --brand: #E6E6E6;
-  /* The mark, the wordmark dot and the home hero go monochrome too: light ink instead of Plasma. */
+  /* The mark and the home hero go monochrome too: light ink instead of Plasma. */
   --mark: #F4F4F0; --plasma: #E6E6E6;
   /* State colours: the only hues on screen. */
   --live: #8AB4F8; --live-line: rgba(138,180,248,.40);
