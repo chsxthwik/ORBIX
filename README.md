@@ -4,14 +4,14 @@
 
 ### The unified open-source ADE.
 
-Every coding agent. Every model. One environment that asks before it acts.
+Run every coding agent and every model in one workspace that asks before it acts.
 
 [![Release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=3DF28C&labelColor=070807)](https://github.com/chsxthwik/ORBIX/releases/latest)
 [![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=070807)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)
 [![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-3DF28C?style=flat-square&labelColor=070807)](#install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3DF28C?style=flat-square&labelColor=070807)](LICENSE)
 
-**[Download for Windows](https://github.com/chsxthwik/ORBIX/releases/latest)** · [Website](https://orbix-agent.vercel.app) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Security](SECURITY.md) · [Discord](https://discord.gg/TcZ2MGCQ)
+**[Download for Windows](https://github.com/chsxthwik/ORBIX/releases/latest)** &emsp; [Website](https://orbix-agent.vercel.app) &emsp; [Changelog](CHANGELOG.md) &emsp; [Architecture](docs/ARCHITECTURE.md) &emsp; [Security](SECURITY.md) &emsp; [Join COM-X](#community)
 
 </div>
 
@@ -72,24 +72,24 @@ It starts ORBIX as a service on `127.0.0.1:47821` and prints the address and tok
 <td width="50%"><img src="docs/img/showcase/review-queue.png" alt="The Review queue with an approval and a finished run"></td>
 </tr>
 <tr>
-<td align="center"><b>Runs</b> · planned, approved and done in a worktree</td>
-<td align="center"><b>Review</b> · every decision that waits for you</td>
+<td align="center"><b>Runs</b><br><sub>Planned, approved and done in its own worktree</sub></td>
+<td align="center"><b>Review</b><br><sub>Every decision that waits for you, in one queue</sub></td>
 </tr>
 <tr>
 <td><img src="docs/img/showcase/run-changes.png" alt="A run's Changes tab: the changed files with their line counts and the diff of one file"></td>
 <td><img src="docs/img/showcase/automations.png" alt="The Loops page: a weekday test report at 09:00 and a weekly dependency check that is turned off"></td>
 </tr>
 <tr>
-<td align="center"><b>Changes</b> · every line before it lands</td>
-<td align="center"><b>Loops</b> · prompts on a schedule</td>
+<td align="center"><b>Changes</b><br><sub>Read every line before it lands</sub></td>
+<td align="center"><b>Loops</b><br><sub>Prompts that run on a schedule</sub></td>
 </tr>
 <tr>
 <td><img src="docs/img/showcase/home.png" alt="Home: the ORBIX mark, a greeting, the message box and recent conversations"></td>
 <td><img src="docs/img/showcase/customizations.png" alt="The Plugins page: MCP servers by category, each with an add button"></td>
 </tr>
 <tr>
-<td align="center"><b>Home</b> · start from a project</td>
-<td align="center"><b>Plugins and skills</b> · MCP servers in one click</td>
+<td align="center"><b>Home</b><br><sub>Start from a project</sub></td>
+<td align="center"><b>Plugins and skills</b><br><sub>MCP servers in one click</sub></td>
 </tr>
 </table>
 
@@ -143,7 +143,9 @@ ORBIX finds the agent CLIs installed on your computer (**Settings → Agents**) 
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>J</kbd> | Sidebar / side panel |
 | <kbd>Ctrl</kbd>+<kbd>&#96;</kbd> | Terminal |
 | <kbd>Ctrl</kbd>+<kbd>,</kbd> | Settings |
-| <kbd>1</kbd> · <kbd>2</kbd> · <kbd>Esc</kbd> | Allow once · allow for the conversation · deny (<kbd>Esc</kbd> also stops the agent) |
+| <kbd>1</kbd> | Allow once |
+| <kbd>2</kbd> | Allow for the rest of the conversation |
+| <kbd>Esc</kbd> | Deny, or stop the agent |
 
 Change any of them in **Settings → Shortcuts**.
 
@@ -156,11 +158,13 @@ Change any of them in **Settings → Shortcuts**.
 | Command | Action |
 | --- | --- |
 | `/plan` | Read and plan only |
-| `/undo` · `/retry` | Undo the last reply's edits · answer again |
+| `/undo` | Undo the last reply's edits |
+| `/retry` | Answer the last message again |
 | `/compact` | Summarize older messages to free context |
 | `/model` | Show or switch the model |
 | `/init` | Write `AGENTS.md` for the project |
-| `/review` · `/commit` | Review uncommitted changes · commit with a written message |
+| `/review` | Review uncommitted changes |
+| `/commit` | Commit with a written message |
 | `/btw <question>` | Ask about the conversation while the agent keeps working |
 | `/goal <text>` | Keep working toward a goal on its own |
 
@@ -181,7 +185,7 @@ Approvals are a checkpoint, not a sandbox: agents run with your user's permissio
 flowchart LR
   subgraph PC["Your PC"]
     UI["Interface<br/>web/"] <-->|"Electron IPC"| S["Engine<br/>src/"]
-    S <--> A["Agents<br/>ORBIX · Claude Code · Codex · ACP"]
+    S <--> A["Agents<br/>ORBIX, Claude Code, Codex, ACP"]
     S <--> D[("Data folder<br/>conversations, settings, encrypted keys")]
     A -->|"after your approval"| T["Tools, MCP, hooks<br/>WSL or Windows"]
   end
@@ -208,7 +212,8 @@ npm run dist    # build the installer into dist/
 | `src/` | The engine: API, runs, agents, ORBIX Cloud, WSL and Windows backend |
 | `src/engine/` | The ORBIX agent: loop, model clients, tools, MCP, hooks, policy |
 | `web/` | The interface |
-| `test/` · `e2e/` | Unit tests · end-to-end tests |
+| `test/` | Unit tests |
+| `e2e/` | End-to-end tests |
 | `site/` | The website |
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request.
@@ -228,16 +233,22 @@ The captures are deterministic: the clock is frozen in the page and in ORBIX, `M
 
 ## Community
 
-Questions, ideas and show-and-tell are welcome.
+### COM-X community
 
-| | |
+The main place for everyone who uses ORBIX: ask questions, report bugs, request features, share what you built and hear about releases first.
+
+| Where | For |
 | --- | --- |
-| **Discord** | [discord.gg/TcZ2MGCQ](https://discord.gg/TcZ2MGCQ) |
-| **Telegram** | [t.me/rootmaxhackers](https://t.me/rootmaxhackers) |
-| **X** | [COM-X](https://x.com/comxhq) · [QUANTUM](https://x.com/chsxthwik) |
-| **Links** | [linktr.ee/sxthwik](https://linktr.ee/sxthwik) |
+| **[Discord](https://discord.gg/TcZ2MGCQ)** | Help, discussion and show-and-tell |
+| **[Telegram](https://t.me/rootmaxhackers)** | Release news and quick questions |
+| **[X](https://x.com/comxhq)** | Updates from COM-X |
+| **[GitHub issues](https://github.com/chsxthwik/ORBIX/issues)** | Bug reports and feature requests |
 
-Found a bug? [Open an issue](https://github.com/chsxthwik/ORBIX/issues). Found a vulnerability? Follow [SECURITY.md](SECURITY.md).
+Found a vulnerability? Follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
+
+### Founder
+
+**QUANTUM**, founder and CEO of COM-X: [X](https://x.com/chsxthwik) and [Linktree](https://linktr.ee/sxthwik).
 
 ## License
 
@@ -245,5 +256,5 @@ Found a bug? [Open an issue](https://github.com/chsxthwik/ORBIX/issues). Found a
 
 <div align="center">
 <br>
-<sub>Created by <b>QUANTUM</b> · Developed by <b>COM-X Innovations, Inc.</b></sub>
+<sub>Created by <b>QUANTUM</b>, founder and CEO of <b>COM-X Innovations, Inc.</b></sub>
 </div>

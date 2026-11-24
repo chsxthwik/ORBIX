@@ -4,7 +4,8 @@
 // a headless Chromium (Microsoft Edge, Chrome, Brave or Chromium, or the one named by ORBIX_BROWSER) renders a small
 // page per image, driven over the DevTools protocol.
 //
-//   node tools/showcase.mjs           write docs/img/showcase/<name>.png for every screen listed below
+//   node tools/showcase.mjs           write docs/img/showcase/<name>.png for every screen listed below, the README banner
+//                                     (docs/img/banner.png) and the website's social image (site/assets/img/og.png)
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -92,9 +93,57 @@ async function open(exe, dir) {
   return { send, close: () => { try { ws.close(); } catch {} proc.kill(); } };
 }
 
+
+// The wordmark, from the website (one source of truth).
+const WORDMARK = (fs.readFileSync(path.join(ROOT, 'site', 'index.html'), 'utf8').match(/<path class="b" d="([^"]+)"/) || [])[1] || '';
+const font = (f) => url(path.join(ROOT, 'site', 'assets', 'fonts', f));
+/** A brand card: the kicker, the wordmark, a line of text, the dot field on the right and a green rule at the bottom. */
+const card = ({ w, h, pad, kicker, mark, body }) => `<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face { font-family: M; src: url("${font('geist-mono-latin-wght-normal.woff2')}"); }
+html, body { margin: 0; width: ${w}px; height: ${h}px; overflow: hidden; background: #070807; }
+canvas { position: absolute; inset: 0; }
+.in { position: absolute; left: ${pad}px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; gap: ${Math.round(kicker * 1.35)}px; }
+.k { display: inline-flex; align-items: center; gap: 10px; width: max-content; padding: 6px 12px 6px 10px; border: 1px solid rgba(232, 240, 235, .16); border-radius: 6px; color: #A4ACA7; font: 400 ${kicker}px/1.2 M; }
+.k i { width: ${Math.round(kicker / 2)}px; height: ${Math.round(kicker / 2)}px; background: #3DF28C; }
+.k b { color: #E8ECE9; font-weight: 500; }
+svg { width: ${mark}px; height: auto; fill: #E8ECE9; }
+h1 { margin: 0; color: #E8ECE9; font: 500 ${Math.round(kicker * 2.8)}px/1.12 M; letter-spacing: -.045em; }
+h1 em { font-style: normal; color: #3DF28C; }
+p { margin: 0; color: #A4ACA7; font: 400 ${Math.round(kicker * 1.15)}px/1.45 M; }
+.rule { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #3DF28C; }
+</style></head><body><canvas id="c" width="${w}" height="${h}"></canvas><div class="in">
+<div class="k"><i></i><b>ORBIX 4</b> the unified open-source ADE</div>
+<svg viewBox="0 -1470 6580 1500"><path d="${WORDMARK}"/></svg>
+${body}</div><div class="rule"></div>
+<script>
+const x = document.getElementById('c').getContext('2d'), W = ${w}, H = ${h}, S = 11, t = 3.7;
+for (let j = 0; j * S < H; j++) for (let i = 0; i * S < W; i++) {
+  const X = i * S, Y = j * S, m = Math.min(1.1, Math.max(0, (X / W - .4) * 1.9));
+  if (m <= 0) continue;
+  const v = Math.sin(X * .011 + t * .55) + Math.sin(Y * .017 - t * .42) + Math.sin((X - Y) * .006 + t * .3) + Math.sin(Math.hypot(X - W * .78, Y - H * .45) * .018 - t * .9);
+  const n = (v / 4 + .5) * m;
+  if (n < .3) continue;
+  x.fillStyle = n > .74 && (i * 7 + j * 13) % 4 === 0 ? 'rgba(61,242,140,.9)' : 'rgba(232,240,235,' + (.08 + (n - .3) * .55) + ')';
+  x.fillRect(X, Y, 2, 2);
+}
+</script></body></html>`;
+const CARDS = [
+  { out: path.join(ROOT, 'site', 'assets', 'img', 'og.png'), w: 1200, h: 630, scale: 1, pad: 80, kicker: 18, mark: 220,
+    body: '<h1>One workspace for <em>every coding agent</em><br>and every model</h1><p>Claude Code, Codex, OpenCode and 17 model providers</p>' },
+  { out: path.join(ROOT, 'docs', 'img', 'banner.png'), w: 1280, h: 400, scale: 2, pad: 72, kicker: 15, mark: 260,
+    body: '<p>Run every coding agent and every model in one workspace that asks before it acts.</p>' },
+];
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-showcase-'));
 fs.mkdirSync(OUT, { recursive: true });
 const cdp = await open(browser(), path.join(tmp, 'profile'));
+const ready = async () => {
+  for (let i = 0; i < 50; i++) {
+    const r = await cdp.send('Runtime.evaluate', { expression: "document.readyState === 'complete' && document.fonts.status === 'loaded' && [...document.images].every((i) => i.complete)", returnByValue: true });
+    if (r?.result?.value) return;
+    await sleep(100);
+  }
+};
 try {
   await cdp.send('Page.enable');
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
@@ -104,15 +153,21 @@ try {
     const html = path.join(tmp, `${name}.html`);
     fs.writeFileSync(html, page(shot, label));
     await cdp.send('Page.navigate', { url: url(html) });
-    for (let i = 0; i < 50; i++) {
-      const r = await cdp.send('Runtime.evaluate', { expression: "document.readyState === 'complete' && document.fonts.status === 'loaded' && document.querySelector('img').complete", returnByValue: true });
-      if (r?.result?.value) break;
-      await sleep(100);
-    }
+    await ready();
     const png = await cdp.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: W, height: H, scale: 1 } });
     const out = path.join(OUT, `${name}.png`);
     fs.writeFileSync(out, Buffer.from(png.data, 'base64'));
     console.log(`  ${path.relative(ROOT, out)}`);
+  }
+  for (const c of CARDS) {
+    const html = path.join(tmp, `${path.basename(c.out, '.png')}-card.html`);
+    fs.writeFileSync(html, card(c));
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: c.w, height: c.h, deviceScaleFactor: c.scale, mobile: false });
+    await cdp.send('Page.navigate', { url: url(html) });
+    await ready();
+    const png = await cdp.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: c.w, height: c.h, scale: 1 } });
+    fs.writeFileSync(c.out, Buffer.from(png.data, 'base64'));
+    console.log(`  ${path.relative(ROOT, c.out)}`);
   }
 } finally {
   cdp.close();

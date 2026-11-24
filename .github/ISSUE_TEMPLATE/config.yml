@@ -3,6 +3,9 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/chsxthwik/ORBIX/security/advisories/new
     about: Please report security problems privately, not as a public issue.
-  - name: Questions and ideas
+  - name: COM-X community on Discord
     url: https://discord.gg/TcZ2MGCQ
-    about: Ask on the ORBIX Discord.
+    about: Questions, ideas and help from the COM-X community.
+  - name: COM-X community on Telegram
+    url: https://t.me/rootmaxhackers
+    about: Release news and quick questions.

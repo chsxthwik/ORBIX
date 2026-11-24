@@ -34,12 +34,15 @@ References, for the feel only (no layout, wording or asset is taken from them):
   blinking cursor, tab fade, menu open, FAQ height. With `prefers-reduced-motion` everything is still: one static
   field frame.
 - **No fake demos:** no scripted terminals, typed-out sessions or invented output. Every picture is a real screen of
-  the app (`node tools/shots.mjs --theme graphite`), framed by `tools/showcase.mjs` for the README.
-- **Content:** say what it does, with real names, shortcuts and numbers. Screens come from the real app.
+  the app (`node tools/shots.mjs --theme graphite`), framed by `tools/showcase.mjs` for the README, which also makes
+  the README banner and the social image.
+- **Content:** say what it does in plain sentences, with real names, shortcuts and numbers.
+- **Community links:** the COM-X community first (Discord, Telegram, X, GitHub issues), then the founder (QUANTUM,
+  founder and CEO: X and Linktree). Nothing else.
 
 ## Banned
 
-Pink, magenta or purple; gradient washes; glowing buttons; serif headlines; badge pills above the headline beyond the
+Pink, magenta or purple; slogans made of period fragments ("Every agent. Every model."); chains of "·" separators in copy (write a sentence, use commas, or use separate rows); gradient washes; glowing buttons; serif headlines; badge pills above the headline beyond the
 one kicker; orbit or blob decorations; icon-per-card bento; cursor spotlights; scroll progress bars; staggered
 fade-ins; "not X, but Y" lines; emoji; made-up numbers or logos.
 

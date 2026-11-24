@@ -1,7 +1,7 @@
 {
   "name": "orbix-agent",
   "version": "4.0.0",
-  "description": "ORBIX: the unified open-source agentic development environment. Every agent, every model, one workspace that asks before it acts.",
+  "description": "ORBIX: the unified open-source agentic development environment. Run every coding agent and every model in one workspace that asks before it acts.",
   "type": "module",
   "main": "electron/main.mjs",
   "license": "MIT",
