@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 process.env.GIT_CEILING_DIRECTORIES = os.tmpdir();
 process.env.GIT_AUTHOR_NAME = process.env.GIT_COMMITTER_NAME = 'tester';
@@ -80,7 +81,7 @@ describe('numstat, patch and push', { skip: !gitAvailable && 'git not installed'
     g(repo, 'add', '-A');
     g(repo, 'commit', '-q', '-m', 'first');
   });
-  after(() => fs.rmSync(root, { recursive: true, force: true }));
+  after(() => rmTmp(root));
 
   test('lines added and removed per file, with new files counted as all added', async () => {
     put('a.txt', 'one\nTWO\nthree\nfour\n');

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-up-'));
 process.env.ORBIX_NO_RG = '1'; // the JS search engine, so results do not depend on an installed ripgrep
@@ -17,7 +18,7 @@ const { createTools } = await import('../src/engine/tools.mjs');
 const { Backend } = await import('../src/backend.mjs');
 const { normalizeSchema, expandEnv } = await import('../src/engine/mcp.mjs');
 
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => rmTmp(TMP));
 const WIN = process.platform === 'win32';
 
 describe('edit and grep on CRLF files', () => {

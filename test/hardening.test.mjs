@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-hard-'));
 const DATA = path.join(TMP, 'data');
@@ -26,7 +27,7 @@ const gitapi = await import('../src/gitapi.mjs');
 const { runSlash, HELP } = await import('../src/engine/slash.mjs');
 const { readMentions } = await import('../src/engine/context.mjs');
 
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => rmTmp(TMP));
 
 describe('backend probing', () => {
   test('parseProbe reads the marked HOME and ignores login-shell banners', () => {

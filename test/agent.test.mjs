@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-agent-test-'));
 const DATA = path.join(TMP, 'data');
@@ -45,7 +46,7 @@ const { Backend } = await import('../src/backend.mjs');
 
 after(() => {
   globalThis.fetch = realFetch;
-  fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  rmTmp(TMP);
 });
 
 const put = (file, content) => {

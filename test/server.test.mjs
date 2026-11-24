@@ -8,6 +8,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-test-'));
 const DATA = path.join(TMP, 'data');
@@ -119,7 +120,7 @@ before(async () => {
 after(async () => {
   await h?.shutdown();
   await h2?.shutdown();
-  fs.rmSync(TMP, { recursive: true, force: true });
+  rmTmp(TMP);
 });
 
 describe('authentication', () => {

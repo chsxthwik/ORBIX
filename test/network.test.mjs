@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-net-'));
 process.env.ORBIX_DATA = path.join(TMP, 'data');
@@ -13,7 +14,7 @@ const { cleanSiteRules, siteVerdict } = await import('../src/engine/policy.mjs')
 const { EngineConfig } = await import('../src/engine/store.mjs');
 const { AgentProc } = await import('../src/engine/proc.mjs');
 const { webFetch } = await import('../src/engine/webfetch.mjs');
-test.after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+test.after(() => rmTmp(TMP));
 
 test('cleanSiteRules keeps sites, subdomain rules and paths, and drops junk', () => {
   assert.deepEqual(cleanSiteRules(['https://Docs.Python.org/3/', '*.github.com', 'example.com/docs/', 'bad site', '', 'a..b', '*', 'localhost:3000', 'docs.python.org/3']), ['docs.python.org/3', '*.github.com', 'example.com/docs', '*', 'localhost:3000']);

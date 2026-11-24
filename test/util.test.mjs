@@ -5,13 +5,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { clip, escapeHtml, makeTitle, mkdirp, readHead, readJson, writeJson } from '../src/util.mjs';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 let tmp;
 before(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-test-util-'));
 });
 after(() => {
-  fs.rmSync(tmp, { recursive: true, force: true });
+  rmTmp(tmp);
 });
 
 describe('makeTitle', () => {

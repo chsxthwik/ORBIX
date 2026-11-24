@@ -6,10 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { Ptys } from '../src/pty.mjs';
 import { Backend } from '../src/backend.mjs';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-pty-'));
-after(async () => { await wait(800); fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); });
+after(async () => { await wait(800); rmTmp(dir); });
 
 test('a terminal runs what you type and streams the output', async () => {
   let out = '';

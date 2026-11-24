@@ -5,12 +5,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-app-'));
 process.env.ORBIX_DATA = TMP;
 const { startOrbix, ping } = await import('../src/app.mjs');
 // Removed again on exit: a background catalog refresh can write into the folder after the tests end.
-const clean = () => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 3 });
+const clean = () => rmTmp(TMP);
 after(clean);
 process.on('exit', clean);
 

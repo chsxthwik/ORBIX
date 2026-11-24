@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import net from 'node:net';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-pkce-test-'));
 process.env.ORBIX_DATA = path.join(TMP, 'data');
@@ -40,7 +41,7 @@ after(() => {
   pkce.closeAll();
   globalThis.fetch = realFetch;
 });
-process.on('exit', () => fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 3 }));
+process.on('exit', () => rmTmp(TMP));
 
 // A JWT the way OpenAI shapes it; only the claims matter here (nothing verifies the signature).
 const jwt = (claims) => ['e30', Buffer.from(JSON.stringify(claims)).toString('base64url'), 'sig'].join('.');

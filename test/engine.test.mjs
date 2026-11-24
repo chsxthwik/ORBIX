@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-test-'));
 process.env.ORBIX_NO_RG = '1'; // the JS search engine everywhere, so results do not depend on an installed ripgrep
@@ -58,7 +59,7 @@ const context = await import('../src/engine/context.mjs');
 
 after(() => {
   globalThis.fetch = realFetch;
-  fs.rmSync(TMP, { recursive: true, force: true });
+  rmTmp(TMP);
 });
 
 const collect = async (it) => {

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Automations, nextRun, describeSchedule, cleanSchedule } from '../src/automations.mjs';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const at = (y, mo, d, h, mi) => new Date(y, mo - 1, d, h, mi).getTime();
 
@@ -77,7 +78,7 @@ test('loops: every N minutes and once', async () => {
 
 test('a pending start cannot launch twice and a failed start is recorded', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-auto-start-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => rmTmp(dir));
   let fail;
   const loops = new Automations({ dir, start: () => new Promise((_resolve, reject) => { fail = reject; }) });
   const a = loops.upsert({ prompt: 'List project tasks', project: 'C:\\shop', schedule: { every: 'day' } });

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 process.env.GIT_CEILING_DIRECTORIES = os.tmpdir();
 process.env.GIT_AUTHOR_NAME = process.env.GIT_COMMITTER_NAME = 'tester';
@@ -45,7 +46,7 @@ describe('session branches', { skip: !gitAvailable && 'git not installed' }, () 
     g(repo, 'add', '-A');
     g(repo, 'commit', '-qm', 'start');
   });
-  after(() => fs.rmSync(root, { recursive: true, force: true }));
+  after(() => rmTmp(root));
 
   test('slugs are short, safe and different', () => {
     const a = gitapi.worktreeSlug(new Date(2026, 10, 11, 14, 32));

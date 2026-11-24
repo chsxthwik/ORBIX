@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 // Stop git from discovering a repository above the scratch dir, and give commits an identity.
 process.env.GIT_CEILING_DIRECTORIES = os.tmpdir();
@@ -43,7 +44,7 @@ describe('git writes', { skip: !gitAvailable && 'git not installed' }, () => {
     g('init', '-q');
     g('symbolic-ref', 'HEAD', 'refs/heads/main');
   });
-  after(() => fs.rmSync(root, { recursive: true, force: true }));
+  after(() => rmTmp(root));
 
   test('stage, unstage (before the first commit) and commit', async () => {
     put('a.txt', 'one\n');
@@ -170,7 +171,7 @@ describe('programs named by a repository\'s own config never run', { skip: !gitA
     g('config', 'filter.evil.required', 'true');
     fs.writeFileSync(path.join(repo, '.git', 'info', 'attributes'), '* filter=evil\n');
   });
-  after(() => fs.rmSync(root, { recursive: true, force: true }));
+  after(() => rmTmp(root));
 
   test('status, diff, stage, unstage, discard and commit run no repo filter, hook or signing program', async () => {
     fs.writeFileSync(path.join(repo, 'a.txt'), 'one\ntwo\n');

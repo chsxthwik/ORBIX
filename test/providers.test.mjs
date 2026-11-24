@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-providers-test-'));
 process.env.ORBIX_DATA = tmp;
@@ -11,7 +12,7 @@ const { httpError } = await import('../src/engine/anthropic.mjs');
 const { modelRows } = await import('../src/engine/openai.mjs');
 const { clientFor } = await import('../src/engine/providers.mjs');
 const { EngineConfig } = await import('../src/engine/store.mjs');
-process.on('exit', () => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 3 })); // after any late background write
+process.on('exit', () => rmTmp(tmp)); // after any late background write
 
 const res = (status, body) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
 

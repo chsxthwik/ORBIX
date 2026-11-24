@@ -14,7 +14,11 @@ function body(chunks, { hang = false } = {}) {
   });
 }
 
-test('a silent stream ends with a retryable connection error', async () => {
+test('a silent stream ends with a retryable connection error', async (t) => {
+  // The reader's quiet timer is unref'd on purpose (it must never keep ORBIX alive), and a stream that never sends
+  // holds nothing else open, so keep the event loop alive until the timer fires.
+  const alive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(alive));
   const got = [];
   await assert.rejects(async () => {
     try {

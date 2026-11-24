@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-runs-'));
 const DATA = path.join(TMP, 'data');
@@ -43,7 +44,7 @@ const gitapi = await import('../src/gitapi.mjs');
 
 after(() => {
   globalThis.fetch = realFetch;
-  fs.rmSync(TMP, { recursive: true, force: true });
+  rmTmp(TMP);
 });
 
 const ev = (type, data) => `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;

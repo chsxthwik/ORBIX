@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-harness-'));
 process.env.ORBIX_NO_RG = '1';
@@ -15,7 +16,7 @@ fs.mkdirSync(process.env.ORBIX_DATA, { recursive: true });
 const { createTools } = await import('../src/engine/tools.mjs');
 const { runTasks } = await import('../src/engine/subagent.mjs');
 const { AgentProc } = await import('../src/engine/proc.mjs');
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => rmTmp(TMP));
 
 const ws = path.join(TMP, 'ws');
 const backend = { hostPath: (p) => p, spawnShell: (command, { cwd }) => spawn(command, { cwd, shell: true }) };

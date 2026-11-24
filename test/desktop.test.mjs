@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-desktop-'));
 process.env.ORBIX_DATA = path.join(TMP, 'data');
@@ -16,7 +17,7 @@ const eng = await startDesktopEngine();
 after(async () => {
   await loadCatalog(); // the engine's model catalog fetch writes into TMP; let it finish before TMP is removed
   await eng.stop();
-  fs.rmSync(TMP, { recursive: true, force: true });
+  rmTmp(TMP);
 });
 
 test('no port: the engine does not listen', () => {

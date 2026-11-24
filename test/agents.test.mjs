@@ -6,11 +6,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-agents-'));
 process.env.ORBIX_DATA = path.join(TMP, 'data');
 fs.mkdirSync(process.env.ORBIX_DATA, { recursive: true });
-after(() => fs.rmSync(TMP, { recursive: true, force: true }));
+after(() => rmTmp(TMP));
 
 const { fromClaude, fromCodex, fromAcp, resultText } = await import('../src/harness/tools.mjs');
 const { customAgents, cleanCustomAgent, isAgentId, AgentRegistry } = await import('../src/harness/registry.mjs');

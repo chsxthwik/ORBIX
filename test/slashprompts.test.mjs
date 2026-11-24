@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const { runSlash } = await import('../src/engine/slash.mjs');
 const { BUILTIN_COMMANDS } = await import('../src/engine/commands.mjs');
@@ -12,7 +13,7 @@ describe('prompt slash commands', () => {
   let dir;
   const agent = () => ({ workspace: 'x', backend: { hostPath: () => dir }, _out: () => {} });
   before(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-slash-')); });
-  after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  after(() => rmTmp(dir));
 
   test('are listed for autocomplete', () => {
     for (const n of ['init', 'review', 'commit']) assert.ok(BUILTIN_COMMANDS.some((c) => c.name === n && c.description), n);

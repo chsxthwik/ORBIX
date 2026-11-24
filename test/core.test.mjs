@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 // Nothing here should touch the project's data/ folder; point it at a scratch dir anyway.
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-test-core-'));
@@ -20,7 +21,7 @@ const { parseStatus } = await import('../src/gitapi.mjs');
 after(() => {
   if (prevCeiling === undefined) delete process.env.GIT_CEILING_DIRECTORIES;
   else process.env.GIT_CEILING_DIRECTORIES = prevCeiling;
-  fs.rmSync(SCRATCH, { recursive: true, force: true });
+  rmTmp(SCRATCH);
 });
 
 let dirSeq = 0;

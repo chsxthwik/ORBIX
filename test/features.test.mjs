@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-feat-test-'));
 const DATA = path.join(TMP, 'data');
@@ -43,7 +44,7 @@ const tools = await import('../src/engine/tools.mjs');
 
 after(() => {
   globalThis.fetch = realFetch;
-  fs.rmSync(TMP, { recursive: true, force: true });
+  rmTmp(TMP);
 });
 
 const put = (file, content) => {

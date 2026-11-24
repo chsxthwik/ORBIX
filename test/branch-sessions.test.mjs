@@ -7,6 +7,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-branch-'));
 process.env.ORBIX_DATA = path.join(TMP, 'data');
@@ -66,7 +67,7 @@ describe('branch sessions over HTTP', { skip: !gitAvailable && 'git not installe
   after(async () => {
     await srv?.shutdown();
     await new Promise((res) => setTimeout(res, 300)); // the exit handlers' git calls finish first
-    fs.rmSync(TMP, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    rmTmp(TMP);
   });
 
   test('a session started with branch works in its own worktree; the board data carries the branch', async () => {
