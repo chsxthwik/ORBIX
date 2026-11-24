@@ -95,21 +95,23 @@ async function open(exe, dir) {
 
 
 // The wordmark, from the website (one source of truth).
-const WORDMARK = (fs.readFileSync(path.join(ROOT, 'site', 'index.html'), 'utf8').match(/<path class="b" d="([^"]+)"/) || [])[1] || '';
+const WORDMARK = (fs.readFileSync(path.join(ROOT, 'site', 'index.html'), 'utf8').match(/<svg class="wm"[^>]*>\s*<path[^>]* d="([^"]+)"/) || [])[1];
+if (!WORDMARK) throw new Error('The ORBIX wordmark was not found in site/index.html.');
 const font = (f) => url(path.join(ROOT, 'site', 'assets', 'fonts', f));
 /** A brand card: the kicker, the wordmark, a line of text, the dot field on the right and a green rule at the bottom. */
 const card = ({ w, h, pad, kicker, mark, body }) => `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face { font-family: M; src: url("${font('geist-mono-latin-wght-normal.woff2')}"); }
+@font-face { font-family: S; src: url("${font('google-sans-flex-latin-wght-normal.woff2')}"); font-weight: 100 1000; }
 html, body { margin: 0; width: ${w}px; height: ${h}px; overflow: hidden; background: #070807; }
 canvas { position: absolute; inset: 0; }
 .in { position: absolute; left: ${pad}px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; gap: ${Math.round(kicker * 1.35)}px; }
-.k { display: inline-flex; align-items: center; gap: 10px; width: max-content; padding: 6px 12px 6px 10px; border: 1px solid rgba(232, 240, 235, .16); border-radius: 6px; color: #A4ACA7; font: 400 ${kicker}px/1.2 M; }
+.k { display: inline-flex; align-items: center; gap: 10px; width: max-content; padding: 6px 12px 6px 10px; border: 1px solid rgba(232, 240, 235, .16); border-radius: 6px; color: #A4ACA7; font: 400 ${kicker}px/1.2 S; }
 .k i { width: ${Math.round(kicker / 2)}px; height: ${Math.round(kicker / 2)}px; background: #3DF28C; }
 .k b { color: #E8ECE9; font-weight: 500; }
 svg { width: ${mark}px; height: auto; fill: #E8ECE9; }
-h1 { margin: 0; color: #E8ECE9; font: 500 ${Math.round(kicker * 2.8)}px/1.12 M; letter-spacing: -.045em; }
+h1 { margin: 0; color: #EDF1EE; font: 600 ${Math.round(kicker * 3.4)}px/1.02 S; letter-spacing: -.045em; }
 h1 em { font-style: normal; color: #3DF28C; }
-p { margin: 0; color: #A4ACA7; font: 400 ${Math.round(kicker * 1.15)}px/1.45 M; }
+p { margin: 0; color: #A9B1AC; font: 400 ${Math.round(kicker * 1.25)}px/1.45 S; }
 .rule { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #3DF28C; }
 </style></head><body><canvas id="c" width="${w}" height="${h}"></canvas><div class="in">
 <div class="k"><i></i><b>ORBIX 4</b> the unified open-source ADE</div>
@@ -129,9 +131,9 @@ for (let j = 0; j * S < H; j++) for (let i = 0; i * S < W; i++) {
 </script></body></html>`;
 const CARDS = [
   { out: path.join(ROOT, 'site', 'assets', 'img', 'og.png'), w: 1200, h: 630, scale: 1, pad: 80, kicker: 18, mark: 220,
-    body: '<h1>One workspace for <em>every coding agent</em><br>and every model</h1><p>Claude Code, Codex, OpenCode and 17 model providers</p>' },
+    body: '<h1>Run every coding agent<br>from <em>one window</em>.</h1><p>Claude Code, Codex, OpenCode and 17 model providers</p>' },
   { out: path.join(ROOT, 'docs', 'img', 'banner.png'), w: 1280, h: 400, scale: 2, pad: 72, kicker: 15, mark: 260,
-    body: '<p>Run every coding agent and every model in one workspace that asks before it acts.</p>' },
+    body: '<p>Run every coding agent from one window. Every agent asks before it acts.</p>' },
 ];
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-showcase-'));

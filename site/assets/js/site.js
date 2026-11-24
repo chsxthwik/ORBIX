@@ -1,5 +1,5 @@
 // ORBIX website. Small and optional: the page is complete without it. Header state, the narrow-screen menu, the
-// permission and screen tabs (WAI-ARIA, arrow keys, Home, End), the copy buttons, the current section in the header,
+// permission tabs (WAI-ARIA, arrow keys, Home, End), the copy buttons, the current section in the header,
 // the colour theme switch and the hero's dot field.
 (() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -60,20 +60,6 @@
       perm.classList.add('mode-' + t.dataset.mode);
       perm.querySelector('[role=tabpanel]')?.setAttribute('aria-labelledby', t.id);
     });
-  }
-
-  function gallery() {
-    const list = document.querySelector('.g-tabs');
-    if (!list) return;
-    tabs(list, (t) => {
-      for (const f of document.querySelectorAll('.g-view [role=tabpanel]')) f.classList.toggle('on', f.id === t.getAttribute('aria-controls'));
-    });
-    // Load every screen once the gallery is near, so switching tabs never shows an empty frame.
-    const imgs = [...document.querySelectorAll('.g-view img[loading=lazy]')];
-    const eager = () => { for (const i of imgs) i.loading = 'eager'; };
-    if (!('IntersectionObserver' in window)) return eager();
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { eager(); io.disconnect(); } }, { rootMargin: '800px 0px' });
-    io.observe(list);
   }
 
   function copy() {
@@ -189,8 +175,8 @@
           const y = j * STEP;
           for (let i = 0; i < cols; i++) {
             const x = i * STEP;
-            // Where the field lives: the right of the hero on wide screens, the top on narrow ones, all over when soft.
-            const m = soft ? 0.8 : narrow ? 1.05 - y / h * 1.15 : Math.min(1.1, Math.max(0, (x / w - 0.18) * 1.6)) * (0.55 + 0.45 * (1 - Math.abs(y / h - 0.42)));
+            // Around the centred headline: strongest at the sides and the top, clear behind the text, gone by the screenshot.
+            const m = soft ? 0.8 : (narrow ? 0.9 : Math.min(1.15, Math.abs(x / w - 0.5) * 2.6)) * Math.max(0, 1 - y / (h * 0.62));
             if (m <= 0.02) continue;
             const v = Math.sin(x * 0.011 + t * 0.55) + Math.sin(y * 0.017 - t * 0.42) + Math.sin((x - y) * 0.006 + t * 0.3) + Math.sin(Math.hypot(x - w * 0.72, y - h * 0.4) * 0.018 - t * 0.9);
             const n = (v / 4 + 0.5) * m;
@@ -226,7 +212,7 @@
     }
   }
 
-  function ready() { topBar(); menu(); permissions(); gallery(); copy(); current(); themeSwitch(); field(); }
+  function ready() { topBar(); menu(); permissions(); copy(); current(); themeSwitch(); field(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready);
   else ready();
 })();

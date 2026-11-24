@@ -1,10 +1,10 @@
 <div align="center">
 
-<img alt="ORBIX: the unified open-source ADE. Every coding agent and every model, in one workspace that asks before it acts." src="docs/img/banner.png" width="100%">
+<img alt="ORBIX: run every coding agent from one window. Every agent asks before it acts." src="docs/img/banner.png" width="100%">
 
 ### The unified open-source ADE.
 
-Run every coding agent and every model in one workspace that asks before it acts.
+Run every coding agent from one window. Every agent asks before it acts, and every edit can be undone.
 
 [![Release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=3DF28C&labelColor=070807)](https://github.com/chsxthwik/ORBIX/releases/latest)
 [![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=070807)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)

@@ -5,38 +5,41 @@ How every page of orbix-agent.vercel.app looks and why. Read this before changin
 
 ## Direction
 
-A terminal-grade page: near-black ground, hairline grids, monospace for everything a machine says, and one signal
-green for action and state. No pink or magenta anywhere: the site, the README banner, the social image and the
-screenshots (taken in the app's monochrome Graphite theme with `node tools/shots.mjs --theme graphite`).
+A calm, editorial product page: near-black ground, large confident sans-serif type, real screens of the app at the
+centre of every claim, and one signal green for action and state. No pink or magenta anywhere: the site, the README
+banner, the social image and the screenshots.
 
 References, for the feel only (no layout, wording or asset is taken from them):
 
 | Site | Taken for ORBIX |
 | --- | --- |
 | trae.ai | A living dot-matrix field behind the hero; one bright green |
-| opencode.ai | Monospace headings and labels; hairline grid cells; plain, factual copy |
-| ethiack.com | Console panels and logs as the visual language |
+| opencode.ai | Plain, factual copy next to real product surfaces |
+| linear.app | One claim per section, proven by the product itself |
 | linear.app, zed.dev | Quiet density, no illustration, fast pages |
 
 ## Rules
 
-- **Type:** Geist Mono for headings of the hero and install block, labels, numbers, code, tabs and buttons. Google Sans
-  Flex for reading (section titles, body, FAQ). Hero 38–76px, section title 28–44px, body 15–17px, labels 12–13px.
-  ORBIX is always written in capitals.
-- **Colour:** tokens only (`--bg`, `--surface`, `--raised`, `--fg`, `--fg-2`, `--fg-3`, `--line*`, `--accent*`).
-  Green (`#3DF28C` dark, `#087A3F` light) is for the primary action, the current state and success; amber for "asks
-  you"; red for deletions. Light and dark come from the same tokens; the footer switch sets `data-theme`.
-- **Shape:** one container, the hairline grid (`.cells`): 1px lines between cells, a 10px outer radius, a green corner
-  tick on hover. Buttons and chips 4–6px. No drop shadows on cards, no gradients except the hero's fade, no glows.
-- **Sections:** numbered `01`–`12` in mono with a hairline rule (`.idx`). Long lists sit beside a sticky side title
-  (`.sec-grid`).
-- **Motion:** the hero's dot field (canvas, at most 30 fps, paused off screen and in hidden tabs), the kicker's
-  blinking cursor, tab fade, menu open, FAQ height. With `prefers-reduced-motion` everything is still: one static
-  field frame.
-- **No fake demos:** no scripted terminals, typed-out sessions or invented output. Every picture is a real screen of
-  the app (`node tools/shots.mjs --theme graphite`), framed by `tools/showcase.mjs` for the README, which also makes
-  the README banner and the social image.
-- **Content:** say what it does in plain sentences, with real names, shortcuts and numbers.
+- **Story:** the page reads top to bottom as one argument. Hero (one sentence and the product), the agents it runs,
+  four stories (Conversations, Runs, Review, Loops) that each pair one claim with the real screen that proves it,
+  permissions you can try, models, the rest of the toolkit as a spec list, privacy, install, FAQ, community. Reference
+  material (every release, every setting) lives in the README and the changelog, not here.
+- **Type:** Google Sans Flex for everything people read: display 44–84px at weight 600 and -0.045em, section titles
+  32–48px, lead 18–20px, body 17px, small 15px, labels 13–14px. Geist Mono only for code, keys and commands. ORBIX is
+  always written in capitals.
+- **Space:** an 8px scale (`--s1`…`--s9`), sections `--sec` apart (80–144px), a 1200px column with 16–40px gutters.
+- **Colour:** tokens only (`--bg`, `--surface`, `--raised`, `--fg*`, `--line*`, `--accent*`). Green (`#3DF28C` dark,
+  `#087A3F` light) for the main action, the current state and success; amber for "asks you". Light and dark come from
+  the same tokens; the footer switch sets `data-theme`.
+- **Shape:** pill buttons and chips; 14px frames around screenshots with one soft shadow; hairlines instead of boxes
+  for lists (spec list, FAQ, ledger). No cards inside cards, no gradients except the dot field, no glows.
+- **Screens:** real screens of the app in the monochrome Graphite theme (`node tools/shots.mjs --theme graphite`),
+  cropped to the main area in the stories. The README uses the framed versions from `tools/showcase.mjs`, which also
+  makes the README banner and the social image.
+- **Motion:** the hero's dot field (canvas, at most 30 fps, paused off screen and in hidden tabs), menu open, FAQ
+  height, a 1px button press. With `prefers-reduced-motion` everything is still.
+- **No fake demos:** no scripted terminals, typed-out sessions or invented output.
+- **Content:** plain sentences with real names, shortcuts and numbers.
 - **Community links:** the COM-X community first (Discord, Telegram, X, GitHub issues), then the founder (QUANTUM,
   founder and CEO: X and Linktree). Nothing else.
 
