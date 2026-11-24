@@ -34,8 +34,8 @@ References, for the feel only (no layout, wording or asset is taken from them):
 - **Shape:** pill buttons and chips; 14px frames around screenshots with one soft shadow; hairlines instead of boxes
   for lists (spec list, FAQ, ledger). No cards inside cards, no gradients except the dot field, no glows.
 - **Screens:** real screens of the app in the monochrome Graphite theme (`node tools/shots.mjs --theme graphite`),
-  cropped to the main area in the stories. The README uses the framed versions from `tools/showcase.mjs`, which also
-  makes the README banner and the social image.
+  sharp 2x captures. `tools/showcase.mjs` cuts each story's picture from them (the reply, the diff, the queue, the
+  loop list), frames the README's screens, and makes the README banner and the social image.
 - **Motion:** the hero's dot field (canvas, at most 30 fps, paused off screen and in hidden tabs), menu open, FAQ
   height, a 1px button press. With `prefers-reduced-motion` everything is still.
 - **No fake demos:** no scripted terminals, typed-out sessions or invented output.

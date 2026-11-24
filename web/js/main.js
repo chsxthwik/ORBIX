@@ -551,7 +551,12 @@ const SIDE_NAV = [
   { view: 'customize', label: 'Customize', icon: 'customizations', hint: 'Plugins, skills, loops and review' },
 ];
 
+// A reply that just finished adds tokens: read the week again then, instead of waiting out the five minutes.
+let busyTabs = 0;
 function drawSidebar() {
+  const busy = [...S.tabs.values()].filter((t) => t.streaming).length;
+  if (busy < busyTabs) weekAt = 0;
+  busyTabs = busy;
   loadWeek();
   const sig = sidebarSig();
   if (sig === sideSig && sideEl.querySelector('.side-scroll')) return;

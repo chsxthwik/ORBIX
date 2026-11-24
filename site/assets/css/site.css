@@ -128,8 +128,6 @@ h3 { font: 600 19px/1.3 var(--sans); letter-spacing: -.015em; }
 /* A screen of the real app: a hairline frame, a soft shadow, the image. */
 .frame { position: relative; overflow: hidden; border: 1px solid var(--line-2); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shot-shadow); }
 .frame img { width: 100%; }
-.frame.crop { aspect-ratio: 5 / 4; }
-.frame.crop img { height: 100%; object-fit: cover; object-position: 100% 0; }
 
 /* ================= agents ================= */
 .agents { padding-block: var(--sec) 0; text-align: center; }
@@ -283,7 +281,6 @@ h3 { font: 600 19px/1.3 var(--sans); letter-spacing: -.015em; }
   .spec { grid-template-columns: minmax(0, 1fr); }
   .spec > div:nth-child(even) { padding-left: 0; border-left: 0; }
   .spec > div { padding-right: 0; }
-  .frame.crop { aspect-ratio: 5 / 4; }
   .perm-rows li { font-size: 14px; }
   .foot-base { flex-direction: column; align-items: flex-start; }
 }

@@ -5,7 +5,9 @@
 // page per image, driven over the DevTools protocol.
 //
 //   node tools/showcase.mjs           write docs/img/showcase/<name>.png for every screen listed below, the README banner
-//                                     (docs/img/banner.png) and the website's social image (site/assets/img/og.png)
+//                                     (docs/img/banner.png), the website's social image (site/assets/img/og.png) and the
+//                                     website's story pictures (site/assets/img/shots/story-<name>.webp: a 2x cut of the
+//                                     part of a screen each story is about, full size and half size)
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -136,6 +138,13 @@ const CARDS = [
     body: '<p>Run every coding agent from one window. Every agent asks before it acts.</p>' },
 ];
 
+// The website's stories: which part of each 2x screen (2400 x 1518, from shots.mjs) to show, in its pixels.
+const CROPS = [
+  { name: 'done', x: 560, y: 80, w: 1800, h: 1360 },
+  { name: 'run-changes', x: 555, y: 90, w: 1845, h: 1410 },
+  { name: 'review-queue', x: 570, y: 90, w: 1830, h: 1080 },
+  { name: 'automations', x: 585, y: 90, w: 1815, h: 900 },
+];
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-showcase-'));
 fs.mkdirSync(OUT, { recursive: true });
 const cdp = await open(browser(), path.join(tmp, 'profile'));
@@ -170,6 +179,23 @@ try {
     const png = await cdp.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: c.w, height: c.h, scale: 1 } });
     fs.writeFileSync(c.out, Buffer.from(png.data, 'base64'));
     console.log(`  ${path.relative(ROOT, c.out)}`);
+  }
+  for (const c of CROPS) {
+    const shot = path.join(SHOTS, `${c.name}.png`);
+    if (!fs.existsSync(shot)) { console.log(`  skipped story-${c.name}: no ${path.relative(ROOT, shot)}`); continue; }
+    const html = path.join(tmp, `crop-${c.name}.html`);
+    fs.writeFileSync(html, `<!doctype html><html><head><style>html,body{margin:0;background:#000}img{display:block}</style></head><body><img src="${url(shot)}"></body></html>`);
+    await cdp.send('Emulation.setDeviceMetricsOverride', { width: 2400, height: 1518, deviceScaleFactor: 1, mobile: false });
+    await cdp.send('Page.navigate', { url: url(html) });
+    await ready();
+    const size = await cdp.send('Runtime.evaluate', { expression: "document.images[0].naturalWidth + 'x' + document.images[0].naturalHeight", returnByValue: true });
+    if (size?.result?.value !== '2400x1518') throw new Error(`${c.name}.png is ${size?.result?.value}, not 2400x1518: run node tools/shots.mjs first`);
+    for (const [suffix, scale] of [['', 1], ['-900', 0.5]]) {
+      const img = await cdp.send('Page.captureScreenshot', { format: 'webp', quality: 86, clip: { x: c.x, y: c.y, width: c.w, height: c.h, scale } });
+      const out = path.join(ROOT, 'site', 'assets', 'img', 'shots', `story-${c.name}${suffix}.webp`);
+      fs.writeFileSync(out, Buffer.from(img.data, 'base64'));
+      console.log(`  ${path.relative(ROOT, out)} (${Math.round(c.w * scale)}x${Math.round(c.h * scale)})`);
+    }
   }
 } finally {
   cdp.close();

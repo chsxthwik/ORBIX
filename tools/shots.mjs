@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Screenshots for the README and the website, taken from a real ORBIX on sample data. No dependencies.
 //
-//   node tools/shots.mjs            regenerate docs/img/shots/*.png and site/assets/img/shots/*.webp (full, -1200 and -800)
+//   node tools/shots.mjs            regenerate docs/img/shots/*.png, and the website's hero (site/assets/img/shots/run*.webp);
+//                                   tools/showcase.mjs then cuts the website's story pictures from the PNGs
 //   node tools/shots.mjs --theme graphite   the same, in another theme (Dark by default)
 //   node tools/shots.mjs --keep     keep the temporary folder afterwards (it holds the server log)
 //   node tools/shots.mjs --visual   visual regression test (npm run visual): every screen in Dark, Light and Graphite at
@@ -188,7 +189,8 @@ function makeProject(dir) {
 
 // ============================================================================ scripted model
 
-const MODEL = 'orbix-demo';
+// The scripted model's name: the visual test keeps the name its baselines were approved with.
+const MODEL = VISUAL ? 'orbix-demo' : 'local-model';
 
 /** What the model says, step by step, for each scenario. A step: { text, tools: [[name, args]] }. */
 const SCENARIOS = [
@@ -556,18 +558,11 @@ async function scenes(page, project) {
   const toEnd = "const tr = document.querySelector('.session:not([hidden]) .transcript'); tr.scrollTop = tr.scrollHeight;";
   await panel(false);
   await page.eval(toEnd);
-  await page.capture('done', { dsf: 4 / 3, webp: true });
+  await page.capture('done', { dsf: 2 });
 
   await panel(true);
   await showPanelTab(page, 'Files');
 
-  // Settings on Providers.
-  await page.eval("(await import('/js/store.js')).emit('settings', 'engine')");
-  await page.until("document.querySelector('.settings .pv-list .pv-card')", 'the providers page');
-  await page.eval('document.activeElement?.blur()');
-  await page.capture('settings', { dsf: 4 / 3, webp: true });
-  await page.key('Escape', { code: 'Escape', keyCode: 27 });
-  await page.settle(300);
 
   // An edit waiting for approval: approvals switch to "ask first" for this one.
   await page.eval("const { api } = await import('/js/api.js'); await api.post('/api/engine/settings', { approvals: 'ask' }); await (await import('/js/store.js')).loadEngine();");
@@ -578,7 +573,7 @@ async function scenes(page, project) {
   await page.eval("(await import('/js/store.js')).emit('home')");
   await page.until("document.querySelector('.home .home-composer') && document.querySelector('.home .home-status')", 'Home');
   await page.eval("document.querySelector('.welcome')?.scrollTo({ top: 0 })");
-  await page.capture('home', { dsf: 4 / 3, webp: true });
+  await page.capture('home', { dsf: 4 / 3 });
 
   // A run: planned, approved, done in its own worktree, waiting for review.
   const runId = await page.eval(`const { api } = await import('/js/api.js'); const j = await api.post('/api/runs/start', { workspace: window.__shotProject, task: 'Limit failed sign-ins: lock an email for a minute after 5 wrong passwords.', mode: 'plan' }); return j.run.id;`);
@@ -588,13 +583,13 @@ async function scenes(page, project) {
   await page.until(`await ${runIs('review')}`, 'the finished run', 30000);
   await page.eval(`(await import('/js/runs.js')).openHub('run', ${JSON.stringify(runId)}); await new Promise((r) => setTimeout(r, 300));`);
   await page.until("document.querySelector('#runs .art-doc')?.innerText.includes('What changed')", 'the walkthrough');
-  await page.capture('run', { dsf: 4 / 3, webp: true });
+  await page.capture('run', { dsf: 2, webp: true, webpDsf: 4 / 3 });
   await page.eval("[...document.querySelectorAll('#runs .run-tab')].find((b) => b.textContent.startsWith('Changes')).click()");
   await page.until("document.querySelectorAll('#runs .chg-file').length >= 3 && document.querySelector('#runs .chg-diff')?.innerText.includes('allowed')", 'the run diff');
-  await page.capture('run-changes', { dsf: 4 / 3, webp: true });
+  await page.capture('run-changes', { dsf: 2 });
   await page.eval("(await import('/js/runs.js')).openHub('review'); await new Promise((r) => setTimeout(r, 300));");
   await page.until("document.querySelector('#runs .rq-item')", 'the Review queue');
-  await page.capture('review-queue', { dsf: 4 / 3, webp: true });
+  await page.capture('review-queue', { dsf: 2 });
 
   // Loops: two scheduled prompts, one of them off.
   await page.eval(`const { api } = await import('/js/api.js');
@@ -602,12 +597,12 @@ async function scenes(page, project) {
     await api.post('/api/automations', { name: 'Weekly dependency check', prompt: 'List outdated dependencies and the risk of updating each one. Do not change files.', project: window.__shotProject, schedule: { every: 'week', day: 1, hour: 8, minute: 30 }, enabled: false });
     (await import('/js/runs.js')).openHub('automations'); await new Promise((r) => setTimeout(r, 300));`);
   await page.until("document.querySelectorAll('#runs .au-item').length === 2", 'the automations');
-  await page.capture('automations', { dsf: 4 / 3, webp: true });
+  await page.capture('automations', { dsf: 2 });
 
   // Plugins: the marketplace of MCP servers.
   await page.eval("(await import('/js/runs.js')).openHub('customizations'); await new Promise((r) => setTimeout(r, 300));");
   await page.until("document.querySelector('#runs .cz-sec')", 'the marketplace');
-  await page.capture('customizations', { dsf: 4 / 3, webp: true });
+  await page.capture('customizations', { dsf: 4 / 3 });
 }
 
 // ============================================================================ main
