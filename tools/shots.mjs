@@ -2,6 +2,7 @@
 // Screenshots for the README and the website, taken from a real ORBIX on sample data. No dependencies.
 //
 //   node tools/shots.mjs            regenerate docs/img/shots/*.png and site/assets/img/shots/*.webp (full, -1200 and -800)
+//   node tools/shots.mjs --theme graphite   the same, in another theme (Dark by default)
 //   node tools/shots.mjs --keep     keep the temporary folder afterwards (it holds the server log)
 //   node tools/shots.mjs --visual   visual regression test (npm run visual): every screen in Dark, Light and Graphite at
 //                                   scale 1, compared pixel by pixel with the approved PNGs in test/visual/. Diff
@@ -38,6 +39,8 @@ const COMPARE = args.includes('--visual');
 const VISUAL = COMPARE || AUDIT; // the audit takes the same deterministic screens
 const APPROVE = COMPARE && args.includes('--approve');
 const ONLY = args.includes('--only') ? args[args.indexOf('--only') + 1] || '' : '';
+// The theme of the README and website screens (`--theme graphite`); the visual test always walks every theme.
+const THEME = args.includes('--theme') ? args[args.indexOf('--theme') + 1] || 'dark' : 'dark';
 const BASELINES = path.join(ROOT, 'test', 'visual');
 let PNG_DIR = path.join(ROOT, 'docs', 'img', 'shots');
 const WEBP_DIR = path.join(ROOT, 'site', 'assets', 'img', 'shots');
@@ -312,7 +315,7 @@ function startModelServer() {
 
 async function startOrbix(data, modelPort) {
   fs.mkdirSync(data, { recursive: true });
-  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ version: 1, backend: { kind: 'native', distro: '' }, backendChosen: true, ui: { theme: 'dark', rightPanel: true, rightTab: 'files', showThinking: true, autoScroll: true } }, null, 2));
+  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ version: 1, backend: { kind: 'native', distro: '' }, backendChosen: true, ui: { theme: THEME, rightPanel: true, rightTab: 'files', showThinking: true, autoScroll: true } }, null, 2));
   fs.writeFileSync(path.join(data, 'engine.json'), JSON.stringify({
     approvals: 'edits',
     trusted: ['node --test', 'npm test'],
@@ -540,7 +543,7 @@ async function scenes(page, project) {
   await sleep(500);
   await page.until("document.readyState === 'complete' && document.querySelector('.home .home-composer')", 'Home');
   await page.eval(`window.__shotProject = ${JSON.stringify(project)};`);
-  await setTheme(page, 'dark');
+  await setTheme(page, THEME);
 
   say('Conversations');
   await converse(page, 'explain');
@@ -555,13 +558,6 @@ async function scenes(page, project) {
   await page.eval(toEnd);
   await page.capture('done', { dsf: 4 / 3, webp: true });
 
-  // Themes: the same finished task in Light and in the ORBIX scene theme (Dark is the main shot above).
-  for (const theme of ['light', 'orbix']) {
-    await setTheme(page, theme);
-    await page.eval(toEnd);
-    await page.capture(`theme-${theme}`, { dsf: 1, webp: true });
-  }
-  await setTheme(page, 'dark');
   await panel(true);
   await showPanelTab(page, 'Files');
 

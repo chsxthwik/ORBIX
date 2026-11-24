@@ -1,19 +1,15 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/logo-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/img/logo-light.svg">
-  <img alt="ORBIX" src="docs/img/logo-light.svg" width="193" height="44">
-</picture>
+<img alt="ORBIX: the unified open-source ADE. Every coding agent and every model, in one workspace that asks before it acts." src="docs/img/banner.png" width="100%">
 
 ### The unified open-source ADE.
 
 Every coding agent. Every model. One environment that asks before it acts.
 
-[![Release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=FF2E7E&labelColor=151514)](https://github.com/chsxthwik/ORBIX/releases/latest)
-[![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=151514)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)
-[![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-FF2E7E?style=flat-square&labelColor=151514)](#install)
-[![License: MIT](https://img.shields.io/badge/license-MIT-FF2E7E?style=flat-square&labelColor=151514)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/chsxthwik/ORBIX?style=flat-square&label=release&color=3DF28C&labelColor=070807)](https://github.com/chsxthwik/ORBIX/releases/latest)
+[![Tests](https://img.shields.io/github/actions/workflow/status/chsxthwik/ORBIX/test.yml?branch=main&style=flat-square&label=tests&labelColor=070807)](https://github.com/chsxthwik/ORBIX/actions/workflows/test.yml)
+[![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-3DF28C?style=flat-square&labelColor=070807)](#install)
+[![License: MIT](https://img.shields.io/badge/license-MIT-3DF28C?style=flat-square&labelColor=070807)](LICENSE)
 
 **[Download for Windows](https://github.com/chsxthwik/ORBIX/releases/latest)** · [Website](https://orbix-agent.vercel.app) · [Changelog](CHANGELOG.md) · [Architecture](docs/ARCHITECTURE.md) · [Security](SECURITY.md) · [Discord](https://discord.gg/TcZ2MGCQ)
 
@@ -21,7 +17,7 @@ Every coding agent. Every model. One environment that asks before it acts.
 
 <br>
 
-<img src="docs/img/shots/done.png" alt="ORBIX: the sidebar of projects and conversations, a finished reply with its steps folded into one line, and the changed file with Review and Undo all.">
+<img src="docs/img/showcase/done.png" alt="ORBIX: the sidebar of projects and conversations, a finished reply with its steps folded into one line, and the changed file with Review and Undo all.">
 
 ## What is ORBIX
 
@@ -72,20 +68,28 @@ It starts ORBIX as a service on `127.0.0.1:47821` and prints the address and tok
 
 <table>
 <tr>
-<td width="50%"><img src="docs/img/shots/run.png" alt="A run waiting for review: its timeline, walkthrough, and Apply changes and Discard"></td>
-<td width="50%"><img src="docs/img/shots/review-queue.png" alt="The Review queue with an approval and a finished run"></td>
+<td width="50%"><img src="docs/img/showcase/run.png" alt="A run waiting for review: its timeline, walkthrough, and Apply changes and Discard"></td>
+<td width="50%"><img src="docs/img/showcase/review-queue.png" alt="The Review queue with an approval and a finished run"></td>
 </tr>
 <tr>
 <td align="center"><b>Runs</b> · planned, approved and done in a worktree</td>
 <td align="center"><b>Review</b> · every decision that waits for you</td>
 </tr>
 <tr>
-<td><img src="docs/img/shots/home.png" alt="Home: the ORBIX mark, a greeting, the message box and recent conversations"></td>
-<td><img src="docs/img/shots/theme-orbix.png" alt="The ORBIX scene theme behind a conversation"></td>
+<td><img src="docs/img/showcase/run-changes.png" alt="A run's Changes tab: the changed files with their line counts and the diff of one file"></td>
+<td><img src="docs/img/showcase/automations.png" alt="The Loops page: a weekday test report at 09:00 and a weekly dependency check that is turned off"></td>
+</tr>
+<tr>
+<td align="center"><b>Changes</b> · every line before it lands</td>
+<td align="center"><b>Loops</b> · prompts on a schedule</td>
+</tr>
+<tr>
+<td><img src="docs/img/showcase/home.png" alt="Home: the ORBIX mark, a greeting, the message box and recent conversations"></td>
+<td><img src="docs/img/showcase/customizations.png" alt="The Plugins page: MCP servers by category, each with an add button"></td>
 </tr>
 <tr>
 <td align="center"><b>Home</b> · start from a project</td>
-<td align="center"><b>Themes</b> · Dark, Light, Midnight, Frost, Graphite, eight editor palettes and four scenes</td>
+<td align="center"><b>Plugins and skills</b> · MCP servers in one click</td>
 </tr>
 </table>
 

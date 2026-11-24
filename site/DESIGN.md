@@ -3,49 +3,50 @@
 How every page of orbix-agent.vercel.app looks and why. Read this before changing the site. (Not deployed:
 `.vercelignore` keeps it out.)
 
-## References
+## Direction
 
-Ten developer-tool sites that look good, and the one thing each does that ORBIX borrows. These are notes, not copies:
-no layout, wording or asset is taken from them.
+A terminal-grade page: near-black ground, hairline grids, monospace for everything a machine says, and one signal
+green for action and state. No pink or magenta anywhere: the site, the README banner, the social image and the
+screenshots (taken in the app's monochrome Graphite theme with `node tools/shots.mjs --theme graphite`).
 
-| Site | What works | Taken for ORBIX |
-| --- | --- | --- |
-| linear.app | Dense, quiet type and one accent. The product screenshot is the hero, with no illustration. | Screenshot as the hero; one accent |
-| zed.dev | Plain statements and fast pages with almost no motion. Docs-like honesty. | No entrance animation; factual headings |
-| ghostty.org | A short page that says what the thing is, then how to get it. | Install cards near the top |
-| warp.dev | Real terminal output as the visual, in monospace. | Commands in Geist Mono with a copy button |
-| raycast.com | Keyboard shortcuts shown as keys, everywhere. | `<kbd>` keys in cards and steps |
-| tailscale.com | Security explained in plain words, what goes where. | "Stays here / leaves your PC" |
-| vercel.com | Hairline borders and grids instead of shadows. | Flat cards, 1px lines, no glows |
-| supabase.com | Real code and real product names; no stock imagery. | Provider list and agent commands as data |
-| cline.bot | Product cards per surface, each with its own install path. | Windows / Cloud / Source cards |
-| stripe.com/docs | A clear type scale and generous measure for reading. | 64ch measure; one type scale |
+References, for the feel only (no layout, wording or asset is taken from them):
+
+| Site | Taken for ORBIX |
+| --- | --- |
+| trae.ai | A living dot-matrix field behind the hero; one bright green |
+| opencode.ai | Monospace headings and labels; hairline grid cells; plain, factual copy |
+| ethiack.com | Console panels and logs as the visual language |
+| linear.app, zed.dev | Quiet density, no illustration, fast pages |
 
 ## Rules
 
-- **Type:** Google Sans Flex (UI and reading), Geist Mono (anything a terminal prints). Hero 38–72px, section
-  heading 28–40px, lead 16–18px, body 15–16px, labels 13px. Weights 400–600. ORBIX is always written in capitals.
-- **Colour:** tokens only (`--bg`, `--surface`, `--raised`, `--fg`, `--fg-2`, `--fg-3`, `--line*`, `--accent`).
-  Plasma `--accent` is for the primary action and state, nothing decorative. Light and dark from the same tokens;
-  the footer switch sets `data-theme`.
-- **Space:** a 4px grid. Section rhythm `--sec` (72–120px), gutters 16–40px, text measure 62–78ch.
-- **Surfaces:** flat. 1px hairlines, 8–16px corners, no drop shadows on cards, no gradients, no glows.
-- **Motion:** feedback only: tab fade, menu open, the FAQ's height. No scroll reveals, no entrance animation, no
-  parallax. Everything stops for `prefers-reduced-motion`.
-- **Content:** say what it does, with real names, shortcuts and numbers. Screens come from the real app
-  (`node tools/shots.mjs`).
+- **Type:** Geist Mono for headings of the hero and install block, labels, numbers, code, tabs and buttons. Google Sans
+  Flex for reading (section titles, body, FAQ). Hero 38–76px, section title 28–44px, body 15–17px, labels 12–13px.
+  ORBIX is always written in capitals.
+- **Colour:** tokens only (`--bg`, `--surface`, `--raised`, `--fg`, `--fg-2`, `--fg-3`, `--line*`, `--accent*`).
+  Green (`#3DF28C` dark, `#087A3F` light) is for the primary action, the current state and success; amber for "asks
+  you"; red for deletions. Light and dark come from the same tokens; the footer switch sets `data-theme`.
+- **Shape:** one container, the hairline grid (`.cells`): 1px lines between cells, a 10px outer radius, a green corner
+  tick on hover. Buttons and chips 4–6px. No drop shadows on cards, no gradients except the hero's fade, no glows.
+- **Sections:** numbered `01`–`12` in mono with a hairline rule (`.idx`). Long lists sit beside a sticky side title
+  (`.sec-grid`).
+- **Motion:** the hero's dot field (canvas, at most 30 fps, paused off screen and in hidden tabs), the kicker's
+  blinking cursor, tab fade, menu open, FAQ height. With `prefers-reduced-motion` everything is still: one static
+  field frame.
+- **No fake demos:** no scripted terminals, typed-out sessions or invented output. Every picture is a real screen of
+  the app (`node tools/shots.mjs --theme graphite`), framed by `tools/showcase.mjs` for the README.
+- **Content:** say what it does, with real names, shortcuts and numbers. Screens come from the real app.
 
-## Banned (the AI look)
+## Banned
 
-Inter, purple or pink gradient washes, glowing or shining buttons, serif headlines with one italic word, four stat
-cards in a row, badge pills above the headline, orbit or blob decorations, icon-per-card bento grids, cursor
-spotlights, scroll progress bars, staggered fade-ins, giant faded wordmarks, three-fragment slogans ("X. Y. Z."),
-"not X, but Y" lines, emoji, made-up numbers or logos. If a section looks like every other AI site, redo it.
+Pink, magenta or purple; gradient washes; glowing buttons; serif headlines; badge pills above the headline beyond the
+one kicker; orbit or blob decorations; icon-per-card bento; cursor spotlights; scroll progress bars; staggered
+fade-ins; "not X, but Y" lines; emoji; made-up numbers or logos.
 
 ## Before shipping
 
-1. At 375px: no horizontal scroll (tab rows scroll inside themselves), 16px gutters, buttons at least 40px tall,
-   nothing clipped.
+1. At 375px: no horizontal scroll (tab rows and the agent strip scroll inside themselves), 16px gutters, buttons at
+   least 40px tall, nothing clipped.
 2. Hover and keyboard focus visible on every link and button; tabs work with the arrow keys.
 3. Light and dark both readable (WCAG AA).
 4. No inline styles or scripts (the CSP allows only `/assets`), no third-party requests, no personal data.
