@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
       return () => ipcRenderer.removeListener('orbix:event', f);
     },
   },
+  // Windows' folder dialog for Open project folder: the chosen path, or '' when cancelled.
+  pickFolder: (start) => ipcRenderer.invoke('orbix:pick-folder', typeof start === 'string' ? start : ''),
   // For Settings → About and bug reports.
   versions: { electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
   screenWidth,

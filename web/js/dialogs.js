@@ -202,6 +202,15 @@ export function popMenu(anchor, items, { align = 'start', minWidth = 200 } = {})
 }
 
 export function folderPicker(start = '') {
+  // In the desktop app on this PC: Windows' own folder dialog. The list below is for a browser or a machine.
+  if (window.orbixDesktop?.pickFolder) {
+    return window.orbixDesktop.pickFolder(start).then((p) => (p === null ? listPicker(start) : p || null), () => listPicker(start));
+  }
+  return listPicker(start);
+}
+
+/** The folder list inside ORBIX: in a browser, and on a machine's page (whose folders are on that machine). */
+function listPicker(start = '') {
   return new Promise((resolve) => {
     let cur = start;
     const pathIn = h('input', { type: 'text', class: 'grow mono', placeholder: 'Type a path and press Enter', 'aria-label': 'Folder path', spellcheck: 'false' });

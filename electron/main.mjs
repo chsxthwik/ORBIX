@@ -2,7 +2,7 @@
 // runs in this process; the window loads the interface from orbix://app/ (files read from the app, never over the
 // network) and talks to the engine over Electron IPC. Nothing listens on a port. ORBIX Cloud (src/headless.mjs) is a
 // separate program that serves the same engine over HTTPS-fronted HTTP on a machine you own.
-import { app, BrowserWindow, Menu, nativeTheme, shell, ipcMain, screen, Tray, powerSaveBlocker, protocol } from 'electron';
+import { app, BrowserWindow, Menu, nativeTheme, shell, ipcMain, screen, Tray, powerSaveBlocker, protocol, dialog } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startUpdates, installOnQuit } from './updater.mjs';
@@ -255,6 +255,12 @@ app.whenReady().then(async () => {
     const f = u.host === 'app' ? engine.staticFile(u.pathname) : { status: 404 };
     if (f.status !== 200) return new Response('Not found', { status: f.status, headers: { 'content-type': 'text/plain' } });
     return new Response(f.body, { status: 200, headers: { 'content-type': f.type, 'cache-control': 'no-cache', 'content-security-policy': DESKTOP_CSP, 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' } });
+  });
+  // Open project folder: Windows' own folder dialog. Resolves the chosen folder, or '' when cancelled.
+  ipcMain.handle('orbix:pick-folder', async (e, start) => {
+    if (!fromApp(e) || !win) return null; // a machine's page: it uses its own folder list
+    const r = await dialog.showOpenDialog(win, { title: 'Choose a project folder', buttonLabel: 'Use this folder', defaultPath: typeof start === 'string' && start ? start : app.getPath('home'), properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'] });
+    return r.canceled ? '' : r.filePaths[0] || '';
   });
   ipcMain.handle('orbix:api', (e, req) => {
     if (!fromApp(e)) return { ok: false, error: 'Not allowed', status: 403 };
