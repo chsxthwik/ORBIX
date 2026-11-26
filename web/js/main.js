@@ -25,6 +25,7 @@ import { H as shell, drawMenubar, drawToolbar, tickToolbar, navRecord, navGo, bi
 import { folderPicker, palette, syncExtDialogs, confirmDialog, promptDialog, popMenu, popover, isApproval } from './dialogs.js';
 import { onBoard, boardState } from './review.js';
 import { openSettings as settingsDialog } from './settings.js';
+import { me as myProfile, initials } from './profile.js';
 import { toggleZen, toggleWide, zenOn } from './workbench.js';
 import { initInterface } from './interface.js';
 import { initBackdrop, SCENES } from './backdrop.js';
@@ -34,6 +35,7 @@ import { HUB_LINKS, isCustomize, lastCustomize } from './hub-nav.js';
 import { initRuns, openHub, closeHub, isHub, hubView, draw as drawHub, onRunEvent, reviewCount, workingCount } from './runs.js';
 
 let week = null, weekAt = 0; // the sidebar's This week card (see loadWeek)
+let busyTabs = 0; // conversations replying at the last redraw: when one finishes, the week's tokens are read again
 
 // No layout animation until the saved layout has been applied (boot() removes this).
 document.documentElement.classList.add('still');
@@ -61,14 +63,15 @@ const narrowPanel = matchMedia('(max-width: 1100px)');
 const overlay = { side: false, panel: false };
 
 // Every theme belongs to a mode (dark or light); the mode drives color-scheme and anything that only needs to know which.
-const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light', graphite: 'dark', tokyo: 'dark', mocha: 'dark', rosepine: 'dark', nord: 'dark', dracula: 'dark', gruvbox: 'dark', latte: 'light', dawn: 'light', orbix: 'dark', sunset: 'dark', nebula: 'dark', aurora: 'dark' };
+const THEMES = { dark: 'dark', light: 'light', midnight: 'dark', frost: 'light', graphite: 'dark', tokyo: 'dark', mocha: 'dark', rosepine: 'dark', nord: 'dark', dracula: 'dark', gruvbox: 'dark', latte: 'light', dawn: 'light', orbix: 'dark', sunset: 'dark', nebula: 'dark', aurora: 'dark', dither: 'dark' };
 /** Retired themes and what they became. */
 const THEME_ALIAS = { koi: 'latte', dusk: 'nebula' };
 // The sidebar can be dragged between these widths (double-click the edge to reset).
 const SIDE_MIN = 220, SIDE_MAX = 360, SIDE_W = 260, SIDE_RAIL = 56;
 
 /** Settings → Appearance: font, contrast, your own colours, and screen reader mode. */
-const FONTS = { google: '', segoe: "'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif", system: 'system-ui, sans-serif' };
+// Segoe UI Variable (Windows 11's own font) is the default: crisp at small sizes, like a native app.
+const FONTS = { google: "'Google Sans Flex', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif", segoe: '', system: 'system-ui, sans-serif' };
 const LOOK_VARS = ['--bg', '--chrome', '--bg-side', '--bg-raise', '--bg-raise-2', '--bg-inset', '--bg-field', '--bg-modal', '--bubble', '--fg', '--fg-2', '--fg-3', '--accent', '--accent-solid', '--accent-soft', '--accent-line', '--on-accent'];
 const hexOk = (v) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
 /** Black or white text on a colour, whichever reads better. */
@@ -500,7 +503,7 @@ function sidebarSig() {
     (S.engine?.providers || []).filter((p) => p.configured).map((p) => p.name),
     S.update ? [S.update.state, S.update.version, S.update.percent] : null,
     week ? week.days.map((d) => dayTokens(d) + d.prompts * 7 + d.workMs) : null,
-    [...infoOf].map(([k, v]) => k + v.branch), S.ui.sideRail === true, navigator.onLine, S.ui.keys || null,
+    [...infoOf].map(([k, v]) => k + v.branch), S.ui.sideRail === true, navigator.onLine, S.ui.keys || null, S.ui.profileName || '',
   ]);
 }
 
@@ -536,13 +539,22 @@ function weekChart() {
     h('div', { class: 'wk-h' }, h('span', null, 'Last 7 days'), h('b', { class: 'num' }, `${total.toLocaleString()} tokens`)),
     h('ol', { class: 'wk-cols', 'aria-label': 'Tokens per day' }, cols),
     h('div', { class: 'wk-f num' }, `${msgs} message${msgs === 1 ? '' : 's'} · ${work ? `${weekTime(work)} agent time` : 'no agent time'}`),
-    h('button', { class: 'link wk-more', type: 'button', onclick: () => (document.querySelector('.pop-panel')?._close?.(), settingsDialog('usage')) }, 'Open Analytics'));
+    h('button', { class: 'link wk-more', type: 'button', onclick: () => (document.querySelector('.pop-panel')?._close?.(), settingsDialog('profile')) }, 'Open Profile'));
 }
+/** This week above the footer: seven tiny bars (today brightest) and the total. An empty week shows nothing. */
 function weekLine() {
   if (!week) return null;
   const total = week.days.reduce((n, d) => n + dayTokens(d), 0);
+  if (!total) return null;
+  const max = Math.max(1, ...week.days.map(dayTokens));
+  const bars = week.days.map((d, i) => {
+    const bar = h('i', { class: i === week.days.length - 1 ? 'today' : '' });
+    bar.style.height = `${dayTokens(d) ? Math.max(2, Math.round((dayTokens(d) / max) * 12)) : 1}px`;
+    return bar;
+  });
   return h('button', { class: 'side-week', type: 'button', 'aria-haspopup': 'dialog', title: 'Tokens over the last 7 days', onclick: (e) => popover(e.currentTarget, weekChart(), { cls: 'wk-pop', label: 'Tokens over the last 7 days' }) },
-    h('span', { class: 'num' }, total ? `${fmtTokens(total)} tokens this week` : 'No tokens this week'));
+    h('span', { class: 'wk-spark', 'aria-hidden': 'true' }, bars),
+    h('span', { class: 'num' }, `${fmtTokens(total)} tokens this week`));
 }
 
 // The sidebar's pages: Runs, and one Customize item for Plugins, Skills, Loops and Review (tabs on its page).
@@ -608,7 +620,8 @@ function drawSidebar() {
       open ? fresh.map((t) => h('div', { class: 's-row' + (t.id === S.active ? ' cur' : '') },
         h('button', { class: 's-btn', type: 'button', title: t.name, 'aria-current': t.id === S.active ? 'page' : null, onclick: () => setActive(t.id) }, stateDot(t), h('span', { class: 'ell grow' }, t.name), working(t) ? dotGrid('s-live') : h('span', { class: 's-when', title: 'Not saved to the list yet' }, 'new')))) : null,
       shown.map((s) => sessionRow(s)),
-      open && !term && !sess.length && !fresh.length ? h('div', { class: 's-none' }, g.sessions.length ? 'All pinned' : ['No conversations yet · ', h('button', { class: 'link s-start', type: 'button', onclick: () => newSession(g.path) }, 'Start one')]) : null,
+      open && !term && !sess.length && !fresh.length ? (g.sessions.length ? h('div', { class: 's-none' }, 'All pinned')
+        : h('div', { class: 's-row s-new-row' }, h('button', { class: 's-btn s-start', type: 'button', title: `New conversation in ${g.name}`, onclick: () => newSession(g.path) }, icon('plus', 12, 's-plus'), h('span', { class: 'ell grow' }, 'New conversation')))) : null,
       // The rest of a long project opens in place; it stays open until you fold it again.
       open && !term && sess.length > SHOWN ? h('button', { class: 's-more', type: 'button', 'aria-expanded': String(all), onclick: () => {
         all ? expanded.delete(g.key) : expanded.add(g.key);
@@ -657,8 +670,8 @@ function drawSidebar() {
     runningList() || '',
     weekLine() || '',
     h('div', { class: 'side-foot' },
-      h('button', { class: 'side-link foot-set', type: 'button', title: `Settings${firstKey(S.ui.keys, 'settings') ? ` (${firstKey(S.ui.keys, 'settings')})` : ''}`, onclick: () => settingsDialog() }, sideIcon('settings'), h('span', { class: 'side-l' }, 'Settings'), keyHint(firstKey(S.ui.keys, 'settings'))),
-      footStatus()),
+      footStatus(),
+      h('button', { class: 'side-link foot-set', type: 'button', title: `Settings${firstKey(S.ui.keys, 'settings') ? ` (${firstKey(S.ui.keys, 'settings')})` : ''}`, 'aria-label': 'Settings', onclick: () => settingsDialog() }, sideIcon('settings'))),
   );
   sideEl.querySelector('.side-scroll').scrollTop = scroll;
   setupRoving();
@@ -735,14 +748,23 @@ function syncTitle() {
 
 /** Sidebar footer: whether the agent can work, and with which provider. */
 /** The footer's model status: a chip that says what it means, and opens Settings → Providers. */
+/**
+ * You, at the bottom of the sidebar: your initials with a status dot (green when a model is ready, amber when one needs
+ * a sign-in or none is connected, red offline), your name and that status in words. A click opens your Profile, or
+ * Providers when the status needs fixing.
+ */
 function footStatus() {
   const all = (S.engine?.providers || []).filter((p) => p.configured);
   const ok = all.filter((p) => !p.signInError);
-  const chip = (state, text, title) => h('button', { class: `foot-status ${state}`, type: 'button', title, onclick: () => settingsDialog('engine') }, h('span', { class: `dot ${state}` }), h('span', { class: 'fs-t ell' }, text));
-  if (!navigator.onLine) return chip('err', 'Offline', 'This PC is offline. Local models still work.');
-  if (all.length && !ok.length) return chip('warn', 'Sign in again', `${all.map((p) => p.name).join(', ')}: the sign-in has ended. Sign in again in Settings → Providers.`);
-  if (ok.length && engineReady()) return chip('ok', `${ok.length} provider${ok.length === 1 ? '' : 's'} ready`, `Connected: ${ok.map((p) => p.name.replace(/ \(.*\)$/, '')).join(', ')}`);
-  return chip('warn', 'No model connected', 'Add an API key, a sign-in or a local model');
+  const [state, text, title] = !navigator.onLine ? ['err', 'Offline', 'This PC is offline. Local models still work.']
+    : all.length && !ok.length ? ['warn', 'Sign in again', `${all.map((p) => p.name).join(', ')}: the sign-in has ended. Sign in again in Settings → Providers.`]
+      : ok.length && engineReady() ? ['ok', `${ok.length} provider${ok.length === 1 ? '' : 's'} ready`, `Connected: ${ok.map((p) => p.name.replace(/ \(.*\)$/, '')).join(', ')}`]
+        : ['warn', 'No model connected', 'Add an API key, a sign-in or a local model'];
+  const { name } = myProfile();
+  const fix = state !== 'ok';
+  return h('button', { class: `foot-status me-btn ${state}`, type: 'button', title: fix ? title : `Your profile\n${title}`, onclick: () => settingsDialog(fix ? 'engine' : 'profile') },
+    h('span', { class: 'me-av', 'aria-hidden': 'true' }, initials(name), h('span', { class: `dot ${state}` })),
+    h('span', { class: 'me-t' }, h('span', { class: 'me-n ell' }, name), h('span', { class: 'me-s fs-t ell' }, text)));
 }
 addEventListener('online', () => drawSidebar());
 addEventListener('offline', () => drawSidebar());

@@ -1,6 +1,6 @@
-/* Home: one centred stack, no cards. Top to bottom: the ORBIX mark (48px, muted) and one line ("Where should we pick up?");
-   what needs you, as rows; three suggestions, as rows; the project and where it works, as chips on top of the message
-   box; the box; the project's latest conversations. Sizes and spacing are the tokens in tokens.css. */
+/* Home, no cards: ORBIX in block letters and one line ("Where should we pick up?"), what needs you, the suggestions and
+   the latest conversations in the middle; the project chips and the message box at the bottom (final.css places them).
+   Sizes and spacing are the tokens in tokens.css. */
 
 .home { container: ws / inline-size; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 100%; margin: 0 auto; padding: var(--sp-8) var(--sp-6) calc(var(--sp-10) + var(--sp-6)); overflow-x: clip; }
 /* Each part fills the column, 760px at most. */
@@ -10,7 +10,6 @@
 /* ---- the mark and the one line ---- */
 .home-hero { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); flex: none; padding: 0 0 var(--sp-6); text-align: center; animation: settle var(--dur-panel) var(--ease-out) both; }
 .home-mark, .empty-mark { display: grid; place-items: center; }
-.home-mark .logo, .empty-mark .logo { color: var(--fg-3); }
 .home-head { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); margin: 0; }
 .home-title { max-width: 40ch; margin: 0; color: var(--fg); font: var(--fw-h) var(--fs-20)/1.25 var(--font); text-wrap: balance; overflow-wrap: anywhere; }
 .home-sub { max-width: 52ch; margin: 0; color: var(--fg-3); font-size: var(--fs-14); line-height: 1.5; text-wrap: pretty; }

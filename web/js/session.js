@@ -1,7 +1,7 @@
 // One session view: transcript (with live streaming), tool approvals, composer.
 import { SessionBar } from './workbench.js';
 import { quoteOnSelect } from './quote.js';
-import { h, icon, replace, clear, toast, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet, logo } from './dom.js';
+import { h, icon, replace, clear, toast, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet, wordmark } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { MarkdownBoundary, liveExcerpt, LIVE_MARKDOWN_LIMIT } from './markdown-stream.mjs';
 import { renderToolCard, output, diffCounts, statChips } from './tools.js';
@@ -779,7 +779,7 @@ export class TabView {
     // Three suggested first tasks for this project, as on Home; the slot keeps its height while the folder is read, so nothing jumps.
     const tasks = h('div', { class: 'ce-tasks-slot' });
     this.emptyEl = h('div', { class: 'chat-empty' },
-      h('span', { class: 'empty-mark', 'aria-hidden': 'true' }, logo(48)),
+      h('span', { class: 'empty-mark' }, wordmark()),
       h('h2', { class: 'ce-name' }, 'Where should we pick up?'),
       tasks);
     const empty = this.emptyEl;
@@ -1047,12 +1047,17 @@ export class TabView {
     let u = t.messages[idx] === m ? idx : t.messages.indexOf(m); // the index is known when drawing: no search per reply
     while (u > 0 && t.messages[u].role !== 'user') u--;
     const start = t.messages[u]?.role === 'user' ? t.messages[u].timestamp : m.timestamp;
-    if (start && m.doneAt > start) bits.push(fmtDuration(m.doneAt - start));
     const out = m.usage?.output || 0;
     const writing = m.doneAt && m.firstTokenAt ? (m.doneAt - m.firstTokenAt) / 1000 : 0;
-    if (out > 0 && writing > 0.25) bits.push(`${(out / writing).toFixed(1)} tok/s`);
-    const tip = [m.provider ? `${m.provider}/${id}` : id, m.firstTokenAt && m.timestamp ? `First token after ${fmtDuration(m.firstTokenAt - m.timestamp)}` : '', out ? `${NUM.format(out)} output tokens` : ''].filter(Boolean).join('\n');
-    return h('span', { class: 'msg-model num', title: tip }, bits.join(' · '));
+    // One fact on screen, the model; the turn's time, the writing speed and the rest are in the tooltip.
+    const tip = [
+      m.provider ? `${m.provider}/${id}` : id,
+      start && m.doneAt > start ? `Took ${fmtDuration(m.doneAt - start)}` : '',
+      out > 0 && writing > 0.25 ? `${(out / writing).toFixed(1)} tokens a second` : '',
+      m.firstTokenAt && m.timestamp ? `First token after ${fmtDuration(m.firstTokenAt - m.timestamp)}` : '',
+      out ? `${NUM.format(out)} output tokens` : '',
+    ].filter(Boolean).join('\n');
+    return h('span', { class: 'msg-model num', title: tip }, bits[0]);
   }
 
   /**
@@ -1429,12 +1434,17 @@ export class TabView {
         }
         return;
       }
+      // A file still streaming in: update its card's live view in place instead of building the card again.
+      if (b.type === 'toolCall' && prev?.id === b.id && prev.el?._live && !t.tools.get(b.id)?.status && !t.results.has(b.id) && t.waitingTool !== b.id) {
+        prev.el._live(b.arguments);
+        return;
+      }
       const sig = b.type === 'toolCall' ? b.id + JSON.stringify(b.arguments) + (t.tools.get(b.id)?.status || '') + (t.waitingTool === b.id) : b.type + (b.data?.length || '');
       if (prev && prev.sig === sig) return;
       const el = b.type === 'toolCall' ? this.toolCard(b) : this.renderBlock(b, `${idx}:${i}`, onPath);
       if (el && !prev) el.classList.add('enter');
       this.placeLive(prev, el, i);
-      this.liveBlocks[i] = { type: b.type, sig, el };
+      this.liveBlocks[i] = { type: b.type, sig, el, id: b.id };
     });
     for (let i = blocks.length; i < this.liveBlocks.length; i++) this.liveBlocks[i]?.el?.remove();
     this.liveBlocks.length = blocks.length;

@@ -36,13 +36,22 @@ async function load() {
 
 const installed = (id) => data?.servers?.some((s) => s.name === id) || data?.project?.servers?.some((s) => s.name === id);
 const match = (...texts) => texts.join(' ').toLowerCase().includes(query.trim().toLowerCase());
-/** A coloured monogram tile (no remote logos: the page loads nothing from outside). */
-const tile = (e, size = 36) => {
-  const el = h('span', { class: 'cz-tile', 'aria-hidden': 'true' }, e.mono);
-  el.style.setProperty('--c', e.color);
-  el.style.setProperty('--s', `${size}px`);
-  return el;
-};
+/** What a catalog entry is, read from the config it saves: where it runs, what it starts or reaches, what it needs. */
+function facts(e) {
+  const c = e.config(Object.fromEntries((e.fields || []).map((f) => [f.key, ''])));
+  let where, what;
+  if (c.url) {
+    const u = new URL(c.url);
+    const local = u.hostname === '127.0.0.1' || u.hostname === 'localhost';
+    where = local ? 'Local app' : 'Remote server';
+    what = local ? `${e.name} desktop app` : u.host;
+  } else {
+    where = 'Runs on this PC';
+    what = (c.args || []).find((a) => !a.startsWith('-'))?.replace(/@latest$/, '') || c.command;
+  }
+  const needs = (e.fields || []).map((f) => (f.folder ? 'a folder' : /key/i.test(f.label) ? 'an API key' : 'a token'));
+  return { where, what, needs };
+}
 /** Add a catalog entry: ask for its fields (a token, a folder) when it has any, then save it as a user server. */
 async function add(e) {
   const save = async (values) => {
@@ -84,22 +93,41 @@ async function add(e) {
 }
 
 function addButton(e) {
-  if (installed(e.id)) return h('span', { class: 'cz-added', title: `${e.name} is configured` }, icon('check', 13), 'Added');
+  if (installed(e.id)) {
+    const b = btn('', () => selectPluginsTab('installed'), 'sm ghost cz-added');
+    b.append(icon('check', 13), 'Added');
+    b.setAttribute('aria-label', `${e.name} is added. Open Installed to test it`);
+    return b;
+  }
   const b = btn('Add', () => add(e), 'sm');
   b.setAttribute('aria-label', `Add ${e.name}`);
   b.disabled = !data || !!data.error;
   return b;
 }
 
+function card(e) {
+  const f = facts(e);
+  return h('article', { class: 'cz-item' },
+    h('div', { class: 'cz-item-h' },
+      h('span', { class: 'cz-ic', 'aria-hidden': 'true' }, icon(e.icon, 18)),
+      h('div', { class: 'cz-item-t' }, h('b', null, e.name), h('code', { class: 'cz-what', title: f.what }, f.what))),
+    h('p', { class: 'cz-blurb' }, e.blurb),
+    h('div', { class: 'cz-item-f' },
+      h('span', { class: 'cz-chip' }, f.where),
+      h('span', { class: `cz-chip${f.needs.length ? ' need' : ''}` }, f.needs.length ? `Needs ${f.needs.join(' and ')}` : 'No key needed'),
+      h('span', { class: 'grow' }),
+      addButton(e)));
+}
+
 function market() {
   const sections = CATEGORIES.map((c) => {
     const items = CATALOG.filter((e) => e.cat === c && match(e.name, e.blurb, e.cat));
     if (!items.length) return null;
-    return h('section', { class: 'cz-sec' }, h('h3', null, c),
-      h('div', { class: 'cz-grid' }, items.map((e) => h('div', { class: 'cz-item' }, tile(e), h('div', { class: 'cz-item-t' }, h('b', null, e.name), h('span', { class: 'ell2' }, e.blurb)), addButton(e)))));
+    return h('section', { class: 'cz-sec' }, h('h3', null, c, h('span', { class: 'cz-n num' }, items.length)),
+      h('div', { class: 'cz-grid' }, items.map(card)));
   }).filter(Boolean);
   return [
-    h('p', { class: 'cz-note' }, 'Built-in catalog of MCP server configurations. Add a server, then test it in Installed. Only add software and servers you trust.'),
+    h('p', { class: 'cz-note' }, 'MCP servers give the agent new tools. Add one, then test it under Installed. Add only servers you trust: they run with your permissions.'),
     data?.error ? errorState(data.error, { title: 'Couldn’t check installed servers', retry: load }) : !data ? h('p', { class: 'muted small', role: 'status' }, 'Checking installed servers…') : null,
     sections.length ? sections : h('p', { class: 'cz-none', role: 'status' }, 'No plugins match your search.')];
 }
@@ -126,6 +154,9 @@ function render() {
   if (!page?.isConnected) return;
   replace(page.querySelector('.cz-body'), tab === 'market' ? market() : installedView());
   for (const b of page.querySelectorAll('.cz-tabs button')) b.setAttribute('aria-pressed', String(b.dataset.t === tab));
+  // Adding from the Marketplace saves for every project; the project only matters for Installed (its .mcp.json).
+  const scope = page.querySelector('.cz-scope');
+  if (scope) scope.hidden = tab !== 'installed';
 }
 
 export function selectPluginsTab(value) {
@@ -150,7 +181,7 @@ export function drawCustomizations(root) {
   search.addEventListener('input', () => ((query = search.value), render()));
   const tabs = h('div', { class: 'cz-tabs', role: 'group', 'aria-label': 'Plugin view' }, [['market', 'Marketplace'], ['installed', 'Installed']].map(([t, l]) => h('button', { type: 'button', 'data-t': t, onclick: () => selectPluginsTab(t) }, l)));
   page = h('div', { class: 'hub cz' },
-    h('header', { class: 'cz-head' }, h('h1', null, 'Customize'), h('span', { class: 'grow' }), scope, tabs),
+    h('header', { class: 'cz-head' }, h('h1', null, 'Customize'), h('span', { class: 'grow' }), h('label', { class: 'cz-scope' }, h('span', null, 'Project'), scope), tabs),
     customizeTabs('customizations'),
     h('label', { class: 'cz-search' }, icon('search', 14), search),
     h('div', { class: 'cz-body' }));

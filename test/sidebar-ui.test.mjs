@@ -38,7 +38,9 @@ test('the sidebar shows shortcuts only through the shared hint, the same for eve
   const main = read('web/js/main.js');
   const side = main.slice(main.indexOf('function drawSidebar()'), main.indexOf('function runningList()'));
   assert.doesNotMatch(side, /h\('kbd'/, 'no keycaps in the sidebar');
-  for (const id of ['new', 'search', 'settings']) assert.match(side, new RegExp(`keyHint\\(firstKey\\(S\\.ui\\.keys, '${id}'\\)\\)`), id);
+  for (const id of ['new', 'search']) assert.match(side, new RegExp(`keyHint\\(firstKey\\(S\\.ui\\.keys, '${id}'\\)\\)`), id);
+  // Settings is an icon button next to your name: its shortcut is in its tooltip
+  assert.match(side, /class: 'side-link foot-set'[^\n]*title: `Settings\$\{firstKey\(S\.ui\.keys, 'settings'\)/, 'settings shortcut in the tooltip');
   assert.match(side, /keyHint\(shortcut\)/, 'every page link');
   const css = read('web/css/sidebar.css');
   assert.match(css, /\.khint \{[^}]*color: var\(--fg-3\)[^}]*tabular-nums/);

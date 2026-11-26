@@ -1,7 +1,8 @@
 // Settings: the whole window under the menu row. Pages on the left (General to Machines, Agent, one page per
 // project, conversations and worktrees), Give feedback and this copy of ORBIX at the bottom. Esc or × closes it.
 // Ctrl+K finds any setting by name (settingsSearchItems) and opens its page.
-import { tabAnalytics } from './analytics.js';
+import { tabProfile } from './profile.js';
+import { tabPrivacy } from './privacy.js';
 import { h, icon, toast, replace, clear, logoTile, errorState, loadingState, copyText, timeAgo, baseName, kbd, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, on, savePrefs, engineReady, loadEngine, loadEnv, loadSessions, emit, groupSessions, activeTab } from './store.js';
@@ -29,6 +30,9 @@ import { group, pick, seg } from './settings-controls.js';
 /** The pages in the list, in groups: [key, label, one line under the title, icon]. */
 const NAV = [
   [
+    ['profile', 'Profile', 'You, and what you and your agents did on this PC.', 'user'],
+  ],
+  [
     ['general', 'Preferences', 'Permissions and how messages are sent.', 'sliders'],
     ['look', 'Appearance', 'Theme, text and layout.', 'palette'],
     ['notify', 'Notifications', 'When ORBIX gets your attention.', 'bell'],
@@ -50,7 +54,7 @@ const NAV = [
     ['browser', 'Browser', 'Links, the built-in browser, history and downloads.', 'globe'],
   ],
   [
-    ['usage', 'Analytics', 'Tokens, models and when you work, from the conversations on this PC.', 'activity'],
+    ['privacy', 'Privacy', 'What leaves this PC, and what stays.', 'shield'],
     ['feedback', 'Help & feedback', 'Opens a GitHub issue in your browser. You check it before it is sent.', 'message'],
     ['application', 'About', 'Updates, data folder and version.', 'info'],
   ],
@@ -61,7 +65,7 @@ const SUB = [
   ['network', 'Network access rules', 'Which sites the agent may read with web_fetch.', null, 'general'],
 ];
 const PAGES = [...NAV.flat(), ...SUB];
-const OLD = { start: 'general', prefs: 'general', about: 'application' }; // page names from before 3.7
+const OLD = { start: 'general', prefs: 'general', about: 'application', usage: 'profile' }; // page names from before (Analytics is part of Profile)
 
 /** What Ctrl+K finds: [setting, page, extra words]. */
 const FIND = [
@@ -69,7 +73,8 @@ const FIND = [
   ['Local models', 'engine', 'ollama lm studio offline server custom'],
   ['Machines', 'machines', 'cloud vps server remote teleport move self-host linux tailscale'],
   ['Agents', 'agents', 'claude code codex opencode gemini acp harness cli agent subscription plan'],
-  ['Analytics', 'usage', 'tokens usage stats statistics models prompts hours streak heatmap chart cost'],
+  ['Profile', 'profile', 'profile name handle avatar me account lifetime streak activity heatmap insights analytics tokens usage stats statistics models prompts hours chart cost'],
+  ['Privacy', 'privacy', 'privacy data telemetry tracking analytics share sent leaves offline'],
   ['Fast model', 'models', 'titles summaries helper agents cheap'],
   ['Plan model', 'models', 'plan mode'],
   ['Permission preset', 'general', 'approval ask allow permission auto edits turbo'],
@@ -97,7 +102,7 @@ const FIND = [
   ['Web search', 'tools', 'brave tavily searxng'],
   ['MCP servers', 'tools', 'server tools mcp'],
   ['Hooks', 'tools', 'before after tool'],
-  ['Theme', 'look', 'dark light system midnight frost graphite monochrome palette tokyo night catppuccin mocha latte rose pine dawn nord dracula gruvbox orbix scene synthwave nebula aurora animated backdrop fireworks color'],
+  ['Theme', 'look', 'dark light system midnight frost graphite monochrome palette tokyo night catppuccin mocha latte rose pine dawn nord dracula gruvbox orbix scene synthwave nebula aurora dither engraving animated backdrop fireworks color'],
   ['Font size', 'look', 'text size zoom bigger smaller'],
   ['Font', 'look', 'typeface google sans segoe system'],
   ['Contrast', 'look', 'strong high contrast'],
@@ -216,7 +221,7 @@ export function openSettings(initial = 'general', focus = '') {
       const page = PAGES.find(([k]) => k === name);
       const parent = page[4] && PAGES.find(([k]) => k === page[4]);
       content.append(head(page[1], page[2], parent), body);
-      const cleanup = ({ usage: tabAnalytics, general: tabGeneral, application: tabApplication, look: tabLook, keys: tabKeys, notify: tabNotify, engine: renderEngineSettings, agents: (b, s, mm) => { const r = tabAgents(b, s, mm); b.append(...agentOptionGroups()); return r; }, machines: tabMachines, models: tabModels, browser: tabBrowser, rules: tabRules, checks: tabChecks, tools: renderMcpSettings, conversations: tabConversations, worktrees: tabWorktrees, behavior: tabBehavior, network: tabNetwork, projects: tabProjects, feedback: tabFeedback })[name](body, show, m);
+      const cleanup = ({ profile: tabProfile, privacy: tabPrivacy, general: tabGeneral, application: tabApplication, look: tabLook, keys: tabKeys, notify: tabNotify, engine: renderEngineSettings, agents: (b, s, mm) => { const r = tabAgents(b, s, mm); b.append(...agentOptionGroups()); return r; }, machines: tabMachines, models: tabModels, browser: tabBrowser, rules: tabRules, checks: tabChecks, tools: renderMcpSettings, conversations: tabConversations, worktrees: tabWorktrees, behavior: tabBehavior, network: tabNetwork, projects: tabProjects, feedback: tabFeedback })[name](body, show, m);
       if (typeof cleanup === 'function') disposePage = cleanup;
     }
     if (focusLabel) pointAt(content, focusLabel);
@@ -747,7 +752,7 @@ function tabLook(el) {
     for (const b of e.currentTarget.closest('.set-wrap, .modal, body').querySelectorAll('.theme-c')) b.setAttribute('aria-checked', String(b === e.currentTarget));
   } }, themePreview(v), h('span', { class: 'theme-n' }, h('span', null, l), icon('check', 13, 'theme-ok')));
   const themes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Theme' }, [['system', 'System'], ['dark', 'Dark'], ['light', 'Light'], ['midnight', 'Midnight'], ['frost', 'Frost'], ['graphite', 'Graphite']].map(card));
-  const scenes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Scene theme' }, [['orbix', 'ORBIX'], ['sunset', 'Synthwave'], ['nebula', 'Nebula'], ['aurora', 'Aurora']].map(card));
+  const scenes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Scene theme' }, [['orbix', 'ORBIX'], ['sunset', 'Synthwave'], ['nebula', 'Nebula'], ['aurora', 'Aurora'], ['dither', 'Dither']].map(card));
   const palettes = h('div', { class: 'themes', role: 'radiogroup', 'aria-label': 'Editor palette' }, [['tokyo', 'Tokyo Night'], ['mocha', 'Catppuccin Mocha'], ['rosepine', 'Rosé Pine'], ['nord', 'Nord'], ['dracula', 'Dracula'], ['gruvbox', 'Gruvbox'], ['latte', 'Catppuccin Latte'], ['dawn', 'Rosé Pine Dawn']].map(card));
   // Theme as three icons (System, Light, Dark); the presets below choose any of the themes.
   const modeOf = (t) => (t === 'system' ? 'system' : ['light', 'frost', 'latte', 'dawn'].includes(t) ? 'light' : 'dark');
@@ -758,7 +763,7 @@ function tabLook(el) {
   } }, icon(ic, 14))));
   const sizes = [12, 13, 14, 15, 16, 17, 18];
   const fontSize = pick('Font size', sizes.map((n) => [String(n), `${n}px`]), String(u.fontSize || 14), (v) => savePrefs({ fontSize: Number(v) }));
-  const font = pick('Font', [['google', 'Google Sans'], ['segoe', 'Segoe UI'], ['system', 'System font']], ['segoe', 'system'].includes(u.font) ? u.font : 'google', (v) => savePrefs({ font: v }));
+  const font = pick('Font', [['segoe', 'Segoe UI (Windows)'], ['google', 'Google Sans'], ['system', 'System font']], ['google', 'system'].includes(u.font) ? u.font : 'segoe', (v) => savePrefs({ font: v }));
   // Your own colours for the theme in use: background, text and accent. Empty = the theme's own.
   const colors = { ...(u.colors || {}) };
   const css = getComputedStyle(document.documentElement);

@@ -14,7 +14,7 @@ import { MIN_WINDOW, TIP_CHARS, firstLine, dotLabel } from './timeline-text.mjs'
 
 const still = () => {
   const root = document.documentElement;
-  return root.classList.contains('sr') || root.dataset.motion === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return root.classList.contains('sr') || root.classList.contains('no-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches;
 };
 
 /** The text a message starts with: your bubble, or the first block of the agent's answer. */

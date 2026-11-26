@@ -1,11 +1,11 @@
 // ASCII effects: the COM-X mark in About, and the loader beside what the agent does now. All of it is decoration: hidden
 // from screen readers, never behind text, it sleeps while off screen, and under reduced motion (Windows' setting or Settings → Appearance → Screen reader mode) it shows one still frame.
-import { h, logo } from './dom.js';
+import { h } from './dom.js';
 
 const motionOff = matchMedia('(prefers-reduced-motion: reduce)');
 const reduced = { get matches() {
   const root = document.documentElement;
-  return motionOff.matches || root.classList.contains('sr') || root.dataset.motion === 'off';
+  return motionOff.matches || root.classList.contains('sr') || root.classList.contains('no-motion');
 } };
 const TAU = Math.PI * 2;
 // 4x4 ordered dither, so shading steps between two characters instead of banding.
@@ -128,7 +128,7 @@ function charCanvas({ cols, rows, font, lineH, cls }) {
         schedule();
       };
       const theme = new MutationObserver(invalidate);
-      theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme', 'data-mode', 'data-motion'] });
+      theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme', 'data-mode'] });
       const options = { signal: stop.signal };
       motionOff.addEventListener('change', invalidate, options);
       document.addEventListener('visibilitychange', schedule, options);
@@ -244,7 +244,47 @@ export function asciiComx({ cols = 30, rows = 14, font = 10, lineH = 12 } = {}) 
 }
 
 /**
- * The spinner beside what the agent does now: the ORBIX loader, the mark's halves swapping O ↔ X (pure CSS, one fixed
- * cell so the words beside it never move; the X holds under reduced motion).
+ * The spinner beside what the agent does now ("Thinking", "Reading src/app.js"): a 7×7 LED matrix in the live colour.
+ * Every LED glows faintly; a comet orbits the ring with a fading tail while the core pulses. Drawn on a canvas at
+ * about 16 frames a second, only while it is on the page; reduced motion shows one still frame.
  */
-export const asciiSpin = () => h('span', { class: 'ascii-spin', 'aria-hidden': 'true' }, logo(16, { loop: true }));
+const LED = 7, PITCH = 3, DOT = 2;
+export function asciiSpin() {
+  const size = LED * PITCH;
+  const cv = h('canvas', { class: 'ascii-spin', 'aria-hidden': 'true' });
+  cv.style.width = cv.style.height = size + 'px';
+  const ctx = cv.getContext('2d');
+  const mid = (LED - 1) / 2;
+  const cells = [];
+  for (let r = 0; r < LED; r++) for (let c = 0; c < LED; c++) cells.push({ x: c * PITCH, y: r * PITCH, d: Math.hypot(c - mid, r - mid), a: Math.atan2(r - mid, c - mid) });
+  let last = 0, dpr = 0, color = '';
+  const draw = (t) => {
+    const ratio = Math.min(devicePixelRatio || 1, 3);
+    if (ratio !== dpr) (dpr = ratio), (cv.width = cv.height = Math.round(size * dpr));
+    if (!color || t % 1000 < 70) color = getComputedStyle(cv).getPropertyValue('--plasma').trim() || '#3DF28C';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = color;
+    const head = (t / 900) * TAU; // one orbit every 0.9 s
+    const pulse = 0.5 + 0.5 * Math.sin(t / 260);
+    for (const p of cells) {
+      let v = 0.1; // the LED is off but visible
+      if (p.d >= 1.6 && p.d <= 3.2) {
+        const behind = (((head - p.a) % TAU) + TAU) % TAU; // how far the comet has passed this LED
+        v = Math.max(v, Math.exp(-behind * 1.1) * (p.d < 2.5 ? 1 : 0.75));
+      } else if (p.d < 1.6) v = Math.max(v, (p.d < 0.5 ? 0.55 : 0.28) + 0.4 * pulse * (p.d < 0.5 ? 1 : 0.5));
+      ctx.globalAlpha = Math.min(1, v);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = v > 0.5 ? 3 : 0;
+      ctx.fillRect(p.x, p.y, DOT, DOT);
+    }
+    ctx.globalAlpha = 1;
+  };
+  const loop = (t) => {
+    if (!cv.isConnected) return; // removed with its line: the loop ends
+    if (t - last >= 60) (last = t), draw(t);
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame((t) => (reduced.matches ? draw(450) : loop(t)));
+  return cv;
+}

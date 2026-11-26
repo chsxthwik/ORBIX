@@ -23,8 +23,8 @@ test('tokens.css loads first and defines the type scale, weights, spacing and mo
   for (const n of [12, 13, 14, 16, 20, 28]) assert.match(t, new RegExp(`--fs-${n}: ${n}px`));
   assert.match(t, /--fw: 400/);
   assert.match(t, /--fw-h: 500/);
-  assert.match(t, /--dur-hover: 120ms/);
-  assert.match(t, /--dur-panel: 180ms/);
+  assert.match(t, /--dur-hover: 80ms/);
+  assert.match(t, /--dur-panel: 120ms/);
   assert.match(t, /--col-max: 760px/);
 });
 

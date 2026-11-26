@@ -72,12 +72,13 @@ const P = {
   list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
   filter: 'M4 7h16M7 12h10M10 17h4',
   users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  user: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z',
   paperclip: 'm21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5',
-  'panel-left': 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 3v18',
+  'panel-left': 'M6 5h12a3.5 3.5 0 0 1 3.5 3.5v7a3.5 3.5 0 0 1-3.5 3.5H6a3.5 3.5 0 0 1-3.5-3.5v-7A3.5 3.5 0 0 1 6 5ZM9 5v14',
   columns: 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM12 3v18',
   maximize: 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7',
   minimize: 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7',
-  'panel-right': 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM15 3v18',
+  'panel-right': 'M6 5h12a3.5 3.5 0 0 1 3.5 3.5v7a3.5 3.5 0 0 1-3.5 3.5H6a3.5 3.5 0 0 1-3.5-3.5v-7A3.5 3.5 0 0 1 6 5ZM15 5v14',
   trash: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
   pencil: 'M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z',
   external: 'M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6',
@@ -133,6 +134,13 @@ const P = {
   download: 'M12 15V3M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5',
 };
 
+// The pane of the panel icons: filled while that panel is open (its button has .on), as a window frame with the side
+// shaded in; otherwise only the frame and its divider show.
+const PANE = {
+  'panel-left': 'M9 5H6a3.5 3.5 0 0 0-3.5 3.5v7A3.5 3.5 0 0 0 6 19h3Z',
+  'panel-right': 'M15 5h3a3.5 3.5 0 0 1 3.5 3.5v7A3.5 3.5 0 0 1 18 19h-3Z',
+};
+
 export function icon(name, size = 16, cls = '') {
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
@@ -147,6 +155,12 @@ export function icon(name, size = 16, cls = '') {
   if (cls) svg.setAttribute('class', cls);
   const p = document.createElementNS(NS, 'path');
   p.setAttribute('d', P[name] || P.circle);
+  if (PANE[name]) {
+    const pane = document.createElementNS(NS, 'path');
+    pane.setAttribute('class', 'ic-pane');
+    pane.setAttribute('d', PANE[name]);
+    svg.append(pane);
+  }
   svg.append(p);
   return svg;
 }
@@ -160,7 +174,7 @@ const svgEl = (tag, attrs, ...kids) => {
 
 // The ORBIX mark (logo kit v2): an O split along one elliptical orbit whose halves swap sides and become `)(`, the X
 // in ORBIX. Drawn as the two halves of the O; at rest they sit swapped (the X). One colour, currentColor (Bone on
-// dark, Obsidian on light); Plasma only while an agent works.
+// dark, Obsidian on light); the brand green only while an agent works.
 const HALF_L = 'M0 50C0 22.39 22.39 0 50 0C50.12 0 50.23 0 50.35 0V18C50.23 18 50.12 18 50 18C32.33 18 18 32.33 18 50C18 67.67 32.33 82 50 82C50.12 82 50.23 82 50.35 82V100C50.23 100 50.12 100 50 100C22.39 100 0 77.61 0 50Z';
 const HALF_R = 'M49.65 100V82C49.77 82 49.88 82 50 82C67.67 82 82 67.67 82 50C82 32.33 67.67 18 50 18C49.88 18 49.77 18 49.65 18V0C49.77 0 49.88 0 50 0C77.61 0 100 22.39 100 50C100 77.61 77.61 100 50 100C49.88 100 49.77 100 49.65 100Z';
 
@@ -172,6 +186,145 @@ export function logo(size = 20, { alive = false, loop = false } = {}) {
   return svgEl('svg', { class: 'logo' + (alive ? ' alive' : '') + (loop ? ' loop' : ''), viewBox: '0 0 100 100', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' },
     svgEl('path', { class: 'lg-h lg-l', fill: 'currentColor', d: HALF_L }),
     svgEl('path', { class: 'lg-h lg-r', fill: 'currentColor', d: HALF_R }));
+}
+
+/**
+ * ORBIX in block letters drawn with ASCII characters and animated, the way a terminal draws a logo. Each pixel of the
+ * letters is a 2×2 patch of characters on a canvas. On arrival the characters scramble and settle into the letters
+ * from left to right; at rest a glint sweeps across every few seconds, thinning the characters it passes
+ * (@ → # → * → + → . and back). The X is in the brand colour; while an agent works it takes the live colour and the
+ * glint keeps running. Near the pointer the characters heat up: they scramble, turn the brand colour and cool back
+ * into the letters after it passes. Reduced motion shows the settled letters, still.
+ */
+const WORD = [
+  ['####', '#..#', '#..#', '#..#', '####'],
+  ['####', '#..#', '####', '#.#.', '#..#'],
+  ['###.', '#..#', '####', '#..#', '####'],
+  ['###', '.#.', '.#.', '.#.', '###'],
+  ['#...#', '.#.#.', '..#..', '.#.#.', '#...#'],
+];
+const RAMP = '@%#*+=-:. '; // dense to empty
+const NOISE = '!#$%&*+=?@0123456789<>/\\|{}[]~^';
+const SUB = 2; // characters per letter pixel, each way
+const CELL_W = 6, CELL_H = 7, FONT = 10; // px per character cell
+const WORD_CELLS = (() => {
+  const cells = [];
+  let x0 = 0;
+  WORD.forEach((rows, li) => {
+    const w = rows[0].length;
+    rows.forEach((row, y) => [...row].forEach((v, x) => {
+      const inner = li < 3 && x > 0 && x < w - 1 && y > 0 && y < rows.length - 1;
+      if (v !== '#' && !inner) return;
+      for (let sy = 0; sy < SUB; sy++) for (let sx = 0; sx < SUB; sx++) {
+        const cx = (x0 + x) * SUB + sx, cy = y * SUB + sy;
+        // Ink cells get a dense character from a soft light from the top left; counters a faint dot.
+        const shade = v === '#' ? Math.min(3, Math.floor(((cx / 48) * 0.6 + (cy / 10) * 0.4) * 4)) : -1;
+        cells.push({ cx, cy, kind: v === '#' ? (li === 4 ? 'x' : 'ink') : 'fill', rest: shade < 0 ? '.' : RAMP[shade] });
+      }
+    }));
+    x0 += w + 1;
+  });
+  return { cells, cols: x0 * SUB - SUB, rows: WORD[0].length * SUB };
+})();
+
+export function wordmark() {
+  const { cells, cols, rows } = WORD_CELLS;
+  const W = cols * CELL_W, H = rows * CELL_H;
+  const cv = h('canvas', { class: 'wordmark', role: 'img', 'aria-label': 'ORBIX', style: { width: W + 'px', height: H + 'px' } });
+  const ctx = cv.getContext('2d');
+  const still = () => matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('no-motion');
+  const pick = (s) => s[(Math.random() * s.length) | 0];
+  let born = 0, glint = -1, raf = 0, wait = 0, dpr = 0;
+  // The cursor: characters near the pointer heat up (they scramble and turn the brand colour) and cool down after it.
+  const R = 52; // px
+  const heat = new Float32Array(cells.length);
+  const glyph = cells.map((c) => c.rest);
+  const ptr = { x: -1e4, y: -1e4 };
+
+  function draw(now) {
+    const ratio = Math.min(devicePixelRatio || 1, 3);
+    if (ratio !== dpr) { dpr = ratio; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const css = getComputedStyle(cv);
+    const busy = !!cv.closest('.agent-busy');
+    const col = { ink: css.getPropertyValue('--mark').trim() || '#F4F4F0', x: css.getPropertyValue(busy ? '--plasma' : '--accent').trim() || '#3DF28C', fill: css.getPropertyValue('--fg-3').trim() || '#777' };
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.font = `600 ${FONT}px ${css.getPropertyValue('--mono').trim() || 'monospace'}`;
+    ctx.textBaseline = 'top';
+    const t = still() ? Infinity : now - born;
+    let hot = false;
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i];
+      // Arrival: a scramble that settles left to right over ~0.9 s.
+      const settle = 260 + (c.cx / cols) * 640 + (c.cy % 2) * 40;
+      let ch = c.rest, alpha = c.kind === 'fill' ? 0.35 : 1;
+      if (t < settle) { ch = pick(NOISE); alpha *= Math.min(1, 0.25 + t / settle); }
+      else if (glint >= 0 && c.kind !== 'fill') {
+        // The glint: a diagonal band that thins the characters it crosses.
+        const d = Math.abs(c.cx + c.cy * 0.6 - glint);
+        if (d < 5) ch = RAMP[Math.min(RAMP.length - 2, Math.max(0, RAMP.indexOf(c.rest)) + 5 - Math.round(d))];
+      }
+      let color = col[c.kind];
+      if (t >= settle) {
+        const d = Math.hypot(c.cx * CELL_W + CELL_W / 2 - ptr.x, c.cy * CELL_H + CELL_H / 2 - ptr.y);
+        heat[i] = Math.max(d < R ? (1 - d / R) ** 1.4 : 0, heat[i] * 0.9);
+        const k = heat[i];
+        if (k > 0.04) {
+          hot = true;
+          if (k > 0.45) { if (glyph[i] === c.rest || Math.random() < 0.3) glyph[i] = pick(NOISE); ch = glyph[i]; }
+          else { glyph[i] = c.rest; ch = c.kind === 'fill' ? '+' : RAMP[Math.min(RAMP.length - 2, Math.max(0, RAMP.indexOf(c.rest)) + Math.round(k * 6))]; }
+          if (k > 0.25) color = c.kind === 'x' ? col.ink : col.x;
+          alpha = Math.max(alpha, Math.min(1, 0.35 + k));
+        } else glyph[i] = c.rest;
+      }
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.fillText(ch, c.cx * CELL_W, c.cy * CELL_H);
+    }
+    ctx.globalAlpha = 1;
+    return hot;
+  }
+
+  function loop(now) {
+    raf = 0;
+    if (!cv.isConnected) return;
+    if (glint >= 0) { glint += 1.1; if (glint > cols + rows + 8) glint = -1; }
+    const hot = draw(now);
+    const busy = !!cv.closest('.agent-busy');
+    if (still()) return;
+    if (now - born < 1000 || glint >= 0 || hot) raf = requestAnimationFrame(loop);
+    else { clearTimeout(wait); wait = setTimeout(() => { glint = -6; if (!raf) raf = requestAnimationFrame(loop); }, busy ? 400 : 4200 + Math.random() * 1800); }
+  }
+
+  // Follow the pointer anywhere near the letters (the whole window listens, so the effect starts before it is over them).
+  const onMove = (e) => {
+    if (!cv.isConnected) return removeEventListener('pointermove', onMove);
+    if (still() || !born) return;
+    const r = cv.getBoundingClientRect();
+    ptr.x = e.clientX - r.left;
+    ptr.y = e.clientY - r.top;
+    const near = ptr.x > -R && ptr.y > -R && ptr.x < r.width + R && ptr.y < r.height + R;
+    if (near && !raf) raf = requestAnimationFrame(loop);
+  };
+  addEventListener('pointermove', onMove, { passive: true });
+  document.addEventListener('pointerleave', () => { ptr.x = ptr.y = -1e4; });
+
+  // Start once it is on screen and the monospace font is ready, so the first frame is already in the right font.
+  const start = () => {
+    if (!cv.isConnected) return requestAnimationFrame(start);
+    (document.fonts?.ready || Promise.resolve()).then(() => { born = performance.now(); if (!raf) raf = requestAnimationFrame(loop); });
+  };
+  requestAnimationFrame(start);
+  // A theme or palette change repaints it in the new colours (the canvas does not follow CSS on its own).
+  const mo = new MutationObserver(() => {
+    if (!cv.isConnected) return mo.disconnect();
+    if (raf) return;
+    draw(performance.now());
+    // An agent started: the glint runs now instead of after the idle pause.
+    if (born && !still() && cv.closest('.agent-busy') && glint < 0) { clearTimeout(wait); glint = -6; raf = requestAnimationFrame(loop); }
+  });
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-mode', 'data-theme', 'data-palette'] });
+  return cv;
 }
 
 /** The mark in its tile: the app icon's shape (About). */

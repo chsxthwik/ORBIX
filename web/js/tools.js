@@ -98,6 +98,33 @@ export function output(text, { maxLines = 300, cls = '', copy = true, tail = fal
   return wrap;
 }
 
+/**
+ * The file a model is writing, as it arrives: the last 200 lines as plain text with their line numbers, kept scrolled
+ * to the end, and how many lines so far. Updated in place on every streamed piece (`_set`), so writing a 2,000-line
+ * file costs a split per update instead of re-highlighting the whole file each time. Highlighting comes once it is
+ * written.
+ */
+const PEEK_LINES = 200;
+function livePeek(text) {
+  const gutter = h('div', { class: 'gutter', 'aria-hidden': 'true' });
+  const code = h('code');
+  const view = h('div', { class: 'codeview live-peek' }, gutter, h('pre', { class: 'code view' }, code));
+  view.style.maxHeight = '240px';
+  const note = h('div', { class: 'muted small' });
+  const set = (t = '') => {
+    const lines = t.split('\n');
+    const from = Math.max(0, lines.length - PEEK_LINES);
+    gutter.textContent = lines.slice(from).map((_, i) => String(from + i + 1)).join('\n');
+    code.textContent = lines.slice(from).join('\n');
+    note.textContent = `${lines.length.toLocaleString()} line${lines.length === 1 ? '' : 's'} so far`;
+    view.scrollTop = view.scrollHeight;
+  };
+  set(text);
+  const box = h('div', null, view, note);
+  box._set = set;
+  return box;
+}
+
 export function codeView(text, lang, { startLine = 1, maxHeight = '360px' } = {}) {
   const pre = h('pre', { class: 'code view' }, h('code', null, highlight(text, lang)));
   const lines = text.split('\n');
@@ -312,8 +339,10 @@ const BODY = {
     }
     return t ? output(t) : h('div', { class: 'muted small' }, 'Reading…');
   },
-  write(call, res) {
+  write(call, res, ctx) {
     const a = call.arguments || {};
+    // While the model is still streaming the file: a cheap live view, updated in place (see livePeek).
+    if (ctx?.status === 'pending' && !res) return livePeek(typeof a.content === 'string' ? a.content : '');
     const wrap = h('div');
     if (typeof a.content === 'string') wrap.append(codeView(a.content, langFor((a.path || '').split('.').pop())));
     const t = resultText(res);
@@ -439,6 +468,8 @@ export function renderToolCard(tab, call, run, open) {
   const body = h('div', { class: 'tool-body' });
   const card = h('div', { class: `tool ${status}${isOpen ? ' open' : ''}`, dataset: { id: call.id, tool: call.name } }, head, body);
   if (isOpen) fillBody(body, call, result, ctx);
+  // A file still being written updates its live view in place (session.js calls this on each streamed piece).
+  if (status === 'pending' && call.name === 'write') card._live = (args) => body.firstChild?._set?.(typeof args?.content === 'string' ? args.content : '');
   card._fill = () => {
     if (!body.firstChild) fillBody(body, call, result, ctx);
   };

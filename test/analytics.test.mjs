@@ -24,3 +24,17 @@ test('tokens by day and model, your messages by hour, and agent time per turn', 
   assert.equal(s.hours['2026-11-20'][9], 1);
   assert.equal(s.hours['2026-11-20'][14], 1);
 });
+
+test('streaks: the run ending today (or yesterday) and the longest run', async () => {
+  const { streaks } = await import('../src/analytics.mjs');
+  const today = new Date(2026, 10, 26);
+  assert.deepEqual(streaks(['2026-11-20', '2026-11-21', '2026-11-22', '2026-11-24', '2026-11-25', '2026-11-26'], today), { current: 3, longest: 3 });
+  assert.deepEqual(streaks(['2026-11-24', '2026-11-25'], today), { current: 2, longest: 2 }, 'yesterday still counts');
+  assert.deepEqual(streaks(['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04'], today), { current: 0, longest: 4 });
+  assert.deepEqual(streaks([], today), { current: 0, longest: 0 });
+});
+
+test('a session file remembers its project folder', () => {
+  const s = summarizeSession([JSON.stringify({ type: 'session', id: 's', cwd: 'C:\\work\\shop' }), JSON.stringify({ type: 'message', message: { role: 'user', timestamp: Date.now() } })].join('\n'));
+  assert.equal(s.cwd, 'C:\\work\\shop');
+});

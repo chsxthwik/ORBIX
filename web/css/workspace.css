@@ -13,7 +13,6 @@
 
 /* Shared interface controls and harness panels. */
 
-.welcome:not([hidden]) { animation:interface-in 160ms ease-out; }
 @keyframes interface-in { from { opacity:.85; } to { opacity:1; } }
 .control-tooltip { position:fixed; z-index:10000; max-width:min(300px,calc(100vw - 16px)); padding:8px 12px; border:1px solid var(--line-2); border-radius:9px; background:var(--bg-modal); color:var(--fg); box-shadow:var(--shadow-2); font:var(--fs-12)/1.5 var(--font); pointer-events:none; overflow-wrap:anywhere; }
 .control-tooltip[hidden] { display:none; }
@@ -142,7 +141,6 @@
 .session .md pre { border:1px solid var(--line-2); border-radius:12px; }
 .session .md blockquote { border-left:2px solid var(--line-3); padding-left:16px; }
 :root[data-density=compact] { --row-height:30px; }
-:root[data-motion=off] *, :root[data-motion=off] *::before, :root[data-motion=off] *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
 @media(prefers-reduced-motion:reduce) {
   *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
 }

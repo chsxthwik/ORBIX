@@ -91,8 +91,9 @@ export function auditPage() {
   const accents = ['--accent', '--accent-solid'].map(probe).filter((c) => c[3] > 0.5);
   const ink = document.documentElement.dataset.theme === 'graphite'; // its accent is ink: no hue to tell from text
   const sameRgb = (c) => c[3] > 0.05 && accents.some((a) => Math.abs(a[0] - c[0]) < 3 && Math.abs(a[1] - c[1]) < 3 && Math.abs(a[2] - c[2]) < 3);
-  // Where the accent belongs: the send button, progress, the current row's bar, today's bar, the current timeline dot.
-  const ACCENT_OK = '.send, .send *, [role=progressbar], [role=progressbar] *, progress, .ring-arc, .ctx-bar i, .wk-track i.today, .turn-mark, .br-load, .spin, .dgrid, .dgrid *, .dot.run';
+  // Where the accent belongs: the send button and a screen's one primary action, progress, the current row's bar,
+  // today's bar, the current timeline dot.
+  const ACCENT_OK = '.send, .send *, .btn.primary, .btn.primary *, [role=progressbar], [role=progressbar] *, progress, .ring-arc, .ctx-bar i, .wk-track i.today, .turn-mark, .br-load, .spin, .dgrid, .dgrid *, .dot.run';
   // pseudo-elements: the current row's bar, the model rail's current mark and the caret of a reply being typed
   const PSEUDO_OK = '.s-btn, .side-link, .side-new, .mp-pv, .msg.live .md *';
   const onGrid = (v) => {
@@ -229,6 +230,38 @@ export function auditPage() {
       const hh = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
       if (w > 3 && hh > 3 && w * hh > 24) add('overlap', a.e, `control with ${path(b.e)}`, a.e.textContent || a.e.getAttribute('aria-label'));
     }
+  }
+  // a control pressed against the edge of the card it sits in (a card: a rounded box with a border or a fill of its own)
+  const boxed = (e) => {
+    const cs = getComputedStyle(e);
+    if (parseFloat(cs.borderTopLeftRadius) < 6) return false;
+    const border = ['Top', 'Right', 'Bottom', 'Left'].some((k) => parseFloat(cs[`border${k}Width`]) >= 1 && rgba(cs[`border${k}Color`])[3] > 0.05);
+    return border || /inset/.test(cs.boxShadow);
+  };
+  const drawn = (cs) => rgba(cs.backgroundColor)[3] > 0.05 || ['Top', 'Right', 'Bottom', 'Left'].some((k) => parseFloat(cs[`border${k}Width`]) >= 1 && rgba(cs[`border${k}Color`])[3] > 0.05);
+  for (const { e, r, cs } of ctl) {
+    if (e.closest('.seg, .switch, .menu, .pop-panel, .tabs, [role=tablist], .composer, .c-row, .modal-h') || e.matches('[role=tab], [role=menuitem], [role=option]')) continue;
+    if (e.matches('input, select, textarea') && !drawn(cs)) continue; // a field without a box of its own (a search bar's input)
+    for (let p = e.parentElement, i = 0; p && p !== document.body && i < 5; p = p.parentElement, i++) {
+      if (!boxed(p)) continue;
+      const pr = p.getBoundingClientRect();
+      if (pr.height < r.height + 12 || pr.width < r.width + 12) break; // a frame drawn tight around this one control
+      const pcs = getComputedStyle(p);
+      const gaps = { top: r.top - pr.top - parseFloat(pcs.borderTopWidth), bottom: pr.bottom - r.bottom - parseFloat(pcs.borderBottomWidth), left: r.left - pr.left - parseFloat(pcs.borderLeftWidth), right: pr.right - r.right - parseFloat(pcs.borderRightWidth) };
+      const tight = Object.entries(gaps).filter(([, g]) => g >= -1 && g < 4).map(([k]) => k);
+      if (tight.length) add('edge', e, `${tight.join(' ')} of ${path(p)}`, e.textContent || e.getAttribute('aria-label') || e.placeholder);
+      break;
+    }
+  }
+  // fields and buttons side by side in one row: one height
+  const rows = new Set(ctl.filter((x) => x.e.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]), select, .btn')).map((x) => x.e.parentElement));
+  for (const row of rows) {
+    const rcs = getComputedStyle(row);
+    if (!/flex/.test(rcs.display) || /column/.test(rcs.flexDirection)) continue;
+    const kids = ctl.filter((x) => x.e.parentElement === row && x.e.matches('input:not([type=checkbox]):not([type=radio]):not([type=range]), select, .btn'));
+    if (kids.length < 2 || !kids.some((x) => x.e.matches('input, select'))) continue;
+    const hs = kids.map((x) => Math.round(x.r.height));
+    if (Math.max(...hs) - Math.min(...hs) > 1) add('height', row, hs.join('/'), kids.map((x) => x.e.textContent || x.e.placeholder || '').join(' | '));
   }
   return [...found.values()];
 }

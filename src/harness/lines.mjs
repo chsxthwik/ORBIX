@@ -3,6 +3,7 @@
 // messages, and kills its whole process tree on close.
 import { EventEmitter } from 'node:events';
 import { killTree } from '../backend.mjs';
+import { lineSplitter } from '../linesplit.mjs';
 
 const MAX_LINE = 16 * 1024 * 1024;
 
@@ -14,26 +15,22 @@ export class LineProcess extends EventEmitter {
     this.stderrTail = [];
     this.closed = false;
     this.exitCode = null;
-    let buf = '';
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (d) => {
-      buf += d;
-      if (buf.length > MAX_LINE && buf.indexOf('\n') < 0) buf = ''; // one runaway line must not eat memory
-      let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i).replace(/\r$/, '');
-        buf = buf.slice(i + 1);
-        if (!line.trim()) continue;
-        let msg;
-        try {
-          msg = JSON.parse(line);
-        } catch {
-          this._tail(line); // banners and log lines some CLIs print on stdout
-          continue;
-        }
-        this.emit('message', msg);
+    // One JSON object per line, split in linear time (a big tool result or diff arrives as one long line); a runaway
+    // line past MAX_LINE is dropped up to its newline so it cannot eat memory.
+    const split = lineSplitter((raw) => {
+      const line = raw.replace(/\r$/, '');
+      if (!line.trim()) return;
+      let msg;
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        this._tail(line); // banners and log lines some CLIs print on stdout
+        return;
       }
-    });
+      this.emit('message', msg);
+    }, { maxLine: MAX_LINE, onOverflow: () => this._tail(`(dropped a line longer than ${MAX_LINE / 1024 / 1024} MB)`) });
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (d) => split.push(d));
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (d) => {
       for (const line of String(d).split(/\r?\n/)) if (line.trim()) this._tail(line);

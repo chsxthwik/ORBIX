@@ -759,7 +759,7 @@ async function visualScenes(page, project, project2) {
   await page.eval(`(await import('/js/runs.js')).closeHub(); ${wait(300)}`);
 
   // Settings, each page.
-  const pages = ['general', 'behavior', 'network', 'look', 'notify', 'keys', 'engine', 'models', 'agents', 'tools', 'rules', 'checks', 'projects', 'worktrees', 'conversations', 'machines', 'browser', 'usage', 'feedback', 'application'];
+  const pages = ['general', 'behavior', 'network', 'look', 'notify', 'keys', 'engine', 'models', 'agents', 'tools', 'rules', 'checks', 'projects', 'worktrees', 'conversations', 'machines', 'browser', 'profile', 'privacy', 'feedback', 'application'];
   for (const key of pages) {
     const open = async () => {
       await page.eval(`${st} st.emit('settings', ${JSON.stringify(key)}); ${wait(300)}`);

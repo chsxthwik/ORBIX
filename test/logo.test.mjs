@@ -21,13 +21,25 @@ test('assets/icon.png is 512 px', () => {
   assert.deepEqual(pngSize(read('assets/icon.png')), [512, 512]);
 });
 
-test('the top left of the menu row is the mark alone: the app has no wordmark', () => {
-  const dir = new URL('web/js/', root);
-  for (const f of fs.readdirSync(dir).filter((n) => /\.m?js$/.test(n))) {
-    assert.doesNotMatch(fs.readFileSync(new URL(f, dir), 'utf8'), /\bwordmark\b/i, `${f} still draws a wordmark`);
-  }
+test('the top left of the menu row is the mark alone, not the name', () => {
   const shell = read('web/js/shell.js').toString();
+  assert.doesNotMatch(shell, /\bwordmark\b/i, 'the menu row draws no wordmark');
   assert.match(shell, /name === 'ORBIX' \? \[logo\(\d+, \{ alive: true \}\)\]/, 'the menu row shows the mark');
+});
+
+test('Home and an empty conversation show ORBIX in animated ASCII block letters, five letters on one grid', () => {
+  const dom = read('web/js/dom.js').toString();
+  const word = new Function(`return ${/const WORD = (\[[\s\S]*?\]);\n/.exec(dom)[1]}`)();
+  assert.equal(word.length, 5, 'O, R, B, I and X');
+  for (const g of word) {
+    assert.equal(g.length, 5, 'every letter is five rows tall');
+    assert.ok(g.every((r) => r.length === g[0].length && /^[#.]+$/.test(r)), 'rows of one width, pixels and gaps only');
+  }
+  const ramp = new Function(`return ${/const RAMP = ('[^']*')/.exec(dom)[1]}`)();
+  assert.match(ramp, /^[\x20-\x7e]+$/, 'the letters are drawn with ASCII characters');
+  assert.match(dom, /prefers-reduced-motion: reduce/, 'reduced motion shows the letters still');
+  assert.match(read('web/js/home.js').toString(), /wordmark\(\)/, 'Home shows it');
+  assert.match(read('web/js/session.js').toString(), /wordmark\(\)/, 'an empty conversation shows it');
 });
 
 test('every provider has a mark, or a deliberate neutral one', () => {

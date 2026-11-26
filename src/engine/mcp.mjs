@@ -10,6 +10,7 @@ import { DATA_DIR } from '../store.mjs';
 import { VERSION, readJson, writeJson, log } from '../util.mjs';
 import { parseSSE } from './anthropic.mjs';
 import { killTree } from '../backend.mjs';
+import { lineSplitter } from '../linesplit.mjs';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from './files.mjs';
 
 const userConfigPath = () => path.join(DATA_DIR, 'mcp.json');
@@ -133,30 +134,25 @@ class StdioTransport {
     } else argv = [resolveWinCommand(cfg.command), ...(cfg.args || [])];
     // quiet: server arguments often carry tokens, which must not reach the log.
     this.child = backend.spawn(argv, { cwd: cfg.cwd || cwd, env: backend.isWsl ? undefined : cfg.env, quiet: true });
-    let buf = '';
+    // One JSON-RPC message per line, split in linear time (lineSplitter); a line past MAX_LINE stops the server.
+    const split = lineSplitter((raw) => {
+      const line = raw.trim();
+      if (!line) return;
+      let msg;
+      try {
+        msg = JSON.parse(line);
+      } catch {
+        return; // servers sometimes print logs to stdout; ignore non-JSON lines
+      }
+      for (const m of Array.isArray(msg) ? msg : [msg]) this.onMessage(m);
+    }, { maxLine: MAX_LINE, onOverflow: () => {
+      this.overflow = true;
+      killTree(this.child);
+      onClose(new Error(`sent a line longer than ${MAX_LINE / 1024 / 1024} MB`));
+    } });
     this.child.stdout.setEncoding('utf8');
     this.child.stdout.on('data', (d) => {
-      if (this.overflow) return;
-      buf += d;
-      let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i).trim();
-        buf = buf.slice(i + 1);
-        if (!line) continue;
-        let msg;
-        try {
-          msg = JSON.parse(line);
-        } catch {
-          continue; // servers sometimes print logs to stdout; ignore non-JSON lines
-        }
-        for (const m of Array.isArray(msg) ? msg : [msg]) this.onMessage(m);
-      }
-      if (buf.length > MAX_LINE) {
-        this.overflow = true;
-        buf = '';
-        killTree(this.child);
-        onClose(new Error(`sent a line longer than ${MAX_LINE / 1024 / 1024} MB`));
-      }
+      if (!this.overflow) split.push(d);
     });
     this.child.stderr.setEncoding('utf8');
     this.child.stderr.on('data', (d) => {

@@ -1,4 +1,4 @@
-// Settings → Analytics: what your agents did over the last 7, 30 or 90 days, from the conversations saved on this PC.
+// Settings → Profile, by range: what your agents did over the last 7, 30 or 90 days, from the conversations saved on this PC.
 // The total for the token kind you choose, tokens per day, your messages and agent time, the models used, and when in
 // the week you prompt. One series per chart in one hue; every mark has a tooltip, and a table holds every number.
 import { h, fmtTokens, errorState, skeleton } from './dom.js';
@@ -94,7 +94,7 @@ export function tabAnalytics(el) {
 
     const busiest = data.busiestDay ? dateLabel(data.busiestDay, { weekday: 'short', month: 'short', day: 'numeric' }) : '—';
     const tiles = h('div', { class: 'an-tiles' },
-      [['Your messages', prompts.toLocaleString()], ['Agent time', work ? hoursText(work) : '—'], ['Streak', `${data.streak} day${data.streak === 1 ? '' : 's'}`], ['Busiest day', busiest]]
+      [['Your messages', prompts.toLocaleString()], ['Agent time', work ? hoursText(work) : '—'], ['Busiest day', busiest]]
         .map(([k, v]) => h('div', { class: 'an-tile' }, h('span', null, k), h('b', { class: 'num' }, v))));
 
     const work_ = work ? h('section', { class: 'an-sec' },

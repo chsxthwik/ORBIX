@@ -25,7 +25,7 @@ import * as pkce from './engine/oauth-pkce.mjs';
 import { webSearch } from './engine/websearch.mjs';
 import { detectCheck } from './engine/verify.mjs';
 import { userInstructionsPath, projectRules } from './engine/context.mjs';
-import { analytics } from './analytics.mjs';
+import { analytics, profile } from './analytics.mjs';
 import { readHooksFile, listHooks, userHooksPath, projectHooksPath, hooksTrusted } from './engine/hooks.mjs';
 import { collect as collectDiagnostics } from './diagnostics.mjs';
 import * as fsapi from './fsapi.mjs';
@@ -984,6 +984,7 @@ export class AppServer {
       // Skills the agent can use: the project's (.agents/skills, .claude/skills, .omp/skills) and your own, for Customizations.
       // Settings → Analytics: tokens, models, prompts and agent time over the last 7, 30 or 90 days.
       'GET /api/analytics': async ({ q }) => analytics(q.range),
+      'GET /api/profile': async () => profile(),
       'GET /api/skills': async ({ q }) => {
         const ws = q.ws ?? this.store.data.workspaces?.[0]?.path ?? '';
         const skills = await this.skillsOf(ws);

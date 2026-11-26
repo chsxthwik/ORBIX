@@ -9,6 +9,8 @@ test('every marketplace entry builds a config ORBIX can save', () => {
     ids.add(e.id);
     assert.ok(CATEGORIES.includes(e.cat), `${e.id} category`);
     assert.match(e.id, /^[a-z0-9-]+$/, 'usable as a server name');
+    assert.match(e.icon || '', /^[a-z][a-z-]*$/, `${e.id} icon`);
+    assert.ok(!('mono' in e) && !('color' in e), `${e.id}: no imitation logo`);
     const values = Object.fromEntries((e.fields || []).map((f) => [f.key, f.folder ? 'C:\\work' : 'x-token']));
     const c = configFor(e, values);
     if (c.url) {

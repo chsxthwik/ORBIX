@@ -1,12 +1,13 @@
 // Scene themes: a living picture behind the workspace sheet. Each scene theme (see SCENES) paints a still layer once
-// per size, then animates a few things on top: a planet's ring, a neon grid, drifting nebula clouds, an aurora. While an
+// per size, then animates a few things on top: a planet's ring, a neon grid, drifting nebula clouds, an aurora, clouds
+// over a dot-engraved landscape. While an
 // agent works, the scene moves a little faster; when a turn finishes cleanly, fireworks go up at the sides.
 // A soft veil of the sheet colour sits over the reading column, so text always reads first.
 // Runs at 30 frames a second in front (about 10 behind other windows), stops while the window is hidden, and is one
 // still frame under reduced motion or when Settings → Appearance → Animate scenes is off.
 import { S, on } from './store.js';
 
-export const SCENES = ['orbix', 'sunset', 'nebula', 'aurora'];
+export const SCENES = ['orbix', 'sunset', 'nebula', 'aurora', 'dither'];
 
 const root = document.documentElement;
 const still = matchMedia('(prefers-reduced-motion: reduce)');
@@ -92,7 +93,7 @@ function orbixScene() {
   const FLAT = 0.27; // how open the ring is: 0 edge-on, 1 face-on
   const D = 4.2, F = 3.6;
   return {
-    sparks: ['#FF2E7E', '#E4E2FF', '#9C8BFF', '#FFFFFF'],
+    sparks: ['#3DF28C', '#E4E2FF', '#9C8BFF', '#FFFFFF'],
     setup() {
       R = clamp(Math.min(W, H) * 0.25, 100, 250);
       Rp = (R * F) / D;
@@ -162,7 +163,7 @@ function orbixScene() {
         if (px < -2 || py < -2 || px > W + 2 || py > H + 2) continue;
         const q = (lit ? 2.2 : p.ring ? 1.6 : 1.5) * Math.min(1.4, s);
         g.globalAlpha = al;
-        g.fillStyle = lit ? '#FF2E7E' : '#E4E2FF';
+        g.fillStyle = lit ? '#3DF28C' : '#E4E2FF';
         g.fillRect(px - q / 2, py - q / 2, q, q);
       }
       g.globalAlpha = 1;
@@ -431,7 +432,278 @@ function nebulaScene() {
   };
 }
 
-const MAKERS = { orbix: orbixScene, sunset: sunsetScene, nebula: nebulaScene, aurora: auroraScene };
+// ---------------------------------------------------------------- Dither: an engraving in square dots of one colour
+// A procedural landscape (ridges, a low moon, a hill of ruined columns) turned into dots by an 8x8 Bayer matrix: a
+// cell gets a dot when the picture's brightness there beats the matrix's threshold. The still picture is dithered once
+// per size; each frame only the cloud band is re-dithered, and only the cells that change are drawn (a dot, or the
+// sheet colour over one). A few dots near their threshold shimmer.
+
+/** The 8x8 Bayer matrix as thresholds in (0, 1). */
+function bayer8() {
+  let m = [[0]];
+  for (let s = 1; s < 8; s *= 2) {
+    const n = [];
+    for (let y = 0; y < s * 2; y++) {
+      n.push([]);
+      for (let x = 0; x < s * 2; x++) n[y].push(4 * m[y % s][x % s] + [[0, 2], [3, 1]][(y / s) | 0][(x / s) | 0]);
+    }
+    m = n;
+  }
+  return Float32Array.from(m.flat(), (v) => (v + 0.5) / 64);
+}
+
+/** Smooth 1D value noise (a few octaves), 0..1, for ridge lines. */
+function noise1(seed) {
+  const r = rng(seed), P = Float32Array.from({ length: 1024 }, r);
+  const at = (t) => {
+    const i = Math.floor(t), f = t - i, s = f * f * (3 - 2 * f), a = P[i & 1023];
+    return a + (P[(i + 1) & 1023] - a) * s;
+  };
+  return (t) => {
+    let v = 0, amp = 0.5, tot = 0;
+    for (let o = 0; o < 5; o++, amp *= 0.5, t *= 2.03) (v += at(t + o * 31.7) * amp), (tot += amp);
+    return v / tot;
+  };
+}
+
+/** A tileable 2D value-noise texture (nx by ny), stretched to 0..1: the clouds and the moon's seas. */
+function tileNoise(nx, ny, seed) {
+  const r = rng(seed), out = new Float32Array(nx * ny);
+  for (let o = 0, amp = 1; o < 4; o++, amp *= 0.5) {
+    const lx = 8 << o, ly = 2 << o, L = Float32Array.from({ length: lx * ly }, r);
+    for (let y = 0; y < ny; y++) {
+      const fy = (y / ny) * ly, y0 = fy | 0, ty = fy - y0, sy = ty * ty * (3 - 2 * ty), y1 = (y0 + 1) % ly;
+      for (let x = 0; x < nx; x++) {
+        const fx = (x / nx) * lx, x0 = fx | 0, tx = fx - x0, sx = tx * tx * (3 - 2 * tx), x1 = (x0 + 1) % lx;
+        const a = L[y0 * lx + x0] + (L[y0 * lx + x1] - L[y0 * lx + x0]) * sx;
+        const b = L[y1 * lx + x0] + (L[y1 * lx + x1] - L[y1 * lx + x0]) * sx;
+        out[y * nx + x] += (a + (b - a) * sy) * amp;
+      }
+    }
+  }
+  let lo = Infinity, hi = -Infinity;
+  for (const v of out) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
+  for (let i = 0; i < out.length; i++) out[i] = (out[i] - lo) / (hi - lo || 1);
+  return out;
+}
+
+function ditherScene() {
+  const BAYER = bayer8(), NX = 256, NY = 64, ALPHA = [0, 0.5, 0.78, 1];
+  const smooth = (a, b, v) => {
+    const t = clamp((v - a) / (b - a), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  const tone = (b) => (b < 0.3 ? 1 : b < 0.6 ? 2 : 3); // a dot's strength follows the picture's brightness
+  let tex = null, ink = '', bg = '', c = 3, d = 2, gw = 0, gh = 0;
+  let bS = null, thr = null, lit = null; // per cell: still brightness, Bayer threshold, still tone (0 = no dot)
+  let band = null, shim = null, out = null; // the cloud band, the shimmering cells, per-frame lists
+  let offA = 37, offB = 113, sh = 0; // cloud drift and shimmer clocks: kept across resizes
+
+  /** Stamp a rectangle (window coordinates) into a per-cell layer, its brightness from a function of 0..1 across. */
+  const stamp = (layer, x0, y0, x1, y1, f) => {
+    const a = clamp(Math.floor(x0 / c), 0, gw), b = clamp(Math.ceil(x1 / c), 0, gw);
+    for (let gy = clamp(Math.floor(y0 / c), 0, gh); gy < clamp(Math.ceil(y1 / c), 0, gh); gy++)
+      for (let gx = a; gx < b; gx++) layer[gy * gw + gx] = f(((gx + 0.5) * c - x0) / (x1 - x0));
+  };
+
+  return {
+    sparks: [],
+    setup() {
+      tex ||= tileNoise(NX, NY, 61);
+      ink = css('--plasma', '#3DF28C');
+      bg = css('--bg', '#070908');
+      this.sparks = [ink, ink, css('--fg', '#E9F1EC'), '#FFFFFF'];
+      c = W * H > 1.3e6 ? 4 : 3;
+      d = c - 1;
+      gw = Math.ceil(W / c); gh = Math.ceil(H / c);
+      const N = gw * gh;
+      bS = new Float32Array(N); thr = new Float32Array(N); lit = new Uint8Array(N);
+
+      // The open sides carry the picture; the middle, under the logo and the reading column, stays quiet.
+      const cw = clamp(W * 0.2, 160, 380);
+      const calm = Float32Array.from({ length: gw }, (_, gx) => 1 - 0.74 * Math.exp(-((((gx + 0.5) * c - W / 2) / cw) ** 2)));
+
+      // A large low moon, off to the right like the other scenes' suns and planets.
+      const R = clamp(Math.min(W, H) * 0.2, 80, 230), mx = W - Math.max(R * 1.35, W * 0.16), my = H * 0.6;
+
+      // Four ridges, far to near: tall at the sides, low in the middle.
+      const LAYERS = [
+        { base: 0.64, amp: 0.24, scale: 0.2, b: 0.2 },
+        { base: 0.74, amp: 0.2, scale: 0.16, b: 0.13 },
+        { base: 0.84, amp: 0.16, scale: 0.13, b: 0.08 },
+        { base: 0.97, amp: 0.13, scale: 0.1, b: 0.03 },
+      ];
+      const tops = LAYERS.map((L, i) => {
+        const f = noise1(101 + i * 17), raw = Float32Array.from({ length: gw }, (_, gx) => f(((gx + 0.5) * c) / (W * L.scale) + i * 7.3));
+        let lo = Infinity, hi = -Infinity;
+        for (const v of raw) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
+        return raw.map((v, gx) => {
+          const edge = Math.abs(((gx + 0.5) * c) / W - 0.5) * 2, peak = (v - lo) / (hi - lo || 1);
+          return H * L.base - H * L.amp * (0.3 + 0.7 * edge ** 0.9) * (0.12 + 0.88 * peak ** 1.4);
+        });
+      });
+
+      // Ruins on the third ridge, at the left: the hilltop levelled, a stylobate, columns (some broken), an architrave.
+      const ruin = new Float32Array(N).fill(-1);
+      const r = rng(77), sp = clamp(W * 0.024, 18, 34), colW = Math.max(c * 3, sp * 0.42), n = 6;
+      const xa = W * 0.07, xb = xa + (n - 1) * sp;
+      const g0 = Math.floor((xa - sp) / c), g1 = Math.ceil((xb + sp) / c);
+      let ground = 0, cnt = 0;
+      for (let gx = clamp(g0, 0, gw - 1); gx <= clamp(g1, 0, gw - 1); gx++) (ground += tops[2][gx]), cnt++;
+      ground = Math.min(ground / (cnt || 1), H * 0.8);
+      for (let gx = 0; gx < gw; gx++) {
+        const x = (gx + 0.5) * c, w = 1 - smooth(0, sp * 2.5, Math.max(xa - sp - x, x - xb - sp, 0));
+        tops[2][gx] += (ground - tops[2][gx]) * w;
+      }
+      const hCol = clamp(H * 0.085, 48, 104), cols = [];
+      for (let i = 0; i < n; i++) {
+        const whole = i === 1 || i === 2 || (i !== 0 && r() > 0.45);
+        cols.push({ x: xa + i * sp, h: whole ? hCol : hCol * (0.25 + 0.5 * r()), whole });
+      }
+      stamp(ruin, xa - colW, ground - c * 2, xb + colW, ground + c * 2, () => 0.34); // the step, its top lit
+      for (const k of cols) {
+        // dark shaft against the hazy ridges behind, its moon side lit
+        stamp(ruin, k.x - colW / 2, ground - k.h, k.x + colW / 2, ground - c * 2, (u) => (u > 0.66 ? 0.44 : u > 0.33 ? 0.08 : 0.02));
+        if (k.whole) stamp(ruin, k.x - colW * 0.8, ground - k.h - c * 2, k.x + colW * 0.8, ground - k.h, (u) => (u > 0.6 ? 0.56 : 0.3));
+      }
+      for (let i = 0; i < n; ) {
+        let j = i;
+        while (j + 1 < n && cols[i].whole && cols[j + 1].whole) j++;
+        if (j > i) stamp(ruin, cols[i].x - colW * 0.8, ground - hCol - c * 4, cols[j].x + colW * 0.8, ground - hCol - c * 2, () => 0.4);
+        i = j + 1;
+      }
+
+      // The still picture, cell by cell (what does not change along a row or a column is worked out once).
+      const stars = rng(83), bandTop = H * 0.06, bandBot = H * 0.56, inBand = [];
+      const moonward = Float32Array.from({ length: gw }, (_, gx) => 0.6 + 0.4 * Math.exp(-Math.abs((gx + 0.5) * c - mx) / (W * 0.35)));
+      const slopes = tops.map((t) => Float32Array.from(t, (_, gx) => (t[Math.min(gw - 1, gx + 1)] - t[Math.max(0, gx - 1)]) / (2 * c))); // > 0: the face looks toward the moon
+      const kHaze = -1 / (H * 0.08), kShade = -1 / (H * 0.1), kCrest = -1 / (c * 1.2), kNear = -1 / (R * 0.3), kFar = -1 / (R * 1.2);
+      for (let gy = 0; gy < gh; gy++) {
+        const y = (gy + 0.5) * c, sky = 0.012 + 0.035 * (y / H) ** 1.5, dy2 = (y - my) ** 2;
+        for (let gx = 0; gx < gw; gx++) {
+          const i = gy * gw + gx, x = (gx + 0.5) * c;
+          let li = -1, b, cloudy = true;
+          for (let k = 3; k >= 0; k--) if (y >= tops[k][gx]) { li = k; break; }
+          if (ruin[i] >= 0 && li < 3) {
+            b = ruin[i];
+            cloudy = false;
+          } else if (li >= 0) {
+            const dy = y - tops[li][gx];
+            b = LAYERS[li].b * (0.55 + 0.45 * Math.exp(dy * kHaze));
+            if (dy < H * 0.4) b += clamp(slopes[li][gx] * 0.9, -0.1, 0.25) * Math.exp(dy * kShade);
+            b *= 0.7 + 0.3 * Math.sin((x * 0.7 - y) * 0.32 + li); // a diagonal hatch, like an engraver's burin
+            if (dy < c * 8) b = Math.max(b, 0.95 * Math.exp(dy * kCrest) * moonward[gx]); // the lit crest: a contour line
+            cloudy = li === 0;
+          } else {
+            const dm = Math.sqrt((x - mx) ** 2 + dy2);
+            if (dm < R) {
+              const sea = tex[(((y - my) / R) * 20 + 32 | 0) * NX + ((((x - mx) / R) * 60 + 128) | 0)];
+              b = R - dm < c * 1.2 ? 0.95 : 0.92 - 0.3 * (dm / R) ** 2 - 0.42 * smooth(0.45, 0.8, sea);
+            } else {
+              b = sky;
+              if (dm < R * 8) b += 0.3 * Math.exp((dm - R) * kNear) + 0.08 * Math.exp((dm - R) * kFar);
+              if (y < H * 0.55 && stars() < 0.0035) b = 0.6 + 0.4 * stars();
+            }
+          }
+          b *= calm[gx];
+          bS[i] = b;
+          thr[i] = BAYER[(gy & 7) * 8 + (gx & 7)];
+          lit[i] = b > thr[i] ? tone(b) : 0;
+          if (cloudy && y > bandTop && y < bandBot) inBand.push(i);
+        }
+      }
+
+      // The cloud band: everything a frame needs, worked out once.
+      const m = inBand.length;
+      band = { m, idx: Int32Array.from(inBand), uA: new Float32Array(m), uB: new Float32Array(m), ra0: new Int32Array(m), ra1: new Int32Array(m), fa: new Float32Array(m), rb0: new Int32Array(m), rb1: new Int32Array(m), fb: new Float32Array(m), env: new Float32Array(m), cb: new Float32Array(m) };
+      const gauss = (v, at, s) => Math.exp(-(((v - at) / s) ** 2));
+      for (let j = 0; j < m; j++) {
+        const i = inBand[j], gx = i % gw, x = (gx + 0.5) * c, y = (((i / gw) | 0) + 0.5) * c, v = (y - bandTop) / (bandBot - bandTop);
+        band.uA[j] = (x / (W * 2.5)) * NX;
+        band.uB[j] = (x / (W * 1.4)) * NX + 90;
+        const va = v * (NY - 1), vb = (v * NY * 0.8 + 23) % NY;
+        band.ra0[j] = (va | 0) * NX; band.ra1[j] = Math.min(NY - 1, (va | 0) + 1) * NX; band.fa[j] = va - (va | 0);
+        band.rb0[j] = (vb | 0) * NX; band.rb1[j] = (((vb | 0) + 1) % NY) * NX; band.fb[j] = vb - (vb | 0);
+        band.env[j] = Math.max(gauss(v, 0.3, 0.13), 0.85 * gauss(v, 0.72, 0.12)) * (y > tops[0][gx] ? 0.5 : 1);
+        band.cb[j] = (0.22 + 0.45 * Math.exp(-Math.max(0, Math.sqrt((x - mx) ** 2 + (y - my) ** 2) - R * 0.6) / (R * 1.4))) * calm[gx];
+      }
+
+      // The shimmer: a few dots outside the band that sit close to their threshold, away from the middle.
+      const q = rng(91), want = Math.round(clamp(N / 300, 150, 600)), pick = [];
+      let seen = 0;
+      for (let i = 0; i < N; i++) {
+        const gx = i % gw, y = (((i / gw) | 0) + 0.5) * c;
+        if ((y > bandTop && y < bandBot) || calm[gx] < 0.7 || bS[i] < 0.05 || Math.abs(bS[i] - thr[i]) > 0.045) continue;
+        seen++;
+        if (pick.length < want) pick.push(i);
+        else if (q() * seen < want) pick[(q() * want) | 0] = i;
+      }
+      shim = { idx: Int32Array.from(pick), f: Float32Array.from(pick, () => 0.6 + 1.4 * q()), ph: Float32Array.from(pick, () => q() * TAU) };
+      const cap = m + pick.length;
+      out = { erase: new Int32Array(cap), dots: [null, new Int32Array(cap), new Int32Array(cap), new Int32Array(cap)], n: [0, 0, 0, 0] };
+    },
+    paint(g) {
+      g.fillStyle = bg;
+      g.fillRect(0, 0, W, H);
+      g.fillStyle = ink;
+      for (let t = 1; t <= 3; t++) {
+        g.globalAlpha = ALPHA[t];
+        g.beginPath();
+        for (let i = 0; i < lit.length; i++) if (lit[i] === t) g.rect((i % gw) * c, ((i / gw) | 0) * c, d, d);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+    },
+    frame(g, dt, fast) {
+      const k = fast ? 2.6 : 1;
+      offA += dt * 0.6 * k;
+      offB += dt * 1.0 * k;
+      sh += dt * k;
+      const n = out.n;
+      n[0] = n[1] = n[2] = n[3] = 0;
+      // A cell that changes either gains a dot or loses its still one; the rest of the picture is already there.
+      const put = (i, b) => {
+        const t = b > thr[i] ? tone(b) : 0;
+        if (t && !lit[i]) out.dots[t][n[t]++] = i;
+        else if (!t && lit[i]) out.erase[n[0]++] = i;
+      };
+      const { m, idx, uA, uB, ra0, ra1, fa, rb0, rb1, fb, env, cb } = band;
+      const oA = offA % NX, oB = offB % NX;
+      for (let j = 0; j < m; j++) {
+        let u = uA[j] + oA, x0 = u | 0, fx = u - x0;
+        x0 %= NX;
+        let x1 = x0 + 1 === NX ? 0 : x0 + 1, p = tex[ra0[j] + x0] + (tex[ra0[j] + x1] - tex[ra0[j] + x0]) * fx;
+        const a = p + (tex[ra1[j] + x0] + (tex[ra1[j] + x1] - tex[ra1[j] + x0]) * fx - p) * fa[j];
+        u = uB[j] + oB; x0 = u | 0; fx = u - x0; x0 %= NX;
+        x1 = x0 + 1 === NX ? 0 : x0 + 1; p = tex[rb0[j] + x0] + (tex[rb0[j] + x1] - tex[rb0[j] + x0]) * fx;
+        const nz = 0.62 * a + 0.38 * (p + (tex[rb1[j] + x0] + (tex[rb1[j] + x1] - tex[rb1[j] + x0]) * fx - p) * fb[j]);
+        const cov = smooth(0.54, 0.7, nz) * env[j];
+        if (cov < 0.02) continue;
+        const i = idx[j], lum = cb[j] * (0.75 + 0.5 * smooth(0.62, 0.9, nz));
+        put(i, bS[i] + (lum - bS[i]) * cov);
+      }
+      for (let j = 0; j < shim.idx.length; j++) put(shim.idx[j], bS[shim.idx[j]] + 0.05 * Math.sin(sh * shim.f[j] + shim.ph[j]));
+      if (n[0]) {
+        g.fillStyle = bg;
+        g.beginPath();
+        for (let j = 0; j < n[0]; j++) g.rect((out.erase[j] % gw) * c, ((out.erase[j] / gw) | 0) * c, c, c);
+        g.fill();
+      }
+      g.fillStyle = ink;
+      for (let t = 1; t <= 3; t++) {
+        if (!n[t]) continue;
+        const list = out.dots[t];
+        g.globalAlpha = ALPHA[t];
+        g.beginPath();
+        for (let j = 0; j < n[t]; j++) g.rect((list[j] % gw) * c, ((list[j] / gw) | 0) * c, d, d);
+        g.fill();
+      }
+      g.globalAlpha = 1;
+    },
+  };
+}
+
+const MAKERS = { orbix: orbixScene, sunset: sunsetScene, nebula: nebulaScene, aurora: auroraScene, dither: ditherScene };
 
 // ---------------------------------------------------------------- fireworks
 // Fireworks get their own layer over the whole window (above dialogs, under menus and toasts), drawn only while some
@@ -646,7 +918,7 @@ function stop() {
 /** Fireworks at the sides of the window, in the scene's colours (or the theme's accent outside a scene). */
 function celebrate(force) {
   if (still.matches || document.hidden || (!force && (!live || !animated()))) return;
-  const palette = live ? scene.sparks : [css('--accent', '#FF2E7E'), css('--fg', '#FFFFFF'), css('--live', '#7CC4FF')];
+  const palette = live ? scene.sparks : [css('--accent', '#3DF28C'), css('--fg', '#FFFFFF'), css('--live', '#7CC4FF')];
   for (let i = 0; i < 3; i++) setTimeout(() => launch(palette), i * 380);
 }
 

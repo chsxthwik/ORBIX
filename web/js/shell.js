@@ -1,5 +1,5 @@
-// The window chrome: one 40px row, like a desktop app's title bar. On the left the mark and the menus (Workspace, View,
-// Window), the sidebar switch, back and forward, and search; in the middle where you are (the project's tile and name,
+// The window chrome: one 40px row, like a desktop app's title bar. On the left the mark and the menus (Workspace and View),
+// the sidebar switch, back and forward, and search; in the middle where you are (the project's tile and name,
 // the conversation, its ··· menu, state and branch); on the right how full the context is, the MCP, skills and rules
 // menu and the side panel's switches, then the update pill; in the Windows app the window buttons sit at the far
 // right. Also here: back/forward history across conversations and views, and the card that previews a conversation
@@ -102,6 +102,14 @@ function menus() {
       { label: 'Search everything', hint: K('search'), run: () => H.search() },
       '-',
       { label: 'Manage conversations…', run: H.manage },
+      '-',
+      { label: 'Back', hint: K('back'), run: () => navGo(-1) },
+      { label: 'Forward', hint: K('forward'), run: () => navGo(1) },
+      { label: 'Next conversation', hint: K('nextConv'), run: () => H.cycle(1) },
+      { label: 'Previous conversation', hint: K('prevConv'), run: () => H.cycle(-1) },
+      t ? { label: 'Close conversation', run: () => H.close(t) } : null,
+      ...(S.tabs.size ? ['-', { header: 'Open conversations' }] : []),
+      ...[...S.tabs.values()].slice(0, 9).map((x, i) => ({ label: x.name, hint: `Alt+${i + 1}`, on: x.id === S.active, run: () => H.open(x.id) })),
     ]],
     ['View', [
       { label: 'Sidebar', hint: K('sidebar'), on: H.sideShown(), run: H.toggleSidebar },
@@ -114,16 +122,6 @@ function menus() {
       { label: 'Bigger text', hint: K('textBigger'), run: () => H.textSize(1) },
       { label: 'Smaller text', hint: K('textSmaller'), run: () => H.textSize(-1) },
       { label: 'Reset text size', hint: K('textReset'), run: () => H.textSize(0) },
-    ]],
-    ['Window', [
-      { label: 'Back', hint: K('back'), run: () => navGo(-1) },
-      { label: 'Forward', hint: K('forward'), run: () => navGo(1) },
-      '-',
-      { label: 'Next conversation', hint: K('nextConv'), run: () => H.cycle(1) },
-      { label: 'Previous conversation', hint: K('prevConv'), run: () => H.cycle(-1) },
-      t ? { label: 'Close conversation', run: () => H.close(t) } : null,
-      ...(S.tabs.size ? ['-', { header: 'Open conversations' }] : []),
-      ...[...S.tabs.values()].slice(0, 9).map((x, i) => ({ label: x.name, hint: `Alt+${i + 1}`, on: x.id === S.active, run: () => H.open(x.id) })),
     ]],
   ];
 }
@@ -214,7 +212,7 @@ function syncMeter(t) {
   meter.classList.toggle('hot', level === 'hot');
   meter.classList.toggle('crit', level === 'crit');
   arc.setAttribute('stroke-dasharray', `${((RING * Math.min(100, pct || 0)) / 100).toFixed(2)} ${RING.toFixed(2)}`);
-  const label = u?.tokens > 0 ? `${fmtTokens(u.tokens)}${Number.isFinite(pct) ? ` · ${Math.floor(pct)}%` : ''}` : 'Context';
+  const label = u?.tokens > 0 ? (Number.isFinite(pct) ? `${Math.floor(pct)}%` : fmtTokens(u.tokens)) : 'Context';
   if (meter.lastChild.textContent !== label) meter.lastChild.textContent = label;
   meter.title = u?.contextWindow ? `Context and cost · ${fmtTokens(u.tokens)} of ${fmtTokens(u.contextWindow)} tokens (${pct.toFixed(1)}%)${u.estimated ? ', estimated' : ''}` : 'Context and cost';
   meter.setAttribute('aria-label', meter.title);
