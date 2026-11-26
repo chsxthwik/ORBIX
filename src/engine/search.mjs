@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { isWinPath, runProc, toLinuxPath } from '../backend.mjs';
 import { looksBinary, pool } from '../util.mjs';
+import { lineSplitter } from '../linesplit.mjs';
 import { cachedText } from './files.mjs';
 
 /** Folders never searched, ignored or not. */
@@ -274,9 +275,15 @@ function runRg(rg, args, onLine, signal) {
     } catch (e) {
       return resolve({ code: -1, stderr: e.message, stopped: false });
     }
-    let buf = '';
     let stderr = '';
     let stopped = false;
+    const split = lineSplitter((raw) => {
+      const line = raw.replace(/\r$/, '');
+      if (line && onLine(line) === false) {
+        stop();
+        return false;
+      }
+    });
     const stop = () => {
       stopped = true;
       try {
@@ -287,20 +294,14 @@ function runRg(rg, args, onLine, signal) {
     child.stdin?.end();
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (d) => {
-      if (stopped) return;
-      buf += d;
-      let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i).replace(/\r$/, '');
-        buf = buf.slice(i + 1);
-        if (line && onLine(line) === false) return stop();
-      }
+      if (!stopped) split.push(d);
     });
     child.stderr.on('data', (d) => (stderr = (stderr + d).slice(-2000)));
     child.on('error', (e) => resolve({ code: -1, stderr: e.message, stopped }));
     child.on('close', (code) => {
       signal?.removeEventListener('abort', stop);
-      if (!stopped && buf.trim()) onLine(buf.replace(/\r$/, ''));
+      const last = split.rest();
+      if (!stopped && last.trim()) onLine(last.replace(/\r$/, ''));
       resolve({ code: code ?? -1, stderr, stopped });
     });
   });

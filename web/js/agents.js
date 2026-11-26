@@ -1,9 +1,10 @@
 // Settings → Agents: the coding agent CLIs ORBIX can run a conversation on (Claude Code, Codex, OpenCode, Gemini
-// CLI and your own ACP agents), whether each is installed and signed in, and how to fix it when it is not.
+// CLI and your own ACP agents), whether each is installed and signed in, how to fix it when it is not, and whether it
+// shows in the model picker.
 import { h, icon, toast, replace, copyText, onEnter } from './dom.js';
 import { api } from './api.js';
 import { S, emit, savePrefs } from './store.js';
-import { btn } from './dialogs.js';
+import { btn, toggle } from './dialogs.js';
 import { brandTile } from './brands.js';
 
 const status = (a) => (!a.installed ? ['off', 'Not installed'] : a.signedIn === false ? ['warn', 'Not signed in'] : a.signedIn ? ['ok', 'Ready'] : ['ok', 'Installed']);
@@ -25,7 +26,21 @@ function agentRow(a, close) {
       h('div', { class: 'set-t' }, a.name, a.version ? h('span', { class: 'ag-ver' }, a.version.replace(/\s*\(.*\)$/, '')) : null),
       h('div', { class: 'set-d' }, a.installed ? h('code', { class: 'ag-path ell', title: a.path }, a.path) : a.note)),
     h('span', { class: `ag-st ${cls}` }, label),
-    fix);
+    fix,
+    a.installed ? pickerSwitch(a) : null);
+}
+
+/** Whether an installed agent is offered in the model picker. Off keeps it installed and usable, just out of the list. */
+function pickerSwitch(a) {
+  const hidden = () => new Set(S.ui.hiddenAgents || []);
+  const t = toggle(!hidden().has(a.id), (on) => {
+    const next = hidden();
+    if (on) next.delete(a.id);
+    else next.add(a.id);
+    savePrefs({ hiddenAgents: [...next] });
+  }, `Show ${a.name} in the model picker`);
+  t.title = 'Show in the model picker';
+  return t;
 }
 
 export function tabAgents(el, show, m) {

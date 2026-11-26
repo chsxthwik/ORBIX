@@ -66,7 +66,7 @@ const LEVEL_NOTE = {
 function dotField(canvas, getFill) {
   const ctx = canvas.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('no-motion');
-  const color = getComputedStyle(canvas).color || '#ff2e7e';
+  const color = getComputedStyle(canvas).color || '#3df28c';
   let raf = 0;
   const t0 = performance.now();
   const frame = (now) => {

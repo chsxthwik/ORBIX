@@ -1,6 +1,7 @@
 /* The sidebar and its rail: the one place its look is decided. 260px by default, 220 to 360 when you drag it, 56px as
-   the icon rail. Top to bottom: New conversation, Search, Runs, Customize; the pinned and project lists; the agents at
-   work; one quiet line of this week's tokens; the connection status and Settings.
+   the icon rail. Top to bottom: New conversation, Search (drawn as a search field), Runs, Customize; the pinned and
+   project lists, each project's conversations hung on a guide line; the agents at work; this week's tokens as seven
+   tiny bars; you (initials, name, whether a model is ready) and Settings.
    Sizes are the tokens in tokens.css: 13px text, 12px captions and hints, 28px list rows, 32px controls, a 4px grid.
    Colour is for state: the focus ring and the current row's 2px bar are the accent; working is blue, needs you is
    amber, unread is an ink dot; everything else is ink and surface. */
@@ -27,6 +28,10 @@
 .sidebar .side-new:hover { background: var(--bg-hover); }
 
 /* ---- pages: Search, Runs, Customize ---- */
+/* Search reads as a search field: an inset box with its shortcut always showing. */
+.sidebar .side-search-btn { margin-bottom: var(--sp-1); border: 1px solid var(--line); background: var(--bg-inset); color: var(--fg-3); }
+.sidebar .side-search-btn:hover { border-color: var(--line-2); background: var(--bg-inset); color: var(--fg-2); }
+.sidebar .side-search-btn .khint { opacity: 1; height: var(--sp-5); padding: 0 var(--sp-1); border: 1px solid var(--line-2); border-radius: var(--sp-1); line-height: 18px; }
 .sidebar .side-nav { display: flex; flex-direction: column; flex: none; padding: var(--sp-1) var(--pad) var(--sp-2); }
 .sidebar .side-link { position: relative; display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--ctl-h); padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .side-link:hover { background: var(--bg-hover); color: var(--fg); }
@@ -42,6 +47,9 @@
 .sidebar .side-scroll { flex: 1; min-height: 0; padding: 0 var(--pad) var(--sp-2); overflow-y: auto; border-bottom: 1px solid var(--line); scroll-padding-block: var(--sp-2); }
 .sidebar .side-h { display: flex; align-items: center; justify-content: space-between; height: var(--row-h); margin-top: var(--sp-3); padding: 0 var(--sp-1) 0 var(--sp-3); color: var(--fg-3); font: var(--fw-h) var(--fs-12)/1 var(--font); }
 .sidebar .side-scroll > :first-child .side-h, .sidebar .side-scroll > .side-h:first-child { margin-top: var(--sp-1); }
+/* The Projects heading stays at the top while its list scrolls under it; the list fades out at its bottom edge. */
+.sidebar .side-scroll > .side-h { position: sticky; top: 0; z-index: 2; background: var(--chrome); }
+.sidebar .side-scroll { -webkit-mask-image: linear-gradient(to bottom, var(--fg) calc(100% - var(--sp-4)), transparent); mask-image: linear-gradient(to bottom, var(--fg) calc(100% - var(--sp-4)), transparent); }
 .sidebar .side-h-acts { display: flex; }
 .sidebar .side-h-acts .ibtn { width: var(--ctl-h); height: var(--row-h); min-height: var(--row-h); color: var(--fg-3); }
 .sidebar .side-h-acts .ibtn:hover { color: var(--fg); }
@@ -52,7 +60,10 @@
 .sidebar .side-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); color: var(--fg-3); font-size: var(--fs-13); line-height: 1.5; }
 
 /* A project: a coloured letter tile, its name, and what is going on in it (the branch, agents at work). */
+.sidebar .proj { position: relative; }
 .sidebar .proj + .proj { margin-top: var(--sp-1); }
+/* A guide line from the project's tile down past its conversations, as in a file tree. */
+.sidebar .proj:has(> .s-row)::before { content: ''; position: absolute; top: calc(var(--row-h) + 2px); bottom: var(--sp-1); left: 18px; width: 1px; background: var(--line-2); pointer-events: none; }
 .sidebar .proj-head, .sidebar .s-row { position: relative; display: flex; align-items: center; }
 .sidebar .proj-btn { display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; height: var(--row-h); padding: 0 var(--sp-2); border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .proj-btn:hover { background: var(--bg-hover); color: var(--fg); }
@@ -96,6 +107,10 @@
 .sidebar .s-more:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .s-more svg { display: none; }
 .sidebar .s-none { padding: var(--sp-1) 0 var(--sp-1) 36px; color: var(--fg-3); font-size: var(--fs-13); white-space: nowrap; }
+/* An empty project: one quiet row that starts its first conversation. */
+.sidebar .s-start { color: var(--fg-3); }
+.sidebar .s-start .s-plus { flex: none; color: var(--fg-3); }
+.sidebar .s-start:hover, .sidebar .s-start:hover .s-plus { color: var(--fg); }
 /* pinned and agent-board rows have no project to hang under */
 .sidebar .pin-sec .s-btn { padding-left: var(--sp-3); }
 .sidebar .pin-sec .s-btn > .dot { position: static; transform: none; }
@@ -119,16 +134,29 @@
 /* ---- this week: one quiet line; a click opens the chart ---- */
 .sidebar .side-week { flex: none; display: flex; align-items: center; height: var(--row-h); margin: var(--sp-1) var(--pad) 0; padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-3); font: var(--fw) var(--fs-12)/1 var(--font); font-variant-numeric: tabular-nums; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .side-week:hover { background: var(--bg-hover); color: var(--fg-2); }
+.sidebar .side-week { gap: var(--sp-2); }
+.sidebar .wk-spark { display: inline-flex; align-items: flex-end; gap: 2px; flex: none; height: var(--sp-3); }
+.sidebar .wk-spark i { display: block; width: 3px; border-radius: 1px; background: var(--fg-3); opacity: .55; }
+.sidebar .wk-spark i.today { background: var(--fg-2); opacity: 1; }
+.sidebar .side-week:hover .wk-spark i { opacity: .8; }
+.sidebar .side-week:hover .wk-spark i.today { background: var(--fg); opacity: 1; }
 
-/* ---- footer: what the model connection is, then Settings ---- */
-.sidebar .side-foot { display: flex; flex-direction: column; align-items: stretch; flex: none; padding: var(--sp-1) var(--pad) var(--sp-2); }
-.sidebar .foot-set { order: 2; }
-.sidebar .foot-status { order: 1; display: flex; align-items: center; align-self: flex-start; gap: var(--sp-2); flex: none; max-width: 100%; height: var(--row-h); padding: 0 var(--sp-3); border: 0; border-radius: var(--sp-2); background: transparent; color: var(--fg-3); font-size: var(--fs-12); }
-.sidebar .foot-status:hover { background: var(--bg-hover); color: var(--fg); }
+/* ---- footer: you (initials with a status dot, your name, the status in words), then Settings ---- */
+.sidebar .side-foot { display: flex; align-items: center; gap: var(--sp-1); flex: none; padding: var(--sp-2) var(--pad); }
+.sidebar .me-btn { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; height: 44px; padding: 0 var(--sp-2); border: 0; border-radius: var(--sp-2); background: transparent; color: var(--fg-2); transition: background-color var(--dur-hover) var(--ease-out); }
+.sidebar .me-btn:hover { background: var(--bg-hover); }
+.sidebar .me-av { position: relative; display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--bg-active); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--fg); font: var(--fw-h) var(--fs-12)/1 var(--font); }
+.sidebar .me-av .dot { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; margin: 0; box-shadow: 0 0 0 2px var(--chrome); }
+.sidebar .me-btn:hover .me-av .dot { box-shadow: 0 0 0 2px var(--bg-hover); }
+.sidebar .me-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.sidebar .me-n { color: var(--fg); font-size: var(--fs-13); line-height: 1.3; }
+.sidebar .me-s { color: var(--fg-3); font-size: var(--fs-12); line-height: 1.3; }
+.sidebar .me-btn.warn .me-s { color: var(--warn); }
+.sidebar .me-btn.err .me-s { color: var(--err); }
 .sidebar .foot-status .dot.ok { background: var(--ok); }
 .sidebar .foot-status .dot.warn { background: var(--warn); }
 .sidebar .foot-status .dot.err { background: var(--err); }
-.sidebar .foot-status .fs-t { min-width: 0; }
+.sidebar .foot-set { flex: none; justify-content: center; width: var(--ctl-h); height: var(--ctl-h); padding: 0; }
 
 /* ---- compact density: a row is 24px ---- */
 .compact .sidebar { --row-h: 24px; }
@@ -136,16 +164,16 @@
 
 /* ---- the rail: icons only, 56px (Ctrl+B); states stay visible as dots ---- */
 .app.side-rail .sidebar { --pad: var(--sp-2); }
-.app.side-rail .sidebar :is(.side-l, .khint, .side-h, .side-week, .side-dock, .pin-sec, .proj > :not(.proj-head), .proj-name, .proj-meta, .row-acts, .side-search, .side-empty, .foot-status .fs-t, .proj-mark .chev, .side-count) { display: none !important; }
+.app.side-rail .sidebar :is(.side-l, .khint, .side-h, .side-week, .side-dock, .pin-sec, .proj > :not(.proj-head), .proj-name, .proj-meta, .row-acts, .side-search, .side-empty, .me-t, .proj-mark .chev, .side-count) { display: none !important; }
 .app.side-rail .sidebar :is(.side-new, .side-link, .proj-btn) { justify-content: center; width: 40px; height: 40px; min-height: 40px; margin-inline: auto; padding: 0; gap: 0; }
 .app.side-rail .sidebar .side-new { margin-top: var(--sp-2); }
 .app.side-rail .sidebar .side-nav { align-items: center; }
 .app.side-rail .sidebar .side-scroll { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2) 0; }
 .app.side-rail .sidebar .proj-head { justify-content: center; }
 .app.side-rail .sidebar .proj-mark .ptile { opacity: 1 !important; }
-.app.side-rail .sidebar .side-foot { align-items: center; gap: var(--sp-2); }
-.app.side-rail .sidebar .foot-set { flex: none; }
-.app.side-rail .sidebar .foot-status { justify-content: center; width: var(--sp-8); padding: 0; }
+.app.side-rail .sidebar .side-foot { flex-direction: column; gap: var(--sp-1); }
+.app.side-rail .sidebar .me-btn { flex: none; justify-content: center; width: 40px; height: 40px; padding: 0; }
+.app.side-rail .sidebar .proj:has(> .s-row)::before { display: none; }
 .app.side-rail .sidebar :is(.side-link.cur, .s-row.cur > .s-btn)::before { left: calc(-1 * var(--pad)); }
 .app.side-rail .sidebar :is(.side-link, .proj-btn) { position: relative; }
 .app.side-rail .sidebar .side-link:has(.side-count)::after,

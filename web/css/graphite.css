@@ -21,7 +21,7 @@
   --accent: #E6E6E6; --accent-solid: #E6E6E6; --on-accent: #0B0B0B;
   --accent-soft: rgba(255,255,255,.08); --accent-line: rgba(255,255,255,.32);
   --brand: #E6E6E6;
-  /* The mark and the home hero go monochrome too: light ink instead of Plasma. */
+  /* The mark and the home hero go monochrome too: light ink instead of the brand green. */
   --mark: #F4F4F0; --plasma: #E6E6E6;
   /* State colours: the only hues on screen. */
   --live: #8AB4F8; --live-line: rgba(138,180,248,.40);
@@ -53,7 +53,7 @@
 :root[data-theme=graphite] .msg-time { color: var(--fg-3); }
 :root[data-theme=graphite] .work-h { color: var(--fg-3); }
 /* Code: an inset card with a quiet label row. */
-:root[data-theme=graphite] .session .md pre { border-color: var(--line-2); border-radius: 10px; background: var(--bg-inset); }
+:root[data-theme=graphite] .session .md pre { border-color: var(--line-2); border-radius: 8px; background: var(--bg-inset); }
 :root[data-theme=graphite] .code-head { background: transparent; color: var(--fg-3); }
 :root[data-theme=graphite] .md code.pathref { color: var(--fg); text-decoration-color: var(--line-3); }
 :root[data-theme=graphite] .md blockquote { border-left-color: var(--line-3); }
@@ -62,7 +62,7 @@
 :root[data-theme=graphite] .c-row .cbtn:hover:not(:disabled), :root[data-theme=graphite] .c-row .cbtn.on { color: var(--fg); }
 :root[data-theme=graphite] :is(.cbtn.plan-pick.on, .c-row .cbtn.plan.on) { background: var(--bg-active); }
 :root[data-theme=graphite] :is(.cbtn.plan-pick.on, .c-row .cbtn.plan.on) svg { color: var(--fg); }
-/* Send stays ink on hover; Stop stays red. Anything filled with the (now light) Plasma takes dark text. */
+/* Send stays ink on hover; Stop stays red. Anything filled with the (now light) brand colour takes dark text. */
 :root[data-theme=graphite] .send:not(.stop):not(:disabled):hover { background: #FFFFFF; color: #0B0B0B; }
 :root[data-theme=graphite] .update-pill.ready { color: #0B0B0B; }
 

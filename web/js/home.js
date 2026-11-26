@@ -1,10 +1,10 @@
-// Home: one centred stack. The ORBIX mark (48px, muted) and one line, "Where should we pick up?"; what needs you; three
-// suggestions as rows; the project and where it works (the project folder or a separate branch) as chips on top of the
-// message box; then the project's latest conversations. No cards.
+// Home: ORBIX in block letters and one line, "Where should we pick up?", centred; what needs you; three suggestions as
+// chips; the project's latest conversations. The message box sits at the bottom of the window, as in a conversation,
+// with the project and where it works (the project folder or a separate branch) as chips on top of it. No cards.
 // Conversations and projects are in the sidebar. Before a model or a project is connected, Home offers setup.
 import { addContext, permissionChip, modelLabel, effortChip } from './controls.js';
 import { runInTerminal } from './terminal.js';
-import { h, icon, iconBtn, replace, baseName, toast, logo, timeAgo } from './dom.js';
+import { h, icon, iconBtn, replace, baseName, toast, wordmark, timeAgo } from './dom.js';
 import { Composer, ASK, dropZone } from './composer.js';
 import { api } from './api.js';
 import { S, openTab, sendPrompt, setThinking, tabForSession, engineReady, savePrefs, groupSessions, on, emit, setActive } from './store.js';
@@ -107,10 +107,11 @@ function shell(root) {
   const under = h('div', { class: 'home-under' });
   const statusSlot = h('div', { class: 'home-status-slot' });
   const recentSlot = h('div', { class: 'home-recent-slot' });
-  const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark', 'aria-hidden': 'true' }, logo(48)), h('header', { class: 'home-head' }, title, sub));
-  // Top to bottom: what needs you, the suggestions, the project chips and the message box, the latest conversations.
-  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, alertSlot, stepsSlot, under, deckSlot, recentSlot);
-  const wrap = h('div', { class: 'home' }, hero, dock);
+  const hero = h('section', { class: 'home-hero', 'aria-label': 'ORBIX' }, h('span', { class: 'home-mark' }, wordmark()), h('header', { class: 'home-head' }, title, sub));
+  // Centred: the name, what needs you, the suggestions, the latest conversations. At the bottom: the message box.
+  const stage = h('div', { class: 'home-stage' }, hero, alertSlot, stepsSlot, under, recentSlot);
+  const dock = h('section', { class: 'home-dock', 'aria-label': 'New task' }, deckSlot);
+  const wrap = h('div', { class: 'home' }, stage, dock);
   W = { wrap, title, sub, alertSlot, stepsSlot, deckSlot, under, statusSlot, recentSlot };
   // One drop handler per screen; it always feeds the current box.
   if (!root._drop) {

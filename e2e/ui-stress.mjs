@@ -96,7 +96,7 @@ try {
             if (m.longCut !== null) check(m.longCut && m.longTip, `${tag}: a 120-character title is cut with an ellipsis and has its full text as a tooltip`);
             check(!m.half, `${tag}: no hairline thinner than one pixel`);
           }
-          if (count === 0) check(await page.eval(`return [...document.querySelectorAll('#sidebar .s-none')].some((x) => /No conversations yet · Start one/.test(x.textContent))`), `${tag}: empty project says "No conversations yet · Start one"`);
+          if (count === 0) check(await page.eval(`return [...document.querySelectorAll('#sidebar .s-start')].some((x) => /New conversation/.test(x.textContent))`), `${tag}: an empty project offers a New conversation row`);
 
           if (count === 500 && scale === 1 && w === 1440) {
             // hover: actions fade in over the row's end; nothing else moves
@@ -128,7 +128,7 @@ try {
             await page.press('ArrowDown', 40);
             check(await page.eval(`return document.activeElement?.dataset.path !== window.__f && document.activeElement?.closest('#sidebar .side-scroll') && document.activeElement.tabIndex === 0`), `${tag}: ArrowDown moves to the next row and makes it the tab stop`);
             // every theme: switching leaves no stuck colours
-            const themes = ['dark', 'light', 'midnight', 'frost', 'graphite', 'tokyo', 'mocha', 'rosepine', 'nord', 'dracula', 'gruvbox', 'latte', 'dawn', 'orbix', 'sunset', 'nebula', 'aurora', 'dark'];
+            const themes = ['dark', 'light', 'midnight', 'frost', 'graphite', 'tokyo', 'mocha', 'rosepine', 'nord', 'dracula', 'gruvbox', 'latte', 'dawn', 'orbix', 'sunset', 'nebula', 'aurora', 'dither', 'dark'];
             const seen = await page.eval(`const st = await import('/js/store.js'); const out = [];
               for (const t of ${JSON.stringify(themes)}) { st.savePrefs({ theme: t }); await new Promise((r) => setTimeout(r, 120));
                 const r = document.documentElement; out.push([r.dataset.theme, getComputedStyle(r).getPropertyValue('--bg').trim(), getComputedStyle(document.querySelector('#sidebar')).backgroundColor, [...r.style].filter((p) => !p.startsWith('--')).length]); }

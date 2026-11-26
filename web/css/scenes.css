@@ -1,5 +1,6 @@
 /* Scene themes: each one a palette plus a moving picture drawn by js/backdrop.js on the workspace sheet.
-   ORBIX (planet and ring), Synthwave (neon grid and striped sun), Nebula (drifting clouds of colour), Aurora.
+   ORBIX (planet and ring), Synthwave (neon grid and striped sun), Nebula (drifting clouds of colour), Aurora,
+   Dither (a landscape engraved in square dots of the brand colour, --plasma).
    Surfaces you read and type on stay opaque; the picture lives in the open space, under a soft veil of the sheet
    colour across the reading column (--scene-veil sets its strength). Loaded last. */
 
@@ -9,9 +10,9 @@
   --bg-hover: rgba(205,208,255,.05); --bg-active: rgba(205,208,255,.09); --bubble: #161722; --bubble-line: rgba(205,208,255,.07);
   --line: rgba(205,208,255,.075); --line-2: rgba(205,208,255,.12); --line-3: rgba(205,208,255,.22); --hi: transparent;
   --fg: #EDEDF3; --fg-2: #A8A9BA; --fg-3: #7E8093;
-  --accent: #FF4D8F; --accent-solid: #FF2E7E; --on-accent: #FFFFFF; --accent-soft: rgba(255,46,126,.12); --accent-line: rgba(255,46,126,.45);
-  --live: #FF2E7E; --live-line: rgba(255,46,126,.4);
-  --pa: #FF2E7E; --scrim: rgba(3,3,7,.7);
+  --accent: #3DF28C; --accent-solid: #3DF28C; --on-accent: #03130A; --accent-soft: rgba(61,242,140,.12); --accent-line: rgba(61,242,140,.42);
+  --live: #3DF28C; --live-line: rgba(61,242,140,.4);
+  --pa: #3DF28C; --scrim: rgba(3,3,7,.7);
   --scene-veil: .5;
 }
 
@@ -37,6 +38,18 @@
   --live: #F472B6; --live-line: rgba(244,114,182,.42);
   --pa: #A78BFA; --scrim: rgba(3,3,9,.72);
   --scene-veil: .52;
+}
+
+:root[data-theme=dither] {
+  color-scheme: dark;
+  --chrome: #050605; --bg-side: #050605; --bg: #070908; --bg-raise: #0F1311; --bg-raise-2: #161B18; --bg-modal: #0E1210; --bg-inset: #050706; --bg-field: #0A0D0B;
+  --bg-hover: color-mix(in srgb, var(--fg) 5%, transparent); --bg-active: color-mix(in srgb, var(--fg) 9%, transparent); --bubble: #131816; --bubble-line: color-mix(in srgb, var(--fg) 8%, transparent);
+  --line: color-mix(in srgb, var(--fg) 8%, transparent); --line-2: color-mix(in srgb, var(--fg) 13%, transparent); --line-3: color-mix(in srgb, var(--fg) 24%, transparent); --hi: transparent;
+  --fg: #E9F1EC; --fg-2: #A9B7AF; --fg-3: #7C8A82;
+  --accent: var(--plasma); --accent-solid: var(--plasma); --on-accent: var(--chrome); --accent-soft: color-mix(in srgb, var(--plasma) 12%, transparent); --accent-line: color-mix(in srgb, var(--plasma) 42%, transparent);
+  --live: var(--plasma); --live-line: color-mix(in srgb, var(--plasma) 40%, transparent);
+  --pa: var(--plasma); --scrim: color-mix(in srgb, var(--chrome) 72%, transparent);
+  --scene-veil: .56;
 }
 
 :root[data-theme=aurora] {
@@ -67,14 +80,16 @@
 
 /* Theme cards: the same little window, with each scene in the sheet. */
 .scene-opts { margin-top: 12px; }
-.tp-orbix { --tc: #06070B; --ts: #090A10; --tr: #11121A; --tl: rgba(205,208,255,.12); --ti: rgba(237,237,243,.32); --tf: rgba(237,237,243,.14); --tu: #181923; --ta: #FF2E7E; }
+.tp-orbix { --tc: #06070B; --ts: #090A10; --tr: #11121A; --tl: rgba(205,208,255,.12); --ti: rgba(237,237,243,.32); --tf: rgba(237,237,243,.14); --tu: #181923; --ta: #3DF28C; }
 .tp-sunset { --tc: #0A0516; --ts: #0D0620; --tr: #1A0E30; --tl: rgba(255,190,255,.14); --ti: rgba(248,240,255,.34); --tf: rgba(248,240,255,.14); --tu: #23143D; --ta: #FF4FB8; }
 .tp-nebula { --tc: #06060E; --ts: #0A0916; --tr: #131125; --tl: rgba(214,206,255,.13); --ti: rgba(238,235,255,.34); --tf: rgba(238,235,255,.14); --tu: #1B1830; --ta: #A78BFA; }
 .tp-aurora { --tc: #030A10; --ts: #05101A; --tr: #0C1B22; --tl: rgba(180,255,230,.13); --ti: rgba(234,251,245,.32); --tf: rgba(234,251,245,.14); --tu: #12242C; --ta: #5EF2B0; }
-.tp-orbix .tp-sheet, .tp-sunset .tp-sheet, .tp-nebula .tp-sheet, .tp-aurora .tp-sheet { position: relative; overflow: hidden; isolation: isolate; }
-.tp-orbix .tp-sheet::before, .tp-orbix .tp-sheet::after, .tp-nebula .tp-sheet::after { content: ''; position: absolute; z-index: -1; pointer-events: none; }
+/* Dither's card mirrors its palette; --ta is the dark-mode brand green the scene draws in, whatever theme is showing the card. */
+.tp-dither { --tc: #050605; --ts: #070908; --tr: #0F1311; --tl: rgba(233,241,236,.12); --ti: rgba(233,241,236,.32); --tf: rgba(233,241,236,.14); --tu: #161B18; --ta: #3DF28C; }
+.tp-orbix .tp-sheet, .tp-sunset .tp-sheet, .tp-nebula .tp-sheet, .tp-aurora .tp-sheet, .tp-dither .tp-sheet { position: relative; overflow: hidden; isolation: isolate; }
+.tp-orbix .tp-sheet::before, .tp-orbix .tp-sheet::after, .tp-nebula .tp-sheet::after, .tp-dither .tp-sheet::before, .tp-dither .tp-sheet::after { content: ''; position: absolute; z-index: -1; pointer-events: none; }
 .tp-orbix .tp-sheet::before { right: -10%; bottom: -22%; width: 50%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 32% 30%, rgba(150,130,255,.55), rgba(40,32,90,.6) 60%, #0B0B16 100%); box-shadow: 0 0 0 1px rgba(228,226,255,.25); }
-.tp-orbix .tp-sheet::after { right: -24%; bottom: 0; width: 92%; height: 22%; border-radius: 50%; border: 1.5px solid rgba(255,46,126,.6); transform: rotate(16deg); }
+.tp-orbix .tp-sheet::after { right: -24%; bottom: 0; width: 92%; height: 22%; border-radius: 50%; border: 1.5px solid rgba(61,242,140,.6); transform: rotate(16deg); }
 .tp-sunset .tp-sheet { background:
   radial-gradient(circle at 80% 56%, #FFD36E 0 9%, #FF6A8A 15%, transparent 16%),
   repeating-linear-gradient(180deg, transparent 0 5px, rgba(255,79,184,.5) 5px 6px) 0 62% / 100% 38% no-repeat,
@@ -90,6 +105,12 @@
   radial-gradient(ellipse 50% 12% at 70% 22%, rgba(155,140,255,.55), transparent 70%),
   linear-gradient(180deg, #030A12, #0A1F1C); }
 .tp-nebula .tp-sheet::after { inset: 0; z-index: -1; opacity: .7; background: radial-gradient(circle at 20% 30%, #fff 0 .6px, transparent 1px) 0 0 / 23px 19px, radial-gradient(circle at 70% 60%, #E8E6FF 0 .5px, transparent 1px) 0 0 / 31px 27px; }
+/* Dither's card: a moon of dots with a halo, and a dark ridge of sparser dots in front of it. */
+.tp-dither .tp-sheet::before { inset: 0; background: radial-gradient(circle, var(--ta) 0 .7px, transparent 1px) 0 0 / 3px 3px;
+  -webkit-mask-image: radial-gradient(circle at 78% 62%, var(--ta) 0 12px, color-mix(in srgb, var(--ta) 45%, transparent) 13px 18px, color-mix(in srgb, var(--ta) 12%, transparent) 26px, transparent 40px);
+  mask-image: radial-gradient(circle at 78% 62%, var(--ta) 0 12px, color-mix(in srgb, var(--ta) 45%, transparent) 13px 18px, color-mix(in srgb, var(--ta) 12%, transparent) 26px, transparent 40px); }
+.tp-dither .tp-sheet::after { inset: 0; background: radial-gradient(circle, color-mix(in srgb, var(--ta) 55%, transparent) 0 .6px, transparent .9px) 0 0 / 4px 4px, var(--ts);
+  clip-path: polygon(0 100%, 0 58%, 10% 50%, 20% 60%, 32% 46%, 44% 70%, 58% 64%, 70% 74%, 84% 60%, 100% 68%, 100% 100%); }
 
 @media (forced-colors: active) { .main > canvas.backdrop { display: none; } }
 /* Fireworks fly over the whole window, above dialogs and under menus and toasts. */

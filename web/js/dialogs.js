@@ -627,6 +627,9 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
       .then((result) => {
         if (!list.isConnected) return;
         models = Array.isArray(result) ? result : result?.models || [];
+        // Agents switched off in Settings → Agents stay out of the list (the current model always shows).
+        const hidden = new Set(S.ui.hiddenAgents || []);
+        if (hidden.size) models = models.filter((x) => !hidden.has(x.provider) || (current && current.provider === x.provider && current.id === x.id));
         errors = Array.isArray(result?.errors) ? result.errors : [];
         build();
         draw(true);

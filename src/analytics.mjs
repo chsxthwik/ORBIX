@@ -18,6 +18,7 @@ const blankDay = () => ({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, prom
 export function summarizeSession(text) {
   const messages = [];
   const usageOf = new Map();
+  let cwd = '';
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     let o;
@@ -26,7 +27,8 @@ export function summarizeSession(text) {
     } catch {
       continue;
     }
-    if (o.type === 'message' && o.message) messages.push(o.message);
+    if (o.type === 'session' && typeof o.cwd === 'string') cwd = o.cwd;
+    else if (o.type === 'message' && o.message) messages.push(o.message);
     else if (o.type === 'usage' && o.id && o.usage) usageOf.set(o.id, o.usage); // an agent CLI's turn total
   }
   const days = {};
@@ -64,7 +66,7 @@ export function summarizeSession(text) {
     }
   }
   closeTurn();
-  return { days, models, hours };
+  return { days, models, hours, cwd };
 }
 
 async function sessionFiles() {
@@ -79,9 +81,8 @@ async function sessionFiles() {
   return lists.flatMap((x) => x || []);
 }
 
-/** Totals for the last `range` days (7, 30 or 90), ending today. */
-export async function analytics(range = 30) {
-  const span = [7, 30, 90].includes(Number(range)) ? Number(range) : 30;
+/** Every session file's sums (cached by size and change time), and the list of files. */
+async function loadSums() {
   const files = await sessionFiles();
   const sums = await pool(files, 8, async (file) => {
     try {
@@ -97,6 +98,13 @@ export async function analytics(range = 30) {
   });
   const live = new Set(files);
   for (const k of cache.keys()) if (!live.has(k)) cache.delete(k);
+  return { files, sums };
+}
+
+/** Totals for the last `range` days (7, 30 or 90), ending today. */
+export async function analytics(range = 30) {
+  const span = [7, 30, 90].includes(Number(range)) ? Number(range) : 30;
+  const { files, sums } = await loadSums();
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -138,6 +146,93 @@ export async function analytics(range = 30) {
     heat,
     streak,
     busiestDay: busiest?.prompts ? busiest.date : null,
+    conversations: files.length,
+  };
+}
+
+const tokensOf = (d) => d.input + d.output + d.cacheRead + d.cacheWrite;
+
+/** Days in a row with at least one message of yours: the run ending today (or yesterday, if today has none yet) and the longest. */
+export function streaks(activeKeys, today = new Date()) {
+  const set = new Set(activeKeys);
+  const t = new Date(today);
+  t.setHours(0, 0, 0, 0);
+  let cur = 0;
+  let d = t.getTime();
+  if (!set.has(dayKey(d))) d -= DAY;
+  while (set.has(dayKey(d))) (cur++, (d -= DAY));
+  let longest = 0;
+  let run = 0;
+  let prev = null;
+  for (const k of [...set].sort()) {
+    const [y, m, dd] = k.split('-').map(Number);
+    const ms = new Date(y, m - 1, dd).getTime();
+    run = prev != null && Math.round((ms - prev) / DAY) === 1 ? run + 1 : 1;
+    longest = Math.max(longest, run);
+    prev = ms;
+  }
+  return { current: cur, longest };
+}
+
+/**
+ * Settings → Profile: everything since the first conversation on this PC. Lifetime tokens and messages, the busiest
+ * day, streaks, a year of activity by day, and the provider, model, hour and project you use most.
+ */
+export async function profile() {
+  const { files, sums } = await loadSums();
+  const days = {};
+  const models = {};
+  const hours = new Array(24).fill(0);
+  const projects = {};
+  for (const s of sums) {
+    if (!s) continue;
+    let prompts = 0;
+    for (const [k, d] of Object.entries(s.days)) {
+      const x = (days[k] ||= blankDay());
+      for (const f of Object.keys(d)) x[f] += d[f];
+      prompts += d.prompts;
+    }
+    for (const [k, m] of Object.entries(s.models)) {
+      const x = (models[k] ||= { model: m.model, provider: m.provider, tokens: 0, replies: 0 });
+      x.tokens += m.tokens;
+      x.replies += m.replies;
+    }
+    for (const row of Object.values(s.hours)) for (let i = 0; i < 24; i++) hours[i] += row[i];
+    if (s.cwd && prompts) projects[s.cwd] = (projects[s.cwd] || 0) + prompts;
+  }
+  const keys = Object.keys(days).sort();
+  const active = keys.filter((k) => days[k].prompts > 0);
+  const peak = keys.reduce((a, k) => (tokensOf(days[k]) > (a ? tokensOf(days[a]) : 0) ? k : a), null);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // A year of days ending today, starting on a Sunday so the grid has whole weeks.
+  const start = new Date(today.getTime() - 364 * DAY);
+  start.setDate(start.getDate() - start.getDay());
+  const year = [];
+  for (const d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) { // by calendar day, so DST changes cannot skip one
+    const k = dayKey(d.getTime());
+    const x = days[k];
+    year.push({ date: k, prompts: x?.prompts || 0, tokens: x ? tokensOf(x) : 0 });
+  }
+  const byProvider = {};
+  for (const m of Object.values(models)) if (m.provider) byProvider[m.provider] = (byProvider[m.provider] || 0) + m.replies;
+  const top = (o) => Object.entries(o).sort((a, b) => b[1] - a[1])[0] || null;
+  const replies = Object.values(models).reduce((n, m) => n + m.replies, 0);
+  const hourMax = Math.max(...hours);
+  const proj = top(projects);
+  return {
+    tokens: keys.reduce((n, k) => n + tokensOf(days[k]), 0),
+    prompts: keys.reduce((n, k) => n + days[k].prompts, 0),
+    workMs: keys.reduce((n, k) => n + days[k].workMs, 0),
+    peakDay: peak && tokensOf(days[peak]) ? { date: peak, tokens: tokensOf(days[peak]) } : null,
+    activeDays: active.length,
+    firstDay: active[0] || null,
+    streak: streaks(active, today),
+    year,
+    topProvider: top(byProvider)?.[0] || null,
+    topHour: hourMax > 0 ? hours.indexOf(hourMax) : null,
+    topProject: proj ? { path: proj[0], prompts: proj[1] } : null,
+    models: Object.values(models).sort((a, b) => b.replies - a.replies).slice(0, 6).map((m) => ({ ...m, share: replies ? m.replies / replies : 0 })),
     conversations: files.length,
   };
 }
