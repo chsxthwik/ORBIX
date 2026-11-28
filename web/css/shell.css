@@ -80,11 +80,6 @@ body { display: flex; flex-direction: column; height: 100vh; background: var(--c
 .sbar-wrap:has(.sfind[hidden]) { display: none; }
 .sfind { height: 38px; border-top: 0; border-bottom: 1px solid var(--line); }
 
-/* ================= message box ================= */
-/* The model chip reads "Opus 5.5  Medium": the reasoning level follows the name, quieter. */
-.c-row .cbtn.c-perm { color: var(--fg-2); }
-.c-row .cbtn.c-perm > svg:first-child { color: var(--fg-3); }
-.dock { padding-bottom: 12px; }
 
 /* Menus with check marks: items without one line up with those that have it. */
 .menu:has(.menu-check) .menu-it:not(:has(.menu-check)) { padding-left: 32px; }
@@ -414,25 +409,6 @@ html.sr .logo .lg-h, html.no-motion .logo .lg-h { animation: none !important; }
 /* Menu row: the mark leads it (18px, its centre over the sidebar button below), then the menus. */
 .mb-it.mb-brand { display: inline-flex; align-items: center; justify-content: center; margin-right: var(--sp-1); }
 .mb-brand .logo { width: 18px; height: 18px; }
-.c-row { flex-wrap: nowrap; gap: 2px; min-height: 0; margin: 0; padding: 8px 8px 8px; border: 0; }
-.c-row > .grow { flex: 1 1 0; min-width: 6px; }
-.c-row > .c-add { width: 30px; height: 30px; min-height: 30px; margin: 0; border-radius: 8px; color: var(--fg-2); }
-/* The chips: quiet until pointed at; only the model name gives way when space runs short. */
-.c-row .cbtn { flex: none; height: 30px; min-height: 30px; max-width: 240px; padding: 0 8px; gap: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--fg-2); font-size: var(--fs-13); line-height: 1; }
-.c-row .cbtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
-.c-row .cbtn.on { background: var(--bg-active); color: var(--fg); }
-.c-row .cbtn:has(.pv-mark) { flex: 0 1 auto; min-width: 0; }
-/* Send: a round button in the text colour; the brand colour on hover. Stop turns red on hover. */
-/* The send button is one of the few places the accent is used. */
-.send { flex: none; width: 32px; height: 32px; min-height: 32px; margin-left: 4px; padding: 0; border: 0; border-radius: 50%; background: var(--accent-solid); color: var(--on-accent); box-shadow: none; }
-.send > svg { width: 16px; height: 16px; }
-.send:not(.stop):not(:disabled):hover { background: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); }
-.send:disabled { background: var(--bg-active); color: var(--fg-3); }
-.send.stop { background: var(--err); color: #FFFFFF; box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent); }
-.send.stop:hover { background: color-mix(in srgb, var(--err) 86%, #fff); }
-@container dock (max-width: 480px) {
-  .session .c-row .cbtn:not(:has(.pv-mark)) > span, .session .c-row .cbtn > .cbtn-chev, .c-row .cbtn .c-pv, .c-row .cbtn .c-sl { display: none; }
-}
 
 /* ================= Model picker: a panel over the message box ================= */
 /* Provider marks in a narrow rail, the models with their Ctrl+N keys in the middle, reasoning levels on the right,
@@ -515,8 +491,6 @@ html.sr .logo .lg-h, html.no-motion .logo .lg-h { animation: none !important; }
 .perm-t { color: var(--fg); font-size: var(--fs-14); font-weight: var(--fw-h); }
 .perm-d { color: var(--fg-3); font-size: var(--fs-13); line-height: 1.45; }
 
-.session .c-row .cbtn:has(.pv-mark) { font-weight: var(--fw); color: var(--fg); }
-.c-row .cbtn:has(.pv-mark) .cbtn-chev { margin-left: -1px; }
 
 /* ================= Side panel: tabs ================= */
 .p-sec { margin-top: 20px; }
@@ -712,19 +686,8 @@ xterm-style { display: none; }
 .nt-note { color: var(--fg-3); }
 @container (max-width: 300px) { .nt-note { display: none; } }
 
-/* ================= Message box: "Provider / Model", the reasoning level, shell mode ================= */
-.c-row .cbtn:has(.c-mn) { gap: 4px; max-width: 320px; }
-.c-pv { flex: 0 3 auto; min-width: 0; color: var(--fg-3); font-weight: var(--fw); }
-.c-sl { flex: none; color: var(--fg-3); }
-.c-mn { flex: 0 1 auto; min-width: 0; color: var(--fg); font-weight: var(--fw); }
-.cbtn:hover .c-pv { color: var(--fg-2); }
-.c-effort { color: var(--fg-2); }
-.c-mode { display: none; align-items: center; gap: 8px; padding: 12px 16px 0; color: var(--fg-2); font-size: var(--fs-12); }
-.c-mode b { font-weight: var(--fw); }
-.c-mode span { color: var(--fg-3); }
-.composer.shell .c-ta { font-size: var(--fs-14); }
 @media (prefers-reduced-motion: reduce) {
-  .ptab-w.fresh, .nt-it, .xm-sub, .ctx-bar i, .composer.shell .c-mode { animation: none; }
+  .ptab-w.fresh, .nt-it, .xm-sub, .ctx-bar i { animation: none; }
   .ptab-new svg { transition: none; }
 }
 
@@ -748,7 +711,6 @@ body { font-size: var(--fs-14); }
 .menu-it { min-height: 34px; font-size: var(--fs-14); }
 .xm-it { height: 34px; font-size: var(--fs-14); }
 .menu.xm { width: 252px; }
-.cbtn { height: 32px; font-size: var(--fs-14); }
 
 
 /* ---- the Context tab ---- */
@@ -762,17 +724,6 @@ body { font-size: var(--fs-14); }
 .ctx-bar i { display: block; width: var(--p); height: 100%; border-radius: inherit; background: var(--fg-2); transform-origin: left; animation: grow-x var(--t4) var(--ease-out); }
 .ctx-bar.hot i { background: var(--warn); }
 .ctx-bar.crit i { background: var(--err); }
-.menu.ctx-popover { width: min(380px, calc(100vw - 16px)); max-height: max(120px, calc(100dvh - 96px)); overflow-y: auto; overscroll-behavior: contain; }
-.ctx-pop-body { display: grid; gap: 8px; padding: 12px; }
-.ctx-pop-title { font-size: var(--fs-16); font-weight: var(--fw-h); }
-.ctx-pop-total { color: var(--fg); font-weight: var(--fw); }
-.ctx-pop-list { display: grid; gap: 4px; margin: 12px 0; }
-.ctx-pop-list > div, .ctx-pop-cost { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
-.ctx-pop-list dt { color: var(--fg-2); }
-.ctx-pop-list dd { margin: 0; }
-.ctx-pop-cost { padding: 8px 0; border-top: 1px solid var(--line-2); }
-.ctx-pop-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.ctx-pop-outcome:empty, .ctx-pop-body > p:empty { display: none; }
 .ctx-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 28px; }
 .ctx-h { margin: 0 0 12px; color: var(--fg-3); font-size: var(--fs-13); font-weight: var(--fw-h); }
 .ctx-sys { margin: 0; padding: 16px 16px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--fg) 3%, transparent); color: var(--fg-2); font: var(--fs-13)/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -899,8 +850,6 @@ html.show-keys .toolbar [data-kbd]::after, html.show-keys .ptabs [data-kbd]::aft
 /* A field and its button are one height (Trusted commands, a project's check command, your ACP agents). */
 .trust-add { align-items: center; }
 .trust-add .btn { height: 32px; min-height: 32px; padding: 0 16px; }
-/* Keyboard focus on the message box's controls: a soft ring that follows the control's corners. */
-.c-row :is(.cbtn, .ibtn):focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; border-radius: 6px; box-shadow: none; }
 
 /* ---- Settings → Profile (profile.js): you, lifetime numbers, a year of activity, what you use most ---- */
 .pf { display: grid; gap: 32px; }

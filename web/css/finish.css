@@ -14,13 +14,7 @@
 /* Errors read as a line of red text with a thin rule, not a red box. */
 .msg .errbox { border: 0; border-left: 2px solid var(--err-line); border-radius: 0; background: transparent; box-shadow: none; padding: 2px 0 2px 16px; }
 
-/* ---- the message box: chips without outlines ---- */
-.c-row .cbtn:hover:not(:disabled) { border-color: transparent; }
-.c-row .cbtn.on { border-color: transparent; }
-.c-status { color: var(--fg-3); }
 
-/* ---- primary actions: flat, no lamp ---- */
-.send:not(.stop):not(:disabled):active { transform: scale(.98); box-shadow: none; }
 
 /* ---- panels, menus and dialogs: flat surfaces over a dim, unblurred workspace ---- */
 .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; }

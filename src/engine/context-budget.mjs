@@ -83,6 +83,8 @@ export function contextBudget({ messages, context, prompt, provider, model, wind
     tokens,
     contextWindow,
     percent: contextWindow ? tokens / contextWindow * 100 : null,
+    // The provider's own count of the latest request; otherwise ORBIX's estimate of what changed since.
+    reported: !!latest,
     estimated: !latest || !(planMode && measure?.plan ? measure.windowKnown : windowKnown),
     windowEstimated: !(planMode && measure?.plan ? measure.windowKnown : windowKnown),
     breakdown: allocate(weights, tokens),

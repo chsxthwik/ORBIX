@@ -2,11 +2,9 @@
 
 :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .ibtn:focus-visible, .ptab:focus-visible { outline-offset:-2px; }
-.session .send { transition:transform var(--t2) var(--ease), filter var(--t2) var(--ease), box-shadow var(--t3) var(--ease); }
-.session .send:hover:not(:disabled) { filter:brightness(1.06); }
 
 @media(prefers-reduced-motion:reduce) {
-  .ibtn, .send { transition:none !important; transform:none !important; }
+  .ibtn { transition:none !important; transform:none !important; }
 }
 .ptab svg { display: block; }
 
@@ -105,23 +103,16 @@
 }
 
 /* Reading and composing: consistent spacing across narrow and wide workspaces. */
-.main, .session, .dock-col, .msg, .md { min-width: 0; }
+.main, .session, .msg, .md { min-width: 0; }
 
-.c-ta { line-height: 1.65; scrollbar-gutter: stable; }
 .msg .md { overflow-wrap: anywhere; }
 .msg .md pre { overflow-x: auto; overscroll-behavior-inline: contain; }
 .msg .md .md-stream-preview { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg-act { min-height: var(--control-small); }
 .run-row-detail { min-width: 0; }
 .errbox { overflow-wrap: anywhere; }
-.session .send:hover:not(:disabled) {
-  transform: none; box-shadow: none;
-}
 @media (hover: none) {
   .msg-act, .ibtn { min-height: 40px; }
-}
-@media (max-width: 600px) {
-  .c-ta { font-size: var(--fs-16); }
 }
 
 /* Shared appearance controls and response surfaces. */
@@ -133,22 +124,15 @@
   *, *::before, *::after { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
 }
 
-.c-row .cbtn { min-width:0; }
-.c-row .cbtn > span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.c-row .send, .c-row > .ibtn { flex-shrink:0; }
 .session .bubble { min-width:0; overflow-wrap:anywhere; }
 .session .md pre { max-width:100%; }
 @media(max-width:600px) {
   .session .bubble { max-width:100%; }
 }
 
-:is(.cbtn, .send, .msg-act) > svg { display:block; flex-shrink:0; }
-.cbtn > svg.pv-mark { width:18px; height:18px; }
-.cbtn > .cbtn-chev { width:12px; height:12px; }
+.msg-act > svg { display:block; flex-shrink:0; }
 
 @media(pointer:coarse) {
   :root { --control-height:44px; --control-small:40px; --row-height:40px; }
   .msg-act { min-height:44px; }
 }
-
-.dock-col { container: dock / inline-size; }

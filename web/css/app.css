@@ -230,24 +230,6 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px va
 .upd-line.err { color: var(--err); }
 
 /* ================= composer (home and session) ================= */
-.composer { position: relative; display: flex; flex-direction: column; }
-.c-ta { field-sizing: content; width: 100%; min-height: 24px; max-height: min(280px, 38vh); margin: 0; padding: 4px 4px 12px 2px; border-radius: 0; color: var(--fg); font-size: var(--fs); resize: none; overflow-y: auto; }
-.c-ta, .c-ta:hover, .c-ta:focus { border: 0; box-shadow: none; background: transparent; }
-.c-ta:disabled { color: var(--fg-3); }
-.c-row { display: flex; align-items: center; min-width: 0; }
-.c-row > .ibtn { margin-left: -2px; }
-.cbtn { display: inline-flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; max-width: 260px; padding: 0 12px; border-radius: 6px; color: var(--fg-2); white-space: nowrap; transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease); }
-.cbtn svg { flex: none; }
-.cbtn:hover:not(:disabled) { background: var(--bg-hover); color: var(--fg); }
-.cbtn.on { background: var(--bg-active); color: var(--fg); }
-.cbtn.on.plan { background: var(--warn-soft); color: var(--warn); }
-.cbtn:disabled { opacity: .6; }
-.cbtn-chev { opacity: .55; }
-.send { position: relative; display: grid; place-items: center; overflow: hidden; transition: background-color var(--t1) var(--ease), color var(--t1) var(--ease), box-shadow var(--t2) var(--ease), transform var(--t1) var(--ease); }
-.send:active:not(:disabled) { transform: scale(.97); box-shadow: inset 0 1px 3px rgba(0,0,0,.3); transition-duration: 60ms; }
-.send:disabled { box-shadow: none; cursor: not-allowed; }
-.attach { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.attach:empty { display: none; }
 .att { position: relative; flex: none; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg-raise-2); animation: pop var(--t2) var(--ease-out); }
 .att.leaving { animation: att-out var(--t-exit) var(--ease-in) forwards; }
 .att.thumb { width: 56px; height: 56px; overflow: hidden; }
@@ -288,13 +270,8 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px va
    one), so opening at the bottom lands exactly there. The clip margin keeps hover rows and outlines past the edge. */
 .tin > .msg { content-visibility: auto; contain-intrinsic-size: auto 160px; overflow-clip-margin: 24px; }
 .tin > .cv-keep, .tin > .msg.live, .tin > .tl-flash, .tin > .cv-measure { content-visibility: visible; }
-.dock { position: relative; flex: none; padding: 0 24px 12px; }
-.dock::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 32px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; }
-.dock-col { display: flex; flex-direction: column; gap: 8px; max-width: var(--col); margin: 0 auto; }
 .jump { position: absolute; left: 50%; bottom: calc(100% + 10px); z-index: 10; display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-modal); color: var(--fg-2); font-size: var(--fs-13); box-shadow: var(--shadow-2); transform: translateX(-50%); animation: rise-x var(--t2) var(--ease); }
 .jump:hover { color: var(--fg); }
-.c-status { display: flex; align-items: center; gap: 16px; min-height: 20px; padding: 0 8px; font-size: var(--fs-12); overflow: hidden; white-space: nowrap; }
-.c-status kbd { height: 16px; min-width: 16px; font-size: var(--fs-12); }
 .queue { display: flex; flex-wrap: wrap; gap: 8px; }
 .queue:empty { display: none; }
 .q-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 26px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r); background: var(--bg-raise); color: var(--fg-2); font-size: var(--fs-13); animation: rise var(--t2) var(--ease); }
@@ -660,16 +637,11 @@ mark.wd.del { background: color-mix(in srgb, var(--err) 30%, transparent); }
 /* ================= narrow windows ================= */
 @media (max-width: 900px) {
   .tin { padding: 24px 16px 16px; }
-  .dock { padding: 0 16px 8px; }
 
 }
 @media (max-width: 760px) {
-    .cbtn { max-width: 170px; }
   .cl-row { grid-template-columns: 16px minmax(0, 1fr) 44px 60px; }
   .cl-p { display: none; }
-}
-@media (max-width: 560px) {
-  .cbtn > span { max-width: 90px; }
 }
 
 /* ================= motion ================= */
@@ -722,7 +694,6 @@ mark.wd.del { background: color-mix(in srgb, var(--err) 30%, transparent); }
 /* Reply summary: what the agent looked at and did, in one line. */
 .ts-file > svg { flex: none; color: var(--fg-3); }
 
-.c-row .cbtn.on svg { color: var(--fg); }
 
 /* Where a jump lands: a brief outline so the eye finds it. */
 .tl-flash { animation: tl-flash 1.3s var(--ease-out); border-radius: var(--r-md); }
@@ -760,9 +731,6 @@ html.sizing :is(.sidebar, #rs-side, .toolbar), html.still :is(.sidebar, #rs-side
 .p-bar { height: 38px; font-size: var(--fs-13); }
 
 /* ---- message box ---- */
-.c-row .cbtn > svg:first-child { color: var(--fg-3); }
-.c-row .cbtn.on > svg:first-child { color: var(--fg); }
-.c-row .cbtn.need { box-shadow: inset 0 0 0 1px var(--warn-line); }
 
 .pv-save-hidden { display: none; }
 .role-ctl { display: flex; align-items: center; gap: 8px; }
@@ -834,7 +802,6 @@ html.sizing :is(.sidebar, #rs-side, .toolbar), html.still :is(.sidebar, #rs-side
 .about-maker-t p { max-width: 46ch; margin: 2px 0 8px; color: var(--fg-2); font-size: var(--fs-13); line-height: 1.55; }
 @media (max-width: 640px) { .about-maker { flex-direction: column; align-items: flex-start; } .about-maker .ascii-comx { max-width: 100%; } }
 .pv-ic svg { display: block; }
-.c-row .cbtn > svg.pv-mark:first-child { color: var(--fg); }
 .list-h.with-mark { display: flex; align-items: center; gap: 8px; }
 .list-h.with-mark svg { flex: none; color: var(--fg-2); }
 /* Tools & MCP */

@@ -9,6 +9,7 @@ import { h, icon, iconBtn, logo, baseName, fmtElapsed, timeAgo, projTile, fmtTok
 import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 import { contextMenu } from './context.js';
+import { contextMeter } from './context-popover.js';
 import { gitState, showTab } from './panels.js';
 import { firstKey } from './keys.mjs';
 import { onMachine, backToThisPc } from './machines.js';
@@ -181,10 +182,14 @@ function crumbs(t, hub) {
   return [ws ? h('span', { class: 'crumb crumb-proj static', title: ws }, projTile(baseName(ws), 20), h('bdi', null, baseName(ws))) : null, ws ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/') : null, h('span', { class: 'crumb cur static' }, 'New conversation')].filter(Boolean);
 }
 
+// The context meter of the open conversation: the same button as in the message box, and the same panel.
+const meter = contextMeter(activeTab, () => showTab('context'), { cls: 'tb-ctx', always: true });
+on('tab:state', (tab) => { if (tab === activeTab()) meter.update(); });
 
 let topSig = '';
 export function drawToolbar(el, { force = false } = {}) {
   const t = activeTab();
+  meter.update();
   const hub = !t && H.hubView();
   const g = t && gitState(t.workspace);
   const sig = JSON.stringify([S.active, hub?.view, hub?.id, homeProject(), H.sideShown(), H.panelShown(), H.panelMax(), !!document.getElementById('app')?.classList.contains('overlay-panel'), canGo(-1), canGo(1), t && [t.name, t.workspace, stateOf(t), t.worktree?.branch, g?.branch, g?.files?.length]]);
@@ -211,7 +216,7 @@ export function drawToolbar(el, { force = false } = {}) {
     // This window shows a machine (ORBIX Cloud): say which, and lead back to this PC.
     onMachine() ? h('button', { class: 'tb-machine', type: 'button', title: window.orbixDesktop?.machines ? 'Back to the ORBIX on this PC' : 'ORBIX on a machine', onclick: () => (window.orbixDesktop?.machines ? backToThisPc() : H.settings('machines')) }, icon('cloud', 13), location.hostname, window.orbixDesktop?.machines ? h('span', { class: 'muted' }, '· Back to this PC') : null) : null,
     // The side panel works for a conversation, and on Home for the project chosen there.
-    t || (!hub && homeProject()) ? h('div', { class: 'tb-end' }, cxBtn(), docked || wide ? maxBtn() : null, panelBtn()) : null,
+    t || (!hub && homeProject()) ? h('div', { class: 'tb-end' }, t ? meter.el : null, cxBtn(), docked || wide ? maxBtn() : null, panelBtn()) : null,
     updatePill,
   ].filter(Boolean));
 }

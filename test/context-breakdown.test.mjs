@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { allocate, contextWeights, promptWeights } from '../src/engine/context-budget.mjs';
+import { allocate, contextBudget, contextWeights, promptWeights } from '../src/engine/context-budget.mjs';
 import { buildSystemPrompt, MODE_PROMPTS } from '../src/engine/prompt.mjs';
 
 const env = { workspace: 'C:\\w', shell: 'cmd', os: 'Windows', date: '2026-01-01', git: null };
@@ -38,6 +38,36 @@ describe('context breakdown', () => {
     const w = contextWeights([{ role: 'user', content: 'hi there' }, { role: 'toolResult', content: [{ type: 'text', text: 'x'.repeat(100) }] }], { system: 5, tools: 4, rules: 3, skills: 2, mcp: 1 });
     assert.deepEqual([w.system, w.tools, w.rules, w.skills, w.mcp], [5, 4, 3, 2, 1]);
     assert.ok(w.history > 0 && w.results > 0);
+  });
+});
+
+describe('where the context numbers come from', () => {
+  const prompt = { system: 100, tools: 50, rules: 0, skills: 0, mcp: 0 };
+  const user = { role: 'user', content: 'hi', timestamp: 1 };
+  const reply = { role: 'assistant', content: [{ type: 'text', text: 'hello' }], provider: 'p', model: 'm', timestamp: 2, contextMeasure: { input: 900, output: 20, epoch: null, weights: { ...prompt, files: 0, history: 1, results: 0 } } };
+  const budget = (messages, extra = {}) => contextBudget({ messages, context: messages, prompt, provider: 'p', model: 'm', window: 10000, windowKnown: true, ...extra });
+
+  test('right after a reply the count is the provider\'s own; one more message makes it an estimate', () => {
+    const fresh = budget([user, reply]);
+    assert.equal(fresh.reported, true);
+    assert.equal(fresh.tokens, 920);
+    assert.equal(fresh.estimated, false);
+    const later = budget([user, reply, { role: 'user', content: 'and then?', timestamp: 3 }]);
+    assert.equal(later.reported, false);
+    assert.ok(later.tokens > 920);
+  });
+
+  test('a limit ORBIX had to guess is marked, and no limit means no percent', () => {
+    const guessed = budget([user, reply], { windowKnown: false });
+    assert.deepEqual([guessed.reported, guessed.windowEstimated], [true, true]);
+    const none = budget([user, reply], { window: 0 });
+    assert.deepEqual([none.contextWindow, none.percent], [0, null]);
+    assert.equal(none.breakdown.reduce((n, r) => n + r.tokens, 0), none.tokens);
+  });
+
+  test('before any reply everything is an estimate', () => {
+    const b = budget([user]);
+    assert.deepEqual([b.reported, b.lastRequest], [false, null]);
   });
 });
 

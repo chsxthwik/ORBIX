@@ -4,9 +4,10 @@ import { errorState, fmtTokens, h, replace, skeleton, toast } from './dom.js';
 import { activeTab, on } from './store.js';
 
 export const contextLevel = (percent) => percent >= 95 ? 'crit' : percent >= 80 ? 'hot' : '';
-const percentText = (n) => `${n < 1 || n % 1 ? n.toFixed(1) : n}%`;
+/** A share as text. Below 1% it keeps a decimal, and anything above zero never reads as 0%. */
+export const percentText = (n) => !Number.isFinite(n) ? '' : n <= 0 ? '0%' : n < 0.1 ? '<0.1%' : n < 1 ? `${(Math.floor(n * 10) / 10).toFixed(1)}%` : `${Math.floor(n)}%`;
 const number = (n) => n.toLocaleString();
-const costText = (n) => !Number.isFinite(n) ? 'Not reported' : n > 0 && n < 0.0001 ? '<$0.0001' : `$${n.toFixed(n < 1 ? 4 : 2)}`;
+const costText = (n) => n === 0 ? '$0.00' : n < 0.0001 ? '<$0.0001' : `$${n.toFixed(n < 1 ? 4 : 2)}`;
 const labels = { system: 'System prompt', tools: 'Tool definitions', rules: 'Project rules', skills: 'Skills', mcp: 'MCP servers', files: 'Files attached', history: 'Conversation history', results: 'Tool results' };
 const label = (key) => labels[key] || key;
 
@@ -30,26 +31,39 @@ export async function requestCompaction(tab) {
   }
 }
 
+/** Where the numbers come from, in a few words: the provider's own count, or ORBIX's estimate; and the limit. */
+function sourceText(u) {
+  const usage = u.reported ? 'Reported by the provider' : u.lastRequest ? 'Estimated since the last reply' : 'Estimated';
+  const limit = !u.contextWindow ? 'limit unknown' : u.windowEstimated ? 'limit estimated' : '';
+  return limit ? `${usage}, ${limit}` : usage;
+}
+
 /**
- * The context panel, opened from the toolbar meter or the message box's ring: how full the window is, a bar split
- * by part with a legend, the session cost, and Compact. One panel at a time; it follows the conversation's numbers.
+ * The context panel. The toolbar meter and the message box's ring both open it, and it reads one thing: the
+ * conversation's `get_context_budget` reply, kept fresh by the conversation's own state events. Top to bottom:
+ * usage and limit, the breakdown by part, cost, then Details and Compact. One panel at a time.
  */
 let current;
+let panels = 0;
 export function openContextBudget(anchor, tab, openDetails) {
   if (current?.tab === tab && current.anchor === anchor) return current.close();
   current?.close(false);
+  const id = `cx-${++panels}`;
   const title = h('h2', { class: 'cx-title', tabindex: '-1' }, 'Context');
   const badge = h('span', { class: 'cx-badge num' });
   const body = h('div', { class: 'cx-main' }, skeleton(3));
-  const outcome = h('p', { class: 'ctx-pop-outcome cx-outcome', role: 'status' });
+  const note = h('p', { class: 'cx-note', role: 'status', id: `${id}-note` });
   const compact = btn('Compact now', () => requestCompaction(tab), 'sm');
+  compact.setAttribute('aria-describedby', note.id);
   const details = openDetails ? h('button', { class: 'cx-link', type: 'button', onclick: () => (pop.close(false), openDetails()) }, 'Details') : null;
   const foot = h('div', { class: 'cx-foot' }, details, h('span', { class: 'grow' }), compact);
   compact.disabled = true;
   let stats = tab.stats?.contextUsage ? { ...tab.stats } : null;
-  let loading = !stats;
-  const pop = popover(anchor, h('div', { class: 'cx-body' }, h('header', { class: 'cx-head' }, title, badge), body, outcome, foot), {
-    align: 'end', cls: 'ctx-popover cx-pop', label: 'Context',
+  let loading = true;
+  let failed = '';
+  let seq = 0;
+  const pop = popover(anchor, h('div', { class: 'cx-body' }, h('header', { class: 'cx-head' }, title, badge), body, note, foot), {
+    align: 'end', cls: 'cx-pop', label: 'Context',
     onClose: () => {
       anchor.setAttribute('aria-expanded', 'false');
       if (current === state) current = null;
@@ -59,56 +73,77 @@ export function openContextBudget(anchor, tab, openDetails) {
   current = state;
   anchor.setAttribute('aria-expanded', 'true');
   title.focus({ preventScroll: true });
+  // Tab stays inside the panel; Escape (dialogs.js) closes it and hands the focus back to the button that opened it.
+  pop.el.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const stops = [...pop.el.querySelectorAll('button:not(:disabled), a[href]')];
+    if (!stops.length) return e.preventDefault();
+    const at = stops.indexOf(document.activeElement);
+    const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at < 0 || at === stops.length - 1 ? 0 : at + 1);
+    e.preventDefault();
+    stops[next].focus();
+  });
 
   function updateActions() {
     const blocked = compactBlock(tab, stats);
-    compact.disabled = loading || !stats || !!blocked;
-    compact.title = blocked || 'Summarize older turns. The latest six stay as they are.';
+    const busy = !!tab.compacting;
+    compact.disabled = loading || !stats?.contextUsage || !!blocked;
+    compact.textContent = busy ? 'Compacting…' : 'Compact now';
+    compact.setAttribute('aria-busy', String(busy));
+    compact.title = blocked ? '' : 'Summarize older turns. The latest six stay as they are.';
     const r = tab.compactionResult?.result;
     const err = tab.compactionResult?.error;
-    outcome.textContent = err ? `Couldn’t compact: ${err}` : r
-      ? r.tokensSaved > 0 ? `${number(r.tokensSaved)} tokens saved (${number(r.tokensBefore)} → ${number(r.tokensAfter)})` : 'Compacted. The estimate did not decrease.'
-      : '';
-    outcome.classList.toggle('err', !!err);
+    // One line under the numbers: how the last compaction went, else why Compact is off right now.
+    const outcome = err ? `Couldn’t compact: ${err}`
+      : r ? (r.tokensSaved > 0 ? `${number(r.tokensSaved)} tokens saved (${number(r.tokensBefore)} → ${number(r.tokensAfter)})` : 'Compacted. The estimate did not decrease.') : '';
+    const why = !outcome && blocked && !loading && !failed ? blocked : '';
+    note.textContent = busy ? '' : outcome || why;
+    note.className = `cx-note ${busy ? '' : err ? 'err' : r ? 'ok' : ''}`.trim();
   }
 
   function render() {
     const u = stats?.contextUsage;
     const cw = u?.contextWindow;
     const level = contextLevel(u?.percent);
-    const approx = u?.estimated ? '~' : '';
-    badge.textContent = u && Number.isFinite(u.percent) ? `${percentText(Math.round(u.percent * 10) / 10)} used` : '';
+    const approx = u && !u.reported ? '~' : '';
+    badge.textContent = u && Number.isFinite(u.percent) ? `${percentText(u.percent)} used` : '';
     badge.className = `cx-badge num ${level}`.trim();
     if (!u) {
-      replace(body, h('p', { class: 'cx-empty' }, `${stats?.contextOwner || 'This agent'} doesn’t share its context with ORBIX.`), costRow());
+      replace(body, h('p', { class: 'cx-empty' }, `${stats?.contextOwner || 'This agent'} keeps its own context and does not share its size with ORBIX.`), costRows());
       return finish();
     }
     const parts = (u.breakdown || []).filter((r) => r.tokens > 0);
+    // Each part is drawn against the limit when it is known, so the empty end of the bar is the room left.
     const base = cw || u.tokens || 1;
-    const bar = h('div', { class: `cx-seg ${level}`.trim(), role: 'meter', 'aria-label': 'Context window used', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.min(100, u.percent || 0)) },
+    const share = (tokens) => (tokens / base) * 100;
+    const bar = h('div', { class: `cx-seg ${level}`.trim(), role: 'meter', 'aria-label': cw ? 'Context window used' : 'Context by part', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.min(100, Math.round(share(u.tokens) * 10) / 10)), 'aria-valuetext': cw ? `${percentText(u.percent)} of ${number(cw)} tokens` : `${number(u.tokens)} tokens` },
       parts.map((r) => {
         const s = h('i', { 'data-key': r.key });
-        s.style.width = `${Math.min(100, (r.tokens / base) * 100)}%`;
+        s.style.width = `${Math.min(100, share(r.tokens))}%`;
         return s;
       }));
-    const used = parts.reduce((n, r) => n + r.tokens, 0) || 1;
     replace(body,
-      h('p', { class: 'cx-total num' }, h('b', null, `${approx}${fmtTokens(u.tokens)}`), cw ? ` of ${fmtTokens(cw)} tokens` : ' tokens'),
+      h('div', { class: 'cx-use' },
+        h('p', { class: 'cx-total num', title: cw ? `${number(u.tokens)} of ${number(cw)} tokens` : `${number(u.tokens)} tokens` }, h('b', null, `${approx}${fmtTokens(u.tokens)}`), cw ? ` of ${fmtTokens(cw)} tokens` : ' tokens'),
+        h('p', { class: 'cx-src' }, sourceText(u))),
       bar,
       level ? h('p', { class: `cx-warn ${level}` }, level === 'crit' ? 'Almost full. Compact to keep going.' : 'Filling up.') : null,
-      h('ul', { class: 'ctx-pop-list cx-rows' }, parts.map((r) => h('li', null,
-        h('span', { class: 'cx-sw', 'data-key': r.key, 'aria-hidden': 'true' }),
-        h('span', { class: 'cx-l' }, label(r.key)),
-        h('span', { class: 'cx-n num' }, `${approx}${fmtTokens(r.tokens)}`),
-        h('span', { class: 'cx-p num' }, `${Math.round((r.tokens / used) * 100)}%`)))),
-      costRow(u));
+      parts.length ? h('section', { class: 'cx-parts', 'aria-label': 'Breakdown' },
+        h('div', { class: 'cx-sub' }, h('h3', null, 'Breakdown'), h('span', null, cw ? 'approximate, share of the limit' : 'approximate, share of what is used')),
+        h('ul', { class: 'cx-rows' }, parts.map((r) => h('li', null,
+          h('span', { class: 'cx-sw', 'data-key': r.key, 'aria-hidden': 'true' }),
+          h('span', { class: 'cx-l' }, label(r.key)),
+          h('span', { class: 'cx-n num', title: `${number(r.tokens)} tokens` }, `~${fmtTokens(r.tokens)}`),
+          h('span', { class: 'cx-p num' }, percentText(share(r.tokens))))))) : null,
+      costRows(u));
     finish();
   }
-  function costRow(u) {
+  function costRows(u) {
     const report = u?.lastRequest;
-    return h('div', { class: 'cx-stats' },
-      h('div', { class: 'ctx-pop-cost cx-stat' }, h('span', null, 'Session cost'), h('strong', { class: 'num' }, costText(stats?.cost))),
-      report ? h('div', { class: 'cx-stat' }, h('span', null, 'Last request'), h('span', { class: 'num', title: report.model }, `${number(report.input)} input, ${number(report.output)} output`)) : null);
+    const known = Number.isFinite(stats?.cost);
+    return h('dl', { class: 'cx-stats' },
+      h('div', { class: 'cx-stat cx-cost' }, h('dt', null, 'Session cost'), h('dd', { class: `num${known ? '' : ' na'}`, title: known ? '' : 'The provider did not report a price for this session.' }, known ? costText(stats.cost) : 'Not reported')),
+      report ? h('div', { class: 'cx-stat' }, h('dt', null, 'Last request'), h('dd', { class: 'num', title: report.model }, `${number(report.input)} input, ${number(report.output)} output`)) : null);
   }
   function finish() {
     updateActions();
@@ -116,26 +151,37 @@ export function openContextBudget(anchor, tab, openDetails) {
   }
 
   async function load() {
+    const mine = ++seq;
+    failed = '';
+    loading = true;
     if (!stats) replace(body, skeleton(3));
     updateActions();
     try {
       const reply = await rpc(tab.id, { type: 'get_context_budget' });
-      if (current !== state) return;
+      if (current !== state || mine !== seq) return;
       stats = { ...(stats || {}), ...reply.data };
       if (reply.data?.contextUsage) tab.stats = { ...(tab.stats || {}), contextUsage: reply.data.contextUsage };
       loading = false;
       render();
     } catch (e) {
-      if (current !== state) return;
+      if (current !== state || mine !== seq) return;
       loading = false;
       if (stats) return render();
+      failed = e.message;
+      badge.textContent = '';
       replace(body, errorState(e.message, { title: 'Couldn’t read context usage.', retry: load }));
       finish();
     }
   }
 
+  // A turn or a compaction that ends while the panel is open changes the numbers and the cost: ask again.
+  let wasBusy = !!(tab.streaming || tab.compacting);
   function refresh(useStats) {
-    if (useStats && !loading && tab.stats?.contextUsage) {
+    const busy = !!(tab.streaming || tab.compacting);
+    const ended = wasBusy && !busy;
+    wasBusy = busy;
+    if (ended) return load();
+    if (useStats && !loading && !failed && tab.stats?.contextUsage) {
       stats = { ...(stats || {}), ...tab.stats };
       render();
     } else updateActions();
@@ -144,23 +190,24 @@ export function openContextBudget(anchor, tab, openDetails) {
   load();
 }
 
-// ================= the composer's context ring =================
+// ================= the meter: one button, in the toolbar and in the message box =================
 
 const SVG = 'http://www.w3.org/2000/svg';
 const RING = 2 * Math.PI * 6;
 
-/** Whether there is anything to show: a conversation with a measured context. */
+/** Whether the conversation has a measured context. */
 const hasUsage = (tab) => {
   const u = tab?.stats?.contextUsage;
-  return !!u && !tab.dead && u.tokens > 0 && Array.isArray(u.breakdown);
+  return !!u && u.tokens > 0;
 };
 
 /**
- * A small ring in the message box's row showing how full the context is. Click opens "Context usage" above the
- * box: the total, a bar split by part, one row per part, and Compact. Hidden until the conversation has a measured
- * context. `update()` redraws it from tab.stats.
+ * A small ring and the percent used. A click opens the context panel on the conversation `getTab()` returns.
+ * `cls` places it (`tb-ctx` in the toolbar, `c-ctx` in the message box). With `always`, it stays in view for a
+ * conversation whose agent does not share its context (the panel still has its cost); otherwise it hides until
+ * there is a measured context. `update()` redraws it from the conversation's stats.
  */
-export function contextRing(tab, onPanel) {
+export function contextMeter(getTab, onDetails, { cls = '', always = false } = {}) {
   const arc = document.createElementNS(SVG, 'circle');
   const track = document.createElementNS(SVG, 'circle');
   const svg = document.createElementNS(SVG, 'svg');
@@ -168,27 +215,37 @@ export function contextRing(tab, onPanel) {
   for (const c of [track, arc]) (c.setAttribute('cx', '8'), c.setAttribute('cy', '8'), c.setAttribute('r', '6'), svg.append(c));
   track.setAttribute('class', 'ring-track');
   arc.setAttribute('class', 'ring-arc');
-  arc.setAttribute('stroke-dasharray', `0 ${RING.toFixed(2)}`);
-  const pctEl = h('span', { class: 'c-ctx-p num', 'aria-hidden': 'true' });
-  const el = h('button', { class: 'c-ctx', type: 'button', hidden: true, 'aria-haspopup': 'dialog', 'aria-expanded': 'false', onclick: () => openContextBudget(el, tab, onPanel) }, svg, pctEl);
-  let sig = '';
+  const text = h('span', { class: 'ctx-meter-p num', 'aria-hidden': 'true' });
+  const el = h('button', { class: `ctx-meter ${cls}`.trim(), type: 'button', hidden: true, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' }, svg, text);
+  el.addEventListener('click', () => {
+    const tab = getTab();
+    if (tab && !tab.dead) openContextBudget(el, tab, onDetails);
+  });
+  let sig = null;
   const update = () => {
-    const show = hasUsage(tab);
+    const tab = getTab();
+    const measured = hasUsage(tab);
+    const show = !!tab && !tab.dead && (measured || always);
     el.hidden = !show;
-    if (!show) return;
-    const u = tab.stats.contextUsage;
-    const pct = Number.isFinite(u.percent) ? Math.min(100, u.percent) : null;
-    const next = `${pct?.toFixed(1)}:${u.tokens}`;
+    if (!show) return (sig = null);
+    const u = measured ? tab.stats.contextUsage : null;
+    const pct = u && Number.isFinite(u.percent) ? Math.min(100, u.percent) : null;
+    const next = u ? `${pct == null ? '' : pct.toFixed(2)}:${u.tokens}:${u.contextWindow || 0}:${!!u.reported}` : 'none';
     if (next === sig) return;
     sig = next;
-    const level = contextLevel(u.percent);
+    const level = contextLevel(pct);
     el.classList.toggle('hot', level === 'hot');
     el.classList.toggle('crit', level === 'crit');
-    arc.setAttribute('stroke-dasharray', `${((RING * Math.max(pct || 0, 4)) / 100).toFixed(2)} ${RING.toFixed(2)}`);
-    pctEl.textContent = pct == null ? fmtTokens(u.tokens) : pct < 1 ? '<1%' : `${Math.round(pct)}%`;
-    const text = pct != null ? `Context: ${Math.round(pct)}% used` : `Context: ${fmtTokens(u.tokens)} tokens`;
-    el.title = text;
-    el.setAttribute('aria-label', text);
+    el.classList.toggle('none', !u);
+    // The arc is the true share: under 1% it is a dot (the round cap), never padded up to look fuller.
+    arc.setAttribute('stroke-dasharray', `${Math.max(0.01, (RING * (pct || 0)) / 100).toFixed(2)} ${RING.toFixed(2)}`);
+    arc.style.visibility = pct ? '' : 'hidden';
+    text.textContent = !u ? '' : pct == null ? fmtTokens(u.tokens) : percentText(pct);
+    const tip = !u ? 'Context and cost'
+      : u.contextWindow ? `Context: ${fmtTokens(u.tokens)} of ${fmtTokens(u.contextWindow)} tokens (${percentText(pct)})${u.reported ? '' : ', estimated'}`
+      : `Context: ${fmtTokens(u.tokens)} tokens, limit unknown`;
+    el.title = tip;
+    el.setAttribute('aria-label', tip);
   };
   update();
   return { el, update };

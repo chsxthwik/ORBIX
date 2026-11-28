@@ -289,7 +289,7 @@ export function popover(anchor, content, { align = 'start', cls = '', label = ''
     const ht = el.offsetHeight;
     el.style.left = Math.max(8, Math.min(align === 'end' ? r.right - w : r.left, innerWidth - w - 8)) + 'px';
     const below = r.bottom + 6 + ht <= innerHeight - 8 || r.top - 6 - ht < 8;
-    el.style.top = (below ? r.bottom + 6 : r.top - 6 - ht) + 'px';
+    el.style.top = Math.max(8, Math.min(below ? r.bottom + 6 : r.top - 6 - ht, innerHeight - ht - 8)) + 'px';
     el.classList.toggle('down', below);
     el.classList.toggle('up', !below);
   };

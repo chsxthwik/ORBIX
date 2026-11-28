@@ -31,13 +31,6 @@ html:root:root .app:not(.no-panel):not(.overlay-panel) .panel { margin: 0; borde
 html:root:root .bubble { padding: 8px 16px; border: 0; border-radius: 20px; background: var(--bubble); font-size: var(--fs); line-height: 1.55; }
 /* Message actions, steps, tables and the timeline: transcript.css. */
 
-/* ================= composer ================= */
-html:root:root .c-row .cbtn { height: 28px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; }
-html:root:root .c-row .cbtn.c-perm.risky { box-shadow: none; }
-html:root:root .c-row > .c-add { width: 28px; height: 28px; min-height: 28px; }
-html:root:root .send:not(.stop) { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent); }
-html:root:root .send:not(.stop):disabled { background: var(--bg-active); color: var(--fg-3); }
-html:root:root .send:not(.stop):not(:disabled):hover { background: var(--accent-solid); color: var(--on-accent); }
 
 /* ================= effort chooser (restyled only: the same slider, levels and animation) ================= */
 html:root:root .menu.rs-pop { width: 248px; padding: 6px 10px 10px !important; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-modal); }
@@ -66,29 +59,15 @@ html:root:root :is(.home-mark, .empty-mark) { display: grid; place-items: center
 html:root:root .wordmark { display: block; }
 
 /* ================= buttons ================= */
-/* One shape for every button, the brand colour on the one primary action of a screen, a visible
-   focus ring for the keyboard, and a small press. */
+/* One visible focus ring for the keyboard on every control. */
 html:root:root :is(.cbtn, .send, .mb-it, .tb-side, .tb-panel, .tb-max, .tb-nav, .tb-search, .ptab):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-html:root:root .send:active:not(:disabled) { transform: translateY(1px); }
 
 
 /* ================= motion: the existing animations stay; these only add hover and panel timing ================= */
-@media (prefers-reduced-motion: reduce) {
-  html:root:root .composer { transition: none; }
-}
-html.no-motion:root:root .composer { transition: none; }
 html.no-motion:root:root :is(.btn, .send):active:not(:disabled) { transform: none; }
 @media (prefers-reduced-motion: reduce) { html:root:root :is(.btn, .send):active:not(:disabled) { transform: none; } }
-@media (forced-colors: active) {
-  html:root:root .composer:focus-within { outline-color: Highlight; }
-}
 
-/* ================= model chip and picker ================= */
-/* The chip's text had a line box shorter than its letters, so g, p and y lost their tails. */
-html:root:root .c-row .cbtn > span { line-height: 20px; }
-html:root:root .c-row .cbtn .c-pv { color: var(--fg-3); }
-html:root:root .c-row .cbtn .c-sl { margin: 0 1px; color: var(--line-3); }
-html:root:root .c-row .cbtn:has(.c-mn):hover .c-mn { color: var(--fg); }
+/* ================= model picker ================= */
 /* The open source in the picker's rail is a filled tile; the bar on its edge sat on the divider. */
 html:root:root .mp-pv.on::after { display: none; }
 html:root:root .mp-pv.on { box-shadow: inset 0 0 0 1px var(--line-2); }
