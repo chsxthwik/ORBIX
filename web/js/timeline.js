@@ -1,8 +1,8 @@
-// The conversation timeline: a thin column of dots 24px outside the transcript's left edge, one per turn (each of your
-// messages starts one; the replies belong to it). The turn on screen has its dot filled with the accent. Hover or focus
-// shows the first 60 characters of your message; a click (or Enter) scrolls to it; Up and Down move between dots; Alt+Up
-// and Alt+Down (stepYou, bound in keys.mjs) jump between your own messages from anywhere in the conversation. Hidden in
-// windows under 1100px.
+// The conversation timeline: a thin column of marks 24px outside the transcript's left edge, one per turn (each of your
+// messages starts one; the replies belong to it). The current turn's mark is the strongest, turns on screen a step
+// below. Hover or focus shows a card after a short delay: your message on one line and the start of the reply; Esc
+// closes it. A click (or Enter) scrolls to the turn; Up and Down move between marks; Alt+Up and Alt+Down (stepYou,
+// bound in keys.mjs) jump between your own messages from anywhere in the conversation. Hidden in windows under 1100px.
 //
 // Nothing here runs on scroll. An IntersectionObserver on the transcript lights the turns in view, and
 // the dot list is rebuilt only when the transcript's top-level children change (a MutationObserver, one frame later).
@@ -17,12 +17,20 @@ const still = () => {
   return root.classList.contains('sr') || root.classList.contains('no-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches;
 };
 
-/** The text a message starts with: your bubble, or the first block of the agent's answer. */
-function messageText(el) {
-  if (el.classList.contains('user')) return el.querySelector('.bubble')?.textContent || '';
-  const md = el.querySelector('.md');
-  const first = md && [...md.children].find((c) => c.textContent.trim());
-  return (first || md || el).textContent || '';
+const TIP_DELAY = 150; // ms before the card shows; moving to another mark while it shows switches at once
+const REPLY_CHARS = 240; // the card clamps the reply to two lines; this only bounds the text put in it
+
+/** The text of your message. */
+const messageText = (el) => el.querySelector('.bubble')?.textContent || '';
+
+/** The start of the turn's answer: the last reply drawn after your message (outside the steps' fold), flattened. */
+function replyText(user) {
+  let answer = null;
+  for (let el = user.nextElementSibling; el && !el.matches('.msg.user'); el = el.nextElementSibling) {
+    if (el.matches('.msg.asst') && el.querySelector(':scope > .md')) answer = el;
+  }
+  const text = answer ? [...answer.querySelectorAll(':scope > .md')].map((md) => md.textContent).join(' ') : '';
+  return text.replace(/\s+/g, ' ').trim().slice(0, REPLY_CHARS);
 }
 
 export class Timeline {
@@ -30,7 +38,12 @@ export class Timeline {
   constructor(view) {
     this.view = view;
     this.el = h('nav', { class: 'turn-map', 'aria-label': 'Conversation timeline', hidden: true });
-    this.tip = h('div', { class: 'tm-tip', 'aria-hidden': 'true' });
+    // The card repeats the mark's label (which already names your message) for the eye, so screen readers skip it.
+    this.tipQ = h('div', { class: 'tm-tip-q' });
+    this.tipA = h('div', { class: 'tm-tip-a' });
+    this.tip = h('div', { class: 'tm-tip', 'aria-hidden': 'true' }, this.tipQ, this.tipA);
+    this.tipFor = null; // the mark whose card shows (or is about to)
+    this.tipTimer = 0;
     // The dots sit on a track that slides (a transform) when there are more than fit: moving it never forces layout,
     // which setting scrollTop would on every change of the current message.
     this.track = h('div', { class: 'tm-track' });
@@ -61,10 +74,10 @@ export class Timeline {
     this.mo = new MutationObserver(() => this.refreshSoon());
     this.mo.observe(view.tin, { childList: true });
     this.el.addEventListener('keydown', (e) => this.onKey(e));
-    this.el.addEventListener('pointerover', (e) => this.showTip(e.target.closest('.turn-mark')));
+    this.el.addEventListener('pointerover', (e) => this.tipSoon(e.target.closest('.turn-mark')));
     this.el.addEventListener('pointerleave', () => this.hideTip());
-    this.el.addEventListener('focusin', (e) => this.showTip(e.target.closest('.turn-mark')));
-    this.el.addEventListener('focusout', () => this.hideTip());
+    this.el.addEventListener('focusin', (e) => this.tipSoon(e.target.closest('.turn-mark')));
+    this.el.addEventListener('focusout', (e) => this.el.contains(e.relatedTarget) || this.hideTip());
     // Kept as a function property: session.js calls timeline.update() on resize and when a conversation opens.
     this.update = () => this.measure();
     this.update.cancel = () => {};
@@ -201,6 +214,12 @@ export class Timeline {
   onKey(e) {
     const at = this.marks.findIndex((m) => m.button === document.activeElement);
     if (at < 0) return;
+    if (e.key === 'Escape' && this.tipFor) {
+      e.preventDefault();
+      e.stopPropagation(); // Esc closes the card only; it does not also stop the agent
+      this.hideTip();
+      return;
+    }
     const to = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: this.marks.length - 1 }[e.key];
     if (to === undefined || e.altKey || e.ctrlKey || e.metaKey) return;
     e.preventDefault();
@@ -211,24 +230,44 @@ export class Timeline {
     this.keepInStrip(this.marks.indexOf(this.marks.find((m) => m.button === next)));
   }
 
-  showTip(button) {
+  /** Show `button`'s card: after TIP_DELAY, or at once when another mark's card already shows. */
+  tipSoon(button) {
     const mark = button && this.marks[Number(button.dataset.i)];
     if (!mark || mark.button !== button || this.el.hidden) return this.hideTip();
-    this.tip.textContent = mark.line || 'Your message';
+    if (this.tipFor === mark) return;
+    const showing = this.tip.classList.contains('on');
+    clearTimeout(this.tipTimer);
+    this.tipFor = mark;
+    if (showing) this.showTip(mark);
+    else this.tipTimer = setTimeout(() => this.showTip(mark), TIP_DELAY);
+  }
+
+  /** Fill the card and place it right of the mark, centred on it, kept inside the view. */
+  showTip(mark) {
+    if (this.tipFor !== mark || !mark.button.isConnected) return;
+    this.tipQ.textContent = firstLine(messageText(mark.target), 200) || 'Your message';
+    this.tipA.textContent = replyText(mark.target);
     const root = this.view.root.getBoundingClientRect();
-    const r = button.getBoundingClientRect();
-    this.tip.style.setProperty('--tip-x', `${Math.round(r.right - root.left + 6)}px`);
-    this.tip.style.setProperty('--tip-y', `${Math.round(r.top + r.height / 2 - root.top)}px`);
+    const r = mark.button.getBoundingClientRect();
+    const x = Math.round(r.right - root.left + 8);
+    this.tip.style.setProperty('--tip-room', `${Math.max(160, Math.round(root.width - x - 16))}px`);
+    const hgt = this.tip.offsetHeight;
+    const y = Math.round(Math.min(Math.max(8, r.top + r.height / 2 - root.top - hgt / 2), root.height - hgt - 8));
+    this.tip.style.setProperty('--tip-x', `${x}px`);
+    this.tip.style.setProperty('--tip-y', `${y}px`);
     this.tip.classList.add('on');
   }
 
   hideTip() {
+    clearTimeout(this.tipTimer);
+    this.tipFor = null;
     this.tip.classList.remove('on');
   }
 
   destroy() {
     if (this.frame) cancelAnimationFrame(this.frame);
     this.frame = 0;
+    clearTimeout(this.tipTimer);
     this.io.disconnect();
     this.mo.disconnect();
     this.ro.disconnect();

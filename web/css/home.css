@@ -1,21 +1,23 @@
-/* Home, no cards: ORBIX in block letters and one line ("Where should we pick up?"), what needs you, the suggestions and
-   the latest conversations in the middle; the project chips and the message box at the bottom (final.css places them).
-   Sizes and spacing are the tokens in tokens.css. */
+/* Home: composer and project actions in one column. */
 
-.home { container: ws / inline-size; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 100%; margin: 0 auto; padding: var(--sp-8) var(--sp-6) calc(var(--sp-10) + var(--sp-6)); overflow-x: clip; }
-/* Each part fills the column, 760px at most. */
-.home > * { width: 100%; min-width: 0; max-width: var(--col); }
+.home { container: ws / inline-size; position: relative; display: grid; align-items: center; justify-items: center; width: 100%; min-height: 100%; padding: var(--sp-10) var(--sp-6); overflow-x: clip; }
+.home-stage { display: flex; flex-direction: column; gap: var(--sp-4); width: 100%; min-width: 0; max-width: min(var(--col), 680px); }
+.home-stage > :empty { display: none; }
 :is(.set-title, .set-sub, .an-h) { text-wrap: balance; }
 
 /* ---- the mark and the one line ---- */
-.home-hero { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); flex: none; padding: 0 0 var(--sp-6); text-align: center; animation: settle var(--dur-panel) var(--ease-out) both; }
+.home-hero { display: flex; align-items: center; gap: var(--sp-3); padding-bottom: var(--sp-2); }
 .home-mark, .empty-mark { display: grid; place-items: center; }
-.home-head { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); margin: 0; }
+.home-mark { flex: none; }
+.home-welcome-mark, .home.first .home-mark { display: none; }
+.home.first .home-welcome-mark { display: grid; place-items: center; }
+.home.first .home-hero { flex-direction: column; text-align: center; }
+.home-head { display: flex; flex-direction: column; gap: var(--sp-1); margin: 0; }
 .home-title { max-width: 40ch; margin: 0; color: var(--fg); font: var(--fw-h) var(--fs-20)/1.25 var(--font); text-wrap: balance; overflow-wrap: anywhere; }
 .home-sub { max-width: 52ch; margin: 0; color: var(--fg-3); font-size: var(--fs-14); line-height: 1.5; text-wrap: pretty; }
 .home-sub[hidden] { display: none; }
 
-.home-dock { display: flex; flex-direction: column; gap: var(--sp-4); flex: none; animation: settle var(--dur-panel) var(--ease-out) both; }
+.home-dock { min-width: 0; }
 .home-steps-slot:empty, .home-under:empty { display: none; }
 
 /* ---- sessions that need you: plain rows, a state dot and a word ---- */
@@ -32,13 +34,16 @@
 .home-alert.wait .home-alert-s { color: var(--warn); }
 .home-alert > svg { flex: none; color: var(--fg-3); }
 
-/* ---- suggestions: three rows above the box ---- */
+/* ---- draft shortcuts ---- */
 .home-under { width: 100%; }
 :is(.home, .chat-empty) .ws-recipes { display: flex; flex-direction: column; width: 100%; }
 :is(.home, .chat-empty) .ws-recipe { display: flex; align-items: center; gap: var(--sp-3); width: 100%; height: var(--ctl-h); padding: 0 var(--sp-3); border: 0; border-radius: var(--sp-2); background: transparent; color: var(--fg-2); font: var(--fw) var(--fs-14)/1 var(--font); text-align: left; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 :is(.home, .chat-empty) .ws-recipe svg { flex: none; width: 16px; height: 16px; color: var(--fg-3); }
 :is(.home, .chat-empty) .ws-recipe:hover { background: var(--bg-hover); color: var(--fg); }
 :is(.home, .chat-empty) .ws-recipe:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.home .ws-recipes { flex-direction: row; flex-wrap: wrap; gap: var(--sp-2); }
+.home .ws-recipe { width: auto; gap: var(--sp-2); border: 1px solid var(--line-2); font-size: var(--fs-13); }
+.home .ws-recipe:hover { border-color: var(--line-3); }
 
 /* ---- the box and the chips on top of it: the project, where it works, the working tree ---- */
 .home-deck { width: 100%; text-align: left; }
@@ -58,7 +63,6 @@
 .home-box-h .home-status .ibtn[hidden] { display: none; }
 .home-box-h .home-status .ibtn[aria-disabled=true] { opacity: .55; cursor: wait; }
 .home-box-h .home-status:empty, .home-box-h .home-status-details:empty, .home-box-h .home-status:has(> .home-status-details:empty) { display: none; } /* a folder that is not a git repository has nothing to show: no empty chip */
-.home .home-composer .c-ta { min-height: 72px; padding: var(--sp-4) var(--sp-4) var(--sp-1); font-size: var(--fs); }
 /* On Home, Start says what comes first ("Open folder") until everything is ready, then it is the round button. */
 .home .send.start.text { display: inline-flex; align-items: center; width: auto; height: var(--ctl-h); padding: 0 var(--sp-4); border-radius: var(--sp-4); font-size: var(--fs-13); font-weight: var(--fw); white-space: nowrap; }
 /* Narrow boxes: the plan and permission chips keep their icons, the chevrons go, and the model name shortens. */
@@ -80,8 +84,7 @@
 .home-step.done .home-step-n { background: var(--ok-soft); color: var(--ok); }
 
 /* ---- first run: connect a model, as a list of rows ---- */
-.home.first { justify-content: center; padding-top: clamp(var(--sp-8), 6vh, 72px); }
-.home.first .home-head { margin-bottom: var(--sp-6); }
+.home.first .home-head { align-items: center; margin-bottom: var(--sp-4); }
 .home-connect { width: 100%; text-align: left; }
 .cx-list { margin: 0; padding: 0; list-style: none; }
 .cx-list li + li { border-top: 1px solid var(--line); }
@@ -99,11 +102,15 @@
 .connect-acts { display: inline-flex; gap: var(--sp-1); margin-left: calc(-1 * var(--sp-2)); }
 .setup-note { display: inline-flex; align-items: center; gap: var(--sp-2); margin: 0; color: var(--fg-3); font-size: var(--fs-13); }
 
-/* ---- the project's latest conversations, by day ---- */
-.home-recent { display: grid; gap: var(--sp-4); width: 100%; margin-top: var(--sp-6); }
-.hr-group { display: grid; gap: 0; }
-.hr-h { padding: 0 var(--sp-3) var(--sp-1); color: var(--fg-3); font: var(--fw-h) var(--fs-12)/1.3 var(--font); }
-.hr-row { display: flex; align-items: center; gap: var(--sp-3); height: var(--ctl-h); padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-2); font-size: var(--fs-13); text-align: left; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+/* ---- recent conversations ---- */
+.home-recent { display: grid; gap: var(--sp-2); margin-top: var(--sp-3); }
+.hr-group { display: grid; min-width: 0; border: 1px solid var(--line-2); border-radius: var(--r-md); }
+.hr-h { margin: 0; color: var(--fg-2); font: var(--fw-h) var(--fs-13)/1.4 var(--font); }
+.hr-row { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; height: 36px; padding: 0 var(--sp-3); color: var(--fg-2); font-size: var(--fs-13); text-align: left; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.hr-row + .hr-row { border-top: 1px solid var(--line); }
+.hr-row:first-child { border-radius: var(--r-md) var(--r-md) 0 0; }
+.hr-row:last-child { border-bottom-left-radius: var(--r-md); border-bottom-right-radius: var(--r-md); }
+.hr-row > svg { flex: none; color: var(--fg-3); }
 .hr-row:hover, .hr-row:focus-visible { background: var(--bg-hover); color: var(--fg); }
 .hr-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .hr-when { flex: none; color: var(--fg-3); font-size: var(--fs-12); font-variant-numeric: tabular-nums; }
@@ -114,9 +121,8 @@
 }
 @media (max-height: 720px) {
   .home { padding-block: var(--sp-4) var(--sp-8); }
-  .home-hero { padding-bottom: var(--sp-4); }
 }
-@media (prefers-reduced-motion: reduce) { .home-hero, .home-dock { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .home :is(.hr-row, .ws-recipe, .home-alert, .cx-row, .home-step-b) { transition: none; } }
 @media (forced-colors: active) {
   .home .home-composer, .hb-btn, .home-box-h .home-status, .cx-how { border-color: ButtonText; }
 }

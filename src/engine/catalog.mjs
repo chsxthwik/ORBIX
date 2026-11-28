@@ -1,6 +1,7 @@
 // Model facts (context window, output limit, prices, reasoning, vision) from the public models.dev catalog.
 // Fetched at most once a day and cached in DATA_DIR/cache/models-dev.json, so it works offline.
 // Nothing here ever throws to callers: unknown models just return null.
+import { replaceFile } from '../util.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from '../store.mjs';
@@ -102,7 +103,7 @@ async function fetchFresh() {
       fs.mkdirSync(path.dirname(cacheFile()), { recursive: true });
       const tmp = cacheFile() + '.' + process.pid + '.tmp';
       fs.writeFileSync(tmp, JSON.stringify(cat));
-      fs.renameSync(tmp, cacheFile());
+      replaceFile(tmp, cacheFile());
     } catch {}
     return true;
   } catch {
@@ -177,7 +178,7 @@ export function learnEfforts(providerId, modelId, efforts) {
     fs.mkdirSync(path.dirname(learnFile()), { recursive: true });
     const tmp = learnFile() + '.' + process.pid + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(learned)));
-    fs.renameSync(tmp, learnFile());
+    replaceFile(tmp, learnFile());
   } catch {}
 }
 

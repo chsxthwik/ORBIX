@@ -1,9 +1,7 @@
 /* The "Final" look (docs/design/DESIGN.md, final-home.html, final-conversation.html). Loaded last; visual only.
-   Every colour is a theme token, so Graphite gets the mockup's exact values (its tokens are those values) while Dark,
-   Light and the palettes keep their own colours with the same sizes, radii and spacing. No id, class or behaviour
-   changes here: the user's text size (--fs), the reading column setting, focus mode, rail mode, high contrast,
-   reduced motion and Mica keep working as before.
-   The `html:root:root` prefix lets these rules win over the theme files without !important. */
+   Every colour is a theme token. No id, class or behaviour changes here: the user's text size (--fs), the reading
+   column setting, focus mode, rail mode, high contrast, reduced motion and Mica keep working as before.
+   The `html:root:root` prefix lets these rules win over the earlier files without !important. */
 
 /* ================= tokens ================= */
 :root { --side-w: 268px; --col-max: 720px; --panel-w: 440px; --f-dur: 120ms; --f-dur-panel: 180ms; }
@@ -20,48 +18,20 @@ html:root:root :is(.tb-side, .tb-panel) svg { stroke-width: 1.8; }
 html:root:root :is(.tb-side, .tb-panel).on { background: transparent; }
 html:root:root :is(.tb-side, .tb-panel).on:hover { background: var(--bg-hover); }
 
-/* ================= sidebar ================= */
-html:root:root .sidebar { font-size: 13px; }
-html:root:root .sidebar .side-new { height: 32px; border: 0; border-radius: 6px; background: var(--bg-raise); font-weight: 400; }
-html:root:root .sidebar .side-new:hover { background: var(--bg-raise-2); }
-html:root:root .sidebar :is(.side-link:not(.foot-set), .s-btn) { height: 30px; font-weight: 400; }
-html:root:root .sidebar :is(.side-new, .side-link) :is(svg, .sic) { width: 16px; height: 16px; }
-html:root:root .sidebar .side-h { font: 400 12px/1 var(--font); letter-spacing: 0; text-transform: none; color: var(--fg-3); }
-/* The current row is a filled chip; no coloured bar. */
-html:root:root .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .run-row.cur) { background: var(--bg-active); color: var(--fg); box-shadow: none; }
-html:root:root .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .side-new.cur)::before { display: none; }
-
 /* ================= the sheet ================= */
-html:root:root .main { border: 0; border-radius: 8px; margin: 0 8px 8px 0; }
-html:root:root .app.no-side .main { margin-left: 8px; }
-html.zen:root:root .main { margin: 0; border-radius: 0; }
-html:root:root .app:not(.no-panel):not(.overlay-panel) .panel { border: 0; border-left: 1px solid var(--line); border-radius: 0; }
+/* One window, no floating sheet: the title bar and sidebar share the chrome colour, the workspace sits flush against
+   them, and a single 1px line marks each edge between them (under the title bar, beside the sidebar and the panel). */
+html:root:root .main { margin: 0; border: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+html:root:root .app.no-side .main, html:root:root .app.overlay-side .main { border-left: 0; }
+html.zen:root:root .main { border: 0; }
+html:root:root .app:not(.no-panel):not(.overlay-panel) .panel { margin: 0; border: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 0; }
 
 /* ================= transcript ================= */
-html:root:root .tin .md { font-size: var(--fs); line-height: 1.65; }
 /* Your message: a pill. */
 html:root:root .bubble { padding: 8px 16px; border: 0; border-radius: 20px; background: var(--bubble); font-size: var(--fs); line-height: 1.55; }
-/* Actions under a message: 28px icon buttons. */
-html:root:root .msg-act { min-width: 28px; height: 28px; border-radius: 6px; }
-/* Tables: no outer box, hairlines between rows, muted headers. */
-html:root:root .table-wrap :is(th, td) { border: 0; border-bottom: 1px solid var(--line); padding: 8px 12px 8px 0; }
-html:root:root .table-wrap th { color: var(--fg-3); font-weight: 400; }
-html:root:root .table-wrap tr:last-child > td { border-bottom: 0; }
-/* Tool activity, opened: an inset block of mono rows. */
-html:root:root details.work[open]:not(.live) > .work-b { padding: 6px 12px; border-radius: 6px; background: var(--bg-inset); }
-html:root:root .work-b .tool-head { min-height: 24px; font: 400 12px/20px var(--mono); }
-html:root:root .work-h { color: var(--fg-3); }
-/* Timeline: muted dots, the current one in the accent. */
-html:root:root .turn-mark::after { border-color: var(--line-3); }
-html:root:root .turn-mark.seen::after { border-color: var(--fg-3); }
-html:root:root .turn-mark[aria-current]::after { border-color: var(--accent); background: var(--accent); }
+/* Message actions, steps, tables and the timeline: transcript.css. */
 
 /* ================= composer ================= */
-html:root:root .composer { max-width: 760px; margin-inline: auto; width: 100%; padding: 12px 12px 8px 16px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--bg-field); transition: border-color var(--f-dur) var(--ease-out), outline-color var(--f-dur) var(--ease-out); }
-html:root:root .composer:focus-within { border-color: var(--accent); outline: 2px solid var(--accent-soft); outline-offset: 2px; box-shadow: none; }
-html:root:root .composer .attach { padding: 0 6px 8px 0; }
-html:root:root .composer .c-ta { min-height: calc(2 * 1.6em); padding: 0 8px 0 0; font-size: var(--fs); line-height: 1.6; }
-html:root:root .composer .c-row { gap: 2px; padding: 8px 0 0; margin-left: -8px; }
 html:root:root .c-row .cbtn { height: 28px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; }
 html:root:root .c-row .cbtn.c-perm.risky { box-shadow: none; }
 html:root:root .c-row > .c-add { width: 28px; height: 28px; min-height: 28px; }
@@ -75,8 +45,6 @@ html:root:root .rs-name { font-size: 15px; font-weight: 500; }
 html:root:root .rs-model { margin: 2px 0 10px; font-size: 12px; }
 
 /* ================= side panel: Changes ================= */
-html:root:root .ptabs .ptab { height: 28px; border-radius: 6px; font-size: 13px; }
-html:root:root .ptab-w.cur .ptab { background: var(--bg-active); color: var(--fg); }
 html:root:root .gfile { height: 28px; font: 400 12px/1 var(--mono); }
 html:root:root .gstat.add { color: var(--ok); } html:root:root .gstat.del { color: var(--err); }
 html:root:root .gdiff { font: 400 12px/20px var(--mono); }
@@ -89,25 +57,8 @@ html:root:root .hub.cz { width: min(100%, 1180px); }
 html:root:root .cz-scope { display: inline-flex; align-items: center; gap: 8px; color: var(--fg-3); font-size: var(--fs-13); }
 
 /* ================= Home ================= */
-/* The name and the line sit in the middle; the message box sits at the bottom of the window, where it is in a
-   conversation, so starting a task never moves it. First run (no model, no folder) stays one centred stack. */
-html:root:root .home { justify-content: flex-start; padding: 0 var(--sp-6); }
-html:root:root .home-stage { display: flex; flex: 1 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-4); width: 100%; max-width: var(--col); padding: var(--sp-10) 0 var(--sp-8); }
-html:root:root .home-stage > * { width: 100%; min-width: 0; }
-html:root:root .home-hero { gap: var(--sp-5); padding: 0 0 var(--sp-2); }
-html:root:root .home-dock { position: sticky; bottom: 0; z-index: 1; padding: var(--sp-4) 0; background: linear-gradient(to bottom, transparent, var(--bg) var(--sp-4)); }
-html:root:root .home.first { justify-content: center; }
-html:root:root .home.first .home-stage { flex: none; padding-bottom: var(--sp-6); }
-html:root:root .home.first .home-dock { position: static; padding-top: 0; background: none; }
-html:root:root :is(.home-title, .ce-name) { font: 400 var(--fs-20)/1.25 var(--font); letter-spacing: -.01em; color: var(--fg-2); }
-/* Suggestions: one centred row of chips. */
-html:root:root .home .ws-recipes { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: var(--sp-2); }
-html:root:root .home .ws-recipe { width: auto; min-height: 32px; height: 32px; padding: 0 var(--sp-3); border: 1px solid var(--line-2); border-radius: 999px; font-size: var(--fs-13); }
-html:root:root .home .ws-recipe:hover { border-color: var(--line-3); }
+html:root:root .ce-name { font: 400 var(--fs-20)/1.25 var(--font); letter-spacing: -.01em; color: var(--fg-2); }
 html:root:root .chat-empty .ws-recipes > * { min-height: 34px; }
-/* The box: compact, one line to start, as in a conversation. */
-html:root:root .home .home-composer .c-ta { min-height: 0; padding: var(--sp-3) var(--sp-4) var(--sp-1); }
-html:root:root .home .home-recent { max-width: 560px; margin: var(--sp-4) auto 0; }
 
 /* ================= the wordmark ================= */
 /* ORBIX in animated ASCII block letters (dom.js wordmark draws them on a canvas, in the theme's colours). */
@@ -115,14 +66,10 @@ html:root:root :is(.home-mark, .empty-mark) { display: grid; place-items: center
 html:root:root .wordmark { display: block; }
 
 /* ================= buttons ================= */
-/* One shape for every button, the brand colour on the one primary action of a screen (Graphite's accent is ink, so
-   it stays monochrome), a visible focus ring for the keyboard, and a small press. */
-html:root:root .btn { border-radius: 6px; }
-html:root:root .btn.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
-html:root:root .btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); border-color: color-mix(in srgb, var(--accent-solid) 86%, var(--fg)); color: var(--on-accent); }
-html:root:root .btn.primary kbd { border-color: color-mix(in srgb, var(--on-accent) 45%, transparent); }
-html:root:root :is(.btn, .cbtn, .send, .mb-it, .tb-side, .tb-panel, .tb-max, .tb-nav, .tb-search, .msg-act, .ptab):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-html:root:root :is(.btn, .send):active:not(:disabled) { transform: translateY(1px); }
+/* One shape for every button, the brand colour on the one primary action of a screen, a visible
+   focus ring for the keyboard, and a small press. */
+html:root:root :is(.cbtn, .send, .mb-it, .tb-side, .tb-panel, .tb-max, .tb-nav, .tb-search, .ptab):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+html:root:root .send:active:not(:disabled) { transform: translateY(1px); }
 
 
 /* ================= motion: the existing animations stay; these only add hover and panel timing ================= */
@@ -134,7 +81,6 @@ html.no-motion:root:root :is(.btn, .send):active:not(:disabled) { transform: non
 @media (prefers-reduced-motion: reduce) { html:root:root :is(.btn, .send):active:not(:disabled) { transform: none; } }
 @media (forced-colors: active) {
   html:root:root .composer:focus-within { outline-color: Highlight; }
-  html:root:root .sidebar :is(.side-link.cur, .s-row.cur > .s-btn) { outline: 2px solid Highlight; outline-offset: -2px; }
 }
 
 /* ================= model chip and picker ================= */
@@ -154,9 +100,6 @@ html:root:root .mp-it.cur .mp-name { font-weight: var(--fw-h); }
    column. */
 html:root:root { text-rendering: optimizeLegibility; font-kerning: normal; }
 html:root:root :is(.menu, .pop-panel, .modal) { border: 1px solid var(--line-2); border-radius: var(--r-md); box-shadow: var(--shadow-pop); }
-html:root:root .composer { border-radius: var(--r-md); }
-html:root:root :is(input[type=text], input[type=search], input:not([type]), textarea, select) { border-radius: var(--r-sm); }
-html:root:root .sidebar :is(.side-link, .s-btn, .run-row) { border-radius: var(--r-sm); }
 html:root:root :is(.cbtn, .hb-btn, .ws-recipe, .chip, .tag) { transition-duration: var(--dur-hover); }
 html:root:root * { scrollbar-width: thin; scrollbar-color: var(--line-3) transparent; }
 html:root:root ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -164,10 +107,69 @@ html:root:root ::-webkit-scrollbar-thumb { border: 3px solid transparent; border
 html:root:root ::-webkit-scrollbar-thumb:hover { background-color: var(--fg-3); }
 html:root:root ::-webkit-scrollbar-track, html:root:root ::-webkit-scrollbar-corner { background: transparent; }
 
-/* ================= fields and buttons: one height in a row, never against a card's edge ================= */
-/* A field and the buttons beside it share the control height (32px), whatever size each was given on its own. */
-html:root:root :has(> :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select)) > :is(.btn, input:not([type=checkbox]):not([type=radio]):not([type=range]), select) { height: var(--ctl-h); min-height: var(--ctl-h); }
-/* A card that ends in something other than a setting row (a field and its buttons) keeps padding below it. */
-html:root:root .set-card:has(> :last-child:not(.set-row)) { padding-bottom: var(--sp-4); }
+/* A field and the buttons beside it share one height. */
+html:root:root :has(> :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select)) > :is(.btn, .ibtn, input:not([type=checkbox]):not([type=radio]):not([type=range]), select) { height: var(--control-height); min-height: var(--control-height); }
 /* Code block headers: the buttons sit inside the 32px strip, not against its edges. */
 html:root:root .code-head .code-btn { height: var(--sp-5); min-height: var(--sp-5); }
+
+/* ================= the shell, after the reference ================= */
+/* The sidebar reads as one quiet column: no rules between its parts. */
+html:root:root .sidebar :is(.side-nav, .side-scroll, .side-dock) { border-bottom: 0; }
+html:root:root .sidebar .side-nav { background: none; }
+html:root:root .sidebar .side-dock { border-top: 0; }
+html:root:root .sidebar .side-foot { border-top: 0; }
+/* Section names in ink, a size up, with their actions on the right. */
+html:root:root .sidebar .side-h { height: var(--ctl-h); margin-top: var(--sp-4); padding: 0 var(--sp-1) 0 var(--sp-2); color: var(--fg); font: var(--fw-h) var(--fs-14)/1 var(--font); }
+/* Threads: title and age on the first line, the project on the second; a filled, rounded row when it is open. */
+html:root:root .sidebar .t-row .s-btn { height: 52px; padding: 0 var(--sp-2); border-radius: var(--r-md); }
+html:root:root .sidebar .t-title { font-weight: var(--fw-h); }
+html:root:root .sidebar .t-1 .s-when { flex: none; color: var(--fg-3); font-size: var(--fs-12); }
+html:root:root .sidebar .t-row.cur > .s-btn { background: var(--bg-active); }
+html:root:root .sidebar .t-row.cur > .s-btn::before { display: none; }
+html:root:root .sidebar .t-row .row-acts { top: var(--sp-4); }
+
+/* ================= New conversation: the mark and the box, nothing else ================= */
+/* The ORBIX mark centred over a centred box. Where it works (project, branch) and which model sit in the box's one
+   row of controls, drawn like the model chip: no outline, a soft fill on hover. */
+html:root:root .home { align-items: center; }
+html:root:root .home-stage { gap: var(--sp-6); }
+html:root:root .home-hero { justify-content: center; padding: 0; }
+html:root:root .home-hero .home-head:has(> .home-title[hidden]) { display: none; }
+html:root:root .home-box-h:empty { display: none; }
+html:root:root .home-composer .c-row :is(.hb-btn, .branch-pick) { height: 28px; min-height: 28px; max-width: 180px; padding: 0 var(--sp-2); border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg-2); font-size: var(--fs-13); }
+html:root:root .home-composer .c-row :is(.hb-btn, .branch-pick):hover { background: var(--bg-hover); color: var(--fg); }
+html:root:root .home-composer .c-row .branch-pick.on { color: var(--fg); background: var(--bg-active); }
+html:root:root .home-composer .c-row .hb-btn svg { flex: none; color: var(--fg-3); }
+html:root:root .home-box .c-foot > .home-status-slot { display: flex; padding: 0 var(--sp-3); }
+html:root:root .home-box .c-foot > .home-status-slot .home-status { display: inline-flex; align-items: center; gap: var(--sp-2); height: var(--sp-6); color: var(--fg-3); font-size: var(--fs-12); }
+html:root:root .home-box .c-foot > .home-status-slot .home-status-details { display: flex; align-items: center; gap: var(--sp-2); }
+html:root:root .home-box .c-foot > .home-status-slot .home-status-summary { padding-inline-start: var(--sp-2); border-inline-start: 1px solid var(--line-2); }
+html:root:root .home-box .c-foot > .home-status-slot .ibtn { width: var(--sp-6); height: var(--sp-6); min-height: var(--sp-6); }
+html:root:root .home-box .c-foot > .home-status-slot .ibtn[hidden] { display: none; }
+html:root:root .home-box .c-foot > .home-status-slot:has(.home-status-details:empty) { display: none; }
+html:root:root .home-box .c-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); min-height: var(--sp-6); }
+html:root:root .home-box .c-foot > .home-status-slot { padding: 0 var(--sp-1); }
+html:root:root .home-composer .c-row :is(.hb-btn, .branch-pick) > span { line-height: 20px; }
+
+/* ================= sidebar: one control system, expanded and as the 56px rail ================= */
+/* 18px outlined icons (1.5 stroke), 36px hit areas, 6px corners, one hover fill, one current fill, the focus ring on
+   the inside. The mark in the menu row sits over the rail's centre line (8px padding + a 40px cell = 28px). */
+html:root:root .mb-it.mb-brand { width: 40px; margin-right: 0; padding: 0; }
+html:root:root .sidebar .sic, html:root:root .sidebar :is(.side-new, .side-link) :is(svg, .sic) { width: 18px; height: 18px; }
+html:root:root .sidebar :is(.side-new, .side-link:not(.foot-set)) { height: 36px; min-height: 36px; padding: 0 var(--sp-3); gap: var(--sp-3); border-radius: 6px; }
+html:root:root .sidebar :is(.s-btn, .run-row, .me-btn, .foot-set, .s-more) { border-radius: 6px; }
+html:root:root .sidebar .side-new { border: 0; background: var(--bg-raise); }
+html:root:root .sidebar .side-new:hover { background: var(--bg-raise-2); }
+html:root:root .sidebar :is(.side-link, .s-btn, .me-btn, .foot-set, .run-row, .s-more):hover { background: var(--bg-hover); }
+html:root:root .sidebar :is(.side-link.cur, .side-new.cur, .s-row.cur > .s-btn, .run-row.cur) { background: var(--bg-active); color: var(--fg); }
+html:root:root .sidebar :is(.side-link, .side-new, .s-row > .s-btn, .proj-btn)::before { display: none; }
+html:root:root .sidebar .side-foot { gap: var(--sp-1); padding: var(--sp-2) 0; }
+html:root:root .sidebar .me-btn { height: 40px; padding: 0 var(--sp-1); gap: var(--sp-2); }
+html:root:root .sidebar .foot-set { display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; }
+/* the rail */
+html:root:root .app.side-rail .sidebar { --rail-btn: 36px; }
+html:root:root .app.side-rail .sidebar :is(.side-new, .side-link, .me-btn, .foot-set) { width: 36px; height: 36px; min-height: 36px; padding: 0; border-radius: 6px; }
+html:root:root .app.side-rail .sidebar .side-new { margin: var(--sp-2) auto var(--sp-1); }
+html:root:root .app.side-rail .sidebar :is(.side-nav, .side-foot) { background: none; }
+html:root:root .app.side-rail .sidebar .side-nav { gap: var(--sp-1); }
+html:root:root .app.side-rail .sidebar .me-av { width: 28px; height: 28px; }

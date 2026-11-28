@@ -39,6 +39,21 @@ const CORE = `You are ORBIX, a coding agent working in the user's project on the
 const PLAN = `# PLAN MODE IS ON
 Change nothing: file edits, writes and shell commands are not available. Investigate with the read-only tools, then reply with a concise, numbered plan: what to change, in which files, and how to verify it. End by asking the user to turn plan mode off (/plan) to carry it out.`;
 
+const ASK = `# ASK MODE IS ON
+Answer the user's questions; do not change anything. File edits and writes are not available, and bash runs only read-only commands (ls, cat, grep, find, git status/diff/log and pipes of them). Read and search the code as needed, then answer directly with file paths and line numbers. If the user asks for a change, describe it and tell them to switch to Agent mode to apply it.`;
+
+const DEBUG = `# DEBUG MODE IS ON
+Find the root cause before changing code:
+1. Reproduce: run the failing command, test or steps and capture the exact error.
+2. Isolate: read the code on the failing path, add temporary logging or narrow the input until the cause is certain.
+3. Explain the root cause in one or two sentences, with the file and line.
+4. Fix it with the smallest change that addresses the cause, not the symptom. Remove any temporary logging.
+5. Verify: run the same reproduction again and show that it now passes.
+Do not refactor or make unrelated changes.`;
+
+/** Extra system prompt text for a conversation mode: 'plan', 'ask' or 'debug' ('' for none). */
+export const MODE_PROMPTS = { plan: PLAN, ask: ASK, debug: DEBUG };
+
 /** "branch main (ahead 1), 3 changed: M src/a.js, ?? b.txt" or "not a git repository", from `git status`. */
 export function summarizeStatus({ repo, branch, upstream, ahead, behind, files }) {
   if (!repo) return 'not a git repository';
@@ -90,7 +105,7 @@ export async function environmentFacts(backend, workspace, { git: withGit = true
  * The full system prompt. `rules`: [{ path, text, truncated }] nearest first (as loadInstructions returns them);
  * `skills`: the skills section text; `mcp`: the MCP section text.
  */
-export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex = [], skills = '', mcp = '', planMode = false, noCoAuthor = false, modelRules = [], onRules }) {
+export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex = [], skills = '', mcp = '', planMode = false, mode = '', noCoAuthor = false, modelRules = [], onRules }) {
   const parts = [CORE];
   parts.push(
     [
@@ -124,7 +139,8 @@ export function buildSystemPrompt({ env, model, approvals, rules = [], ruleIndex
   if (forModel.length) parts.push(`# Instructions for this model\n${forModel.map((r) => r.text).join('\n\n')}`);
   if (skills) parts.push(skills.trim());
   if (mcp) parts.push(mcp.trim());
-  if (planMode) parts.push(PLAN);
+  const extra = planMode ? PLAN : MODE_PROMPTS[mode] && mode !== 'plan' ? MODE_PROMPTS[mode] : '';
+  if (extra) parts.push(extra);
   return parts.join('\n\n');
 }
 

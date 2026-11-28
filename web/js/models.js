@@ -8,8 +8,8 @@ import { row, btn } from './dialogs.js';
 const SAVED = 'pv-save-hidden';
 
 const ROLES = [
-  ['fast', 'Fast model', 'Titles, summaries, change reviews and helper agents. A small, low-cost model fits.'],
-  ['plan', 'Plan model', 'Used in plan mode (/plan). A stronger model fits.'],
+  ['fast', 'Fast model', 'Titles, summaries, reviews and helper agents.'],
+  ['plan', 'Plan model', 'Plan mode (/plan).'],
 ];
 
 export function renderModelRoles(root, engine) {
@@ -37,7 +37,7 @@ export function renderModelRoles(root, engine) {
     save.classList.add(SAVED);
     return row(label, h('div', { class: 'role-ctl' }, input, save), hint);
   });
-  replace(root, h('p', { class: 'set-note' }, 'Empty uses the conversation’s own model. /model fast and /model plan change it for one conversation.'), h('div', { class: 'set-card' }, rows), dl);
+  replace(root, h('p', { class: 'set-note' }, 'Empty uses the conversation’s model. /model fast and /model plan change it for one conversation.'), h('div', { class: 'set-card' }, rows), dl);
   api.get('/api/engine/models').then((r) => {
     replace(dl, r.models.map((m) => h('option', { value: `${m.provider}/${m.id}` }, `${m.providerName}: ${m.name}`)));
     if (r.errors?.length) toast(r.errors[0], 'info', 5000);

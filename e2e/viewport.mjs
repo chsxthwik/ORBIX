@@ -13,13 +13,11 @@ let passed = false;
 try {
   writeConfig(data, model.port, [repo]);
   app = await startOrbix(data, 47993);
-  for (const [width, height, theme] of [[760, 540, 'light'], [1800, 1024, 'dark']]) {
+  for (const [width, height] of [[760, 540], [1800, 1024]]) {
     const page = await startBrowser(path.join(root, `browser-${width}`), { width, height, scale: 2 });
     try {
       await page.goto(app.url);
-      const setTheme = `await (await import('/js/store.js')).savePrefs({ theme: ${JSON.stringify(theme)} });`;
-      await page.eval(setTheme);
-      await page.until(`document.documentElement.dataset.mode === ${JSON.stringify(theme)} && !!document.querySelector('.home-composer textarea')`, 'the themed composer');
+      await page.until(`document.documentElement.dataset.mode === 'dark' && !!document.querySelector('.home-composer textarea')`, 'the composer');
       const fits = `const fits = (el) => {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0 && r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1;
@@ -32,7 +30,7 @@ try {
       await page.until(`document.querySelector('.mp-list [role=option]')`, 'model results');
       assert(await page.eval(`${fits} return fits(document.querySelector('.model-picker')) && fits(document.querySelector('.mp-footer'));`), 'the picker and its controls fit without horizontal clipping');
       assert.equal(page.errors.filter((e) => !/favicon|Failed to load resource/i.test(e)).length, 0);
-      console.log(`${width} × ${height}, ${theme}, 2× DPI: passed`);
+      console.log(`${width} × ${height}, Dark, 2× DPI: passed`);
     } finally {
       page.close();
     }

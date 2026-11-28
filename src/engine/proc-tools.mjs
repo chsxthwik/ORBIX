@@ -175,6 +175,15 @@ export class ToolRuns {
     return { role: 'toolResult', toolCallId: call.id, toolName: call.name, content, details, isError: !!result.isError, timestamp: Date.now() };
   }
 
+  /** Ask mode allows read-only tools, and bash only for commands that only read. Returns the refusal, or undefined. */
+  _askBlocked(call) {
+    if (this.chatMode !== 'ask' || this.planMode || this._isReadOnly(call.name)) return undefined;
+    if (call.name === 'bash' && readOnlyCommand(call.arguments?.command)) return undefined;
+    return { text: call.name === 'bash'
+      ? 'Ask mode is on: only read-only commands run (ls, cat, grep, find, git status/diff/log and pipes of them). The user can switch to Agent mode to make changes.'
+      : 'Ask mode is on: this tool is not available. The user can switch to Agent mode to make changes.', isError: true };
+  }
+
   /** Ask the user about a call that needs approval. Returns the denial result, or undefined when it may run. */
   async _approve(call, args, title = this._askTitle(call)) {
     const risky = call.name === 'bash' && !!destructiveReason(args.command); // asked every time, so no lasting choice is offered
@@ -230,12 +239,14 @@ export class ToolRuns {
     let t0 = Date.now();
     const intent = call.name === 'bash' ? clip(String(args.description || args.command || ''), 80) : call.name === 'web_fetch' ? clip(String(args.url ?? ''), 80) : this.mcp.has(call.name) ? this.mcp.describe(call.name) : undefined;
     this._emit({ type: 'tool_execution_start', toolCallId: call.id, toolName: call.name, args, intent });
+    const askRefusal = this._askBlocked(call);
     let result;
     if (call.truncated || call.invalidArguments) {
       result = call.truncated
         ? { text: 'Not run: this tool call was cut off because the reply reached the output token limit. Make smaller calls: for a large file, write the first part, then add the rest with edit.', isError: true }
         : { text: invalidArgsText(this._toolDefs().find((d) => d.name === call.name)), isError: true };
     } else if (this.planMode && !this._isReadOnly(call.name)) result = { text: 'Plan mode is on, so this tool is not available. Only read and plan; the user can turn plan mode off with /plan.', isError: true };
+    else if (askRefusal) result = askRefusal;
     else if ((!this.defs.some((d) => d.name === call.name) && !this.mcp.has(call.name) && !(call.name === 'artifact' && this.runInfo)) || (call.name === 'web_search' && !this._searchOn())) result = { text: `Unknown tool "${call.name}". Available tools: ${this._toolDefs().map((d) => d.name).join(', ')}.`, isError: true };
     else result = this._repeatBlocked(key);
     if (!result) {

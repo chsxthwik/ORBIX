@@ -185,7 +185,7 @@ export function startModel() {
 
 export function writeConfig(data, modelPort, projects) {
   fs.mkdirSync(data, { recursive: true });
-  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ version: 1, backend: { kind: 'native', distro: '' }, backendChosen: true, workspaces: projects.map((p, i) => ({ id: `w${i}`, path: p, name: path.basename(p), added: Date.now() })), ui: { theme: 'dark', rightPanel: true, rightTab: 'files', showThinking: true, autoScroll: true, layout: 2 } }, null, 2));
+  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ version: 1, backend: { kind: 'native', distro: '' }, backendChosen: true, workspaces: projects.map((p, i) => ({ id: `w${i}`, path: p, name: path.basename(p), added: Date.now() })), ui: { rightPanel: true, rightTab: 'files', showThinking: true, autoScroll: true, layout: 2 } }, null, 2));
   fs.writeFileSync(path.join(data, 'engine.json'), JSON.stringify({ approvals: 'ask', trusted: [], providers: { custom: { enabled: true, baseUrl: `http://127.0.0.1:${modelPort}/v1`, models: 1 } }, defaultModel: `custom/${MODEL}`, verify: 'ask', review: false }, null, 2));
 }
 

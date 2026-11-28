@@ -253,8 +253,9 @@ function newRunBox() {
   const last = localStorage.getItem('orbix.run.project') || '';
   let project = projects.find((p) => p.path === last)?.path || projects[0]?.path || '';
   let mode = localStorage.getItem('orbix.run.mode') === 'direct' ? 'direct' : 'plan';
-  const task = h('textarea', { rows: '3', placeholder: 'Describe the task: what should change, and how you will know it works', 'aria-label': 'Task', onkeydown: (e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && (e.preventDefault(), start()) });
+  const task = h('textarea', { rows: '3', placeholder: 'Describe the task and how to verify it', 'aria-label': 'Task', onkeydown: (e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && (e.preventDefault(), start()) });
   const go = btn('Start run', () => start(), 'primary');
+  go.title = 'Start run (Ctrl+Enter)';
   const modeBtn = (val, label, tip) => h('button', { class: 'rseg-btn' + (mode === val ? ' on' : ''), type: 'button', title: tip, 'aria-pressed': String(mode === val), onclick: (e) => {
     mode = val;
     localStorage.setItem('orbix.run.mode', val);
@@ -280,11 +281,10 @@ function newRunBox() {
     }
   }
   return h('section', { class: 'run-new', 'aria-label': 'Start a run' },
-    h('h2', null, 'Start a run'),
-    projects.length ? null : h('p', { class: 'muted small' }, 'Open a project folder first: the folder button beside Projects in the sidebar.'),
+    projects.length ? null : h('p', { class: 'run-new-note muted small' }, 'Open a project folder first.'),
     task,
     h('div', { class: 'run-new-row' },
-      projects.length ? h('label', { class: 'run-proj' }, icon('folder', 14), sel) : null,
+      projects.length ? h('label', { class: 'run-proj', title: project || '' }, icon('folder', 14), sel) : null,
       h('div', { class: 'rseg', role: 'group', 'aria-label': 'How to start' },
         modeBtn('plan', 'Plan first', 'The agent reads the code and writes a plan. Nothing changes until you approve it.'),
         modeBtn('direct', 'Straight to work', 'For small, clear tasks: the agent edits files in the worktree right away. Commands still ask.')),
@@ -324,9 +324,9 @@ function drawRuns() {
   update();
   replace(el(),
     h('div', { class: 'hub' },
-      h('header', { class: 'hub-head' }, h('h1', null, 'Runs'), h('p', { class: 'muted' }, 'A run takes one task from its description to changes you have reviewed. Each works in its own git worktree, so several can run side by side.')),
+      h('header', { class: 'hub-head' }, h('h1', null, 'Runs'), h('p', { class: 'muted' }, 'Each run works in its own git worktree. Review the changes before applying them.')),
       newRunBox(),
-      loadError ? errorState(loadError, { retry: refresh }) : !loaded ? skeleton(4) : !all.length ? h('div', { class: 'empty' }, icon('activity', 22), h('span', null, 'No runs yet. Describe a task above to start one.')) : [
+      loadError ? errorState(loadError, { retry: refresh }) : !loaded ? skeleton(4) : !all.length ? h('div', { class: 'empty' }, icon('activity', 22), h('span', null, 'No runs yet.')) : [
         h('label', { class: 'cz-search' }, icon('search', 14), search), list,
       ]));
   if (restoreSearch && search.isConnected) {

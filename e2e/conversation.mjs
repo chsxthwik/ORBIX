@@ -11,7 +11,8 @@ import { ROOT, sleep, startModel, makeRepo, writeConfig, startOrbix, startBrowse
 
 const args = process.argv.slice(2);
 const SHOTS = args.includes('--shots');
-const DESKTOP = args.includes('--desktop');
+const DEV_ELECTRON = args.includes('--electron');
+const DESKTOP = DEV_ELECTRON || args.includes('--desktop');
 const KEEP = args.includes('--keep');
 const say = (s) => process.stdout.write(s + '\n');
 const assert = (c, what) => {
@@ -29,10 +30,13 @@ let page;
 let ok = false;
 try {
   if (DESKTOP) {
-    page = await startDesktop(process.env.ORBIX_DESKTOP_EXE || path.join(ROOT, 'dist', 'win-unpacked', 'ORBIX.exe'), data, path.join(root, 'desktop'));
+    const exe = DEV_ELECTRON
+      ? process.env.ORBIX_ELECTRON || path.join(ROOT, 'node_modules', 'electron', 'dist', 'electron.exe')
+      : process.env.ORBIX_DESKTOP_EXE || path.join(ROOT, 'dist', 'win-unpacked', 'ORBIX.exe');
+    page = await startDesktop(exe, data, path.join(root, 'desktop'), DEV_ELECTRON ? ROOT : undefined);
     await page.until(`!!window.orbixDesktop`, 'the Electron preload bridge', 20000);
     assert(await page.eval(`return location.href.startsWith('orbix://app/') && !!window.orbixDesktop.engine`), 'the interface from orbix://app/ with the engine over IPC');
-    say('desktop e2e: running the packaged ORBIX window');
+    say(`desktop e2e: running ${DEV_ELECTRON ? 'ORBIX from source in Electron' : 'the packaged ORBIX window'}`);
   } else {
     orbix = await startOrbix(data, 47992);
     page = await startBrowser(path.join(root, 'browser'), { scale: 2 });
@@ -44,10 +48,13 @@ try {
   assert(await page.eval(`
     const alpha = (e) => { const m = /\\/\\s*([\\d.]+)\\)$/.exec(getComputedStyle(e).backgroundColor); return m ? +m[1] : 1; };
     const side = document.querySelector('#sidebar'), top = document.querySelector('.chrome');
+    const html = document.documentElement;
+    const had = html.classList.contains('win-mica'); // Windows 11 hosts start with Mica on
+    html.classList.remove('win-mica');
     const solid = alpha(side) === 1 && alpha(top) === 1;
-    document.documentElement.classList.add('win-mica');
+    html.classList.add('win-mica');
     const glass = alpha(side) < 1 && alpha(top) < 1;
-    document.documentElement.classList.remove('win-mica');
+    html.classList.toggle('win-mica', had);
     return solid && glass;`), 'Mica: the sidebar and the top row are see-through with html.win-mica and solid without it');
   await page.eval(`const trigger = document.querySelector('.home-model-pick'); trigger.focus(); trigger.click();`);
   await page.until(`document.querySelector('.mp-rail .mp-pv') && document.querySelector('.mp-list')?.textContent.includes('orbix-fixture')`, 'the Home provider and model');
@@ -148,18 +155,34 @@ try {
   assert(info.afterYou, 'the fold follows your message directly (no name plate)');
   assert(info.replyCls.includes('msg') && info.replyText.includes('keyed by lower-case email'), `the final reply right below the fold (${info.order})`);
   assert(info.sum.includes('1 file changed') && info.sum.includes('Review'), 'the changed-files card');
+  await page.key('k', { ctrl: true, keyCode: 75, code: 'KeyK' });
+  await page.until(`document.querySelector('.pal-q')`, 'search opens');
+  await page.fill('.pal-q', 'keyed by lower-case email');
+  await page.until(`document.querySelector('.pal-list')?.textContent.includes('Conversation history')
+    && document.querySelector('.pal-list .pal-hint[title*="keyed by lower-case email"]')`, 'search finds a phrase in the assistant reply');
+  await page.fill('.pal-q', '');
+  await page.press('Escape', 27);
+  await page.until(`!document.querySelector('.palette')`, 'search closes');
   await page.eval(`document.querySelector('details.work > summary').click()`);
   await page.until(`document.querySelector('details.work').open && [...document.querySelectorAll('details.work .tool[data-id]')].every((x) => x.offsetParent)`, 'the steps shown');
   await shot('13-conversation-steps');
   // The window chrome: the menu row, where you are in the toolbar, the side-panel button, and back / forward.
   const chrome = await page.eval(`return { menus: [...document.querySelectorAll('#menubar .mb-it')].map((b) => b.getAttribute('aria-label') || b.textContent), crumb: document.querySelector('#topbar .crumb.cur')?.textContent || '' };`);
-  assert(chrome.menus.join(',') === 'ORBIX,Workspace,View,Window', `the menu row (${chrome.menus})`);
+  assert(chrome.menus.join(',') === 'ORBIX,Workspace,View', `the menu row (${chrome.menus})`);
   assert(/explain sign-in/i.test(chrome.crumb), `the conversation in the toolbar (${chrome.crumb})`);
   const was = await page.eval(`return document.querySelector('#app').classList.contains('no-panel')`);
   await page.eval(`document.querySelector('#topbar .tb-panel').click()`);
   await page.until(`document.querySelector('#app').classList.contains('no-panel') === ${!was}`, 'the toolbar button toggles the side panel');
   if (!was) await page.eval(`document.querySelector('#topbar .tb-panel').click()`);
   await page.until(`!document.querySelector('#app').classList.contains('no-panel') && document.querySelectorAll('.ptabs .ptab').length >= 4`, 'the side panel open with its tabs');
+  await page.eval(`document.querySelector('.ptabs .ptab.cur').focus()`);
+  await page.press('ArrowRight', 39);
+  assert(await page.eval(`return document.activeElement.matches('.ptabs .ptab[aria-selected="true"]')`), 'arrow keys retain focus in the active panel tab');
+  await page.mouse('.ptab-new');
+  await page.until(`document.activeElement.matches('.qo-q')`, 'panel launcher search receives focus');
+  await page.fill('.qo-q', 'files');
+  await page.press('Enter', 13);
+  await page.until(`document.querySelector('.ptabs .ptab.cur')?.id === 'panel-tab-files'`, 'panel launcher opens Files');
   await page.key('2', { ctrl: true, keyCode: 50, code: 'Digit2' });
   await page.until(`!document.querySelector('#runs').hidden`, 'Runs');
   await page.eval(`document.querySelector('#topbar .tb-nav').click()`);
@@ -218,7 +241,7 @@ try {
   await page.until(`document.querySelector('.modal.settings-card .set-tab.cur')`, 'Settings, full window');
   await page.eval(`document.querySelector('#set-general').click()`);
   await page.click('Ctrl+Enter', '.modal.settings-card');
-  await page.click('Back to app', '.modal.settings-card .set-nav');
+  await page.click('Back to the app (Esc)', '.modal.settings-card .set-nav');
   await page.until(`!document.querySelector('.modal.settings-card')`, 'back to the app');
   const sent = model.seen.length;
   await page.fill('#session textarea', 'one line');
@@ -295,6 +318,20 @@ try {
   await page.until(`document.querySelector('.tin .msg.user')?.classList.contains('tl-flash') && document.querySelector('.tm-tip.on')`, 'a dot shows its first line and jumps to its message');
   assert(await page.eval(`return document.querySelector('.turn-map').getBoundingClientRect().height <= 250`), 'the timeline is a short stack, not a full-height rail');
   say('conversation e2e: tools after an initial answer');
+  const portable = path.join(root, 'example.orbix.json');
+  fs.writeFileSync(portable, JSON.stringify({ format: 'orbix-transcript', version: 1, title: 'A portable fixture', messages: [
+    { role: 'user', text: 'An imported question.' }, { role: 'assistant', text: 'An imported answer.' },
+  ] }));
+  await page.key('k', { ctrl: true, keyCode: 75, code: 'KeyK' });
+  await page.fill('.pal-q', 'Import portable transcript');
+  await page.click('Import portable transcript', '.palette .list');
+  await page.until(`document.querySelector('.modal[aria-label="Import portable transcript"] input[type=file]')`, 'the transcript file picker');
+  const { root: { nodeId: documentId } } = await page.cdp.send('DOM.getDocument');
+  const { nodeId } = await page.cdp.send('DOM.querySelector', { nodeId: documentId, selector: '.modal[aria-label="Import portable transcript"] input[type=file]' });
+  await page.cdp.send('DOM.setFileInputFiles', { nodeId, files: [portable] });
+  await page.click('Import', '.modal[aria-label="Import portable transcript"]');
+  await page.until(`document.querySelector('.session:not([hidden]) .tin')?.textContent.includes('An imported answer.')`, 'the new conversation with the imported reply');
+  say('conversation e2e: portable transcript import');
   if (DESKTOP) {
     // The built-in browser shows a web page in the Windows app (a <webview> with its own session).
     const http = await import('node:http');

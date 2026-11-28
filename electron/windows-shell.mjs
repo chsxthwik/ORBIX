@@ -1,12 +1,12 @@
 // Windows 11 / 10 integration: Mica, taskbar progress and overlay, jump list, toast notifications with actions,
-// accent colour, high contrast, text size and light/dark. Imported by main.mjs only when process.platform is win32.
+// accent colour, high contrast and text size. Imported by main.mjs only when process.platform is win32.
 import { app, BrowserWindow, Notification, nativeImage, nativeTheme, systemPreferences, ipcMain } from 'electron';
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  isWindowsHome, progressArgs, notifyArgs, themeSource, recentProjects, jumpAction, toastAction, isToastToken,
+  isWindowsHome, progressArgs, notifyArgs, recentProjects, jumpAction, toastAction, isToastToken,
   allowOnce, registryDword, supportsMica, amberDot, accentHex,
 } from './windows-input.mjs';
 
@@ -32,7 +32,6 @@ async function readState() {
     mica: MICA && transparent && !highContrast,
     transparency: transparent,
     highContrast,
-    dark: nativeTheme.shouldUseDarkColors,
     accent: accentHex(systemPreferences.getAccentColor()),
     textScale: textScale >= 100 && textScale <= 225 ? textScale / 100 : 1,
     hcColors: highContrast ? { bg: hex(systemPreferences.getColor('window')), fg: hex(systemPreferences.getColor('window-text')) } : null,
@@ -113,10 +112,6 @@ export function setupWindowsShell({ getWin, appUrl, engine, show, icon, mica = f
     const jump = pendingJump;
     pendingJump = null;
     return { state, jump };
-  });
-  ipcMain.on('orbix:win:theme', (e, v) => {
-    const src = themeSource(v);
-    if (fromHome(e) && src && nativeTheme.themeSource !== src) nativeTheme.themeSource = src;
   });
 
   // ---- Taskbar: progress while agents work, an amber dot when one needs you ----

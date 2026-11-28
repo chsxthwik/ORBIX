@@ -2,7 +2,6 @@
 
 :where(button, a, input, select, textarea, [tabindex]):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .ibtn:focus-visible, .ptab:focus-visible { outline-offset:-2px; }
-.ibtn { transition:background-color var(--t2) var(--ease), color var(--t2) var(--ease), transform var(--t2) var(--ease); }
 .session .send { transition:transform var(--t2) var(--ease), filter var(--t2) var(--ease), box-shadow var(--t3) var(--ease); }
 .session .send:hover:not(:disabled) { filter:brightness(1.06); }
 
@@ -18,10 +17,13 @@
 .control-tooltip[hidden] { display:none; }
 .control-tooltip:not([hidden]) { display:flex; align-items:center; gap:8px; animation:tip-in var(--t2) var(--ease-out); }
 .control-tooltip[data-side=top]:not([hidden]) { animation-name:tip-up; }
+.control-tooltip[data-side=right]:not([hidden]) { animation-name:tip-right; }
 .tip-keys { display:inline-flex; gap:4px; }
 .tip-keys kbd { height:17px; min-width:17px; padding:0 4px; border-bottom-width:1px; font-size: var(--fs-12); color:var(--fg-2); }
 @keyframes tip-in { from { opacity:0; transform:translateY(-3px) scale(.98); } }
 @keyframes tip-up { from { opacity:0; transform:translateY(3px) scale(.98); } }
+@keyframes tip-right { from { opacity:0; transform:translateX(-3px) scale(.98); } }
+@media(prefers-reduced-motion:reduce) { .control-tooltip:not([hidden]) { animation:none; } }
 :is(.run-filter, .ibtn):focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .search-clear { position:absolute; right:7px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:27px; height:27px; border-radius:8px; color:var(--fg-3); }
 .search-clear:hover { color:var(--fg); background:var(--bg-active); }
@@ -90,24 +92,10 @@
   .app:not(.overlay-panel) .main { min-width:min(560px, 50vw); }
 }
 
-/* Hairlines: stroke contrast carries hierarchy, not glow.
-   It stays out of the way of a system that asks for more contrast, so the stronger hairlines in app.css still apply. */
-@media not all and (prefers-contrast: more) {
-  :root[data-theme=dark],:root[data-theme=midnight] {
-    --line:rgba(228,234,224,.10);
-    --line-2:rgba(228,234,224,.18);
-    --line-3:rgba(228,234,224,.28);
-  }
-  :root[data-theme=light],:root[data-theme=frost] {
-    --line:#D8D7D0;
-    --line-2:#C7C6BE;
-    --line-3:#AAA99F;
-  }
-}
 /* The sidebar sits on the window frame; a frame-wide gap, not a second hairline, separates it from the sheet. */
 .app:not(.overlay-side):not(.no-side) #rs-side { width:var(--frame); }
 /* The grab area is the gap plus a little of the sheet's edge (not the sidebar's, where its scrollbar sits). */
-.app:not(.overlay-side) #rs-side::before { left:0; width:calc(100% + 4px); }
+.app:not(.overlay-side) #rs-side::before { left:0; width:calc(100% + 6px); }
 .app:not(.overlay-side) #rs-side::after { left:calc(50% - 1px); }
 .app .main,.app .panel { border-color:var(--line-2); }
 
@@ -154,21 +142,9 @@
   .session .bubble { max-width:100%; }
 }
 
-/* Control sizing: square icon buttons, aligned labels, and non-shrinking marks. */
-:root { --control-height:32px; --control-small:28px; --control-radius:8px; }
-.btn { line-height:1; }
-.btn.sm { min-height:var(--control-small); }
-.ibtn { width:var(--control-height); height:var(--control-height); min-height:var(--control-height); padding:0; }
-.ibtn.sm { width:var(--control-small); height:var(--control-small); min-height:var(--control-small); }
-
-:is(.btn, .ibtn, .cbtn, .send, .msg-act) > svg { display:block; flex-shrink:0; }
-:is(.btn, .ibtn) > svg:not(.logo):not(.pv-mark) { width:16px; height:16px; }
+:is(.cbtn, .send, .msg-act) > svg { display:block; flex-shrink:0; }
 .cbtn > svg.pv-mark { width:18px; height:18px; }
 .cbtn > .cbtn-chev { width:12px; height:12px; }
-/* One height for sidebar rows, one for filters and pins; small controls round a little less than full-size ones. */
-:root { --row-height:34px; --control-radius-sm:7px; }
-.ibtn { border-radius:var(--control-radius); }
-.btn.sm, .ibtn.sm { border-radius:var(--control-radius-sm); }
 
 @media(pointer:coarse) {
   :root { --control-height:44px; --control-small:40px; --row-height:40px; }

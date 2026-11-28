@@ -4,19 +4,20 @@ import { quoteOnSelect } from './quote.js';
 import { h, icon, replace, clear, toast, fmtDuration, rafThrottle, kbd, copyButtonFeedback, copyText, baseName, leave, errorState, fmtElapsed, lsGet, lsSet, wordmark } from './dom.js';
 import { renderMarkdown } from './markdown.js';
 import { MarkdownBoundary, liveExcerpt, LIVE_MARKDOWN_LIMIT } from './markdown-stream.mjs';
-import { renderToolCard, output, diffCounts, statChips } from './tools.js';
+import { renderToolCard, output, terminal, diffCounts, statChips } from './tools.js';
 import { S, emit, textOf, sendPrompt, abort, setThinking, setModel, loadModels, refreshState, savePrefs, replyUi, openTab, closeTab } from './store.js';
 import { rpc, api } from './api.js';
 import { modelPicker, popMenu, isApproval, approvalLabel, thinkingLevels, thinkingName } from './dialogs.js';
 import { asciiSpin } from './ascii.js';
 import { fmtMsgTime, dateFormat } from './prefs-extra.js';
-import { viewFile, reviewChanges, askSide } from './panels.js';
+import { viewFile, reviewChanges, askSide, showTab } from './panels.js';
 import { runInTerminal } from './terminal.js';
-import { conversationToMarkdown } from './exporter.js';
+import { conversationToMarkdown, exportPortableTranscript } from './exporter.js';
 import { rateModel } from './ratings.js';
 import { shellCommand } from './tool-title.mjs';
 import { Composer, ASK } from './composer.js';
-import { addContext, permissionChip, modelLabel, effortChip } from './controls.js';
+import { addContext, permissionChip, modelLabel, effortChip, modelGroup, keyHints, modePill } from './controls.js';
+import { contextRing } from './context-popover.js';
 import { Timeline } from './timeline.js';
 
 // How each thinking level reads in the interface.
@@ -56,6 +57,7 @@ export function sessionMenu(t, anchor, { rename, close, find, outline, inspect, 
     ...(cmd('compact') ? [{ icon: 'layers', label: 'Compact context', hint: '/compact', run: () => sendPrompt(t, '/compact').catch(() => {}) }] : []),
     '-',
     { icon: 'copy', label: 'Copy as Markdown', run: () => copyConversation(t) },
+    { icon: 'file', label: 'Export portable transcript', run: () => exportPortableTranscript(t) },
     { icon: 'external', label: 'Export as HTML', run: async () => {
       try {
         const r = await rpc(t.id, { type: 'export_html' }, 120000);
@@ -325,10 +327,13 @@ export class TabView {
       }
       this.focus();
     });
-    this.planBtn = h('button', { class: 'cbtn plan', type: 'button', title: 'Plan mode: the agent reads and proposes a plan, but changes nothing', onclick: () => this.togglePlan() });
+    this.modePill = modePill(() => this.setMode('agent'));
+    this.ctxRing = contextRing(t, () => showTab('context'));
     this.statusLine = h('div', { class: 'c-status', 'aria-live': 'polite' });
-    this.composer.el.append(h('div', { class: 'c-row' }, addContext(this.composer), this.modelBtn, this.effort.el, this.planBtn, h('span', { class: 'grow' }), this.permBtn.el, this.sendBtn));
-    this.dockCol = h('div', { class: 'dock-col' }, this.queue, this.composer.el, this.statusLine);
+    this.keys = keyHints();
+    const mode = { get: () => t.state?.mode || 'agent', set: (id) => this.setMode(id), available: () => !t.dead && !!t.state && 'mode' in t.state };
+    this.composer.el.append(h('div', { class: 'c-row' }, addContext(this.composer, mode), modelGroup(this.modelBtn, this.effort.el), this.modePill.el, h('span', { class: 'grow' }), this.ctxRing.el, this.permBtn.el, this.sendBtn));
+    this.dockCol = h('div', { class: 'dock-col' }, this.queue, this.composer.el, h('div', { class: 'c-foot' }, this.statusLine, this.keys.el));
     this.dock = h('div', { class: 'dock' }, this.jump, this.dockCol);
     this.root = h('div', { class: 'session-inner' }, this.scroller, this.dock, h('div', { class: 'drop-hint', 'aria-hidden': 'true' }, icon('paperclip', 18), 'Drop images or text files to attach'));
     this.root._view = this;
@@ -460,15 +465,8 @@ export class TabView {
     }
     this.effort.update(dead ? [] : levels, lvl, { model, def: m?.thinking?.default });
     this.permBtn.update(dead);
-    const hasPlan = !!st && 'planMode' in st;
-    this.planBtn.hidden = dead || !hasPlan;
-    if (this.planOn !== !!st?.planMode) {
-      this.planOn = !!st?.planMode;
-      this.planBtn.replaceChildren(icon('map', 14), h('span', null, this.planOn ? 'Plan mode' : 'Plan'));
-    }
-    this.planBtn.classList.toggle('on', !!st?.planMode);
-    this.planBtn.setAttribute('aria-pressed', String(!!st?.planMode));
-
+    this.modePill.update(dead ? 'agent' : st?.mode, this.settingMode);
+    this.ctxRing.update();
 
     const q = [...(t.queued?.steering || []).map((x) => ['Steer', x]), ...(t.queued?.followUp || []).map((x) => ['Next', x])];
     replace(this.queue, q.map(([k, x]) => {
@@ -497,18 +495,20 @@ export class TabView {
     this.sendBtn.disabled = t.dead || this.sending === true || (!stop && !typed);
     this.sendBtn.title = stop ? `${action} (Esc)` : `${action} (${key})${t.streaming ? ` · ${queue ? 'Steer' : 'Queue'} (Alt+Enter)` : ''}`;
     this.sendBtn.setAttribute('aria-label', action);
+    this.composer.el.classList.toggle('typed', typed);
+    this.keys.update({ busy: !!t.streaming && !t.dead, chars: this.ta.value.length });
   }
 
   updateStatus() {
     const t = this.tab;
     const rate = t.streaming && t.state?.tokensPerSecond ? t.state.tokensPerSecond.toFixed(0) : '';
-    const sig = JSON.stringify([!!t.compacting, !!t.retry, this.planBtn.hidden, [...t.statuses], rate]);
+    const sig = JSON.stringify([!!t.compacting, !!t.retry, this.modePill.el.hidden, [...t.statuses], rate]);
     if (this.statusSig === sig) return;
     this.statusSig = sig;
     const bits = [];
     if (t.compacting) bits.push(h('span', null, 'Compacting context…'));
     if (t.retry) bits.push(h('span', { class: 'warn-text' }, 'Retrying…'));
-    for (const [k, v] of t.statuses) if (!(k === 'plan' && !this.planBtn.hidden)) bits.push(h('span', null, v));
+    for (const [k, v] of t.statuses) if (!(k === 'plan' && !this.modePill.el.hidden)) bits.push(h('span', null, v));
     if (rate) bits.push(h('span', { class: 'num' }, `${rate} tok/s`));
     replace(this.statusLine, bits);
   }
@@ -557,16 +557,21 @@ export class TabView {
     });
   }
 
-  async togglePlan() {
+  /** Switch the conversation mode: 'agent', 'plan', 'ask' or 'debug'. */
+  async setMode(id) {
     const t = this.tab;
-    this.planBtn.disabled = true;
+    if (this.settingMode || id === (t.state?.mode || 'agent')) return;
+    this.settingMode = true;
+    this.modePill.update(t.state?.mode, true);
     try {
-      await rpc(t.id, { type: 'prompt', message: '/plan' });
+      await rpc(t.id, { type: 'set_mode', mode: id });
       await refreshState(t);
     } catch (e) {
       toast(e.message, 'error');
     }
-    this.planBtn.disabled = false;
+    this.settingMode = false;
+    this.updateComposer();
+    this.focus();
   }
 
   updateApproval() {
@@ -780,7 +785,7 @@ export class TabView {
     const tasks = h('div', { class: 'ce-tasks-slot' });
     this.emptyEl = h('div', { class: 'chat-empty' },
       h('span', { class: 'empty-mark' }, wordmark()),
-      h('h2', { class: 'ce-name' }, 'Where should we pick up?'),
+      h('h2', { class: 'ce-name' }, 'Start with a task'),
       tasks);
     const empty = this.emptyEl;
     this.tin.append(empty);
@@ -924,7 +929,7 @@ export class TabView {
       case 'toolResult':
         return null;
       case 'bashExecution':
-        return h('div', { class: 'tool done open' }, h('div', { class: 'tool-head static' }, h('span', { class: 'tool-ico' }, icon('terminal', 14)), h('span', { class: 'tool-name' }, 'shell'), h('span', { class: 'tool-sum' }, m.command || '')), h('div', { class: 'tool-body' }, output(String(m.output ?? textOf(m.content) ?? ''))));
+        return h('div', { class: 'tool done open' }, h('div', { class: 'tool-head static' }, h('span', { class: 'tool-ico' }, icon('terminal', 14)), h('span', { class: 'tool-name' }, 'Ran'), h('span', { class: 'tool-sum' }, shellCommand(m.command))), h('div', { class: 'tool-body' }, terminal(String(m.command || ''), String(m.output ?? textOf(m.content) ?? ''), { exit: m.exitCode ?? null, note: 'No output.' })));
       case '_notice':
         return h('div', { class: `note ${m.level || ''}` }, icon(m.level === 'error' || m.level === 'warn' ? 'alert' : 'info', 14), h('span', null, m.text));
       case '_cmd':
@@ -982,26 +987,32 @@ export class TabView {
       this.composer.restore({ raw: rest, items: [...items, ...imgs.map((c, i) => ({ kind: 'image', name: `image ${i + 1}`, url: `data:${c.mimeType || 'image/png'};base64,${c.data}`, b64: c.data, mime: c.mimeType || 'image/png', size: Math.round(c.data.length * 0.75) }))] });
       this.focus();
     });
-    const canBranch = m.id && this.tab.state?.features?.includes('branch') && !this.tab.dead;
-    const branch = canBranch ? h('button', { class: 'msg-act', type: 'button', title: 'Start a new conversation with the messages up to here. Your files are not changed.' }, icon('branch', 13), 'Branch') : null;
-    branch?.addEventListener('click', async () => {
-      branch.disabled = true;
+    const branch = m.id ? this.branchButton(() => ({ messageId: m.id }), 'Branch', 'Start a new conversation with the messages up to here. Your files are not changed.') : null;
+    const when = m.timestamp ? msgTime(m.timestamp) : null;
+    return h('div', { class: 'msg user' }, bubble, h('div', { class: 'msg-acts' }, copy, when, this.tab.dead ? null : edit, branch));
+  }
+
+  /** A button that starts a new conversation from part of this one; `at()` gives where it ends. */
+  branchButton(at, label, title) {
+    if (!this.tab.state?.features?.includes('branch') || this.tab.dead) return null;
+    const b = h('button', { class: 'msg-act', type: 'button', title }, icon('branch', 13), label);
+    b.addEventListener('click', async () => {
+      b.disabled = true;
       try {
-        await rpc(this.tab.id, { type: 'branch', messageId: m.id });
+        await rpc(this.tab.id, { type: 'branch', ...at() });
       } catch (e) {
         toast(e.message, 'error', 7000);
       }
-      branch.disabled = false;
+      b.disabled = false;
     });
-    const when = m.timestamp ? msgTime(m.timestamp) : null;
-    return h('div', { class: 'msg user' }, bubble, h('div', { class: 'msg-acts' }, copy, when, this.tab.dead ? null : edit, branch));
+    return b;
   }
 
   renderAssistant(m, idx, onPath, reuse = null) {
     const wrap = h('div', { class: 'msg asst' });
     const blocks = Array.isArray(m.content) ? m.content : [];
     blocks.forEach((b, i) => {
-      const el = this.renderBlock(b, `${idx}:${i}`, onPath, reuse?.[i]);
+      const el = this.renderBlock(b, `${idx}:${i}`, onPath, reuse?.[i], `${m.timestamp}:${i}`);
       if (el) wrap.append(el);
     });
     if (m.stopReason === 'error' && m.errorMessage) wrap.append(this.errorBox(m.errorMessage));
@@ -1010,18 +1021,28 @@ export class TabView {
     if (!this.firstOfTurn(idx)) wrap.classList.add('cont');
     const text = blocks.filter((b) => b.type === 'text' && b.text?.trim()).map((b) => b.text.trim()).join('\n\n');
     const acts = h('div', { class: 'msg-acts' });
+    // 👍 / 👎, kept on this PC. 👎 also offers what to do next: answer again, another model, or report it.
+    if (text && m.timestamp) acts.append(...this.rateButtons(m));
     if (text) {
       const copy = h('button', { class: 'msg-act copy', type: 'button', title: 'Copy reply as Markdown' }, icon('copy', 13), 'Copy');
       copy.addEventListener('click', () => copyButtonFeedback(copy, text));
       acts.append(copy);
     }
-    // 👍 / 👎, kept on this PC. 👎 also offers what to do next: answer again, another model, or report it.
-    if (text && m.timestamp) acts.append(...this.rateButtons(m));
     // A failed reply has Retry in its error box.
     if (m.stopReason === 'aborted' || (m.stopReason !== 'error' && this.tab.state?.features?.includes('regenerate'))) {
       const retry = h('button', { class: 'msg-act retry', type: 'button', title: 'Regenerate this reply' }, icon('refresh', 13), 'Retry');
       retry.addEventListener('click', () => this.retry());
       acts.append(retry);
+    }
+    // Fork: a new conversation with everything up to the end of this reply (up to the next message of yours).
+    if (text && m.timestamp) {
+      const upTo = () => {
+        const all = this.tab.messages;
+        const next = all.slice(all.indexOf(m) + 1).find((x) => x.role === 'user' && x.id);
+        return next ? { messageId: next.id } : {};
+      };
+      const fork = this.branchButton(upTo, 'Fork', 'Start a new conversation with the messages up to this reply. Your files are not changed.');
+      if (fork) acts.append(fork);
     }
     // A step that only ran tools gets no action row (it would only add a gap between tool rows); a stopped or failed
     // one keeps it for Retry.
@@ -1125,6 +1146,15 @@ export class TabView {
     const show = can ? this.els.get(last)?.querySelector('.retry') : null;
     for (const b of this.tin.querySelectorAll('.retry:not([hidden])')) if (b !== show) b.hidden = true;
     if (show?.hidden) show.hidden = false;
+    // The latest reply keeps its actions in view; every other message shows them under the pointer or focus.
+    let latest = t.streaming ? null : this.tin.lastElementChild;
+    while (latest && !latest.matches('.msg.asst, .msg.user')) latest = latest.previousElementSibling;
+    if (!latest?.matches('.msg.asst')) latest = null;
+    if (this.latestEl !== latest) {
+      this.latestEl?.classList.remove('latest');
+      latest?.classList.add('latest');
+      this.latestEl = latest;
+    }
     this.refreshSummary();
   }
 
@@ -1189,20 +1219,20 @@ export class TabView {
     return { files, read, n, check, checkFails, review, edits, lastAsst, lastEl, secs };
   }
 
-  /** The facts of a turn as small labelled items: "Read 2 files", "Ran 1 command", "Tests passed"… */
+  /** The facts of a turn, in words: "Read 2 files", "Ran 1 command", "Tests passed"… (a failure marked as bad). */
   turnFacts(st) {
     const pl = (k, one, many = one + 's') => `${k} ${k === 1 ? one : many}`;
     const { read, n, files, check, checkFails, review, edits } = st;
     return [
-      n.failed ? [icon('alert', 12), pl(n.failed, 'failed step'), true] : null,
-      read.size ? [icon('eye', 12), `Read ${pl(read.size, 'file')}`] : null,
-      n.search ? [icon('search', 12), pl(n.search, 'search', 'searches')] : null,
-      n.run ? [icon('terminal', 12), `Ran ${pl(n.run, 'command')}`] : null,
-      n.help ? [icon('users', 12), pl(n.help, 'helper')] : null,
-      files.size ? [icon('pencil', 12), `Changed ${pl(files.size, 'file')}`] : null,
-      check ? (check.status === 'passed' ? [icon('check', 12), `${checkWord(check.command)} passed${checkFails ? ` after ${pl(checkFails, 'fix', 'fixes')}` : ''}`] : [icon('alert', 12), `${checkWord(check.command)} ${check.status === 'skipped' ? 'skipped' : 'failed'}`, check.status !== 'skipped']) : null,
-      review ? (review.status === 'issues' ? [icon('eye', 12), `Review found ${pl(review.issues?.length || 0, 'issue')}${edits > review.editsBefore ? ', fixed' : ''}`] : [icon('eye', 12), 'Review found no issues']) : null,
-    ].filter(Boolean).map(([ic, txt, bad]) => h('span', { class: 'ts-fact' + (bad ? ' bad' : '') }, ic, txt));
+      n.failed ? [pl(n.failed, 'failed step'), true] : null,
+      read.size ? [`Read ${pl(read.size, 'file')}`] : null,
+      n.search ? [pl(n.search, 'search', 'searches')] : null,
+      n.run ? [`Ran ${pl(n.run, 'command')}`] : null,
+      n.help ? [pl(n.help, 'helper')] : null,
+      files.size ? [`Changed ${pl(files.size, 'file')}`] : null,
+      check ? (check.status === 'passed' ? [`${checkWord(check.command)} passed${checkFails ? ` after ${pl(checkFails, 'fix', 'fixes')}` : ''}`] : [`${checkWord(check.command)} ${check.status === 'skipped' ? 'skipped' : 'failed'}`, check.status !== 'skipped']) : null,
+      review ? (review.status === 'issues' ? [`Review found ${pl(review.issues?.length || 0, 'issue')}${edits > review.editsBefore ? ', fixed' : ''}`] : ['Review found no issues']) : null,
+    ].filter(Boolean).map(([txt, bad]) => h('span', { class: 'ts-fact' + (bad ? ' bad' : '') }, txt));
   }
 
   /** Fold every finished turn from message `from` on (the turn still running stays open). */
@@ -1344,7 +1374,7 @@ export class TabView {
     this.updateComposer();
   }
 
-  renderBlock(b, key, onPath, reuse) {
+  renderBlock(b, key, onPath, reuse, thinkKey = '') {
     if (b.type === 'text') {
       if (!b.text?.trim()) return null;
       if (reuse?.type === 'text' && reuse.md) {
@@ -1357,25 +1387,39 @@ export class TabView {
       if (S.ui.showThinking === false || !b.thinking?.trim()) return null;
       if (reuse?.type === 'thinking' && reuse.md) {
         reuse.md.finish(b.thinking);
-        reuse.el.classList.remove('live');
-        const l = reuse.el.querySelector('.think-l');
-        if (l) l.textContent = 'Thought';
+        this.endThought(reuse, thinkKey);
         setGist(reuse.el, b.thinking);
         return reuse.el;
       }
-      return this.thinkBlock(key, renderMarkdown(b.thinking, { onPath }), false, b.thinking);
+      return this.thinkBlock(key, renderMarkdown(b.thinking, { onPath }), false, b.thinking, this.tab.thinkMs?.get(thinkKey));
     }
     if (b.type === 'toolCall') return this.toolCard(b);
     if (b.type === 'image' && b.data) return h('img', { class: 'tool-img', src: `data:${b.mimeType || 'image/png'};base64,${b.data}`, alt: 'Image from the agent' });
     return null;
   }
 
-  /** A thinking block: one quiet row ("Thought  what it was about…") that opens to the full text. */
-  thinkBlock(key, body, live, text = '') {
-    const d = h('details', { class: 'think' + (live ? ' live' : ''), dataset: { key } }, h('summary', null, icon('chevron-right', 12, 'chev'), h('span', { class: 'think-l' }, live ? 'Thinking' : 'Thought'), h('span', { class: 'think-p ell' })), h('div', { class: 'think-b' }, body));
+  /**
+   * A thinking block: one quiet row ("Thought 3s  what it was about…") that opens to the full text. The time is
+   * measured while the block streams, so only blocks seen live in this window have one.
+   */
+  thinkBlock(key, body, live, text = '', ms) {
+    const d = h('details', { class: 'think' + (live ? ' live' : ''), dataset: { key } }, h('summary', null, h('span', { class: 'think-l' }, live ? 'Thinking' : 'Thought'), h('span', { class: 'think-t num' }, ms ? fmtElapsed(Math.max(1, Math.round(ms / 1000))) : ''), icon('chevron-right', 12, 'chev'), h('span', { class: 'think-p ell' })), h('div', { class: 'think-b' }, body));
     setGist(d, text);
     d.open = this.thinkOpen.has(key);
     return d;
+  }
+
+  /** A live thinking block stopped (the next block started, or the reply ended): "Thought", with how long it took. */
+  endThought(cur, thinkKey) {
+    if (cur.ms == null) {
+      cur.ms = Date.now() - cur.start;
+      (this.tab.thinkMs ||= new Map()).set(thinkKey, cur.ms);
+    }
+    cur.el.classList.remove('live');
+    const l = cur.el.querySelector('.think-l');
+    const tt = cur.el.querySelector('.think-t');
+    if (l) l.textContent = 'Thought';
+    if (tt) tt.textContent = fmtElapsed(Math.max(1, Math.round(cur.ms / 1000)));
   }
 
   toolCard(call) {
@@ -1421,15 +1465,12 @@ export class TabView {
           const md = new LiveMarkdown(onPath);
           const el = b.type === 'text' ? md.el : this.thinkBlock(`${idx}:${i}`, md.el, true);
           this.placeLive(prev, el, i);
-          this.liveBlocks[i] = { type: b.type, md, el };
+          this.liveBlocks[i] = { type: b.type, md, el, start: Date.now() };
         }
         const cur = this.liveBlocks[i];
         cur.md.update(text);
         if (b.type === 'thinking') {
-          const l = cur.el.querySelector('.think-l');
-          const want = last ? 'Thinking' : 'Thought';
-          if (l && l.textContent !== want) l.textContent = want;
-          cur.el.classList.toggle('live', last);
+          if (!last && cur.ms == null) this.endThought(cur, `${live.timestamp}:${i}`);
           setGist(cur.el, text);
         }
         return;
@@ -1496,11 +1537,12 @@ export class TabView {
     const el = this.toolCard(call);
     if (el.classList.contains('done') && /\b(running|pending|waiting)\b/.test(old.className)) el.classList.add('just-done');
     // Streaming output: keep following its end if the reader was there.
-    const out = old.querySelector('.tool-body pre.out:last-of-type');
+    const OUT = '.tool-body :is(pre.out, pre.cli-out):last-of-type';
+    const out = old.querySelector(OUT);
     const follow = out && out.scrollHeight - out.scrollTop - out.clientHeight < 8;
     old.replaceWith(el);
     if (follow) {
-      const n = el.querySelector('.tool-body pre.out:last-of-type');
+      const n = el.querySelector(OUT);
       if (n) n.scrollTop = n.scrollHeight;
     }
     const j = this.liveBlocks.findIndex((x) => x?.el === old);

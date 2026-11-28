@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   titleBarArgs, isWindowsHome, projectId, jumpAction, toastAction, isToastToken, allowOnce, registryDword, progressArgs,
-  notifyArgs, themeSource, recentProjects, amberDot, accentHex, supportsMica, fitBounds, restorePlace,
+  notifyArgs, recentProjects, amberDot, accentHex, supportsMica, fitBounds, restorePlace,
 } from '../electron/windows-input.mjs';
 import { windowPlacement } from '../electron/windows-place.mjs';
 
@@ -51,9 +51,7 @@ describe('IPC argument checks', () => {
       assert.equal(notifyArgs(bad), null, JSON.stringify(bad));
   });
 
-  test('themeSource and recentProjects', () => {
-    for (const v of ['system', 'dark', 'light']) assert.equal(themeSource(v), v);
-    for (const v of ['', 'Dark', 'midnight', null, 1]) assert.equal(themeSource(v), null);
+  test('recentProjects', () => {
     assert.deepEqual(recentProjects(['w1', 'w2', 'w1']), ['w1', 'w2']);
     assert.deepEqual(recentProjects(['a', 'b', 'c', 'd', 'e', 'f', 'g']), ['a', 'b', 'c', 'd', 'e', 'f']);
     assert.equal(recentProjects(['ok', '../x']), null);

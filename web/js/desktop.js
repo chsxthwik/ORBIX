@@ -1,7 +1,7 @@
 // In the Windows app: the page draws the top of the window (the menu row). It marks itself as the app (html.desktop),
-// and keeps the window buttons in the menu row's colour as the theme changes. In a browser this does nothing.
-// On Windows it also follows the system: Mica behind the sidebar, the accent colour (optional), high contrast, text
-// size and light/dark, and drives the taskbar (progress, the amber "needs you" dot, the jump list) and notifications.
+// and keeps the window buttons in the menu row's colour as the colours change. In a browser this does nothing.
+// On Windows it also follows the system: Mica behind the sidebar, the accent colour (optional), high contrast and text
+// size, and drives the taskbar (progress, the amber "needs you" dot, the jump list) and notifications.
 import { S, on, emit } from './store.js';
 import { H } from './shell.js';
 
@@ -47,9 +47,8 @@ if (bridge) {
       requestAnimationFrame(sync);
     }
   };
-  // Themes are applied as attributes on <html>; the system light or dark setting can change them too.
-  new MutationObserver(later).observe(root, { attributes: true, attributeFilter: ['data-theme', 'data-mode', 'style', 'class'] });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', later);
+  // Your own colours are inline on <html>; contrast, Mica and high contrast are classes.
+  new MutationObserver(later).observe(root, { attributes: true, attributeFilter: ['style', 'class'] });
   later();
 }
 
@@ -68,17 +67,13 @@ if (win) {
     const st = winState;
     if (!st) return;
     const u = S.ui || {};
-    // Mica shows through the window's own surfaces only: not under a scene theme, which paints its own picture.
-    root.classList.toggle('win-mica', !!st.mica && u.winMica !== false && !root.dataset.scene);
+    root.classList.toggle('win-mica', !!st.mica && u.winMica !== false);
     root.classList.toggle('win-hc', !!st.highContrast);
     const accent = u.winAccent === true && !st.highContrast && /^#[\da-f]{6}$/i.test(st.accent || '') ? st.accent : '';
     root.classList.toggle('win-accent', !!accent);
-    // :not(#_) outranks the themes' own accent; your own colours (inline on <html>) still win.
+    // :not(#_) outranks the theme's own accent; your own colours (inline on <html>) still win.
     accentSheet.replaceSync(accent ? `html:not(#_).win-accent{--accent:${accent};--accent-solid:${accent};--accent-soft:color-mix(in srgb,${accent} 13%,transparent);--accent-line:color-mix(in srgb,${accent} 45%,transparent);--on-accent:${onColor(accent)}}` : '');
     win.textScale(u.winTextSize === false ? 1 : st.textScale);
-    // Mica, the window buttons and menus follow the theme's light or dark, or Windows itself under the System theme.
-    const theme = u.theme || 'system';
-    win.theme(theme === 'system' ? 'system' : root.dataset.mode === 'light' ? 'light' : 'dark');
   };
   win.onState((st) => {
     winState = st;
@@ -86,7 +81,6 @@ if (win) {
     emit('windows');
   });
   on('prefs', apply);
-  new MutationObserver(apply).observe(root, { attributes: true, attributeFilter: ['data-mode', 'data-scene'] });
 
   // Taskbar: an indeterminate bar while agents work, the amber dot and a paused bar while one waits for you.
   let bar = '';

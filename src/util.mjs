@@ -19,13 +19,34 @@ export function readJson(file, fallback) {
   }
 }
 
+/**
+ * Put `tmp` in place of `file` (the last step of an atomic write). On Windows a rename onto a file that something else
+ * has open for a moment (antivirus, the search indexer, another ORBIX reading it) fails with EPERM, EACCES or EBUSY:
+ * try again a few times over about half a second, then copy over it, so a busy file never fails a save or a start.
+ */
+export function replaceFile(tmp, file) {
+  for (let i = 0; ; i++) {
+    try {
+      return fs.renameSync(tmp, file);
+    } catch (e) {
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(e.code)) throw e;
+      if (i >= 8) {
+        fs.copyFileSync(tmp, file);
+        fs.rmSync(tmp, { force: true });
+        return;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15 * (i + 1));
+    }
+  }
+}
+
 /** Atomic write: temp file + rename, so a crash never leaves a half-written config. */
 export function writeJson(file, value) {
   mkdirp(path.dirname(file));
   const tmp = `${file}.${process.pid}.tmp`;
   try {
     fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
-    fs.renameSync(tmp, file);
+    replaceFile(tmp, file);
   } catch (e) {
     fs.rmSync(tmp, { force: true });
     throw e;

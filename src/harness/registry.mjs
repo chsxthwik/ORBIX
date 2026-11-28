@@ -11,7 +11,7 @@ import { CLAUDE_MODELS, CLAUDE_EFFORTS } from './claude.mjs';
 const BUILTIN_AGENTS = [
   { id: 'agent-claude', name: 'Claude Code', cmd: 'claude', kind: 'claude', install: 'npm install -g @anthropic-ai/claude-code', login: 'claude', note: 'Anthropic’s agent, on your Claude plan or API key.' },
   { id: 'agent-codex', name: 'Codex', cmd: 'codex', kind: 'codex', install: 'npm install -g @openai/codex', login: 'codex login', note: 'OpenAI’s agent, on your ChatGPT plan or API key.' },
-  { id: 'agent-opencode', name: 'OpenCode', cmd: 'opencode', kind: 'acp', args: ['acp'], env: { OPENCODE_DISABLE_AUTOUPDATE: '1' }, extra: ['.opencode/bin/opencode'], install: 'npm install -g opencode-ai', login: 'opencode auth login', note: 'Open-source agent for 75+ providers, over ACP.' },
+  { id: 'agent-opencode', name: 'OpenCode', cmd: 'opencode', kind: 'acp', args: ['acp'], env: { OPENCODE_DISABLE_AUTOUPDATE: '1' }, extra: ['.opencode/bin/opencode'], install: 'npm install -g @opencode/cli', login: 'opencode auth login', note: 'Use models from your configured OpenCode providers over ACP. Provider charges may apply.' },
   { id: 'agent-gemini', name: 'Gemini CLI', cmd: 'gemini', kind: 'acp', args: ['--experimental-acp'], install: 'npm install -g @google/gemini-cli', login: 'gemini', note: 'Google’s agent, over ACP.' },
 ];
 
@@ -82,7 +82,7 @@ export class AgentRegistry {
       const where = new Map(String(r?.stdout || '').split('\n').map((l) => l.split('\t')).filter((x) => x[1]?.trim()).map(([c, p]) => [c, p.trim()]));
       for (const a of agents) if (where.get(a.cmd)) out[a.id] = { path: where.get(a.cmd) };
       for (const a of agents) if (a.cmd.startsWith('/') ) out[a.id] = { path: a.cmd };
-    } else {
+    } else if (process.platform === 'win32') {
       const home = os.homedir();
       await Promise.all(agents.map(async (a) => {
         if (path.isAbsolute(a.cmd)) {
@@ -100,10 +100,23 @@ export class AgentRegistry {
         const best = hits.find((h) => /\.exe$/i.test(h)) || hits.find((h) => /\.cmd$/i.test(h)) || null;
         if (best) out[a.id] = { path: best };
       }));
+    } else {
+      await Promise.all(agents.map(async (a) => {
+        for (const candidate of [a.cmd, ...(a.extra || []).map((p) => path.join(os.homedir(), p))]) {
+          const candidates = candidate.includes('/') ? [candidate] : (process.env.PATH || '').split(path.delimiter).filter(Boolean).map((dir) => path.join(dir, candidate));
+          for (const bin of candidates) {
+            const executable = await fs.promises.access(bin, fs.constants.X_OK).then(() => fs.promises.stat(bin)).catch(() => null);
+            if (executable?.isFile()) {
+              out[a.id] = { path: bin };
+              return;
+            }
+          }
+        }
+      }));
     }
     await Promise.all(Object.entries(out).map(async ([id, f]) => {
       const r = await this.backend.exec([f.path, '--version'], { timeout: 15000 }).catch(() => null);
-      f.version = firstLine(r?.stdout).replace(/^v(?=\d)/, '').slice(0, 60);
+      f.version = firstLine(r?.stdout).replace(/^(?:opencode\s+)?v(?=\d)/i, '').slice(0, 60);
       f.signedIn = await this._signedIn(agents.find((a) => a.id === id), f.path).catch(() => null);
     }));
     return out;

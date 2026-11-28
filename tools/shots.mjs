@@ -3,14 +3,13 @@
 //
 //   node tools/shots.mjs            regenerate docs/img/shots/*.png, and the website's hero (site/assets/img/shots/run*.webp);
 //                                   tools/showcase.mjs then cuts the website's story pictures from the PNGs
-//   node tools/shots.mjs --theme graphite   the same, in another theme (Dark by default)
 //   node tools/shots.mjs --keep     keep the temporary folder afterwards (it holds the server log)
-//   node tools/shots.mjs --visual   visual regression test (npm run visual): every screen in Dark, Light and Graphite at
+//   node tools/shots.mjs --visual   visual regression test (npm run visual): every screen (in Dark, the one theme) at
 //                                   scale 1, compared pixel by pixel with the approved PNGs in test/visual/. Diff
 //                                   images go to test/visual/diff/; it fails when more than 0.1% of a screen's pixels change
 //   node tools/shots.mjs --visual --approve   take the same screens and save them as the new baselines
 //   node tools/shots.mjs --visual --only NAME  only the screens whose name starts with NAME (or one of A,B,...) (with or without --approve)
-//   node tools/shots.mjs --audit    the same screens, no comparison: checks every screen in every theme against the design
+//   node tools/shots.mjs --audit    the same screens, no comparison: checks every screen against the design
 //                                   rules (type scale, weights, 4px spacing, accent only where it belongs, 4.5:1 text
 //                                   contrast, clipped or overlapping text) and lists what breaks them (tools/ui-audit.mjs)
 //   node tools/shots.mjs --visual --size 2560x1440 --keep   a different window size (the folder with the captures is kept)
@@ -40,8 +39,6 @@ const COMPARE = args.includes('--visual');
 const VISUAL = COMPARE || AUDIT; // the audit takes the same deterministic screens
 const APPROVE = COMPARE && args.includes('--approve');
 const ONLY = args.includes('--only') ? args[args.indexOf('--only') + 1] || '' : '';
-// The theme of the README and website screens (`--theme graphite`); the visual test always walks every theme.
-const THEME = args.includes('--theme') ? args[args.indexOf('--theme') + 1] || 'dark' : 'dark';
 const BASELINES = path.join(ROOT, 'test', 'visual');
 let PNG_DIR = path.join(ROOT, 'docs', 'img', 'shots');
 const WEBP_DIR = path.join(ROOT, 'site', 'assets', 'img', 'shots');
@@ -317,7 +314,7 @@ function startModelServer() {
 
 async function startOrbix(data, modelPort) {
   fs.mkdirSync(data, { recursive: true });
-  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ version: 1, backend: { kind: 'native', distro: '' }, backendChosen: true, ui: { theme: THEME, rightPanel: true, rightTab: 'files', showThinking: true, autoScroll: true } }, null, 2));
+  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ version: 1, backend: { kind: 'native', distro: '' }, backendChosen: true, ui: { rightPanel: true, rightTab: 'files', showThinking: true, autoScroll: true } }, null, 2));
   fs.writeFileSync(path.join(data, 'engine.json'), JSON.stringify({
     approvals: 'edits',
     trusted: ['node --test', 'npm test'],
@@ -498,7 +495,7 @@ function pageOf(cdp) {
   return P;
 }
 
-// ============================================================================ scenes
+// ============================================================================ screens
 
 const PROMPTS = {
   explain: 'Explain how this project is put together.',
@@ -529,14 +526,12 @@ async function converse(page, key, { waitFor = 'done' } = {}) {
   await page.settle(600);
 }
 
-const setTheme = (page, theme) => page.eval(`(await import('/js/store.js')).savePrefs({ theme: ${JSON.stringify(theme)} }); await new Promise((r) => setTimeout(r, 250));`);
-
 async function showPanelTab(page, label) {
   await page.eval(`document.querySelector('.ptab[aria-label=${JSON.stringify(label)}]')?.click();`);
   await page.settle(300);
 }
 
-async function scenes(page, project) {
+async function screens(page, project) {
   await page.eval(`window.__shotProject = ${JSON.stringify(project)};
     const { api } = await import('/js/api.js');
     await api.post('/api/workspaces', { path: window.__shotProject });`);
@@ -545,7 +540,6 @@ async function scenes(page, project) {
   await sleep(500);
   await page.until("document.readyState === 'complete' && document.querySelector('.home .home-composer')", 'Home');
   await page.eval(`window.__shotProject = ${JSON.stringify(project)};`);
-  await setTheme(page, THEME);
 
   say('Conversations');
   await converse(page, 'explain');
@@ -609,7 +603,6 @@ async function scenes(page, project) {
 
 // ============================================================================ visual regression test (--visual)
 
-const VIS_THEMES = ['dark', 'light', 'graphite'];
 const VIS_SCALES = [[1, '1x']]; // display scaling is covered by e2e/ui-stress.mjs (100-175%)
 // Volatile pieces masked in every capture: the terminal runs a real shell, whose prompt and output are not ours.
 // Animations end at once (on their last frame, and their end events still fire); nothing moves after that.
@@ -617,25 +610,23 @@ const VIS_STYLE = '*, *::before, *::after { animation-duration: 0s !important; a
 const visualNames = [];
 const audited = {}; // screen -> findings of tools/ui-audit.mjs
 
-/** One screen in every theme and scale. `prep` runs after each theme change (and may reopen what it closed). */
+/** One screen at every scale. `prep` runs before the capture (and may reopen what it closed). */
 async function vshot(page, name, prep = async () => {}) {
   if (ONLY && !ONLY.split(',').some((p) => name.startsWith(p))) return;
-  for (const theme of VIS_THEMES) {
-    // The sidebar's conversation list is read again every 30 s; read it now so a capture never has an older list.
-    await page.eval("await (await import('/js/store.js')).loadSessions();");
-    await setTheme(page, theme);
-    await prep();
-    if (AUDIT) {
-      await page.settle();
-      audited[`${name}-${theme}`] = await page.eval(inPage(auditPage));
-    }
-    for (const [dsf, tag] of VIS_SCALES) {
-      const file = `${name}-${theme}-${tag}`;
-      await page.capture(file, { dsf, blur: !prep.keepFocus });
-      visualNames.push(file);
-    }
-    if (AUDIT && theme === 'dark' && /^(home|session|hub-|settings-look|panel-changes|model-picker|review)/.test(name)) audited[`${name}-${theme}-keys`] = await tabWalk(page);
+  // The sidebar's conversation list is read again every 30 s; read it now so a capture never has an older list.
+  await page.eval("await (await import('/js/store.js')).loadSessions();");
+  await page.settle(250);
+  await prep();
+  if (AUDIT) {
+    await page.settle();
+    audited[`${name}-dark`] = await page.eval(inPage(auditPage));
   }
+  for (const [dsf, tag] of VIS_SCALES) {
+    const file = `${name}-dark-${tag}`;
+    await page.capture(file, { dsf, blur: !prep.keepFocus });
+    visualNames.push(file);
+  }
+  if (AUDIT && /^(home|session|hub-|settings-look|panel-changes|model-picker|review)/.test(name)) audited[`${name}-dark-keys`] = await tabWalk(page);
   say(`  ${name}`);
 }
 
@@ -661,7 +652,7 @@ async function tabWalk(page) {
 
 const noLoading = (root) => `!document.querySelector('${root} .skel, ${root} .loading-state, ${root} .spin')`;
 
-async function visualScenes(page, project, project2) {
+async function visualScreens(page, project, project2) {
   await page.eval(`const { api } = await import('/js/api.js');
     await api.post('/api/workspaces', { path: ${JSON.stringify(project)} });
     await api.post('/api/workspaces', { path: ${JSON.stringify(project2)} });`);
@@ -669,7 +660,6 @@ async function visualScenes(page, project, project2) {
   await sleep(500);
   await page.until("document.readyState === 'complete' && document.querySelector('.home .home-composer')", 'Home');
   await page.eval(`window.__shotProject = ${JSON.stringify(project)};`);
-  await setTheme(page, 'dark');
 
   say('Conversations');
   await converse(page, 'explain');
@@ -871,6 +861,12 @@ async function main() {
   const tmp = VISUAL ? path.join(visualTmp(), process.platform === 'win32' ? 'orbix-visual' : 'orbix-visual-wsl') : fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-shots-'));
   if (VISUAL) {
     takeVisualLock(`${tmp}.lock`);
+    // Browser profiles that an earlier run could not delete (still locked when it ended) pile up at ~100 MB each.
+    for (const name of fs.readdirSync(os.tmpdir())) {
+      if (!name.startsWith('orbix-visual-browser-')) continue;
+      const dir = path.join(os.tmpdir(), name);
+      try { if (Date.now() - fs.statSync(dir).mtimeMs > 30 * 60e3) fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+    }
     fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     fs.mkdirSync(tmp, { recursive: true });
     PNG_DIR = path.join(tmp, 'captures');
@@ -894,7 +890,10 @@ async function main() {
     model.close();
     await sleep(800);
     if (!KEEP) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-    if (browser?.dir && !browser.dir.startsWith(tmp)) fs.rmSync(browser.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    // A profile still locked here is swept by the next visual run, so a lock must not fail this one.
+    try {
+      if (browser?.dir && !browser.dir.startsWith(tmp)) fs.rmSync(browser.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {}
   };
   try {
     // Visual mode keeps the browser's profile out of the fixed folder (under WSL, on the Windows drive): a profile
@@ -917,8 +916,8 @@ async function main() {
     await page.until("document.readyState === 'complete' && document.querySelector('.app')", 'ORBIX to load');
     fs.mkdirSync(PNG_DIR, { recursive: true });
     if (!VISUAL) fs.mkdirSync(WEBP_DIR, { recursive: true });
-    if (VISUAL) await visualScenes(page, project, project2);
-    else await scenes(page, project);
+    if (VISUAL) await visualScreens(page, project, project2);
+    else await screens(page, project);
     const errs = page.errors.filter(Boolean);
     if (errs.length) say(`Console errors:\n  ${errs.join('\n  ')}`);
     else say('Console: no errors');

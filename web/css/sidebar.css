@@ -1,19 +1,26 @@
-/* The sidebar and its rail: the one place its look is decided. 260px by default, 220 to 360 when you drag it, 56px as
-   the icon rail. Top to bottom: New conversation, Search (drawn as a search field), Runs, Customize; the pinned and
-   project lists, each project's conversations hung on a guide line; the agents at work; this week's tokens as seven
-   tiny bars; you (initials, name, whether a model is ready) and Settings.
-   Sizes are the tokens in tokens.css: 13px text, 12px captions and hints, 28px list rows, 32px controls, a 4px grid.
-   Colour is for state: the focus ring and the current row's 2px bar are the accent; working is blue, needs you is
-   amber, unread is an ink dot; everything else is ink and surface. */
+/* The sidebar and its rail: 248px by default, 220 to 320 when you drag it, 56px as the icon rail.
+   Top to bottom: New conversation, Search, Runs, Customize; pinned and project lists; the agents at work; you and
+   Settings. Usage lives in your account menu.
+   Sizes: 13px text, 12px captions and hints, 30px rows, a 4px grid (tokens.css).
+   Colour is for state: the focus ring is the accent and the current row a soft fill (on the rail, with a 2px
+   edge on the window's edge); working is blue, needs you is amber, unread is an ink dot; everything else is ink and
+   surface. */
 
-.sidebar { --pad: var(--sp-2); display: flex; flex-direction: column; flex: none; width: var(--side-w); min-width: 0; background: var(--chrome); color: var(--fg-2); font-size: var(--fs-13); }
-.sidebar { transition: width var(--dur-panel) var(--ease-out), margin-left var(--dur-panel) var(--ease-out), visibility 0s; }
+.sidebar { --pad: var(--sp-2); --row-h: 30px; display: flex; flex-direction: column; flex: none; width: var(--side-w); min-width: 0; overflow: hidden; background: var(--chrome); color: var(--fg-2); font-size: var(--fs-13); transition: width var(--dur-panel) var(--ease-out), margin-left var(--dur-panel) var(--ease-out), visibility 0s; }
 .app.no-side .sidebar { transition: width var(--dur-panel) var(--ease-out), margin-left var(--dur-panel) var(--ease-out), visibility 0s var(--dur-panel); }
+/* Its parts are laid out at the width it is going to (--side-w), not the width it is passing through: while it eases
+   between rail and full nothing reflows or wraps, the column just reveals or covers them. Dragging writes --side-w
+   every frame, so they follow the edge exactly. */
+.app:not(.overlay-side) .sidebar > :is(.side-nav, .side-scroll, .side-dock) { min-width: var(--side-w); }
+.app:not(.overlay-side) .sidebar > :is(.side-new, .side-foot) { min-width: calc(var(--side-w) - 2 * var(--pad)); }
+.app.side-rail:not(.overlay-side) .sidebar > .side-foot { min-width: var(--side-w); }
 
 /* ---- shared row bits ---- */
-.sidebar :is(.side-new, .side-link, .proj-btn, .s-btn, .s-more, .run-row, .side-week, .foot-status) { text-align: left; }
-.sidebar :is(.side-new, .side-link, .proj-btn, .s-btn, .s-more, .run-row, .side-week, .foot-status):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sidebar :is(.side-new, .side-link, .proj-btn, .s-btn, .s-more, .run-row, .foot-status) { text-align: left; }
+.sidebar :is(.side-new, .side-link, .proj-btn, .s-btn, .s-more, .run-row, .foot-status, .side-h-acts .ibtn, .row-acts .ibtn):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sidebar .side-l { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* One-line labels get a line box tall enough for g, p and y (a 1.0 line box clipped their tails). */
+.sidebar :is(.side-new, .side-link, .proj-btn, .s-btn, .s-more) :is(.side-l, .ell) { line-height: 20px; }
 .sidebar .sic { flex: none; width: 16px; height: 16px; overflow: visible; color: var(--fg-3); transition: color var(--dur-hover) var(--ease-out); }
 
 /* A shortcut, written one way everywhere ("Ctrl+K"): plain text, muted, right-aligned, shown under the pointer or the keyboard. */
@@ -22,37 +29,35 @@
 .sidebar :is(.side-new, .side-link):is(:hover, :focus-visible) .khint { opacity: 1; }
 .sidebar .side-count + .khint { display: none; }
 
-/* ---- New conversation: regular weight, a 1px border, no fill ---- */
-.sidebar .side-new { display: flex; align-items: center; gap: var(--sp-2); flex: none; height: var(--ctl-h); margin: var(--sp-2) var(--pad) var(--sp-1); padding: 0 var(--sp-3); border: 1px solid var(--line-3); border-radius: var(--sp-2); background: transparent; color: var(--fg); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), border-color var(--dur-hover) var(--ease-out); }
+/* ---- New conversation: a plain row in full ink ---- */
+.sidebar .side-new { position: relative; display: flex; align-items: center; gap: var(--sp-2); flex: none; height: var(--row-h); margin: var(--sp-2) var(--pad) 2px; padding: 0 var(--sp-2); border: 0; border-radius: var(--r); background: transparent; color: var(--fg); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out); }
 .sidebar .side-new .sic { color: var(--fg); }
 .sidebar .side-new:hover { background: var(--bg-hover); }
+.sidebar .side-new.cur { background: var(--bg-active); }
+/* Icons sit on the project tiles' centre line (26px in), labels on the names' (44px in). */
+.sidebar :is(.side-new, .side-link) > .sic { margin: 0 2px; }
 
 /* ---- pages: Search, Runs, Customize ---- */
-/* Search reads as a search field: an inset box with its shortcut always showing. */
-.sidebar .side-search-btn { margin-bottom: var(--sp-1); border: 1px solid var(--line); background: var(--bg-inset); color: var(--fg-3); }
-.sidebar .side-search-btn:hover { border-color: var(--line-2); background: var(--bg-inset); color: var(--fg-2); }
-.sidebar .side-search-btn .khint { opacity: 1; height: var(--sp-5); padding: 0 var(--sp-1); border: 1px solid var(--line-2); border-radius: var(--sp-1); line-height: 18px; }
-.sidebar .side-nav { display: flex; flex-direction: column; flex: none; padding: var(--sp-1) var(--pad) var(--sp-2); }
-.sidebar .side-link { position: relative; display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--ctl-h); padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.sidebar .side-nav { display: flex; flex-direction: column; gap: 2px; flex: none; padding: 2px var(--pad) var(--sp-3); background: linear-gradient(var(--line), var(--line)) center bottom / calc(100% - 2 * var(--pad)) 1px no-repeat; }
+.sidebar .side-link { position: relative; display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--row-h); padding: 0 var(--sp-2); border-radius: var(--r); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .side-link:hover { background: var(--bg-hover); color: var(--fg); }
-.sidebar .side-link:hover .sic { color: var(--fg-2); }
+.sidebar :is(.side-link:hover, .side-link.cur) .sic { color: var(--fg-2); }
 .sidebar .side-count { flex: none; min-width: var(--sp-5); height: var(--sp-5); margin-left: auto; padding: 0 var(--sp-1); border-radius: var(--sp-2); background: var(--warn-soft); color: color-mix(in srgb, var(--warn) 78%, var(--fg)); font: var(--fw) var(--fs-12)/20px var(--font); text-align: center; }
 .sidebar .side-count.quiet { background: transparent; color: var(--fg-3); box-shadow: inset 0 0 0 1px var(--line-2); }
 
-/* The current page or conversation: a soft fill and a 2px accent bar on its left edge. Only that row has colour. */
+/* The current page or conversation: a soft fill. Only that row is filled. */
 .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .run-row.cur) { background: var(--bg-active); color: var(--fg); }
-.sidebar :is(.side-link.cur, .s-row.cur > .s-btn)::before { content: ''; position: absolute; top: var(--sp-1); bottom: var(--sp-1); left: 0; width: 2px; border-radius: 1px; background: var(--accent-solid); }
 
 /* ---- lists ---- */
-.sidebar .side-scroll { flex: 1; min-height: 0; padding: 0 var(--pad) var(--sp-2); overflow-y: auto; border-bottom: 1px solid var(--line); scroll-padding-block: var(--sp-2); }
-.sidebar .side-h { display: flex; align-items: center; justify-content: space-between; height: var(--row-h); margin-top: var(--sp-3); padding: 0 var(--sp-1) 0 var(--sp-3); color: var(--fg-3); font: var(--fw-h) var(--fs-12)/1 var(--font); }
+/* Keep the final row and its focus ring visible at the end of the list. */
+.sidebar .side-scroll { flex: 1; min-height: 0; padding: 0 var(--pad) var(--sp-2); overflow-y: auto; scroll-padding-block: var(--row-h) var(--sp-2); container: side-list / inline-size; }
+.sidebar .side-h { display: flex; align-items: center; justify-content: space-between; height: var(--row-h); margin-top: var(--sp-3); padding: 0 var(--sp-1) 0 var(--sp-3); color: var(--fg-3); font: var(--fw) var(--fs-12)/1 var(--font); }
 .sidebar .side-scroll > :first-child .side-h, .sidebar .side-scroll > .side-h:first-child { margin-top: var(--sp-1); }
-/* The Projects heading stays at the top while its list scrolls under it; the list fades out at its bottom edge. */
+/* The Projects heading stays at the top while its list scrolls under it. */
 .sidebar .side-scroll > .side-h { position: sticky; top: 0; z-index: 2; background: var(--chrome); }
-.sidebar .side-scroll { -webkit-mask-image: linear-gradient(to bottom, var(--fg) calc(100% - var(--sp-4)), transparent); mask-image: linear-gradient(to bottom, var(--fg) calc(100% - var(--sp-4)), transparent); }
-.sidebar .side-h-acts { display: flex; }
-.sidebar .side-h-acts .ibtn { width: var(--ctl-h); height: var(--row-h); min-height: var(--row-h); color: var(--fg-3); }
-.sidebar .side-h-acts .ibtn:hover { color: var(--fg); }
+.sidebar .side-h-acts { display: flex; gap: 2px; }
+.sidebar .side-h-acts .ibtn { width: var(--sp-6); height: var(--sp-6); min-height: var(--sp-6); border-radius: var(--r); color: var(--fg-3); }
+.sidebar .side-h-acts .ibtn:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .side-h-acts .ibtn.on { background: var(--bg-active); color: var(--fg); }
 .sidebar .side-search { position: relative; flex: none; margin: 0 0 var(--sp-1); }
 .sidebar .side-search svg { position: absolute; left: var(--sp-3); top: 50%; transform: translateY(-50%); color: var(--fg-3); pointer-events: none; }
@@ -62,35 +67,38 @@
 /* A project: a coloured letter tile, its name, and what is going on in it (the branch, agents at work). */
 .sidebar .proj { position: relative; }
 .sidebar .proj + .proj { margin-top: var(--sp-1); }
-/* A guide line from the project's tile down past its conversations, as in a file tree. */
-.sidebar .proj:has(> .s-row)::before { content: ''; position: absolute; top: calc(var(--row-h) + 2px); bottom: var(--sp-1); left: 18px; width: 1px; background: var(--line-2); pointer-events: none; }
 .sidebar .proj-head, .sidebar .s-row { position: relative; display: flex; align-items: center; }
-.sidebar .proj-btn { display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; height: var(--row-h); padding: 0 var(--sp-2); border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.sidebar .s-row + .s-row, .sidebar .proj-head + .s-row { margin-top: 1px; }
+.sidebar .proj-btn { position: relative; display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; height: var(--row-h); padding: 0 var(--sp-2); border-radius: var(--r); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .proj-btn:hover { background: var(--bg-hover); color: var(--fg); }
-.sidebar .proj:has(.s-row.cur) > .proj-head .proj-btn { color: var(--fg); }
+.sidebar .proj:has(.s-row.cur) > .proj-head .proj-btn, .sidebar .proj-btn.cur { color: var(--fg); }
 .sidebar .proj-mark { display: grid; place-items: center; flex: none; width: var(--sp-5); height: var(--sp-5); }
 .sidebar .proj-mark > * { grid-area: 1 / 1; transition: opacity var(--dur-hover) var(--ease-out); }
 .sidebar .proj-mark .chev { opacity: 0; color: var(--fg-2); }
 .sidebar .proj-btn:is(:hover, :focus-visible) .proj-mark .ptile { opacity: 0; }
 .sidebar .proj-btn:is(:hover, :focus-visible) .proj-mark .chev { opacity: 1; }
 .sidebar .proj-btn[aria-expanded=false] .ptile { opacity: .8; }
-.sidebar .proj-name { min-width: 0; }
-.sidebar .proj-meta { display: inline-flex; align-items: center; gap: var(--sp-2); flex: 0 1 auto; min-width: 0; margin-left: auto; transition: opacity var(--dur-hover) var(--ease-out); }
-.sidebar .proj-br { max-width: 96px; height: var(--sp-5); padding: 0 8px; border-radius: var(--sp-1); background: var(--bg-hover); color: var(--fg-3); font: var(--fw) var(--fs-12)/20px var(--mono); }
-.sidebar .proj-live { display: inline-flex; align-items: center; gap: 8px; color: var(--working); font-size: var(--fs-12); }
-/* the row's actions fade in over its meta, so nothing moves */
-.sidebar .row-acts { position: absolute; right: var(--sp-1); top: 50%; display: flex; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity var(--dur-hover) var(--ease-out); }
-.sidebar .row-acts .ibtn { width: var(--sp-6); height: var(--sp-6); min-height: var(--sp-6); color: var(--fg-3); }
+/* At any width the name keeps the room it needs first; the branch chip gives way (down to nothing) before the name truncates. */
+.sidebar .proj-name { flex: 0 1 auto; min-width: var(--sp-10); }
+.sidebar .proj-meta { display: inline-flex; align-items: center; gap: var(--sp-2); flex: 0 100 auto; min-width: 0; margin-left: auto; overflow: hidden; transition: opacity var(--dur-hover) var(--ease-out); }
+.sidebar .proj-br { display: inline-flex; align-items: center; gap: var(--sp-1); flex: 0 1 auto; min-width: 0; max-width: 96px; color: var(--fg-3); font: var(--fw) var(--fs-12)/20px var(--font); }
+.sidebar .proj-br > svg { flex: none; }
+.sidebar .proj-br > bdi { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container side-list (max-width: 232px) { .sidebar .proj-br { display: none; } }
+.sidebar .proj-live { display: inline-flex; align-items: center; gap: 8px; flex: none; color: var(--working); font-size: var(--fs-12); }
+/* Reserve the space vacated by row metadata so actions never cover the label. */
+.sidebar .row-acts { position: absolute; right: var(--sp-1); top: 50%; display: flex; gap: 2px; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity var(--dur-hover) var(--ease-out); }
+.sidebar .row-acts .ibtn { width: var(--sp-6); height: var(--sp-6); min-height: var(--sp-6); border-radius: var(--r-sm); color: var(--fg-3); }
 .sidebar .row-acts .ibtn:hover { background: var(--bg-active); color: var(--fg); }
 .sidebar .row-acts .ibtn.on { color: var(--fg); }
 .sidebar :is(.proj-head, .s-row):is(:hover, :focus-within) .row-acts { opacity: 1; pointer-events: auto; }
-.sidebar .proj-head:is(:hover, :focus-within) .proj-meta { opacity: 0; }
-.sidebar .s-start { padding: 0; color: var(--fg-2); font: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-3); }
+.sidebar .proj-head:is(:hover, :focus-within) .proj-meta { display: none; }
+.sidebar .proj-head:has(> .row-acts):is(:hover, :focus-within) > .proj-btn { padding-inline-end: 56px; }
+.sidebar .s-start { padding: 0; color: var(--fg-3); font: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--line-3); }
 .sidebar .s-start:hover { color: var(--fg); text-decoration-color: currentColor; }
 
 /* A conversation: its title, and on the right its relative time (muted). Working shows the dot grid, needs you says so. */
-.sidebar .s-row { margin-bottom: 0; }
-.sidebar .s-btn { position: relative; display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; height: var(--row-h); padding: 0 var(--sp-2) 0 36px; border-radius: var(--sp-2); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.sidebar .s-btn { position: relative; display: flex; align-items: center; gap: var(--sp-2); flex: 1; min-width: 0; height: var(--row-h); padding: 0 var(--sp-2) 0 36px; border-radius: var(--r); color: var(--fg-2); font: var(--fw) var(--fs-13)/1 var(--font); transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
 .sidebar .s-btn:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .s-row.unread .s-btn { color: var(--fg); }
 .sidebar .s-row.archived .s-btn { color: var(--fg-3); }
@@ -102,17 +110,20 @@
 .sidebar .s-where { max-width: 42%; overflow: hidden; text-overflow: ellipsis; }
 .sidebar .s-you { color: var(--warn); }
 .sidebar .s-live { margin-left: auto; }
-.sidebar .s-row:is(:hover, :focus-within) :is(.s-when, .s-where, .s-you, .s-live) { visibility: hidden; }
-.sidebar .s-more { display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--row-h); padding: 0 var(--sp-2) 0 36px; border-radius: var(--sp-2); color: var(--fg-3); font-size: var(--fs-13); }
+.sidebar .s-row:has(> .row-acts):is(:hover, :focus-within) :is(.s-when, .s-where, .s-you, .s-live) { display: none; }
+.sidebar .s-row:has(> .row-acts):is(:hover, :focus-within) > .s-btn { padding-inline-end: 80px; }
+.sidebar .s-more { display: flex; align-items: center; gap: var(--sp-2); width: 100%; height: var(--row-h); padding: 0 var(--sp-2) 0 36px; border-radius: var(--r); color: var(--fg-3); font-size: var(--fs-13); }
 .sidebar .s-more:hover { background: var(--bg-hover); color: var(--fg); }
 .sidebar .s-more svg { display: none; }
 .sidebar .s-none { padding: var(--sp-1) 0 var(--sp-1) 36px; color: var(--fg-3); font-size: var(--fs-13); white-space: nowrap; }
 /* An empty project: one quiet row that starts its first conversation. */
-.sidebar .s-start { color: var(--fg-3); }
 .sidebar .s-start .s-plus { flex: none; color: var(--fg-3); }
 .sidebar .s-start:hover, .sidebar .s-start:hover .s-plus { color: var(--fg); }
 /* pinned and agent-board rows have no project to hang under */
-.sidebar .pin-sec .s-btn { padding-left: var(--sp-3); }
+.sidebar :is(.pin-sec, .thr-sec) .s-btn, .sidebar .thr-sec .s-more { padding-left: var(--sp-3); }
+.sidebar .thr-sec .s-btn > .dot { position: static; transform: none; }
+/* a folded project shows how many conversations it holds */
+.sidebar .proj-n { min-width: var(--sp-5); color: var(--fg-3); font-size: var(--fs-12); text-align: right; }
 .sidebar .pin-sec .s-btn > .dot { position: static; transform: none; }
 
 /* ---- status: one system ---- */
@@ -122,32 +133,25 @@
 .dot.run { background: var(--working); }
 
 /* ---- the agents at work: a dock above the footer, outside the scrolling list, so it never pushes a row ---- */
-.sidebar .side-dock { flex: none; max-height: calc(4 * 44px + var(--row-h)); padding: 0 var(--pad) var(--sp-1); overflow-y: auto; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
-.sidebar .run-row { gap: var(--sp-2); min-height: 44px; padding: var(--sp-1) var(--sp-3); border-radius: var(--sp-2); color: var(--fg); font-size: var(--fs-13); }
+.sidebar .side-dock { flex: none; max-height: calc(4 * 44px + var(--row-h)); padding: 0 var(--pad) var(--sp-1); overflow-y: auto; border-top: 1px solid var(--line); scrollbar-width: thin; }
+.sidebar .side-dock .side-h { margin-top: var(--sp-1); }
+.sidebar .run-row { gap: var(--sp-2); min-height: 44px; padding: var(--sp-1) var(--sp-3); border-radius: var(--r); color: var(--fg); font-size: var(--fs-13); }
+.sidebar .run-row + .run-row { margin-top: 2px; }
 .sidebar .run-row:hover { background: var(--bg-hover); }
 .sidebar .run-m .ell:first-child { font-size: var(--fs-13); }
 .sidebar .run-now, .sidebar .run-st { font-size: var(--fs-12); }
+.sidebar .run-now { color: var(--fg-3); }
 .sidebar .run-st { font-variant-numeric: tabular-nums; }
 .sidebar .run-st.you { color: var(--warn); }
 .sidebar .run-st:not(.you) { color: var(--fg-3); }
 
-/* ---- this week: one quiet line; a click opens the chart ---- */
-.sidebar .side-week { flex: none; display: flex; align-items: center; height: var(--row-h); margin: var(--sp-1) var(--pad) 0; padding: 0 var(--sp-3); border-radius: var(--sp-2); color: var(--fg-3); font: var(--fw) var(--fs-12)/1 var(--font); font-variant-numeric: tabular-nums; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
-.sidebar .side-week:hover { background: var(--bg-hover); color: var(--fg-2); }
-.sidebar .side-week { gap: var(--sp-2); }
-.sidebar .wk-spark { display: inline-flex; align-items: flex-end; gap: 2px; flex: none; height: var(--sp-3); }
-.sidebar .wk-spark i { display: block; width: 3px; border-radius: 1px; background: var(--fg-3); opacity: .55; }
-.sidebar .wk-spark i.today { background: var(--fg-2); opacity: 1; }
-.sidebar .side-week:hover .wk-spark i { opacity: .8; }
-.sidebar .side-week:hover .wk-spark i.today { background: var(--fg); opacity: 1; }
-
 /* ---- footer: you (initials with a status dot, your name, the status in words), then Settings ---- */
-.sidebar .side-foot { display: flex; align-items: center; gap: var(--sp-1); flex: none; padding: var(--sp-2) var(--pad); }
-.sidebar .me-btn { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; height: 44px; padding: 0 var(--sp-2); border: 0; border-radius: var(--sp-2); background: transparent; color: var(--fg-2); transition: background-color var(--dur-hover) var(--ease-out); }
-.sidebar .me-btn:hover { background: var(--bg-hover); }
+.sidebar .side-foot { display: flex; align-items: center; gap: var(--sp-1); flex: none; margin: var(--sp-1) var(--pad) 0; padding: var(--sp-2) 0; border-top: 1px solid var(--line); }
+.sidebar .side-dock + .side-foot { margin-top: 0; }
+.sidebar .me-btn { display: flex; align-items: center; gap: var(--sp-3); flex: 1; min-width: 0; height: 44px; padding: 0 var(--sp-2); border: 0; border-radius: var(--r); background: transparent; color: var(--fg-2); transition: background-color var(--dur-hover) var(--ease-out); }
+.sidebar .me-btn:is(:hover, [aria-expanded=true]) { background: var(--bg-hover); }
 .sidebar .me-av { position: relative; display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--bg-active); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--fg); font: var(--fw-h) var(--fs-12)/1 var(--font); }
-.sidebar .me-av .dot { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; margin: 0; box-shadow: 0 0 0 2px var(--chrome); }
-.sidebar .me-btn:hover .me-av .dot { box-shadow: 0 0 0 2px var(--bg-hover); }
+.sidebar .me-av .dot { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; margin: 0; box-shadow: 0 0 0 2px var(--chrome); }
 .sidebar .me-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
 .sidebar .me-n { color: var(--fg); font-size: var(--fs-13); line-height: 1.3; }
 .sidebar .me-s { color: var(--fg-3); font-size: var(--fs-12); line-height: 1.3; }
@@ -162,26 +166,58 @@
 .compact .sidebar { --row-h: 24px; }
 .compact .sidebar :is(.side-link, .side-new) { height: 28px; }
 
-/* ---- the rail: icons only, 56px (Ctrl+B); states stay visible as dots ---- */
-.app.side-rail .sidebar { --pad: var(--sp-2); }
-.app.side-rail .sidebar :is(.side-l, .khint, .side-h, .side-week, .side-dock, .pin-sec, .proj > :not(.proj-head), .proj-name, .proj-meta, .row-acts, .side-search, .side-empty, .me-t, .proj-mark .chev, .side-count) { display: none !important; }
-.app.side-rail .sidebar :is(.side-new, .side-link, .proj-btn) { justify-content: center; width: 40px; height: 40px; min-height: 40px; margin-inline: auto; padding: 0; gap: 0; }
-.app.side-rail .sidebar .side-new { margin-top: var(--sp-2); }
-.app.side-rail .sidebar .side-nav { align-items: center; }
+/* ---- the rail: icons only, 56px (Ctrl+B) ----
+   Quiet and slim: every item is the same bare 32px rounded square with a 16px icon (New conversation too), 4px apart,
+   on the rail's centre line. Under the pointer it fills softly; the current one stays filled, with a 2px accent edge
+   flush with the window. Short hairlines part the pages, the projects and you. States stay visible as small dots;
+   each icon names itself in a tooltip to its right (interface.js, data-rail-tip). */
+.app.side-rail .sidebar { --pad: var(--sp-2); --rail-btn: 32px; --rule: linear-gradient(var(--line-2), var(--line-2)) no-repeat; }
+.app.side-rail .sidebar :is(.side-l, .khint,  .side-h, .side-dock, .pin-sec, .thr-sec, .proj > :not(.proj-head), .proj-name, .proj-meta, .row-acts, .side-search, .side-empty, .me-t, .proj-mark .chev, .side-count) { display: none !important; }
+.app.side-rail .sidebar :is(.side-new, .side-link, .proj-btn, .me-btn) { position: relative; display: grid; place-items: center; flex: none; width: var(--rail-btn); height: var(--rail-btn); min-height: var(--rail-btn); margin: 0 auto; padding: 0; gap: 0; border: 0; border-radius: var(--r); background: transparent; box-shadow: none; color: var(--fg-2); }
+.app.side-rail .sidebar :is(.side-new, .side-link, .proj-btn, .me-btn):hover { background: var(--bg-hover); color: var(--fg); }
+.app.side-rail .sidebar .sic { width: 16px; height: 16px; margin: 0; color: var(--fg-2); }
+.app.side-rail .sidebar :is(.side-new, .side-link):hover .sic { color: var(--fg); }
+.app.side-rail .sidebar .side-new { margin-top: var(--sp-2); margin-bottom: var(--sp-1); }
+/* Current: a soft fill, and a 2px accent edge on the window's edge (the button sits 8px in from it). */
+.app.side-rail .sidebar :is(.side-new.cur, .side-link.cur, .proj-btn.cur) { background: var(--bg-active); color: var(--fg); }
+.app.side-rail .sidebar :is(.side-new.cur, .side-link.cur) .sic { color: var(--fg); }
+.app.side-rail .sidebar :is(.side-new.cur, .side-link.cur, .proj-btn.cur)::before { content: ''; position: absolute; top: var(--sp-2); bottom: var(--sp-2); left: calc(-1 * var(--sp-2)); width: 2px; border-radius: 0 2px 2px 0; background: var(--fg-2); }
+/* The groups: pages, projects, you, each parted by a short hairline. */
+.app.side-rail .sidebar .side-nav { align-items: center; gap: var(--sp-1); padding: 0 0 var(--sp-2); background: var(--rule) center bottom / var(--sp-5) 1px; }
 .app.side-rail .sidebar .side-scroll { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2) 0; }
+.app.side-rail .sidebar .proj + .proj { margin-top: 0; }
 .app.side-rail .sidebar .proj-head { justify-content: center; }
-.app.side-rail .sidebar .proj-mark .ptile { opacity: 1 !important; }
-.app.side-rail .sidebar .side-foot { flex-direction: column; gap: var(--sp-1); }
-.app.side-rail .sidebar .me-btn { flex: none; justify-content: center; width: 40px; height: 40px; padding: 0; }
-.app.side-rail .sidebar .proj:has(> .s-row)::before { display: none; }
-.app.side-rail .sidebar :is(.side-link.cur, .s-row.cur > .s-btn)::before { left: calc(-1 * var(--pad)); }
-.app.side-rail .sidebar :is(.side-link, .proj-btn) { position: relative; }
+.app.side-rail .sidebar .proj-mark { width: var(--sp-6); height: var(--sp-6); }
+.app.side-rail .sidebar .proj-mark .ptile { width: var(--sp-6); height: var(--sp-6); opacity: 1 !important; }
+.app.side-rail .sidebar .side-foot { flex-direction: column; gap: var(--sp-1); margin: 0; padding: var(--sp-2) 0; border-top: 0; background: var(--rule) center top / var(--sp-5) 1px; }
+.app.side-rail .sidebar .side-foot > * { margin-inline: auto; }
+/* State dots: needs you (amber), working (blue), unread (ink), on the item's top-right corner. */
 .app.side-rail .sidebar .side-link:has(.side-count)::after,
-.app.side-rail .sidebar .proj-btn[data-state]:not([data-state=""])::after { content: ''; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--chrome); background: var(--warn); }
+.app.side-rail .sidebar .proj-btn[data-state]:not([data-state=""])::after { content: ''; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--chrome); background: var(--warn); }
 .app.side-rail .sidebar .side-link:has(.side-count.quiet)::after, .app.side-rail .sidebar .proj-btn[data-state=run]:not([data-state=""])::after { background: var(--working); }
 .app.side-rail .sidebar .proj-btn[data-state=unread]:not([data-state=""])::after { background: var(--fg); }
+.app.side-rail .sidebar .proj-head:has(> .row-acts):is(:hover, :focus-within) > .proj-btn { padding-inline-end: 0; }
+
+/* ---- motion: the width eases between full and rail; nothing slides under reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .app.no-side .sidebar { transition: none; }
+}
 
 @media (forced-colors: active) {
-  .sidebar :is(.side-link.cur, .s-row.cur > .s-btn) { outline: 2px solid Highlight; outline-offset: -2px; }
+  .sidebar :is(.side-link.cur, .s-row.cur > .s-btn, .proj-btn.cur) { outline: 2px solid Highlight; outline-offset: -2px; }
   .app.side-rail .sidebar :is(.side-link, .proj-btn)::after { forced-color-adjust: none; background: Highlight; }
 }
+
+/* ---- Threads: two lines per conversation, its title, then its project, branch and age ---- */
+.sidebar .t-row .s-btn { flex-direction: column; align-items: stretch; justify-content: center; gap: var(--sp-1); height: 48px; padding: 0 var(--sp-3); }
+.sidebar .t-1, .sidebar .t-2 { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.sidebar .t-1 > .dot { position: static; transform: none; flex: none; }
+.sidebar .t-title { color: var(--fg); font-size: var(--fs-13); }
+.sidebar .t-row:not(.cur):not(.unread) .t-title { color: var(--fg-2); }
+.sidebar .t-row .s-btn:hover .t-title { color: var(--fg); }
+.sidebar .t-2 { color: var(--fg-3); font-size: var(--fs-12); }
+.sidebar .t-2 .ptile { flex: none; }
+.sidebar .t-proj { min-width: 0; max-width: 60%; }
+.sidebar .t-row .row-acts { top: var(--sp-3); transform: none; }
+.sidebar .t-row:is(:hover, :focus-within) .t-2 > :last-child { visibility: visible; }
+.sidebar .t-row + .t-row { margin-top: var(--sp-1); }

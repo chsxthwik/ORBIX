@@ -254,6 +254,24 @@ let pickerId = 0;
 const keyOf = (x) => (x ? `${x.provider}/${x.id}` : '');
 const THINK_NAMES = { off: 'Off', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra' };
 export const thinkingName = (l) => THINK_NAMES[l] || String(l || '').charAt(0).toUpperCase() + String(l || '').slice(1);
+/** One line on what each reasoning level costs and buys. */
+export const LEVEL_NOTE = {
+  off: 'No reasoning: the fastest replies.',
+  none: 'No reasoning: the fastest replies.',
+  minimal: 'Brief reasoning.',
+  low: 'For straightforward tasks.',
+  medium: 'Balances speed and depth.',
+  high: 'For problems with several steps.',
+  xhigh: 'More reasoning and higher token use.',
+  max: 'Longest reasoning time and highest token use.',
+  ultra: 'Longest reasoning time and highest token use.',
+};
+/** A level's depth as bars: `levels` without 'off', lit up to `l` (none for 'off'). */
+export function depthBars(levels, l) {
+  const real = levels.filter((x) => x !== 'off' && x !== 'none');
+  const at = real.indexOf(l);
+  return h('span', { class: 'lvl-bars', 'aria-hidden': 'true' }, real.map((_, i) => h('i', { class: i <= at ? 'on' : '' })));
+}
 /** The thinking levels a model offers, in order ('off' first when it can stop thinking). */
 export const thinkingLevels = (x) => (x?.thinking?.efforts?.length ? [...(x.thinking.canOff === false ? [] : ['off']), ...x.thinking.efforts] : []);
 
@@ -424,7 +442,9 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
   const side = h('div', { class: 'mp-side', hidden: true });
   const q = h('input', { type: 'search', role: 'combobox', 'aria-autocomplete': 'list', 'aria-controls': id, 'aria-expanded': 'false', placeholder: 'Search models…', 'aria-label': 'Search models', spellcheck: 'false', autocomplete: 'off' });
   const feedback = h('span', { class: 'mp-results', role: 'status' });
-  const foot = h('div', { class: 'mp-footer' }, feedback);
+  const hint = (k, what) => h('span', { class: 'mp-hint' }, kbd(k), what);
+  const foot = h('div', { class: 'mp-footer' }, feedback, h('span', { class: 'grow' }), h('span', { class: 'mp-hints', 'aria-hidden': 'true' },
+    hint('↑↓', 'move'), hint('←→', 'provider'), thinking ? hint('Tab', 'reasoning') : null, hint('Enter', 'choose')));
   const body = h('div', { class: 'mp-layout' }, rail, h('div', { class: 'mp-main' }, h('label', { class: 'mp-search' }, icon('search', 14), q), list), side, foot);
   const m = modal({ title: 'Choose a model', cls: 'model-picker' + (anchor ? ' anchored' : ''), body, initialFocus: q, returnFocus });
   const scrim = m.el.parentElement;
@@ -499,16 +519,25 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
     ];
     if (!groups.some((g) => g.key === pv)) pv = (current && groups.find((g) => g.key === current.provider)?.key) || groups.find((g) => g.kind === 'fav' || g.kind === 'recent')?.key || groups[0]?.key || '';
   };
-  const row = (x, withProvider, n) => {
+  // What a model can do, as small marks: reads images, has reasoning levels.
+  const caps = (x) => {
+    const kids = [
+      Array.isArray(x.input) && x.input.includes('image') ? h('span', { class: 'mp-cap', title: 'Reads images' }, icon('eye', 12)) : null,
+      thinkingLevels(x).length ? h('span', { class: 'mp-cap', title: `Reasoning: ${thinkingLevels(x).map(thinkingName).join(', ')}` }, icon('brain', 12)) : null,
+    ].filter(Boolean);
+    return kids.length ? h('span', { class: 'mp-caps' }, kids) : null;
+  };
+  const row = (x, withProvider, n, hits = []) => {
     const isCur = !!current && keyOf(current) === keyOf(x);
     const faved = prefList('modelFav').includes(keyOf(x));
     const starBtn = h('span', { class: 'mp-star' + (faved ? ' on' : ''), role: 'button', tabindex: '-1', title: faved ? 'Unstar' : 'Star: keep it at the top', 'aria-label': faved ? `Unstar ${x.name || x.id}` : `Star ${x.name || x.id}`, onclick: (e) => (e.stopPropagation(), star(x)) }, icon('star', 13));
     return h('button', { class: 'list-it mp-it' + (isCur ? ' cur' : ''), type: 'button', role: 'option', 'aria-selected': String(isCur), title: modelTip(x), onclick: () => choose(x), onmousemove: () => { if (shown[sel] !== x) ((sel = shown.indexOf(x)), mark()); } },
       modelMark(x.provider, x.id, 15, 'mp-pmark'),
-      h('span', { class: 'mp-name ell' }, x.name || x.id, withProvider ? h('small', null, names().get(x.provider) || x.provider) : null),
+      h('span', { class: 'mp-name ell' }, h('span', { class: 'ell' }, marked(x.name || x.id, hits)), withProvider ? h('small', null, names().get(x.provider) || x.provider) : null),
       isCur ? icon('check', 14, 'mp-cur') : null,
       h('span', { class: 'grow' }),
-      x.contextWindow ? h('span', { class: 'mp-ctx num' }, fmtTokens(x.contextWindow)) : null,
+      caps(x),
+      x.contextWindow ? h('span', { class: 'mp-ctx num', title: `Context window: ${fmtTokens(x.contextWindow)} tokens` }, fmtTokens(x.contextWindow)) : null,
       starBtn,
       n <= 9 ? h('kbd', { class: 'mp-key' }, `Ctrl+${n}`) : null);
   };
@@ -518,6 +547,8 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
     import('./connect.js').then((x) => x.openConnect());
   };
   // The reasoning column: the highlighted model's levels; a click picks that model at that level.
+  // Tab from the search moves into it; ↑ ↓ change the level, Enter or Space picks the model at that level, ← or
+  // Shift+Tab goes back to the search.
   let sideFor = null;
   const drawSide = () => {
     const x = shown[sel] || current;
@@ -526,18 +557,40 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
     if (!thinking || sideFor === x) return;
     sideFor = x;
     const isCur = !!current && x && keyOf(current) === keyOf(x);
-    const at = isCur ? level || 'off' : x?.thinking?.default || (levels.includes('medium') ? 'medium' : levels[0]);
+    const def = x?.thinking?.default;
+    const at = isCur ? level || 'off' : def || (levels.includes('medium') ? 'medium' : levels[0]);
+    const note = h('p', { class: 'mp-lvl-note' }, LEVEL_NOTE[at] || '');
+    const btns = levels.map((l) => h('button', { class: 'mp-lvl' + (l === at ? ' on' : ''), type: 'button', role: 'radio', 'aria-checked': String(l === at), tabindex: l === at ? '0' : '-1', onclick: () => choose(x, l), onfocus: () => (note.textContent = LEVEL_NOTE[l] || ''), onmouseenter: () => (note.textContent = LEVEL_NOTE[l] || ''), onmouseleave: () => (note.textContent = LEVEL_NOTE[levels[btns.indexOf(document.activeElement)] || at] || '') },
+      depthBars(levels, l),
+      h('span', { class: 'mp-lvl-t grow' }, thinkingName(l), l === def ? h('small', null, 'default') : null),
+      l === at ? icon('check', 14, 'mp-lvl-ok') : null));
+    const group = h('div', { class: 'mp-levels', role: 'radiogroup', 'aria-label': `Reasoning for ${x?.name || x?.id || 'this model'}` }, btns);
+    group.addEventListener('keydown', (e) => {
+      const i = btns.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') return e.preventDefault(), btns[(i + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length]?.focus();
+      if (e.key === 'Home' || e.key === 'End') return e.preventDefault(), btns[e.key === 'Home' ? 0 : btns.length - 1]?.focus();
+      if (e.key === 'ArrowLeft' || (e.key === 'Tab' && e.shiftKey)) return e.preventDefault(), q.focus();
+    });
     replace(side, [
-      h('div', { class: 'mp-side-h' }, h('span', null, 'Reasoning'), x ? h('small', { class: 'ell' }, x.name || x.id) : null),
+      h('div', { class: 'mp-side-h' }, h('span', null, icon('brain', 13), 'Reasoning'), x ? h('small', { class: 'ell' }, x.name || x.id) : null),
       levels.length
-        ? h('div', { class: 'mp-levels', role: 'group', 'aria-label': 'Reasoning' }, levels.map((l) => h('button', { class: 'mp-lvl' + (l === at ? ' on' : ''), type: 'button', 'aria-pressed': String(l === at), tabindex: '-1', onclick: () => choose(x, l) }, h('span', { class: 'grow' }, thinkingName(l)), l === at ? icon('check', 14) : null)))
-        : h('p', { class: 'mp-side-none' }, x ? 'This model has no reasoning levels.' : ''),
+        ? [h('div', { class: 'mp-scale', 'aria-hidden': 'true' }, h('span', null, 'Faster'), h('span', null, 'Deeper')), group, note]
+        : h('p', { class: 'mp-side-none' }, x ? 'No adjustable reasoning levels.' : ''),
     ]);
   };
   const draw = (initial = false) => {
     const f = q.value.toLowerCase().trim();
     const nm = names();
-    const match = (x) => !f || `${nm.get(x.provider) || ''} ${x.provider} ${x.id} ${x.name || ''}`.toLowerCase().includes(f);
+    // Fuzzy on the name ("gpt5" finds "GPT-5"), then on the id; a provider name matches all of its models.
+    const score = (x) => {
+      if (!f) return { score: 0, hits: [] };
+      const byName = fuzzy(f, x.name || x.id);
+      if (byName) return byName;
+      const byId = fuzzy(f, x.id);
+      if (byId) return { score: byId.score + 500, hits: [] };
+      return `${nm.get(x.provider) || ''} ${x.provider}`.toLowerCase().includes(f) ? { score: 5000, hits: [] } : null;
+    };
+    const match = (x) => !!score(x);
     replace(rail, [
       extra ? h('button', { class: 'mp-pv mp-default' + (!current ? ' cur' : ''), type: 'button', title: extra, 'aria-label': 'Default model', onclick: () => choose(null) }, icon('sparkle', 16)) : null,
       ...groups.flatMap((g, i) => {
@@ -553,8 +606,8 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
     const kids = [];
     shown = [];
     options = [];
-    const add = (x, withProvider) => {
-      const b = row(x, withProvider, shown.length + 1);
+    const add = (x, withProvider, hits) => {
+      const b = row(x, withProvider, shown.length + 1, hits);
       b.id = `${id}-${shown.length}`;
       b.tabIndex = -1;
       shown.push(x);
@@ -565,10 +618,10 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
       const seen = new Set();
       for (const g of groups) {
         if (g.kind === 'recent' || g.kind === 'fav') continue;
-        const hit = g.models.filter(match);
+        const hit = g.models.map((x) => [x, score(x)]).filter(([, s]) => s).sort((a, b) => a[1].score - b[1].score);
         if (!hit.length) continue;
         kids.push(h('div', { class: 'list-h with-mark' }, brandMark(g.mark, 13), g.name));
-        for (const x of hit) if (!seen.has(keyOf(x))) (seen.add(keyOf(x)), add(x, false));
+        for (const [x, s] of hit) if (!seen.has(keyOf(x))) (seen.add(keyOf(x)), add(x, false, s.hits));
       }
       if (!shown.length) kids.push(h('div', { class: 'empty' }, 'No model matches.'));
     } else {
@@ -585,19 +638,19 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
     q.setAttribute('aria-expanded', String(shown.length > 0));
     if (initial) sel = Math.max(0, shown.findIndex((x) => current && keyOf(x) === keyOf(current)));
     sel = Math.max(0, Math.min(sel, shown.length - 1));
-    marked = null;
+    activeOption = null;
     mark();
   };
-  let marked = null;
+  let activeOption = null;
   const mark = () => {
     const next = options[sel];
-    if (next === marked && next?.isConnected) return;
-    marked?.classList.remove('sel');
-    marked = next;
-    marked?.classList.add('sel');
-    if (marked) q.setAttribute('aria-activedescendant', marked.id);
+    if (next === activeOption && next?.isConnected) return;
+    activeOption?.classList.remove('sel');
+    activeOption = next;
+    activeOption?.classList.add('sel');
+    if (activeOption) q.setAttribute('aria-activedescendant', activeOption.id);
     else q.removeAttribute('aria-activedescendant');
-    marked?.scrollIntoView({ block: 'nearest' });
+    activeOption?.scrollIntoView({ block: 'nearest' });
     drawSide();
   };
   q.addEventListener('input', () => {
@@ -620,6 +673,10 @@ export function modelPicker({ load, current, onPick, extra, loading = 'Loading m
       pv = groups[(i + (e.key === 'ArrowRight' ? 1 : -1) + groups.length) % groups.length].key;
       sel = 0;
       return draw();
+    }
+    if (e.key === 'Tab' && !e.shiftKey && thinking) {
+      const on = side.querySelector('.mp-lvl[tabindex="0"]');
+      if (on) return e.preventDefault(), on.focus();
     }
     if (!shown.length) return;
     if (e.key === 'ArrowDown') (e.preventDefault(), (sel = Math.min(shown.length - 1, sel + 1)), mark());
@@ -713,8 +770,8 @@ export const toggle = (val, onchange, label) => h('label', { class: 'switch' }, 
 /**
  * Search everything (Ctrl+K): commands, conversations, projects and, with `opts.files`, files of the open project.
  * Items: { group, scope?, icon, label, hint?, text?, key?, run }. `scope` is one of SCOPES (default 'commands');
- * `text` is extra searchable text (a conversation's first message). `opts.files(query)` returns a promise of items
- * (scope 'files'); it is asked as you type, and stale answers are dropped. Tab / Shift+Tab change the scope.
+ * `text` is extra searchable text. The optional file and conversation lookups run as you type; stale answers are
+ * dropped. Tab / Shift+Tab change the scope.
  */
 const SCOPES = [['all', 'All'], ['conversations', 'Conversations'], ['files', 'Files'], ['projects', 'Projects'], ['commands', 'Commands']];
 export function palette(getItems, opts = {}) {
@@ -722,43 +779,36 @@ export function palette(getItems, opts = {}) {
   const list = h('div', { class: 'list pal-list', role: 'listbox', id: 'pal-list' });
   const scopesEl = h('div', { class: 'pal-scopes', role: 'tablist', 'aria-label': 'Search in' });
   const foot = h('div', { class: 'pal-foot', 'aria-hidden': 'true' }, h('span', null, kbd('↑'), kbd('↓'), ' move'), h('span', null, kbd('Tab'), ' scope'), h('span', null, kbd('Enter'), ' open'), h('span', null, kbd('Esc'), ' close'));
-  const m = modal({ title: 'Search', cls: 'palette', body: h('div', null, h('div', { class: 'pal-top' }, icon('search', 16), q), scopesEl, list, foot), initialFocus: q, onClose: () => { clearTimeout(fileTimer); fileSeq++; } });
+  const m = modal({ title: 'Search', cls: 'palette', body: h('div', null, h('div', { class: 'pal-top' }, icon('search', 16), q), scopesEl, list, foot), initialFocus: q, onClose: () => { clearTimeout(searchTimer); searchSeq++; } });
   let scope = 'all';
-  let files = [];
-  let fileQ = '';
-  let fileTimer = 0;
-  let fileSeq = 0;
-  let filesBusy = false;
-  let filesErr = null; // why the last file search failed: shown with Retry, never as "No matches"
-  const askFiles = (f) => {
-    clearTimeout(fileTimer);
-    const seq = ++fileSeq; // any answer already in flight belongs to an older query
-    if (!opts.files || f.length < 2 || !(scope === 'all' || scope === 'files')) {
-      files = [];
-      fileQ = '';
-      filesBusy = false;
-      filesErr = null;
-      return;
-    }
-    if (f === fileQ && !filesErr) {
-      filesBusy = false;
-      return;
-    }
-    filesBusy = true;
-    fileTimer = setTimeout(async () => {
-      let got = [];
-      let err = null;
-      try {
-        got = await opts.files(f);
-      } catch (e) {
-        err = e;
+  let results = [];
+  let searchErrors = [];
+  let searchTimer = 0;
+  let searchSeq = 0;
+  let searching = 0;
+  const ask = (query) => {
+    clearTimeout(searchTimer);
+    const seq = ++searchSeq;
+    results = [];
+    searchErrors = [];
+    const lookups = [
+      { id: 'files', label: 'File', min: 2, find: opts.files },
+      { id: 'conversations', label: 'Conversation history', min: 3, find: opts.conversations },
+    ].filter(({ id, min, find }) => find && (scope === 'all' || scope === id) && [...query].length >= min);
+    searching = lookups.length;
+    if (!searching) return;
+    searchTimer = setTimeout(() => {
+      for (const { label, find } of lookups) {
+        Promise.resolve().then(() => find(query)).then((items) => {
+          if (seq === searchSeq) results.push(...items);
+        }, (error) => {
+          if (seq === searchSeq) searchErrors.push({ label, error });
+        }).finally(() => {
+          if (seq !== searchSeq || !list.isConnected) return;
+          searching--;
+          draw();
+        });
       }
-      if (seq !== fileSeq || !list.isConnected) return; // a newer query is on its way, or the palette closed
-      files = got || [];
-      fileQ = f;
-      filesErr = err;
-      filesBusy = false;
-      draw();
     }, 140);
   };
   const drawScopes = () => replace(scopesEl, SCOPES.filter(([k]) => k !== 'files' || opts.files).map(([k, l]) => h('button', { type: 'button', role: 'tab', class: 'pal-scope' + (k === scope ? ' on' : ''), 'aria-selected': String(k === scope), tabindex: '-1', onclick: () => setScope(k) }, l)));
@@ -766,7 +816,7 @@ export function palette(getItems, opts = {}) {
     scope = k;
     sel = 0;
     drawScopes();
-    askFiles(q.value.trim());
+    ask(q.value.trim());
     draw();
     q.focus();
   };
@@ -780,18 +830,19 @@ export function palette(getItems, opts = {}) {
     const cur = list.querySelectorAll('.list-it')[sel];
     cur?.scrollIntoView({ block: 'nearest' });
     if (cur) q.setAttribute('aria-activedescendant', cur.id);
+    else q.removeAttribute('aria-activedescendant');
   };
   const all = getItems().map((it) => ({ scope: 'commands', ...it }));
   const inScope = (it) => scope === 'all' || it.scope === scope;
   const draw = () => {
     const f = q.value.trim();
-    const pool = [...all.filter(inScope), ...(inScope({ scope: 'files' }) ? files : [])];
+    const pool = [...all.filter(inScope), ...results];
     // Ranked fuzzy match on the label; a match in the hint, group or a conversation's first message ranks lower.
     // Results stay grouped (by best match within each group, groups in order of their best result).
     if (f) {
       const ranked = pool.map((it) => {
         const l = fuzzy(f, it.label);
-        const o = l ? null : fuzzy(f, `${it.hint || ''} ${it.group}`) || (it.text && it.text.toLowerCase().includes(f.toLowerCase()) ? { score: 500 } : null);
+        const o = l ? null : it.matched ? { score: 500 } : fuzzy(f, `${it.hint || ''} ${it.group}`) || (it.text && it.text.toLowerCase().includes(f.toLowerCase()) ? { score: 500 } : null);
         return l ? [l.score, it, l.hits] : o ? [o.score + 10000, it, []] : null;
       }).filter(Boolean).sort((a, b) => a[0] - b[0]).slice(0, 80);
       const order = [];
@@ -800,11 +851,9 @@ export function palette(getItems, opts = {}) {
     } else items = pool.filter((it) => !it.searchOnly).slice(0, 80); // settings show up once you type
     sel = Math.min(sel, Math.max(0, items.length - 1));
     let lastG = '';
-    const fileErr = filesErr && inScope({ scope: 'files' }) && f.length >= 2 && !filesBusy
-      ? errorState(filesErr.message, { title: 'File search failed.', cls: 'pal-err', retry: () => { fileQ = ''; askFiles(q.value.trim()); draw(); q.focus(); } })
-      : null;
-    const empty = scope === 'files' && f.length < 2 ? 'Type at least 2 characters to search files' : filesBusy && !items.length ? 'Searching files…' : f ? `No matches${scope === 'all' ? '' : ' in ' + SCOPES.find(([k]) => k === scope)[1].toLowerCase()}` : scope === 'files' ? 'Type at least 2 characters to search files' : 'Nothing here yet';
-    replace(list, items.map((it, i) => [it.group !== lastG ? h('div', { class: 'list-h' }, (lastG = it.group)) : null, h('button', { class: 'list-it', id: `pal-${i}`, type: 'button', tabindex: '-1', role: 'option', onclick: () => run(it), onmousemove: () => sel !== i && ((sel = i), mark()) }, it.icon ? h('span', { class: 'pal-ico' }, icon(it.icon, 14)) : null, h('span', { class: 'grow ell' }, marked(it.label, it.hits)), it.hint ? h('span', { class: 'pal-hint ell' }, it.hint) : null, it.key ? kbd(it.key) : null)]), fileErr, !items.length && !fileErr ? h('div', { class: 'empty' }, empty) : null, filesBusy && items.length ? h('div', { class: 'pal-busy' }, 'Searching files…') : null);
+    const errors = searchErrors.map(({ label, error }) => errorState(error.message, { title: `${label} search failed.`, cls: 'pal-err', retry: () => { ask(q.value.trim()); draw(); q.focus(); } }));
+    const empty = searching ? 'Searching…' : scope === 'files' && f.length < 2 ? 'Type at least 2 characters to search files' : f ? `No matches${scope === 'all' ? '' : ' in ' + SCOPES.find(([k]) => k === scope)[1].toLowerCase()}` : 'Nothing here yet';
+    replace(list, items.map((it, i) => [it.group !== lastG ? h('div', { class: 'list-h' }, (lastG = it.group)) : null, h('button', { class: 'list-it', id: `pal-${i}`, type: 'button', tabindex: '-1', role: 'option', onclick: () => run(it), onmousemove: () => sel !== i && ((sel = i), mark()) }, it.icon ? h('span', { class: 'pal-ico' }, icon(it.icon, 14)) : null, h('span', { class: 'grow ell' }, marked(it.label, it.hits)), it.hint ? h('span', { class: 'pal-hint ell', title: it.hint }, it.hint) : null, it.key ? kbd(it.key) : null)]), errors, !items.length && !errors.length ? h('div', { class: 'empty' }, empty) : null, searching && items.length ? h('div', { class: 'pal-busy' }, 'Searching…') : null);
     mark();
   };
   const run = (it) => {
@@ -813,10 +862,17 @@ export function palette(getItems, opts = {}) {
   };
   q.addEventListener('input', () => {
     sel = 0;
-    askFiles(q.value.trim());
+    ask(q.value.trim());
     draw();
   });
   q.addEventListener('keydown', (e) => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      m.close();
+      return;
+    }
     if (e.key === 'ArrowDown') (e.preventDefault(), (sel = Math.min(items.length - 1, sel + 1)), mark());
     else if (e.key === 'ArrowUp') (e.preventDefault(), (sel = Math.max(0, sel - 1)), mark());
     else if (e.key === 'Enter' && items[sel]) (e.preventDefault(), run(items[sel]));
@@ -828,5 +884,10 @@ export function palette(getItems, opts = {}) {
   });
   if (opts.scope) scope = opts.scope;
   drawScopes();
+  // Opened with text already typed (the side panel's "+" hands over what you typed there).
+  if (opts.query) {
+    q.value = opts.query;
+    ask(q.value.trim());
+  }
   draw();
 }

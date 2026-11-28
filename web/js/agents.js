@@ -87,9 +87,10 @@ export function tabAgents(el, show, m) {
     }
   };
   el.append(
-    h('p', { class: 'set-note' }, 'Pick an agent in the model picker to run a conversation on it, with its own login. Your permission preset applies; destructive commands always ask.'),
+    h('p', { class: 'set-note' }, 'Pick an agent in the model picker to run a conversation on it with its own login. Your permission preset applies.'),
+    h('p', { class: 'set-note' }, 'OpenCode uses the models and accounts connected in OpenCode itself. Provider charges may apply.'),
     h('section', { class: 'set-group' }, h('div', { class: 'set-sub-row' }, h('h4', { class: 'set-sub' }, 'On this computer'), btn('Look again', () => refresh(true), 'sm')), list),
-    h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Your ACP agents'), h('p', { class: 'set-note' }, 'Any Agent Client Protocol agent, such as Hermes, Goose or your own: the command that starts it in ACP mode.'), mine));
+    h('section', { class: 'set-group' }, h('h4', { class: 'set-sub' }, 'Your ACP agents'), h('p', { class: 'set-note' }, 'Any Agent Client Protocol agent: the command that starts it in ACP mode.'), mine));
   draw();
   refresh(false);
 }

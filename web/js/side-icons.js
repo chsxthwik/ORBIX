@@ -21,7 +21,7 @@ export const SIDE_ICONS = {
 /** A sidebar icon by page name (`new`, `search`, a hub view such as `runs`, `settings`). */
 export function sideIcon(name, size = 18) {
   const svg = document.createElementNS(NS, 'svg');
-  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': '1.75', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false', class: 'sic' })) svg.setAttribute(k, v);
+  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', focusable: 'false', class: 'sic' })) svg.setAttribute(k, v);
   const p = document.createElementNS(NS, 'path');
   p.setAttribute('d', SIDE_ICONS[name] || SIDE_ICONS.new);
   svg.append(p);

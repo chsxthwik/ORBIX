@@ -1,0 +1,130 @@
+/* Settings (web/js/settings.js). The window below the menu row: the page list pinned to the left edge with its own
+   scroll, the page in the remaining space with its column centred. A page is a title, then sections: a muted label
+   over a card of rows, each row a title, one line of description and its control on the right. */
+
+/* ================= window ================= */
+.scrim:has(> .modal.settings-card) { inset: var(--mb-h) 0 0 0; padding: 0; place-items: stretch; background: var(--bg); animation: fade-in var(--t1) var(--ease); }
+.modal.settings-card { width: 100%; max-width: none; height: 100%; max-height: none; background: var(--bg); overflow: hidden; animation: set-in var(--t2) var(--ease-out); }
+@keyframes set-in { from { opacity: 0; transform: translateY(4px); } }
+.modal.settings-card > .modal-h { display: none; }
+.modal.settings-card > .modal-b { height: 100%; padding: 0; overflow: hidden; border-top: 0; container: settings / inline-size; }
+.set-wrap { display: grid; grid-template-columns: 248px minmax(0, 1fr); height: 100%; min-height: 0; }
+
+/* ================= page list ================= */
+.set-nav { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; padding: 12px 8px 16px; border-right: 1px solid var(--line); background: var(--bg-side); overflow-y: auto; scrollbar-width: thin; }
+.set-back { display: flex; align-items: center; gap: 8px; flex: none; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--fg-3); font-size: var(--fs-13); }
+.set-back:hover { background: var(--bg-hover); color: var(--fg); }
+.set-back:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.set-search { display: flex; align-items: center; gap: 8px; flex: none; margin: 4px 0 12px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg-field); color: var(--fg-3); transition: border-color var(--t1) var(--ease); }
+.set-search:hover { border-color: var(--line-3); }
+.set-search:focus-within { border-color: var(--accent); }
+.set-search .set-search-in { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--fg); font-size: var(--fs-13); }
+.set-search .set-search-in:focus { outline: 0; box-shadow: none; }
+.set-search-in::-webkit-search-cancel-button { display: none; }
+.set-kbd { flex: none; height: 20px; padding: 0 4px; border: 1px solid var(--line-2); border-radius: 4px; background: transparent; color: var(--fg-3); font: var(--fw) var(--fs-12)/18px var(--font); }
+.set-pages { display: flex; flex-direction: column; gap: 12px; }
+.set-nav-g { display: flex; flex-direction: column; gap: 1px; }
+.set-tab { display: flex; align-items: center; gap: 8px; flex: none; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--fg-2); font-size: var(--fs-13); font-weight: var(--fw); text-align: left; }
+.set-tab svg { flex: none; color: var(--fg-3); }
+.set-tab:hover { background: var(--bg-hover); color: var(--fg); }
+.set-tab.cur { background: var(--bg-active); color: var(--fg); }
+.set-tab.cur svg { color: var(--fg); }
+.set-tab.dim { color: var(--fg-3); }
+.set-tab.dim svg { opacity: .6; }
+.set-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.set-tab-n { flex: none; color: var(--fg-3); font-size: var(--fs-12); }
+.set-tab .dot { flex: none; }
+
+/* ================= page ================= */
+.set-main { min-width: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.set-content { max-width: 744px; margin: 0 auto; padding: 0 32px 96px; outline: 0; }
+.set-content > * { animation: fade-in var(--t2) var(--ease); }
+.set-head { position: sticky; top: 0; z-index: 3; margin-bottom: 16px; padding: 32px 0 12px; background: var(--bg); }
+.set-head::after { content: ''; position: absolute; inset: 100% 0 auto; height: 12px; background: linear-gradient(var(--bg), transparent); pointer-events: none; }
+.set-head-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.set-title { margin: 0; font-size: var(--fs-20); font-weight: var(--fw-h); letter-spacing: -.015em; }
+.set-lead { max-width: 64ch; margin: 4px 0 0; color: var(--fg-3); font-size: var(--fs-13); line-height: 1.5; overflow-wrap: anywhere; }
+.set-crumb { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--fg-3); font-size: var(--fs-13); }
+.set-crumb:hover { color: var(--fg); }
+
+/* ================= sections ================= */
+.set-body { display: flex; flex-direction: column; min-width: 0; }
+.set-body > .set-group:not(:first-child), .set-group + .set-after, .set-after:not(:empty), .set-group + .about-maker { margin-top: 28px; }
+.set-sub { margin: 24px 0 8px; color: var(--fg); font-size: var(--fs-14); font-weight: var(--fw-h); }
+.set-body > .set-sub:first-child { margin-top: 0; }
+:is(.set-group, .set-sub-row, .mr-head) > .set-sub { display: flex; align-items: baseline; gap: 8px; padding-left: 2px; color: var(--fg-3); font-size: var(--fs-13); }
+.set-group > .set-sub { margin: 0 0 8px; }
+.set-sub-n { color: var(--fg-3); font-size: var(--fs-12); font-weight: var(--fw); }
+.set-note { margin: 0 0 12px; color: var(--fg-3); font-size: var(--fs-13); line-height: 1.5; }
+.set-group > .set-note { margin: -4px 0 8px; padding-left: 2px; }
+.set-note + .set-sub { margin-top: 12px; }
+.set-body > .set-note:last-child, .set-after-note { margin: 16px 0 0; }
+.set-none { padding: 12px 0; color: var(--fg-3); font-size: var(--fs-13); }
+.set-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; }
+.set-actions-top { justify-content: flex-end; margin: -8px 0 12px; }
+
+/* A card: rows separated by hairlines. A card that ends in something other than a row keeps padding below it. */
+.set-card { padding: 0 16px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--bg-raise) 60%, var(--bg)); }
+.set-card:has(> :last-child:not(.set-row)) { padding-bottom: 16px; }
+
+/* ================= rows ================= */
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.set-card > .set-row:last-child { border-bottom: 0; }
+.set-k { flex: 1; min-width: 0; }
+.set-l { display: block; color: var(--fg); font-size: var(--fs-13); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; }
+code.set-l { font-size: var(--fs-13); font-weight: var(--fw); white-space: nowrap; }
+.set-hint { margin-top: 2px; color: var(--fg-3); font-size: var(--fs-12); line-height: 1.45; overflow-wrap: anywhere; }
+.set-v { display: flex; align-items: center; justify-content: flex-end; flex: none; max-width: 60%; min-width: 0; color: var(--fg-2); }
+.set-v code { max-width: 230px; color: var(--fg-3); font-size: var(--fs-13); }
+.set-v .row { gap: 8px; }
+.set-v input[type=text] { width: 240px; }
+.set-v input[type=range] { width: 160px; accent-color: var(--accent-solid); }
+.range-v { width: 36px; color: var(--fg-2); font-size: var(--fs-13); text-align: right; }
+.set-flash { animation: tl-flash 1.3s var(--ease-out); }
+
+/* Rows that open another page, and search results: the whole row is the button, with a chevron. The hairline is
+   drawn inset so it lines up with the other rows while the hover fills the card's width. */
+.set-card > :is(.set-go, .set-hit) { width: calc(100% + 32px); margin: 0 -16px; padding: 12px 16px; border-bottom: 0; background: linear-gradient(var(--line), var(--line)) 16px 100% / calc(100% - 32px) 1px no-repeat; color: var(--fg-3); text-align: left; cursor: pointer; transition: background-color var(--t1) var(--ease); }
+.set-card > :is(.set-go, .set-hit):last-child { background-image: none; }
+.set-card > :is(.set-go, .set-hit):first-child { border-radius: 9px 9px 0 0; }
+.set-card > :is(.set-go, .set-hit):last-child { border-radius: 0 0 9px 9px; }
+.set-card > :is(.set-go, .set-hit):only-child { border-radius: 9px; }
+:is(.set-go, .set-hit) > svg { flex: none; transition: transform var(--t1) var(--ease), color var(--t1) var(--ease); }
+:is(.set-go, .set-hit):hover, .set-hit.act { background-color: var(--bg-hover); }
+:is(.set-go, .set-hit):hover > svg, .set-hit.act > svg { color: var(--fg); transform: translateX(2px); }
+:is(.set-go, .set-hit):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.set-mark { padding: 0 1px; border-radius: 2px; background: var(--accent-soft); color: var(--fg); }
+
+/* ================= controls ================= */
+/* Select: 32px with a chevron, as wide as its longest choice. */
+.set-select, .set-v select { width: auto; min-width: 140px; max-width: 280px; padding: 0 32px 0 12px; font-size: var(--fs-13); }
+.settings-card :is(textarea, input[type=text], input[type=number], input[type=url], select):focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.settings-card .trust-card { padding: 2px 16px 12px; }
+.settings-card .ov-cta { margin-bottom: 24px; border-radius: 10px; }
+.settings-card .pv-tools { background: var(--bg); }
+.about-upd:empty { display: none; }
+
+/* Four permission presets as a 2 × 2 grid, so the last one is never alone on its row. */
+.settings-card .perms { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* ================= narrow windows ================= */
+@container settings (max-width: 760px) {
+  .set-wrap { grid-template-columns: 200px minmax(0, 1fr); }
+  .set-content { padding-inline: 24px; }
+}
+@container settings (max-width: 620px) {
+  .set-wrap { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .set-nav { border-right: 0; border-bottom: 1px solid var(--line); overflow: visible; }
+  .set-pages { flex-direction: row; gap: 4px; overflow-x: auto; }
+  .set-nav-g { flex-direction: row; }
+  .set-content { padding-inline: 16px; }
+  .set-head { padding-top: 20px; }
+  .settings-card .perms { grid-template-columns: minmax(0, 1fr); }
+  .set-card > .set-row { flex-wrap: wrap; gap: 8px 16px; }
+  .set-v, .kc-v { justify-content: flex-start; max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrim:has(> .modal.settings-card), .modal.settings-card, .set-content > *, .set-flash { animation: none; }
+  :is(.set-go, .set-hit) > svg { transition: none; transform: none; }
+}

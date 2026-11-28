@@ -292,3 +292,11 @@ h3 { font: 600 19px/1.3 var(--sans); letter-spacing: -.015em; }
   .btn, .seg button[aria-selected=true] { border: 1px solid ButtonText; }
 }
 @media print { .top, .field, .menu, .theme-seg { display: none; } }
+
+/* ================= trust row + closing call ================= */
+.spec.trust { margin-bottom: var(--s6); }
+.final { position: relative; isolation: isolate; overflow: hidden; padding-block: var(--sec); border-top: 1px solid var(--line); background: var(--surface); text-align: center; }
+.final .field { opacity: .8; }
+.final-in { display: flex; flex-direction: column; align-items: center; }
+.final h2 { max-width: 18ch; text-wrap: balance; }
+.final p { margin-top: var(--s4); color: var(--fg-2); font-size: clamp(17px, 1.5vw, 20px); }

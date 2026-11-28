@@ -5,16 +5,20 @@
 .hub-head p { margin: 0; max-width: 68ch; line-height: 1.55; }
 
 /* Start a run */
-.run-new { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg-raise); }
-.run-new h2, .run-group h2 { margin: 0; display: flex; align-items: center; gap: 8px; }
-.run-new textarea { width: 100%; min-height: 76px; background: var(--bg-field); }
-.run-new-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.run-proj { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; color: var(--fg-3); }
-.run-proj select { max-width: 340px; height: 32px; }
-.rseg { display: inline-flex; padding: 2px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg-inset); }
-.rseg-btn { height: 28px; padding: 0 12px; border-radius: 7px; color: var(--fg-2); font-size: var(--fs-13); }
+/* One field: the task on top, its options in a row underneath, split by a hairline. */
+.run-new { display: flex; flex-direction: column; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--bg-field); transition: border-color var(--t1) var(--ease), box-shadow var(--t1) var(--ease); }
+.run-new:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); }
+.run-new-note { margin: 0; padding: 12px 12px 0; }
+.run-new textarea, .run-new textarea:hover, .run-new textarea:focus { min-height: 72px; padding: 12px; border: 0; border-radius: var(--r-md) var(--r-md) 0 0; background: transparent; box-shadow: none; resize: none; }
+.run-new-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; border-top: 1px solid var(--line); }
+.run-group h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.run-proj { position: relative; display: inline-flex; align-items: center; min-width: 0; max-width: 100%; color: var(--fg-3); }
+.run-proj > svg { position: absolute; left: 12px; pointer-events: none; }
+.run-proj select { width: auto; min-width: 120px; max-width: 240px; padding-left: 32px; background-color: var(--bg-raise); }
+.rseg { display: inline-flex; align-items: center; height: var(--control-height); padding: 2px; border: 1px solid var(--line-2); border-radius: var(--control-radius); background: var(--bg-inset); }
+.rseg-btn { height: 100%; padding: 0 12px; border-radius: 4px; color: var(--fg-2); font-size: var(--fs-13); }
 .rseg-btn:hover { color: var(--fg); }
-.rseg-btn.on { background: var(--bg-raise-2); color: var(--fg); font-weight: var(--fw); box-shadow: inset 0 0 0 1px var(--line-2); }
+.rseg-btn.on { background: var(--bg-raise-2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-2); }
 
 /* Lists */
 .run-list { display: flex; flex-direction: column; gap: 20px; }

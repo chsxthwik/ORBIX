@@ -97,7 +97,6 @@ contextBridge.exposeInMainWorld('orbixDesktop', {
       textScale = Math.min(2.25, Math.max(1, Number(n) || 1));
       applyZoom();
     },
-    theme: (src) => ipcRenderer.send('orbix:win:theme', src === 'dark' || src === 'light' ? src : 'system'),
     progress: (working, waiting) => ipcRenderer.send('orbix:win:progress', { working: Math.trunc(Number(working)) || 0, waiting: Math.trunc(Number(waiting)) || 0 }),
     recent: (ids) => ipcRenderer.send('orbix:win:recent', Array.isArray(ids) ? ids.slice(0, 20).map(String) : []),
     notify: (n) => ipcRenderer.send('orbix:win:notify', { kind: String(n?.kind || ''), proc: String(n?.proc || ''), ask: String(n?.ask || ''), secs: Math.trunc(Number(n?.secs)) || 0 }),

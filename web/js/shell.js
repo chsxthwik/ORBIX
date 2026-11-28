@@ -9,7 +9,6 @@ import { h, icon, iconBtn, logo, baseName, fmtElapsed, timeAgo, projTile, fmtTok
 import { S, on, emit, activeTab, savePrefs } from './store.js';
 import { popMenu, isApproval } from './dialogs.js';
 import { contextMenu } from './context.js';
-import { contextLevel, openContextBudget } from './context-popover.js';
 import { gitState, showTab } from './panels.js';
 import { firstKey } from './keys.mjs';
 import { onMachine, backToThisPc } from './machines.js';
@@ -79,7 +78,6 @@ function openMenu(btn, items) {
 
 function menus() {
   const t = activeTab();
-  const dark = document.documentElement.dataset.mode === 'dark';
   return [
     ['ORBIX', [
       { label: 'About ORBIX', run: () => H.settings('about') },
@@ -118,7 +116,6 @@ function menus() {
       t ? { label: 'Focus mode', hint: K('zen'), on: document.documentElement.classList.contains('zen'), run: () => H.zen() } : null,
       t ? { label: 'Wide reading column', on: document.documentElement.classList.contains('wide'), run: H.wide } : null,
       '-',
-      { label: dark ? 'Light theme' : 'Dark theme', run: H.toggleTheme },
       { label: 'Bigger text', hint: K('textBigger'), run: () => H.textSize(1) },
       { label: 'Smaller text', hint: K('textSmaller'), run: () => H.textSize(-1) },
       { label: 'Reset text size', hint: K('textReset'), run: () => H.textSize(0) },
@@ -184,51 +181,12 @@ function crumbs(t, hub) {
   return [ws ? h('span', { class: 'crumb crumb-proj static', title: ws }, projTile(baseName(ws), 20), h('bdi', null, baseName(ws))) : null, ws ? h('span', { class: 'crumb-sep', 'aria-hidden': 'true' }, '/') : null, h('span', { class: 'crumb cur static' }, 'New conversation')].filter(Boolean);
 }
 
-// ================= context meter =================
-
-/** How full the conversation's context is: open the breakdown, cost and compact action. */
-const meter = h('button', { class: 'tb-ctx', type: 'button', hidden: true, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' });
-const RING = 2 * Math.PI * 6;
-const arc = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-{
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('width', '14');
-  svg.setAttribute('height', '14');
-  svg.setAttribute('aria-hidden', 'true');
-  const track = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  for (const c of [track, arc]) (c.setAttribute('cx', '8'), c.setAttribute('cy', '8'), c.setAttribute('r', '6'), svg.append(c));
-  track.setAttribute('class', 'ring-track');
-  arc.setAttribute('class', 'ring-arc');
-  arc.setAttribute('stroke-dasharray', `0 ${RING}`);
-  meter.append(svg, h('span', { class: 'num' }));
-}
-function syncMeter(t) {
-  meter.hidden = !t || t.dead;
-  if (meter.hidden) return;
-  const u = t.stats?.contextUsage;
-  const pct = u?.percent;
-  const level = contextLevel(pct);
-  meter.classList.toggle('hot', level === 'hot');
-  meter.classList.toggle('crit', level === 'crit');
-  arc.setAttribute('stroke-dasharray', `${((RING * Math.min(100, pct || 0)) / 100).toFixed(2)} ${RING.toFixed(2)}`);
-  const label = u?.tokens > 0 ? (Number.isFinite(pct) ? `${Math.floor(pct)}%` : fmtTokens(u.tokens)) : 'Context';
-  if (meter.lastChild.textContent !== label) meter.lastChild.textContent = label;
-  meter.title = u?.contextWindow ? `Context and cost · ${fmtTokens(u.tokens)} of ${fmtTokens(u.contextWindow)} tokens (${pct.toFixed(1)}%)${u.estimated ? ', estimated' : ''}` : 'Context and cost';
-  meter.setAttribute('aria-label', meter.title);
-}
-meter.addEventListener('click', () => {
-  const tab = activeTab();
-  if (tab && !tab.dead) openContextBudget(meter, tab, () => showTab('context'));
-});
-on('tab:state', (tab) => { if (tab === activeTab()) syncMeter(tab); });
 
 let topSig = '';
 export function drawToolbar(el, { force = false } = {}) {
   const t = activeTab();
   const hub = !t && H.hubView();
   const g = t && gitState(t.workspace);
-  syncMeter(t);
   const sig = JSON.stringify([S.active, hub?.view, hub?.id, homeProject(), H.sideShown(), H.panelShown(), H.panelMax(), !!document.getElementById('app')?.classList.contains('overlay-panel'), canGo(-1), canGo(1), t && [t.name, t.workspace, stateOf(t), t.worktree?.branch, g?.branch, g?.files?.length]]);
   if (!force && sig === topSig && el.childElementCount) return;
   topSig = sig;
@@ -253,7 +211,7 @@ export function drawToolbar(el, { force = false } = {}) {
     // This window shows a machine (ORBIX Cloud): say which, and lead back to this PC.
     onMachine() ? h('button', { class: 'tb-machine', type: 'button', title: window.orbixDesktop?.machines ? 'Back to the ORBIX on this PC' : 'ORBIX on a machine', onclick: () => (window.orbixDesktop?.machines ? backToThisPc() : H.settings('machines')) }, icon('cloud', 13), location.hostname, window.orbixDesktop?.machines ? h('span', { class: 'muted' }, '· Back to this PC') : null) : null,
     // The side panel works for a conversation, and on Home for the project chosen there.
-    t || (!hub && homeProject()) ? h('div', { class: 'tb-end' }, t ? meter : null, cxBtn(), docked || wide ? maxBtn() : null, panelBtn()) : null,
+    t || (!hub && homeProject()) ? h('div', { class: 'tb-end' }, cxBtn(), docked || wide ? maxBtn() : null, panelBtn()) : null,
     updatePill,
   ].filter(Boolean));
 }
@@ -264,7 +222,6 @@ export function tickToolbar(el) {
     const t = S.tabs.get(s.dataset.tick);
     if (t?.streaming) s.textContent = `Working ${elapsed(t)}`;
   }
-  syncMeter(activeTab());
 }
 
 // ================= conversation preview card =================
@@ -276,31 +233,36 @@ function hideCard() {
   card?.remove();
   card = null;
 }
-/** Rest the pointer on a conversation row in `root` for a moment: a card shows its title, project, last update and state. */
+/** Rest the pointer on a conversation for a moment: a small card in the corner of that row, title and a two-line snippet. */
 export function bindHoverCards(root, resolve) {
+  const hit = (node) => node?.closest?.('[data-peek], .s-btn[data-path]');
   root.addEventListener('pointerover', (e) => {
-    const row = e.target.closest?.('.s-btn[data-path]');
+    const row = hit(e.target);
     if (!row || row.contains(e.relatedTarget)) return;
     hideCard();
     timer = setTimeout(() => {
-      const d = row.isConnected && resolve(row.dataset.path);
+      const d = row.isConnected && resolve(row.dataset.peek || row.dataset.path);
       if (!d) return;
-      const r = row.getBoundingClientRect();
       card = h('div', { class: 'hcard', role: 'tooltip' },
         h('div', { class: 'hc-t' }, d.title),
-        h('div', { class: 'hc-l' }, icon('folder', 12), h('span', { class: 'ell' }, h('bdi', null, d.project))),
-        d.branch ? h('div', { class: 'hc-l' }, icon('branch', 12), h('span', { class: 'ell' }, h('bdi', null, d.branch))) : null,
-        h('div', { class: 'hc-l' }, icon('clock', 12), h('span', null, d.updated)),
-        d.state ? h('div', { class: `hc-l hc-st ${d.state[0]}` }, h('span', { class: `dot ${d.state[0]}` }), h('span', null, d.state[1])) : null,
         d.preview ? h('div', { class: 'hc-p' }, d.preview) : null);
       document.body.append(card);
-      const top = Math.max(8, Math.min(r.top - 6, innerHeight - card.offsetHeight - 8));
-      card.style.left = `${Math.round(r.right + 10)}px`;
+      const r = row.getBoundingClientRect();
+      const gap = 6;
+      const w = card.offsetWidth;
+      const height = card.offsetHeight;
+      let left = r.right + gap;
+      if (left + w > innerWidth - 8) left = r.left - gap - w;
+      left = Math.max(8, Math.min(left, innerWidth - w - 8));
+      // Sit on the corner of the row that is nearer a corner of the window, not floating at its middle.
+      let top = r.top + r.height / 2 < innerHeight / 2 ? r.top : r.bottom - height;
+      top = Math.max(8, Math.min(top, innerHeight - height - 8));
+      card.style.left = `${Math.round(left)}px`;
       card.style.top = `${Math.round(top)}px`;
     }, 450);
   });
   root.addEventListener('pointerout', (e) => {
-    const row = e.target.closest?.('.s-btn[data-path]');
+    const row = hit(e.target);
     if (row && !row.contains(e.relatedTarget)) hideCard();
   });
   for (const ev of ['pointerdown', 'scroll', 'keydown']) root.addEventListener(ev, hideCard, { passive: true, capture: ev === 'scroll' });

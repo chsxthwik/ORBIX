@@ -21,7 +21,7 @@
 
 /* Windows 11 Mica (html.win-mica, see desktop.js): the window's frame, the top row and the sidebar let
    the desktop's tint show through; the conversation itself stays solid so text keeps its contrast. Off when Windows'
-   Transparency effects are off, in high contrast, under a scene theme, or in Settings → Appearance → Windows. */
+   Transparency effects are off, in high contrast, or in Settings → Appearance → Windows. */
 html.win-mica, html.win-mica body { background: transparent; }
 html.win-mica .chrome { background: color-mix(in srgb, var(--chrome) 45%, transparent); }
 /* (a narrow window's sidebar slides over the page and stays solid: sidebar.css) */

@@ -71,9 +71,6 @@ export function notifyArgs(value) {
   return { kind, proc, secs: Number.isInteger(secs) && secs >= 0 && secs < 1e7 ? secs : 0 };
 }
 
-/** Which colour scheme the window (Mica, the title bar buttons, menus) follows. */
-export const themeSource = (value) => (value === 'system' || value === 'dark' || value === 'light' ? value : null);
-
 /** The page's most recent projects, by id only (names and paths come from the engine's own list). */
 export function recentProjects(value) {
   if (!Array.isArray(value) || value.length > 20) return null;

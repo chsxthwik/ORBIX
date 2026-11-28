@@ -2,6 +2,60 @@
 // every line comes from the recorded messages.
 import { toolSummary } from './tools.js';
 import { textOf } from './store.js';
+import { h, toast } from './dom.js';
+import { btn, modal } from './dialogs.js';
+import { api } from './api.js';
+import { portableTranscript, TRANSCRIPT_FORMAT, TRANSCRIPT_MAX_BYTES } from './portable-transcript.mjs';
+
+export function exportPortableTranscript(tab) {
+  try {
+    const messages = tab.messages.filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({ role: m.role, text: textOf(m.content) })).filter((m) => m.text.trim());
+    const transcript = portableTranscript({ format: TRANSCRIPT_FORMAT, version: 1, title: tab.name, messages });
+    const file = new Blob([JSON.stringify(transcript)], { type: 'application/json' });
+    if (file.size > TRANSCRIPT_MAX_BYTES) throw new Error('This portable transcript exceeds 16 MB.');
+    const url = URL.createObjectURL(file);
+    const link = h('a', { href: url, download: 'conversation.orbix.json' });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+export function importPortableTranscript(projects, onImport) {
+  if (!projects.length) return toast('Open a project before importing a transcript.', 'info');
+  const project = h('select', null, projects.map((p) => h('option', { value: p.id }, p.name || p.path)));
+  const file = h('input', { type: 'file', accept: '.json,application/json' });
+  const error = h('p', { class: 'warn-text', role: 'alert' });
+  const dialog = modal({
+    title: 'Import portable transcript', initialFocus: file,
+    body: h('div', null, h('p', null, 'Import user and assistant text into a new ORBIX conversation. Tool history and attachments are not imported.'),
+      h('label', { class: 'field' }, 'Project', project), h('label', { class: 'field' }, 'Transcript', file), error),
+    actions: [btn('Cancel', () => dialog.close()), btn('Import', async () => {
+      error.textContent = '';
+      try {
+        const chosen = file.files[0];
+        if (!chosen) throw new Error('Choose a portable transcript file.');
+        if (chosen.size > TRANSCRIPT_MAX_BYTES) throw new Error('This portable transcript exceeds 16 MB.');
+        let value;
+        try {
+          value = JSON.parse((await chosen.text()).replace(/^\uFEFF/, ''));
+        } catch {
+          throw new Error('That file does not contain valid JSON.');
+        }
+        const transcript = portableTranscript(value);
+        const { session } = await api.post('/api/sessions/import', { projectId: project.value, transcript });
+        dialog.close();
+        onImport(session);
+      } catch (err) {
+        error.textContent = err.message;
+      }
+    }, 'primary')],
+  });
+}
 
 const fence = (s) => {
   const n = Math.max(3, ...(s.match(/`+/g) || []).map((x) => x.length + 1));

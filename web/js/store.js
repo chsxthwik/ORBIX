@@ -396,6 +396,7 @@ function reduce(tab, ev) {
       if (ev.success === false) note(tab, 'error', `Retry failed${ev.finalError ? ': ' + ev.finalError : ''}`);
       break;
     case 'model_changed':
+      tab.models = null;
     case 'thinking_level_changed':
       refreshState(tab);
       break;

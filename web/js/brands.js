@@ -1,6 +1,6 @@
 // Provider logo marks, drawn inline so they work under the strict Content-Security-Policy.
 // Source: @lobehub/icons-static-svg 1.102 (MIT). The marks are trademarks of their owners and only identify each provider.
-// Qwen uses its single-colour mark: the brand's deep blue is unreadable on the dark themes.
+// Qwen uses its single-colour mark: the brand's deep blue is unreadable on the dark theme.
 // Generated data: elements and attributes were checked against an allow-list. Marks without colour follow the text colour.
 import { h, icon } from './dom.js';
 
@@ -31,10 +31,6 @@ export function frameOf(id) {
   const r = (v) => Math.round(v * 100) / 100;
   return `${r(x + w / 2 - side / 2)} ${r(y + h / 2 - side / 2)} ${r(side)} ${r(side)}`;
 }
-// Marks with their own colours that fall under 3:1 on light surfaces (yellow, pale lilac, green): on light themes they
-// are drawn in one colour, as their makers' single-colour versions; tiles put them on a dark ground instead.
-const LOW_ON_LIGHT = new Set(['google', 'mistral', 'together']);
-
 /** The provider's logo, decorative (its name is always beside it). A provider without a mark, like a custom server, gets a neutral icon. */
 export function brandMark(id, size = 18, cls = '') {
   if (Object.hasOwn(SAME_MAKER, id)) id = SAME_MAKER[id];
@@ -47,7 +43,7 @@ export function brandMark(id, size = 18, cls = '') {
   svg.setAttribute('fill', 'currentColor');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  svg.setAttribute('class', `bmark${LOW_ON_LIGHT.has(id) ? ' bm-lowlight' : ''}${cls ? ' ' + cls : ''}`);
+  svg.setAttribute('class', `bmark${cls ? ' ' + cls : ''}`);
   for (const [k, v] of Object.entries(m.a)) svg.setAttribute(k, v);
   const suffix = `-b${++uid}`;
   for (const n of m.n) svg.append(draw(n, suffix));

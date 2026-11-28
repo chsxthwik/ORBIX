@@ -45,6 +45,12 @@ try {
   await page.until(`document.querySelector('.gdiff .dl.add')`, 'the inline diff');
   assert(await page.eval(`return document.querySelector('.gdiff').textContent.includes('rate limit')`), 'the diff shows the added lines');
   say('ship e2e: inline diff on click');
+  await page.click('Side by side', '.gdiff');
+  await page.until(`document.querySelector('.gdiff .diff-split .diff-side.add .tx')`, 'the side-by-side diff');
+  assert(await page.eval(`return document.querySelector('.gdiff .diff-split-head').textContent === 'BeforeAfter'
+    && [...document.querySelectorAll('.gdiff .diff-side.add .tx')].some((line) => line.textContent.includes('rate limit'))`), 'the added line appears in the After column');
+  await page.click('Unified', '.gdiff');
+  await page.until(`document.querySelector('.gdiff .diffview:not(.diff-split) .dl.add')`, 'return to the unified diff');
 
   // The model writes the message (the scripted model answers a short text; whatever it says becomes the message).
   await page.click('Write', '.commit-box');
@@ -69,6 +75,20 @@ try {
   assert(git(repo, 'status', '--porcelain').trim() === '', 'the working tree is clean');
   await page.until(`document.querySelectorAll('.gfile').length === 0`, 'the panel shows a clean tree');
   say('ship e2e: the remote has the commit and the panel is clean');
+
+  fs.writeFileSync(path.join(repo, 'preview.html'), '<h2>Initial preview</h2><script>window.previewExecuted = true</script><iframe src="https://invalid.example"></iframe>');
+  await page.eval(`const store = await import('/js/store.js'); await (await import('/js/panels.js')).viewFile(store.activeTab(), 'preview.html');`);
+  await page.until(`document.querySelector('.p-text-preview h2')?.textContent === 'Initial preview'`, 'an HTML preview');
+  assert(await page.eval(`return !window.previewExecuted && !document.querySelector('.p-text-preview iframe, .p-text-preview script')`), 'preview shows structure without executing markup');
+  await page.click('Source', '.p-bar');
+  await page.until(`document.querySelector('.codeview')?.textContent.includes('previewExecuted')`, 'the HTML source');
+  await page.click('Preview', '.p-bar');
+  await page.until(`(await import('/js/api.js')).recentCalls.includes('/api/fs/stamps')`, 'the file watcher is observing the preview');
+  // Let the initial stat arrive before editing the file from outside ORBIX.
+  await sleep(250);
+  fs.writeFileSync(path.join(repo, 'preview.html'), '<h2>Updated preview from disk</h2>');
+  await page.until(`document.querySelector('.p-text-preview h2')?.textContent === 'Updated preview from disk'`, 'external file changes refresh the preview', 10000);
+  say('ship e2e: safe HTML preview, source toggle and external refresh');
 
   const bad = page.errors.filter((e) => e && !/favicon|Failed to load resource/i.test(e));
   assert(!bad.length, `no page errors: ${bad.join(' | ')}`);

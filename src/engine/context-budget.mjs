@@ -1,16 +1,23 @@
 import { contextTokens, estimateTokens, lastMarker } from './compact.mjs';
 
 const size = (text) => Math.ceil(text.length / 3.6);
-const keys = ['system', 'rules', 'files', 'history', 'results'];
+const keys = ['system', 'tools', 'rules', 'skills', 'mcp', 'files', 'history', 'results'];
 const sum = (weights) => keys.reduce((n, k) => n + (weights[k] || 0), 0);
-export const promptWeights = (system, rules, tools) => ({
-  system: Math.max(0, size(system) - size(rules)) + size(tools.length ? JSON.stringify(tools) : ''),
+/**
+ * Prompt parts measured separately: `rules`, `skills` and `mcp` are sections of `system` (subtracted from it);
+ * `tools` are the tool definitions sent next to it.
+ */
+export const promptWeights = (system, rules, tools, { skills = '', mcp = '' } = {}) => ({
+  system: Math.max(0, size(system) - size(rules) - size(skills) - size(mcp)),
+  tools: size(tools.length ? JSON.stringify(tools) : ''),
   rules: size(rules),
+  skills: size(skills),
+  mcp: size(mcp),
 });
 
 /** Estimate the visible request parts, without counting inlined attachments twice. */
 export function contextWeights(messages, prompt = {}) {
-  const weights = { system: prompt.system || 0, rules: prompt.rules || 0, files: 0, history: 0, results: 0 };
+  const weights = { system: prompt.system || 0, tools: prompt.tools || 0, rules: prompt.rules || 0, skills: prompt.skills || 0, mcp: prompt.mcp || 0, files: 0, history: 0, results: 0 };
   for (const m of messages) {
     if (m.role === 'toolResult') weights.results += estimateTokens([m]);
     else if (m.role === 'user' && Array.isArray(m.content)) {
@@ -30,11 +37,14 @@ export const contextEpoch = (messages) => {
   return m?.id || m?.timestamp || null;
 };
 
-/** Integer allocations add up to the total, including when some parts round down. */
-function allocate(weights, total) {
+/**
+ * Integer allocations add up to the total, including when some parts round down. Parts with nothing measured
+ * (no skills, no MCP servers, no attached files…) are left out rather than shown as zero.
+ */
+export function allocate(weights, total) {
   const raw = sum(weights);
-  if (!raw) return keys.map((key) => ({ key, tokens: key === 'history' ? total : 0 }));
-  const rows = keys.map((key) => {
+  if (!raw) return [{ key: 'history', tokens: total }];
+  const rows = keys.filter((key) => weights[key] > 0).map((key) => {
     const share = weights[key] / raw * total;
     return { key, tokens: Math.floor(share), fraction: share % 1 };
   });
@@ -60,7 +70,7 @@ export function contextBudget({ messages, context, prompt, provider, model, wind
   // Provider usage includes everything in the prompt, including cached input and message/template overhead.
   // Estimate only changes since that request, or the new total after a compaction. The per-part split is always approximate.
   const scale = measure ? measure.input / Math.max(1, sum(measure.weights)) : 1;
-  const latest = sameEpoch && messages.at(-1) === report && weights.system === measure.weights.system && weights.rules === measure.weights.rules;
+  const latest = sameEpoch && messages.at(-1) === report && ['system', 'tools', 'rules', 'skills', 'mcp'].every((k) => (weights[k] || 0) === (measure.weights[k] || 0));
   const legacyOutput = legacy ? legacy.usage.output || 0 : 0;
   const tokens = Math.max(0, Math.round(latest ? measure.input + measure.output
     : sameEpoch ? measure.input + measure.output + (raw - sum(measure.weights) - estimateTokens([report])) * scale

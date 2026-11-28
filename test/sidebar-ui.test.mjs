@@ -40,15 +40,15 @@ test('the sidebar shows shortcuts only through the shared hint, the same for eve
   assert.doesNotMatch(side, /h\('kbd'/, 'no keycaps in the sidebar');
   for (const id of ['new', 'search']) assert.match(side, new RegExp(`keyHint\\(firstKey\\(S\\.ui\\.keys, '${id}'\\)\\)`), id);
   // Settings is an icon button next to your name: its shortcut is in its tooltip
-  assert.match(side, /class: 'side-link foot-set'[^\n]*title: `Settings\$\{firstKey\(S\.ui\.keys, 'settings'\)/, 'settings shortcut in the tooltip');
+  assert.match(side, /class: 'side-link foot-set'[^\n]*tip\(`Settings\$\{firstKey\(S\.ui\.keys, 'settings'\)/, 'settings shortcut in the tooltip');
   assert.match(side, /keyHint\(shortcut\)/, 'every page link');
   const css = read('web/css/sidebar.css');
   assert.match(css, /\.khint \{[^}]*color: var\(--fg-3\)[^}]*tabular-nums/);
 });
 
-test('the sidebar icons are one family: outline 1.75, nothing filled', () => {
+test('the sidebar icons are one family: outline 1.5, nothing filled', () => {
   const src = read('web/js/side-icons.js');
-  assert.match(src, /'stroke-width': '1\.75'/);
+  assert.match(src, /'stroke-width': '1\.5'/);
   assert.match(src, /fill: 'none'/);
   for (const name of ['new', 'search', 'customizations', 'skills', 'automations', 'runs', 'review', 'settings']) assert.match(src, new RegExp(`\\b${name}: '`), name);
 });

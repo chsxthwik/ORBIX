@@ -128,7 +128,7 @@ function charCanvas({ cols, rows, font, lineH, cls }) {
         schedule();
       };
       const theme = new MutationObserver(invalidate);
-      theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme', 'data-mode'] });
+      theme.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] });
       const options = { signal: stop.signal };
       motionOff.addEventListener('change', invalidate, options);
       document.addEventListener('visibilitychange', schedule, options);

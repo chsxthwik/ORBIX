@@ -1,10 +1,10 @@
-// Controls of the message box, shared by Home and every conversation: "+" (images and files, commands, context, a
-// shell command), the model button ("Provider / Model"), the reasoning level, and the permission chip (how much the
+// Controls of the message box, shared by Home and every conversation: "+" (modes, images and files, commands,
+// context, a shell command), the mode pill, the model button ("Provider / Model"), the reasoning level, and the permission chip (how much the
 // agent may do without asking: Supervised, Auto edits, Guarded, Full access).
-import { h, icon, iconBtn, toast } from './dom.js';
+import { h, icon, iconBtn, toast, kbd, fmtTokens } from './dom.js';
 import { S, loadEngine, emit } from './store.js';
 import { api } from './api.js';
-import { popMenu, popover, confirmDialog, thinkingName } from './dialogs.js';
+import { popover, confirmDialog, thinkingName, LEVEL_NOTE } from './dialogs.js';
 import { modelMark } from './brands.js';
 
 /** Type `ch` at the caret, as if typed, so the box opens its pop-up (@ files, / commands). `!` starts the line. */
@@ -23,17 +23,180 @@ function typeAtCaret(ta, ch) {
   ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
-/** The "+" button: attach images and files, a slash command, a file or folder as context, or a shell command. */
-export function addContext(composer) {
-  const b = iconBtn('plus', 'Add to the message', () => popMenu(b, [
-    { icon: 'paperclip', label: 'Images and files', run: () => composer.openFilePicker() },
-    '-',
-    { icon: 'command', label: 'Commands', hint: '/', run: () => typeAtCaret(composer.ta, '/') },
-    { icon: 'at', label: 'Context', hint: '@', run: () => typeAtCaret(composer.ta, '@') },
-    { icon: 'terminal', label: 'Shell command', hint: '!', run: () => typeAtCaret(composer.ta, '!') },
-  ], { minWidth: 220 }), 'c-add');
-  b.setAttribute('aria-haspopup', 'menu');
+// Conversation modes. Agent is the default and has no pill; the others change what the agent may do (see
+// src/engine/proc.mjs _setMode): Plan and Ask cannot edit files, Debug works root cause first.
+const SVG = 'http://www.w3.org/2000/svg';
+const MODE_PATHS = {
+  plan: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2',
+  ask: 'M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12ZM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.1M12 17h.01',
+  debug: 'M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1V6a3 3 0 0 1 6 0v1.1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6ZM12 20v-9M6.5 9.5C4.6 9.3 3 7.8 3 6M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 6c0 1.8-1.6 3.3-3.5 3.5M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4',
+};
+export const CHAT_MODES = [
+  { id: 'plan', label: 'Plan', desc: 'Generate an implementation plan' },
+  { id: 'ask', label: 'Ask', desc: 'Answer questions without making edits' },
+  { id: 'debug', label: 'Debug', desc: 'Find the root cause of an issue' },
+];
+export const modeName = (id) => CHAT_MODES.find((m) => m.id === id)?.label || 'Agent';
+
+/** A mode's icon, in the mode's colour (CSS: .mode-ic[data-mode]). */
+export function modeIcon(id, size = 14) {
+  const svg = document.createElementNS(SVG, 'svg');
+  for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: size, height: size, fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', class: 'mode-ic', 'data-mode': id })) svg.setAttribute(k, v);
+  const p = document.createElementNS(SVG, 'path');
+  p.setAttribute('d', MODE_PATHS[id] || '');
+  svg.append(p);
+  return svg;
+}
+
+/** Fuzzy-ish filter for the "+" menu: every word of the query appears in the label or the description. */
+const matches = (q, ...texts) => {
+  const hay = texts.join(' ').toLowerCase();
+  return q.toLowerCase().split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+};
+
+/**
+ * The "+" button: a searchable menu with the conversation modes (Plan, Ask, Debug), then attach files, a slash
+ * command, a file or folder as context, or a shell command. `mode`: { get() → 'agent'|'plan'|'ask'|'debug',
+ * set(id), available() → bool }; without it the menu has no modes. Picking the mode in use turns it off.
+ */
+export function addContext(composer, mode = null) {
+  const b = iconBtn('plus', 'Add to the message', () => open(), 'c-add');
+  b.setAttribute('aria-haspopup', 'dialog');
+  b.setAttribute('aria-expanded', 'false');
+  let pop = null;
+  const open = () => {
+    if (pop) return pop.close();
+    const listId = `am-${Math.random().toString(36).slice(2, 8)}`;
+    const q = h('input', { class: 'am-q', type: 'text', placeholder: 'Search modes, context, files…', 'aria-label': 'Search modes, context, files', spellcheck: 'false', autocomplete: 'off', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': listId, 'aria-autocomplete': 'list' });
+    const list = h('div', { class: 'am-list', id: listId, role: 'listbox', 'aria-label': 'Add to the message' });
+    const current = mode?.get?.() || 'agent';
+    const rows = [
+      ...(mode && mode.available() ? CHAT_MODES.map((m) => ({ kind: 'mode', id: m.id, label: m.label, desc: m.desc, on: current === m.id, run: () => mode.set(current === m.id ? 'agent' : m.id) })) : []),
+      { kind: 'act', ic: 'paperclip', label: 'Attach files', desc: 'Images and text files', run: () => composer.openFilePicker() },
+      { kind: 'act', ic: 'command', label: 'Commands', hint: '/', desc: 'Slash commands and skills', run: () => typeAtCaret(composer.ta, '/') },
+      { kind: 'act', ic: 'at', label: 'Context', hint: '@', desc: 'Files and folders', run: () => typeAtCaret(composer.ta, '@') },
+      { kind: 'act', ic: 'terminal', label: 'Shell', hint: '!', desc: 'Run a command in the Terminal', run: () => typeAtCaret(composer.ta, '!') },
+    ];
+    let shown = [];
+    let sel = 0;
+    const pick = (r) => {
+      pop.close(false);
+      if (r.kind === 'mode') composer.focus?.();
+      r.run();
+    };
+    const paint = () => {
+      for (const [i, el] of [...list.querySelectorAll('.am-it')].entries()) {
+        const on = i === sel;
+        el.classList.toggle('sel', on);
+        el.setAttribute('aria-selected', String(on));
+        if (on) {
+          q.setAttribute('aria-activedescendant', el.id);
+          el.scrollIntoView({ block: 'nearest' });
+        }
+      }
+    };
+    const draw = () => {
+      shown = rows.filter((r) => matches(q.value, r.label, r.desc, r.hint || ''));
+      sel = Math.min(sel, Math.max(0, shown.length - 1));
+      const items = [];
+      shown.forEach((r, i) => {
+        if (i && r.kind !== shown[i - 1].kind) items.push(h('div', { class: 'am-sep', role: 'separator' }));
+        items.push(h('div', { class: 'am-it' + (r.on ? ' on' : ''), id: `${listId}-${i}`, role: 'option', 'data-kind': r.kind, 'aria-selected': 'false', onmousedown: (e) => e.preventDefault(), onclick: () => pick(r), onmousemove: () => { if (sel !== i) { sel = i; paint(); } } },
+          r.kind === 'mode' ? h('span', { class: 'am-ic', 'data-mode': r.id }, modeIcon(r.id, 14)) : h('span', { class: 'am-ic' }, icon(r.ic, 14)),
+          h('span', { class: 'am-l' }, h('span', { class: 'am-t' }, r.label), h('span', { class: 'am-d ell' }, r.desc)),
+          r.on ? icon('check', 14, 'am-on') : r.hint ? kbd(r.hint) : null));
+      });
+      if (!shown.length) items.push(h('div', { class: 'am-empty' }, 'No matches'));
+      list.replaceChildren(...items);
+      if (!shown.length) q.removeAttribute('aria-activedescendant');
+      paint();
+      pop?.el._place?.();
+    };
+    q.addEventListener('input', () => { sel = 0; draw(); });
+    q.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (shown.length) sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + shown.length) % shown.length;
+        paint();
+      } else if (e.key === 'Home' || e.key === 'End') {
+        if (q.value) return;
+        e.preventDefault();
+        sel = e.key === 'Home' ? 0 : shown.length - 1;
+        paint();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (shown[sel]) pick(shown[sel]);
+      } else if (e.key === 'Tab') pop.close(false);
+    });
+    pop = popover(b, [h('div', { class: 'am-top' }, icon('search', 14), q), list], {
+      align: 'start', cls: 'am-pop', label: 'Add to the message',
+      onClose: () => {
+        pop = null;
+        b.setAttribute('aria-expanded', 'false');
+      },
+    });
+    b.setAttribute('aria-expanded', 'true');
+    draw();
+    q.focus({ preventScroll: true });
+  };
   return b;
+}
+
+/**
+ * The mode in use, as a small pill in the message box's row ("Plan ×"). Hidden for Agent. `onClear()` goes back
+ * to Agent. `update(id)` redraws it.
+ */
+export function modePill(onClear) {
+  const label = h('span', { class: 'c-modepill-l' });
+  const x = h('button', { class: 'c-modepill-x', type: 'button', onclick: () => onClear() }, icon('x', 12));
+  const el = h('span', { class: 'c-modepill', hidden: true }, label, x);
+  let shown;
+  const update = (id = 'agent', disabled = false) => {
+    const on = id && id !== 'agent' && CHAT_MODES.some((m) => m.id === id);
+    el.hidden = !on;
+    x.disabled = disabled;
+    if (!on || shown === id) return;
+    shown = id;
+    const m = CHAT_MODES.find((c) => c.id === id);
+    el.dataset.mode = id;
+    el.title = `${m.label} mode: ${m.desc.toLowerCase()}`;
+    label.replaceChildren(modeIcon(id, 13), h('span', null, m.label));
+    x.title = `Leave ${m.label} mode`;
+    x.setAttribute('aria-label', `Leave ${m.label} mode`);
+  };
+  return { el, update };
+}
+
+/** The model button and the reasoning level read as one chip: "Opus 5.5 | Medium". */
+export function modelGroup(modelBtn, effortEl) {
+  return h('span', { class: 'c-model-grp' }, modelBtn, effortEl);
+}
+
+/**
+ * The keys under the message box: what Enter does right now (send, or steer / queue while the agent works), how to add
+ * a line, and a rough size once the text gets long. `update({ busy, chars })` redraws it only when something changed.
+ */
+export function keyHints() {
+  const el = h('div', { class: 'c-keys', 'aria-hidden': 'true' });
+  let sig = '';
+  const update = ({ busy = false, chars = 0 } = {}) => {
+    const ctrl = S.ui?.sendKey === 'ctrl';
+    const queue = S.ui?.whileBusy === 'queue';
+    const size = chars >= 400 ? `~${fmtTokens(Math.round(chars / 4))} tokens` : '';
+    const next = JSON.stringify([ctrl, queue, busy, size]);
+    if (next === sig) return;
+    sig = next;
+    const send = ctrl ? 'Ctrl+Enter' : 'Enter';
+    const keys = busy
+      ? [[send, queue ? 'queue' : 'steer'], ['Alt+Enter', queue ? 'steer' : 'queue'], ['Esc', 'stop']]
+      : [[send, 'send'], [ctrl ? 'Enter' : 'Shift+Enter', 'new line']];
+    el.replaceChildren(
+      size ? h('span', { class: 'c-size num' }, size) : '',
+      ...keys.map(([k, what]) => h('span', { class: 'c-key' }, kbd(k), h('span', null, what))),
+    );
+  };
+  update();
+  return { el, update };
 }
 
 /** What the model button shows: the provider (or agent) dimmed, then the model: "Claude Code / Opus 5.5". */
@@ -42,22 +205,6 @@ export function modelLabel(m) {
   const name = m ? m.name || m.id : 'Default model';
   return [modelMark(m?.provider, m?.id, 15, 'pv-mark'), pv ? h('span', { class: 'c-pv ell' }, pv) : null, pv ? h('span', { class: 'c-sl', 'aria-hidden': 'true' }, '/') : null, h('span', { class: 'c-mn ell' }, name), icon('chevron-down', 12, 'cbtn-chev')].filter(Boolean);
 }
-
-/**
- * The reasoning level as its own small menu ("Medium ⌄"), for a model that has levels. `onPick(level)` applies one;
- * `update(levels, level)` redraws it (no levels: hidden).
- */
-const LEVEL_NOTE = {
-  off: 'No reasoning: the fastest replies.',
-  none: 'No reasoning: the fastest replies.',
-  minimal: 'A quick look before it answers.',
-  low: 'Light reasoning for simple tasks.',
-  medium: 'Balanced: the usual choice.',
-  high: 'Deeper reasoning for hard problems. Slower.',
-  xhigh: 'Very deep reasoning. Slower, and more tokens.',
-  max: 'The longest thinking: slowest, and the most tokens.',
-  ultra: 'The longest thinking: slowest, and the most tokens.',
-};
 
 /**
  * The dot field behind the reasoning slider: a grid of dots up to the thumb, lit by slow drifting waves, brighter
@@ -161,11 +308,16 @@ export function effortChip(onPick) {
       const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
       if (d) return e.preventDefault(), set(at + d), commit();
       if (e.key === 'Home' || e.key === 'End') return e.preventDefault(), set(e.key === 'Home' ? 0 : last), commit();
+      // 1…9 jump straight to a level; Enter is done.
+      if (/^[1-9]$/.test(e.key) && +e.key - 1 <= last) return e.preventDefault(), set(+e.key - 1), commit();
+      if (e.key === 'Enter') return e.preventDefault(), pop.close();
     });
+    const scale = h('div', { class: 'rs-scale', 'aria-hidden': 'true' }, h('span', null, icon('bolt', 12), 'Faster'), h('span', null, 'Deeper', icon('brain', 12)));
+    const keys = h('div', { class: 'rs-keys', 'aria-hidden': 'true' }, h('span', null, kbd('←→'), 'adjust'), h('span', null, kbd(`1–${Math.min(9, last + 1)}`), 'jump'), h('span', null, kbd('Enter'), 'done'));
     const pop = popover(btn, [
       h('div', { class: 'rs-head' }, h('span', { class: 'rs-dots', 'aria-hidden': 'true' }, h('i'), h('i'), h('i')), name),
       info.model ? h('div', { class: 'rs-model ell' }, info.model) : null,
-      track, ticks, note,
+      scale, track, ticks, note, keys,
     ].filter(Boolean), { align: 'start', cls: 'rs-pop', label: 'Reasoning' });
     paint();
     const stop = dotField(field, () => ({ x: 20 + pos() * (field.clientWidth - 40), energy: last ? at / last : 0.5 }));
@@ -195,6 +347,7 @@ export function effortChip(onPick) {
     })) : null;
     btn.setAttribute('aria-label', `Reasoning: ${name}`);
     btn.replaceChildren(...[bars || h('span', null, name), icon('chevron-down', 12, 'cbtn-chev')]);
+    btn.dataset.level = level || 'default';
   };
   return { el: btn, update };
 }

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { DATA_DIR } from '../store.mjs';
-import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, readTail, textOf } from '../util.mjs';
+import { readJson, writeJson, uid, clip, makeTitle, pool, readHead, readTail, textOf, replaceFile } from '../util.mjs';
 import { protect, unprotect } from './secrets.mjs';
 import { PRESETS, clientFor, LIST_TIMEOUT } from './providers.mjs';
 import { setProviderOrg } from './openai.mjs';
@@ -365,14 +365,29 @@ function projectFolder(keyPath) {
  * Start a session file. `worktree` ({ repo, slug, path, branch, base, baseBranch, source }) is set for a session that
  * works on its own branch: it goes into the header, so a reopened session still knows its branch and where it came from.
  */
-export function createSession({ cwd, keyPath, model, provider, worktree, engine = 'builtin' }) {
+export function createSession({ cwd, keyPath, model, provider, worktree, engine = 'builtin', entries = [] }) {
   const id = uid('b');
   const dir = path.join(sessionsDir(), projectFolder(keyPath));
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${id}.jsonl`);
   const header = { type: 'session', engine: engine || 'builtin', version: 1, id, cwd, model: model || '', provider: provider || '', timestamp: new Date().toISOString() };
   if (worktree) header.worktree = worktree;
-  fs.writeFileSync(file, JSON.stringify(header) + '\n');
+  const body = [header, ...entries].map((entry) => JSON.stringify(entry)).join('\n') + '\n';
+  if (entries.length) {
+    const tmp = `${file}.tmp`;
+    const fd = fs.openSync(tmp, 'wx');
+    try {
+      try {
+        fs.writeFileSync(fd, body);
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+      replaceFile(tmp, file);
+    } finally {
+      fs.rmSync(tmp, { force: true });
+    }
+  } else fs.writeFileSync(file, body);
   return { id, file, header };
 }
 
@@ -432,6 +447,7 @@ export function loadSession(file) {
   let handoff = false;
   let teleported = null; // { to, url, at } once this conversation moved to another machine
   let native = ''; // the session id of the agent CLI (Claude Code, Codex, an ACP agent) that runs this conversation
+  let selectedModel;
   for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
     let o;
@@ -452,11 +468,12 @@ export function loadSession(file) {
       if (native) handoff = false;
     } else if (o.type === 'handoff') handoff = true; // moved here without the agent's own session: tell it what happened
     else if (o.type === 'teleported') teleported = { to: o.to || '', url: o.url || '', at: o.at || 0 };
+    else if (o.type === 'model' && typeof o.model === 'string') selectedModel = o.model;
     else if (o.type === 'usage' && o.id && o.usage) usageOf.set(o.id, o.usage); // an agent's turn total, known after its last message
     else if (o.type === 'message' && o.message) messages.push(o.message);
   }
   if (usageOf.size) for (const m of messages) if (m.id && usageOf.has(m.id)) m.usage = usageOf.get(m.id);
-  return { header, messages, title, titleBy, undone, checkpoints, worktreeState, native, handoff, teleported };
+  return { header, messages, title, titleBy, undone, checkpoints, worktreeState, native, handoff, teleported, selectedModel };
 }
 
 /** The last title entry in a stretch of session lines, or ''. */

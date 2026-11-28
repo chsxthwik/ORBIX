@@ -1,0 +1,157 @@
+/* The prompt bar (Home and every conversation). Loaded last; visual only, apart from the classes controls.js adds:
+   .c-model-grp (model and reasoning read as one chip), .c-foot / .c-keys (the keys under the box) and .typed on the
+   box while it holds something to send.
+   - A raised surface with a soft shadow; focus is a quiet accent ring, not a hard outline.
+   - One line to start, grows with the text.
+   - A thin moving line along the top edge while the agent works.
+   - The send button wakes up once there is something to send. */
+
+/* ================= the box ================= */
+html:root:root .composer {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 12px 12px 8px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-raise) 65%, var(--bg-field));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 4%, transparent), var(--shadow-2);
+  transition: border-color var(--f-dur) var(--ease-out), box-shadow var(--f-dur) var(--ease-out), background-color var(--f-dur) var(--ease-out);
+}
+html:root:root .composer:hover:not(:focus-within) { border-color: var(--line-3); }
+html:root:root .composer:focus-within {
+  border-color: var(--accent-line);
+  outline: 0;
+  background: color-mix(in srgb, var(--bg-raise) 80%, var(--bg-field));
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-2);
+}
+html:root:root .drop .composer { border-style: dashed; border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* One line to start; the box grows with the text (field-sizing in Chromium, composer.js elsewhere). */
+html:root:root .composer .c-ta,
+html:root:root .home .home-composer .c-ta { min-height: 1.6em; padding: 2px 8px 2px 0; line-height: 1.6; }
+html:root:root .composer .attach { padding: 0 8px 8px 0; }
+html:root:root .composer .c-row { gap: 4px; padding: 8px 0 0; margin-left: -8px; }
+
+/* ================= controls ================= */
+/* "+": a round filled button, the way in to files, commands, context and the shell. */
+html:root:root .c-row > .c-add { width: 30px; height: 30px; min-height: 30px; border-radius: 50%; background: var(--bg-raise-2); color: var(--fg-2); transition: background-color var(--f-dur) var(--ease-out), color var(--f-dur) var(--ease-out), transform var(--f-dur) var(--ease-out); }
+html:root:root .c-row > .c-add:hover { background: var(--bg-active); color: var(--fg); }
+html:root:root .c-row > .c-add[aria-expanded=true] { transform: rotate(45deg); background: var(--bg-active); color: var(--fg); }
+
+/* Model and reasoning: one chip, one chevron ("Opus 5.5  Medium ⌄"). Each half still opens its own picker. */
+.c-model-grp { display: inline-flex; flex: 0 1 auto; align-items: center; min-width: 0; height: 30px; border-radius: 8px; transition: background-color var(--f-dur) var(--ease-out); }
+.c-model-grp:hover { background: var(--bg-hover); }
+html:root:root .c-model-grp > .cbtn:hover:not(:disabled) { background: transparent; }
+.c-model-grp:has(> .c-effort:not([hidden])) > .cbtn:first-child { padding-right: 2px; }
+.c-model-grp:has(> .c-effort:not([hidden])) > .cbtn:first-child .cbtn-chev { display: none; }
+html:root:root .c-model-grp > .c-effort { padding-left: 4px; color: var(--fg-3); }
+html:root:root .c-model-grp > .c-effort:hover { color: var(--fg); }
+
+/* ================= send ================= */
+html:root:root .send:not(.stop) { transition: background-color var(--f-dur) var(--ease-out), color var(--f-dur) var(--ease-out), transform var(--f-dur-panel) var(--ease-out), opacity var(--f-dur) var(--ease-out); }
+html:root:root .composer:not(.typed) .send:not(.stop):not(.text):disabled { transform: scale(.9); opacity: .7; }
+html:root:root .composer.typed .send:not(.stop):not(:disabled) { transform: scale(1); box-shadow: 0 2px 10px -2px color-mix(in srgb, var(--accent-solid) 55%, transparent); }
+
+/* ================= working ================= */
+/* While the agent works: a thin line runs along the top edge (the box stays usable for steering). */
+html:root:root .composer.busy::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent) 50%, transparent) no-repeat;
+  background-size: 35% 100%;
+  animation: prompt-run 1.6s var(--ease-out) infinite;
+  pointer-events: none;
+}
+@keyframes prompt-run { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
+/* ================= under the box ================= */
+/* Status on the left, the keys on the right. The keys show while you are in the box or the agent works. */
+.c-foot { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 20px; padding: 0 8px; }
+html:root:root .c-foot > .c-status { flex: 1 1 auto; min-width: 0; padding: 0; }
+.c-keys { display: flex; flex: none; align-items: center; gap: 12px; margin-left: auto; color: var(--fg-3); font-size: var(--fs-12); white-space: nowrap; opacity: 0; transition: opacity var(--f-dur) var(--ease-out); }
+:is(.dock-col, .home-box):focus-within .c-keys, .dock-col:has(.composer.busy) .c-keys { opacity: 1; }
+.c-key { display: inline-flex; align-items: center; gap: 4px; }
+.c-keys kbd { height: 16px; min-width: 16px; padding: 0 4px; border-bottom-width: 1px; background: transparent; color: var(--fg-2); font-size: var(--fs-12); }
+.c-size { color: var(--fg-3); }
+@container dock (max-width: 480px) { .c-keys .c-key:not(:first-child) { display: none; } }
+
+/* ================= motion and contrast ================= */
+@media (prefers-reduced-motion: reduce) {
+  html:root:root :is(.composer, .send, .c-row > .c-add, .c-model-grp, .c-keys) { transition: none; }
+  html:root:root .composer.busy::after { animation: none; background-size: 100% 100%; opacity: .5; }
+}
+html.no-motion:root:root :is(.composer, .send, .c-row > .c-add, .c-model-grp, .c-keys) { transition: none; }
+html.no-motion:root:root .composer.busy::after { animation: none; background-size: 100% 100%; opacity: .5; }
+@media (forced-colors: active) {
+  html:root:root .composer { border-color: ButtonText; box-shadow: none; }
+html:root:root .composer:focus-within { outline: 2px solid Highlight; box-shadow: none; }
+  html:root:root .composer.busy::after { background: Highlight; }
+}
+
+/* ================= model picker ================= */
+/* A sharper panel: a crisp edge, a deeper shadow, the search glows in the accent, and a wider reasoning column. */
+html:root:root .modal.model-picker { width: min(600px, calc(100vw - 16px)); border-radius: 14px; border-color: var(--line-2); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fg) 5%, transparent), var(--shadow-pop, var(--shadow-2)); }
+html:root:root .modal.model-picker.with-side { width: min(780px, calc(100vw - 16px)); }
+html:root:root .mp-search { height: 48px; }
+html:root:root .mp-search:focus-within > svg { color: var(--accent); }
+html:root:root .mp-it { min-height: 36px; gap: 8px; transition: background-color var(--f-dur) var(--ease-out); }
+html:root:root .mp-it.sel { background: var(--bg-active); box-shadow: inset 2px 0 0 var(--accent); }
+.mp-it .mp-name mark { border-radius: 2px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); }
+.mp-caps { display: inline-flex; flex: none; align-items: center; gap: 4px; }
+.mp-cap { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: color-mix(in srgb, var(--fg) 6%, transparent); color: var(--fg-3); }
+.mp-it.sel .mp-cap { color: var(--fg-2); }
+.mp-hints { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+.mp-hint { display: inline-flex; align-items: center; gap: 4px; }
+.mp-hint kbd, .rs-keys kbd { height: 16px; min-width: 16px; padding: 0 4px; border-bottom-width: 1px; background: transparent; color: var(--fg-2); font-size: var(--fs-12); }
+
+/* Reasoning column: a scale from faster to deeper, each level with depth bars, its note under the list. */
+html:root:root .mp-side { width: 232px; padding: 0 8px 8px; }
+.mp-side-h > span { display: inline-flex; align-items: center; gap: 8px; }
+.mp-scale { display: flex; justify-content: space-between; margin: 0 8px 4px; color: var(--fg-3); font-size: var(--fs-12); }
+html:root:root .mp-levels { gap: 2px; }
+html:root:root .mp-lvl { height: 36px; gap: 12px; padding: 0 8px; border-radius: 8px; color: var(--fg-2); transition: background-color var(--f-dur) var(--ease-out), color var(--f-dur) var(--ease-out); }
+html:root:root .mp-lvl:hover, html:root:root .mp-lvl:focus-visible { background: var(--bg-hover); color: var(--fg); outline: 0; }
+html:root:root .mp-lvl:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-line); }
+html:root:root .mp-lvl.on { background: var(--accent-soft); color: var(--fg); }
+.mp-lvl-t { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mp-lvl-t small { color: var(--fg-3); font-size: var(--fs-12); }
+.mp-lvl-ok { color: var(--accent); }
+.mp-lvl-note { margin: 8px 8px 0; color: var(--fg-3); font-size: var(--fs-12); line-height: 1.5; text-wrap: pretty; }
+
+/* Depth bars: one per level, rising; lit up to the level. */
+.lvl-bars { display: inline-flex; flex: none; align-items: flex-end; gap: 2px; width: 28px; height: 14px; }
+.lvl-bars i { flex: 1; min-width: 2px; border-radius: 1px; background: var(--line-3); }
+.lvl-bars i:nth-child(1) { height: 30%; } .lvl-bars i:nth-child(2) { height: 45%; } .lvl-bars i:nth-child(3) { height: 60%; }
+.lvl-bars i:nth-child(4) { height: 75%; } .lvl-bars i:nth-child(5) { height: 88%; } .lvl-bars i:nth-child(n+6) { height: 100%; }
+.lvl-bars i.on { background: var(--accent); }
+
+/* ================= reasoning chooser (the chip's panel) ================= */
+html:root:root .menu.rs-pop { width: 340px; padding: 16px 20px 12px !important; border-radius: 14px; }
+.rs-scale { display: flex; justify-content: space-between; margin: 0 4px 8px; color: var(--fg-3); font-size: var(--fs-12); }
+.rs-scale > span { display: inline-flex; align-items: center; gap: 4px; }
+.rs-keys { display: flex; gap: 12px; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--fg-3); font-size: var(--fs-12); }
+.rs-keys > span { display: inline-flex; align-items: center; gap: 4px; }
+
+@media (max-width: 720px) { .mp-hints { display: none; } html:root:root .mp-side { width: 160px; } .mp-scale, .mp-lvl-note { display: none; } }
+@media (prefers-reduced-motion: reduce) { html:root:root :is(.mp-it, .mp-lvl) { transition: none; } }
+
+/* Quick open: a search field over the surfaces, each with its shortcut. */
+html:root:root .menu.qo-pop { width: 320px; padding: 0 !important; overflow: hidden; border-radius: 12px; }
+.qo-top { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; border-bottom: 1px solid var(--line); color: var(--fg-3); cursor: text; }
+.qo-top:focus-within > svg { color: var(--accent); }
+html:root:root .qo-q, html:root:root .qo-q:hover, html:root:root .qo-q:focus { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: 0; color: var(--fg); font-size: var(--fs-14); }
+.qo-q::-webkit-search-cancel-button { display: none; }
+.qo-list { display: flex; flex-direction: column; gap: 1px; max-height: min(420px, 60vh); padding: 4px; overflow-y: auto; }
+.qo-it { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 32px; padding: 0 8px; border-radius: 8px; color: var(--fg-2); font-size: var(--fs-13); text-align: left; }
+.qo-it svg { flex: none; color: var(--fg-3); }
+.qo-it.sel { background: var(--bg-active); color: var(--fg); }
+.qo-it.sel svg { color: var(--fg); }
+.qo-it .qo-l mark { border-radius: 2px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); }
+.qo-it .khint { flex: none; color: var(--fg-3); font-size: var(--fs-12); }
+.qo-empty { padding: 12px; color: var(--fg-3); font-size: var(--fs-13); }

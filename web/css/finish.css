@@ -1,9 +1,8 @@
 /* Calm: a finish layer over app.css. Flat surfaces, no glow, no gradients, one hairline where a line is needed.
-   The conversation is the interface: chrome recedes until the pointer reaches it. Built from theme tokens, so every
-   theme follows. */
+   The conversation is the interface: chrome recedes until the pointer reaches it. Built from theme tokens. */
 
 /* ---- Dark: no highlight edge, flat shadows ---- */
-:root:not([data-mode=light]):is([data-theme=dark], :not([data-theme])) { --hi: transparent;
+:root { --hi: transparent;
   --shadow-1: none;
   --shadow-2: 0 12px 32px -16px rgba(0,0,0,.8);
   --shadow-sheet: none;
@@ -11,25 +10,6 @@
 
 /* ---- frame ---- */
 .app:not(.overlay-side) .sidebar { background: var(--chrome); }
-
-/* Tool steps: one quiet line each, like a log. The icon tile and the rail go; status keeps its colour only when it
-   needs you (waiting, failed). Durations and the success tick appear under the pointer. */
-.tool::before { display: none; }
-.tool + .tool { margin-top: -12px; }
-.tool-head { height: 30px; gap: 8px; padding: 0 8px; }
-.tool-ico { width: 16px; height: 16px; background: none; outline: 0; color: var(--fg-3); }
-.tool-name { color: var(--fg-2); font-weight: var(--fw); }
-.tool-sum { color: var(--fg-3); font-size: var(--fs-13); }
-.tool-head:hover .tool-name { color: var(--fg); }
-.tool-head:hover .tool-sum { color: var(--fg-2); }
-.tool.done .tool-dur, .tool.done .st.ok { opacity: 0; transition: opacity var(--t2) var(--ease); }
-.tool.done .tool-head:hover .tool-dur, .tool.done .tool-head:hover .st.ok, .tool.done.open .tool-dur, .tool.done.open .st.ok { opacity: 1; }
-.tool.open { border-color: var(--line); background: var(--bg-raise); box-shadow: none; }
-.tool.running .tool-name { color: var(--fg); }
-.tool.running .tool-sum { color: var(--fg-2); }
-.tool.error:not(.open) .tool-name { color: var(--err); }
-.tool-exit { background: transparent; padding: 0; }
-details.think > summary { color: var(--fg-3); }
 
 /* Errors read as a line of red text with a thin rule, not a red box. */
 .msg .errbox { border: 0; border-left: 2px solid var(--err-line); border-radius: 0; background: transparent; box-shadow: none; padding: 2px 0 2px 16px; }
@@ -40,9 +20,7 @@ details.think > summary { color: var(--fg-3); }
 .c-status { color: var(--fg-3); }
 
 /* ---- primary actions: flat, no lamp ---- */
-.btn.primary { background: var(--fg); border-color: var(--fg); color: var(--bg); }
-.btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 86%, var(--bg)); transform: none; }
-.btn.primary:active:not(:disabled), .send:not(.stop):not(:disabled):active { transform: scale(.98); box-shadow: none; }
+.send:not(.stop):not(:disabled):active { transform: scale(.98); box-shadow: none; }
 
 /* ---- panels, menus and dialogs: flat surfaces over a dim, unblurred workspace ---- */
 .scrim { -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -51,10 +29,6 @@ details.think > summary { color: var(--fg-3); }
 .list-it.sel { background: var(--bg-active); }
 .list-it.sel .pal-ico { color: var(--fg); }
 .dot.ok, .dot.warn { box-shadow: none; }
-
-@media (forced-colors: active) {
-  .tool.done .tool-dur, .tool.done .st.ok { opacity: 1; }
-}
 
 /* "Show earlier messages" is a quiet link, not a button. */
 .earlier { border-color: transparent; background: transparent; color: var(--fg-3); font-weight: var(--fw); }

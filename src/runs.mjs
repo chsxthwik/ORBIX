@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { mkdirp, readJson, writeJson, clip } from './util.mjs';
+import { mkdirp, readJson, writeJson, clip, replaceFile } from './util.mjs';
 
 /** While a run is in one of these states an agent is working on it. */
 export const WORKING = new Set(['planning', 'executing']);
@@ -215,7 +215,7 @@ export class RunStore {
     const file = path.join(dir, `r${rev}.md`);
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, text);
-    fs.renameSync(tmp, file);
+    replaceFile(tmp, file);
     run.artifacts[kind] = { kind, rev, title: clip(String(title || '').trim(), 120) || ARTIFACTS[kind].title, author, at: Date.now(), size: text.length };
     this.save(run);
     this.append(id, 'artifact.revised', { kind, rev, author, size: text.length });

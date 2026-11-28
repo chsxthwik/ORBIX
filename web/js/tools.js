@@ -6,6 +6,7 @@ import { highlight, langFor } from './highlight.js';
 import { rpc } from './api.js';
 import { toolTitle, resultText, shellCommand } from './tool-title.mjs';
 import { wordDiff } from './word-diff.mjs';
+import { diffRows, splitDiffRows } from './diff-rows.mjs';
 
 const ICONS = { bash: 'terminal', read: 'eye', write: 'file', edit: 'pencil', grep: 'search', glob: 'search', todo: 'list', task: 'users', web_search: 'globe', web_fetch: 'globe' };
 const OPEN_BY_DEFAULT = new Set(['edit', 'write', 'todo', 'task']);
@@ -142,43 +143,54 @@ export function codeView(text, lang, { startLine = 1, maxHeight = '360px' } = {}
  * Diffs. Lines are parsed into rows first, then drawn: every line gets syntax colour for its file type, and a removed
  * line and the added line that replaced it get the exact words that changed marked.
  */
+let splitDiffs = false; // the layout chosen last, kept when a panel redraws its diffs
 const BIG_DIFF = 3000; // past this many lines, rows are drawn plain: no syntax colour, no word marks
 const extOf = (p) => (/\.([A-Za-z0-9]+)$/.exec(p || '') || [])[1] || '';
 const metaRow = (cls, raw) => ({ el: h('div', { class: `dl ${cls}` }, h('span', { class: 'ln' }), h('span', { class: 'ln' }), h('span', { class: 'tx' }, raw)) });
 
-/** Render a unified git diff string. `path` names the file when the diff has no header for it. */
+/** Show a git diff in either layout. `path` names the file when the diff has no header for it. */
 export function renderUnifiedDiff(text, path = '') {
-  const rows = [];
-  let lang = langFor(extOf(path));
-  let oldN = 0;
-  let newN = 0;
-  for (const raw of text.split('\n')) {
-    if (raw.startsWith('diff --git')) {
-      const name = raw.replace(/^diff --git a\/(.*) b\/.*$/, '$1');
-      lang = langFor(extOf(name));
-      rows.push({ el: h('div', { class: 'diff-file' }, name) });
-      continue;
-    }
-    if (raw.startsWith('+++ ') && !raw.startsWith('+++ /dev/null')) lang = langFor(extOf(raw.slice(4).replace(/^b\//, '').trim()));
-    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/.exec(raw);
-    if (hunk) {
-      oldN = +hunk[1];
-      newN = +hunk[2];
-      rows.push(metaRow('hunk', raw));
-      continue;
-    }
-    if (/^(index |--- |\+\+\+ |new file|deleted file|similarity|rename |old mode|new mode|Binary)/.test(raw)) {
-      if (!/^(--- |\+\+\+ |index )/.test(raw)) rows.push(metaRow('meta', raw));
-      continue;
-    }
-    if (raw === '') continue;
-    const c = raw[0];
-    if (c === '+') rows.push({ cls: 'add', a: '', b: newN++, text: raw.slice(1), lang });
-    else if (c === '-') rows.push({ cls: 'del', a: oldN++, b: '', text: raw.slice(1), lang });
-    else if (c === '\\') rows.push({ cls: 'meta', a: '', b: '', text: raw });
-    else rows.push({ cls: 'eq', a: oldN++, b: newN++, text: raw.slice(1), lang });
+  const rows = diffRows(text, path).map((row) => ({ ...row, lang: langFor(extOf(row.file)) }));
+  const view = h('div', { class: 'diff-layout-body' });
+  const setLayout = (split) => {
+    splitDiffs = split;
+    unified.setAttribute('aria-pressed', String(!split));
+    sideBySide.setAttribute('aria-pressed', String(split));
+    const root = h('div', { class: 'diffview' });
+    if (split) drawSplitDiff(root, rows);
+    else drawRows(root, rows.map((row) => ({
+      ...row,
+      el: row.cls === 'file' ? h('div', { class: 'diff-file' }, row.text)
+        : row.a === undefined ? metaRow(row.cls, row.text).el : null,
+    })));
+    view.replaceChildren(root);
+  };
+  const unified = h('button', { type: 'button', class: 'btn tiny', onclick: () => setLayout(false) }, 'Unified');
+  const sideBySide = h('button', { type: 'button', class: 'btn tiny', onclick: () => setLayout(true) }, 'Side by side');
+  setLayout(splitDiffs);
+  return h('div', { class: 'diff-layout' }, h('div', { class: 'diff-layout-bar', role: 'group', 'aria-label': 'Diff layout' }, unified, sideBySide), view);
+}
+
+function drawSplitDiff(root, rows) {
+  const plain = rows.length > BIG_DIFF;
+  if (!plain) pairChanges(rows);
+  const cell = (row, side) => {
+    if (!row) return h('div', { class: 'diff-side diff-side-empty', 'aria-hidden': 'true' });
+    const number = side === 'before' ? row.a : row.b;
+    const txt = h('span', { class: 'tx' }, !plain && row.lang ? highlight(row.text, row.lang) : row.text);
+    if (!plain && row.marks?.length) markRanges(txt, row.marks, row.cls);
+    return h('div', { class: `diff-side dl ${row.cls}` }, h('span', { class: 'ln' }, String(number)),
+      h('span', { class: 'sg' }, row.cls === 'add' ? '+' : row.cls === 'del' ? '−' : ''), txt);
+  };
+  root.classList.add('diff-split');
+  const frag = document.createDocumentFragment();
+  frag.append(h('div', { class: 'diff-split-row diff-split-head' }, h('span', null, 'Before'), h('span', null, 'After')));
+  for (const row of splitDiffRows(rows)) {
+    frag.append(row.meta
+      ? h('div', { class: `diff-file ${row.meta.cls}` }, row.meta.text)
+      : h('div', { class: 'diff-split-row' }, cell(row.before, 'before'), cell(row.after, 'after')));
   }
-  return drawRows(h('div', { class: 'diffview' }), rows);
+  root.append(frag);
 }
 
 /** One diff line: old number, new number, sign, and the text (syntax-coloured, changed words marked). */
@@ -308,17 +320,67 @@ function statusBadge(status) {
   return h('span', { class: 'st ok', title: 'Done' }, icon('check', 14));
 }
 
+/*
+ * A command as a terminal block: the `$ command` line, then its output (the last CLI_LINES lines until "Show more"),
+ * a copy button in the corner, and the exit code when it is not 0. At most CLI_MAX lines go in the page.
+ */
+const CLI_LINES = 12;
+const CLI_MAX = 2000;
+const EXIT_LINE = /\n?\[exit code (-?\d+)[^\]\n]*\]\s*$/;
+
+export function terminal(command, text, { exit = null, failed = false, note = '' } = {}) {
+  const raw = String(text ?? '').replace(/\r\n/g, '\n').replace(/^\n+/, '').replace(/\s+$/, '');
+  const colour = hasAnsi(raw) && raw.length <= 400000;
+  const plain = colour ? stripAnsi(raw) : raw;
+  const bad = failed || (exit != null && exit !== 0);
+  const box = h('div', { class: 'cli' + (bad ? ' bad' : '') });
+  box.append(h('pre', { class: 'cli-cmd' }, h('span', { class: 'cli-ps', 'aria-hidden': 'true' }, '$'), h('code', null, highlight(command.trim(), 'sh'))));
+  const copy = h('button', { class: 'cli-copy', type: 'button', title: 'Copy command and output', 'aria-label': 'Copy command and output' }, icon('copy', 13));
+  copy.dataset.done = '';
+  copy.addEventListener('click', () => copyButtonFeedback(copy, plain ? `$ ${command.trim()}\n${plain}` : command.trim()));
+  box.append(copy);
+  if (plain) {
+    const lines = plain.split('\n');
+    const rawLines = colour ? raw.split('\n') : lines;
+    const pre = h('pre', { class: 'cli-out' });
+    const fill = (n) => {
+      const part = rawLines.slice(-n).join('\n');
+      pre.replaceChildren(colour ? ansiFragment(part) : part);
+    };
+    fill(CLI_LINES);
+    box.append(pre);
+    if (lines.length > CLI_LINES) {
+      const hidden = Math.min(lines.length, CLI_MAX) - CLI_LINES;
+      const more = h('button', { class: 'cli-more', type: 'button', 'aria-expanded': 'false' }, `Show ${hidden} more line${hidden === 1 ? '' : 's'}`);
+      pre.classList.add('cut');
+      more.addEventListener('click', () => {
+        const open = more.getAttribute('aria-expanded') !== 'true';
+        fill(open ? CLI_MAX : CLI_LINES);
+        pre.classList.toggle('cut', !open);
+        pre.classList.toggle('all', open);
+        more.setAttribute('aria-expanded', String(open));
+        more.textContent = open ? 'Show less' : `Show ${hidden} more line${hidden === 1 ? '' : 's'}`;
+      });
+      box.append(more);
+    }
+  } else if (note) box.append(h('div', { class: 'cli-note' }, note));
+  if (exit != null && exit !== 0) box.append(h('div', { class: 'cli-exit num' }, `Exit code ${exit}`));
+  return box;
+}
+
+/** A command's exit code: from its details, else from the "[exit code N]" line its output ends with. */
+function exitOf(res) {
+  if (res?.details?.exitCode != null) return res.details.exitCode;
+  const m = EXIT_LINE.exec(resultText(res));
+  return m ? Number(m[1]) : null;
+}
+
 const BODY = {
   bash(call, res, ctx) {
-    const wrap = h('div');
-    wrap.append(h('pre', { class: 'out cmd' }, h('span', { class: 'prompt' }, '$ '), call.arguments?.command || ''));
-    const t = resultText(res).replace(/\n?\[exit code -?\d+\]\s*$/, '');
-    if (ctx.denied) wrap.append(h('div', { class: 'muted small' }, 'You denied this command.'));
-    else if (t.trim()) wrap.append(output(t, { cls: ctx.error ? 'err' : '', tail: true }));
-    else if (res && ctx.status !== 'running') wrap.append(h('div', { class: 'muted small' }, ctx.error ? 'Failed with no output.' : 'No output.'));
-    else if (ctx.status === 'running') wrap.append(h('div', { class: 'muted small' }, 'Running…'));
-    else if (ctx.status === 'waiting') wrap.append(h('div', { class: 'muted small' }, 'Waiting for your approval.'));
-    return wrap;
+    const text = resultText(res).replace(EXIT_LINE, '');
+    const exit = exitOf(res);
+    const note = ctx.denied ? 'You denied this command.' : ctx.status === 'running' ? 'Running…' : ctx.status === 'waiting' ? 'Waiting for your approval.' : res ? (ctx.error ? 'Failed with no output.' : 'No output.') : '';
+    return terminal(String(call.arguments?.command || ''), ctx.denied ? '' : text, { exit, failed: ctx.error, note });
   },
   read(call, res) {
     const d = res?.details;
@@ -451,8 +513,8 @@ export function renderToolCard(tab, call, run, open) {
   const dur = run?.startedAt && run?.endedAt ? run.endedAt - run.startedAt : finalRes?.details?.wallTimeMs;
   const summary = toolSummary(call, result, tab.workspace);
   const title = toolTitle(call, result, status, { rel: (p) => relPath(p || '', tab.workspace), summary });
-  const exit = call.name === 'bash' ? result?.details?.exitCode : null;
-  const extra = call.name === 'edit' ? diffStat(result?.details) : exit ? h('span', { class: 'tool-exit num', title: 'Exit code' }, `exit ${exit}`) : result?.details?.timedOut ? h('span', { class: 'tool-exit' }, 'timed out') : null;
+  const exit = call.name === 'bash' ? exitOf(result) : null;
+  const extra = call.name === 'edit' ? diffStat(result?.details) : exit ? h('span', { class: 'tool-exit num', title: `Exit code ${exit}` }, `exit ${exit}`) : result?.details?.timedOut ? h('span', { class: 'tool-exit' }, 'timed out') : null;
   const head = h(
     'button',
     // The plain title is for reading; the tool's own name and arguments stay one hover away.

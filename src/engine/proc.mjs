@@ -33,6 +33,8 @@ import { ARTIFACT_DEF, runPrompt } from './artifact.mjs';
 import { siteVerdict } from './policy.mjs';
 
 const MAX_TURNS = 100;
+/** Conversation modes: the agent as usual, plan first, read-only answers, or debugging (root cause first). */
+export const CHAT_MODES = ['agent', 'plan', 'ask', 'debug'];
 
 /** The request for one round of goal mode. */
 function goalPrompt(g) {
@@ -118,6 +120,7 @@ export class AgentProc extends EventEmitter {
     this.thinkingLevel = 'off';
     this.thinkingChosen = false; // until you choose a level, the session follows each model's own default
     this.planMode = false;
+    this.chatMode = ''; // 'ask' (read-only answers) or 'debug' (root cause first); plan mode is planMode
     this.autoCompact = true;
     this.allowAlways = new Set();
     this.allowedHosts = new Set();
@@ -187,6 +190,7 @@ export class AgentProc extends EventEmitter {
       if (ex.thinkingLevel) (this.thinkingLevel = ex.thinkingLevel), (this.thinkingChosen = true);
       if (ex.roles) this.roles = { fast: ex.roles.fast || '', plan: ex.roles.plan || '' };
       this.planMode = ex.planMode;
+      this.chatMode = ex.planMode ? '' : ex.chatMode || '';
       this.dropped = { ...zeroUsage(), cost: 0, ...ex.droppedUsage };
       this._recomputeUsage();
     }
@@ -208,7 +212,7 @@ export class AgentProc extends EventEmitter {
     const ok = (data) => ({ type: 'response', command: cmd.type, success: true, data });
     switch (cmd.type) {
       case 'get_state':
-        if (this.planMode && !this._planShown) {
+        if ((this.planMode || this.chatMode) && !this._planShown) {
           this._planShown = true;
           setImmediate(() => this._planStatus());
         }
@@ -224,7 +228,7 @@ export class AgentProc extends EventEmitter {
         return ok(this._stats());
       case 'get_context_budget': {
         const parts = await this._system({ budget: true });
-        this.contextPromptWeights = promptWeights(parts.text, parts.rules, this._toolDefs());
+        this.contextPromptWeights = promptWeights(parts.text, parts.rules, this._toolDefs(), parts);
         return ok(this._stats());
       }
       // The Context tab: the system prompt this conversation sends with its next turn.
@@ -239,6 +243,8 @@ export class AgentProc extends EventEmitter {
       }
       case 'set_thinking_level':
         return ok({ level: await this._setThinking(String(cmd.level || 'off')) });
+      case 'set_mode':
+        return ok({ mode: this._setMode(cmd.mode) });
       case 'compact': {
         const blocked = this._compactBlock();
         if (blocked) throw Object.assign(new Error(blocked), { status: 409 });
@@ -341,6 +347,7 @@ export class AgentProc extends EventEmitter {
       sessionId: this.sessionId,
       autoCompactionEnabled: this.autoCompact,
       planMode: this.planMode,
+      mode: this._mode(),
       contextUsage: this._contextUsage(),
       queuedMessageCount: this.queue.steer.length + this.queue.followUp.length,
       queuedMessages: { steering: this.queue.steer.map((x) => x.text), followUp: this.queue.followUp.map((x) => x.text), liveSteered: 0 },
@@ -357,6 +364,26 @@ export class AgentProc extends EventEmitter {
     return READ_ONLY.has(name) || name === 'artifact' || this.mcp.isReadOnly(name);
   }
 
+  /** The conversation mode: 'agent', 'plan', 'ask' or 'debug'. */
+  _mode() {
+    return this.planMode ? 'plan' : this.chatMode || 'agent';
+  }
+
+  /** Switch the conversation mode (saved with the session). Returns the mode now in effect. */
+  _setMode(mode) {
+    const next = String(mode || 'agent');
+    if (!CHAT_MODES.includes(next)) throw Object.assign(new Error(`Unknown mode "${next}".`), { status: 400 });
+    if (next === this._mode()) return next;
+    const plan = next === 'plan';
+    if (plan !== this.planMode && this.session) this._persistRaw({ type: 'plan', on: plan });
+    this.planMode = plan;
+    this.chatMode = next === 'ask' || next === 'debug' ? next : '';
+    if (this.session) this._persistRaw({ type: 'mode', mode: this.chatMode });
+    this._planStatus();
+    return next;
+  }
+
+
   _needsApproval(name) {
     return NEEDS_APPROVAL.has(name) || (this.mcp.has(name) && !this.mcp.isReadOnly(name));
   }
@@ -368,7 +395,8 @@ export class AgentProc extends EventEmitter {
 
   _toolDefs() {
     const defs = [...this.defs.filter((d) => d.name !== 'web_search' || this._searchOn()), ...(this.runInfo ? [ARTIFACT_DEF] : []), ...this.mcp.toolDefs()];
-    return this.planMode ? defs.filter((d) => this._isReadOnly(d.name)) : defs;
+    if (this.planMode) return defs.filter((d) => this._isReadOnly(d.name));
+    return this.chatMode === 'ask' ? defs.filter((d) => this._isReadOnly(d.name) || d.name === 'bash') : defs;
   }
 
   _emit(ev) {
@@ -393,6 +421,7 @@ export class AgentProc extends EventEmitter {
     this.sessionId = this.session.id;
     if (this.thinkingLevel !== 'off') appendEntry(this.session.file, { type: 'thinking', level: this.thinkingLevel });
     if (this.planMode) appendEntry(this.session.file, { type: 'plan', on: true });
+    else if (this.chatMode) appendEntry(this.session.file, { type: 'mode', mode: this.chatMode });
     if (this.title) appendEntry(this.session.file, { type: 'title', title: this.title }); // renamed before the first message
     // The sidebar lists saved files: tell it which file is this conversation now, so it is not listed twice.
     this._emit({ type: 'session_info_update', sessionId: this.sessionId });
@@ -531,7 +560,7 @@ export class AgentProc extends EventEmitter {
   /** The agent loop from the current conversation: model turn, tools, repeat until the model stops. */
   async _loop(conn) {
     const run = this.run;
-    const { text: system, rules } = await this._system({ budget: true });
+    const { text: system, ...promptParts } = await this._system({ budget: true });
     const once = { compactions: 0, overflow: false, empty: false, midStream: false, continues: 0, stop: false };
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       await this._drainSteer();
@@ -551,7 +580,7 @@ export class AgentProc extends EventEmitter {
       }
       this._emit({ type: 'turn_start' });
       run.turns++;
-      const asst = await this._streamAssistant({ conn, system, rules, retryEmpty: !once.empty, retryError: !once.midStream });
+      const asst = await this._streamAssistant({ conn, system, parts: promptParts, retryEmpty: !once.empty, retryError: !once.midStream });
       const calls = asst.content.filter((c) => c.type === 'toolCall');
       const end = (results = []) => this._emit({ type: 'turn_end', message: asst, toolResults: results });
       if (asst.stopReason === 'error' && !once.overflow && isOverflow(asst.errorMessage)) {
@@ -674,9 +703,11 @@ export class AgentProc extends EventEmitter {
     if (subagent) return subagentPrompt(buildSystemPrompt({ env, model, approvals: null, rules, ruleIndex }), tools);
     // A run has its own phase instructions; the generic plan-mode text would contradict them.
     let ruleText = '';
-    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, ruleIndex, skills: skillsPrompt(skills), mcp: this.mcp.instructionsText(), planMode: this.planMode && !this.runInfo, noCoAuthor: this.config.data.noCoAuthor === true, modelRules: this.config.data.modelRules || [], onRules: budget ? (s) => { ruleText = s; } : undefined });
+    const skillText = skillsPrompt(skills);
+    const mcpText = this.mcp.instructionsText();
+    const base = buildSystemPrompt({ env, model, approvals: this.config.data.approvals, rules, ruleIndex, skills: skillText, mcp: mcpText, planMode: this.planMode && !this.runInfo, mode: this.runInfo ? '' : this.chatMode, noCoAuthor: this.config.data.noCoAuthor === true, modelRules: this.config.data.modelRules || [], onRules: budget ? (s) => { ruleText = s; } : undefined });
     const text = this.runInfo ? `${base}\n\n${runPrompt({ phase: this.runInfo.phase(), branch: this.worktree?.branch, baseBranch: this.worktree?.baseBranch })}` : base;
-    return budget ? { text, rules: ruleText } : text;
+    return budget ? { text, rules: ruleText, skills: (skillText || '').trim(), mcp: (mcpText || '').trim() } : text;
   }
 
   _skills() {
@@ -698,7 +729,7 @@ export class AgentProc extends EventEmitter {
    * Stream one assistant turn into a message (shown live, then saved). With `retryEmpty` an empty reply, and with
    * `retryError` a reply whose connection broke mid-stream, is marked `discard` (kept for the record, not sent again).
    */
-  async _streamAssistant({ conn, system, rules = '', retryEmpty = false, retryError = false }) {
+  async _streamAssistant({ conn, system, parts = {}, retryEmpty = false, retryError = false }) {
     const signal = this.abortCtl.signal;
     const msg = { role: 'assistant', content: [], api: this.config.type(conn.provider || this.provider), provider: conn.provider || this.provider, model: conn.model || this.model, usage: { ...zeroUsage(), totalTokens: 0 }, stopReason: 'stop', timestamp: Date.now() };
     if (conn.thinking) msg.thinkingLevel = conn.thinking;
@@ -719,7 +750,7 @@ export class AgentProc extends EventEmitter {
     };
     const messages = this._context();
     const tools = this._toolDefs();
-    this.contextPromptWeights = promptWeights(system, rules, tools);
+    this.contextPromptWeights = promptWeights(system, parts.rules || '', tools, parts);
     const weights = contextWeights(messages, this.contextPromptWeights);
     const epoch = contextEpoch(this.messages);
     this._emit({ type: 'message_start', message: structuredClone(msg) });
@@ -869,7 +900,7 @@ export class AgentProc extends EventEmitter {
       conn ||= await this._connect();
       if (reason === 'manual' && !this.contextPromptWeights) {
         const parts = await this._system({ budget: true });
-        this.contextPromptWeights = promptWeights(parts.text, parts.rules, this._toolDefs());
+        this.contextPromptWeights = promptWeights(parts.text, parts.rules, this._toolDefs(), parts);
       }
       const tokensBefore = this._contextUsage().tokens;
       // Summaries are written by the fast model when one is chosen.
@@ -1110,7 +1141,7 @@ export class AgentProc extends EventEmitter {
   }
 
   _planStatus() {
-    this._emit({ type: 'extension_ui_request', id: `status-plan-${Date.now()}`, method: 'setStatus', statusKey: 'plan', statusText: this.planMode ? 'Plan mode: read-only (/plan to leave)' : '' });
+    this._emit({ type: 'extension_ui_request', id: `status-plan-${Date.now()}`, method: 'setStatus', statusKey: 'plan', statusText: this.planMode ? 'Plan mode: read-only (/plan to leave)' : this.chatMode === 'ask' ? 'Ask mode: read-only' : this.chatMode === 'debug' ? 'Debug mode' : '' });
   }
 
   _out(text) {

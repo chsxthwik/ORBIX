@@ -24,7 +24,6 @@ html.wrap-code .b-file > pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Diff colours for red-green colour blindness: blue for additions, orange for deletions. */
 html[data-diff=blue-orange] { --add-bg: rgba(77,150,255,.13); --del-bg: rgba(255,153,51,.13); --diff-add: #6CB0FF; --diff-del: #FFA552; }
-html[data-diff=blue-orange][data-mode=light] { --add-bg: rgba(20,100,210,.1); --del-bg: rgba(200,100,0,.1); --diff-add: #1458B8; --diff-del: #A85400; }
 html[data-diff=blue-orange] .dl.add .sg, html[data-diff=blue-orange] .dl.add .ln { color: var(--diff-add); }
 html[data-diff=blue-orange] .dl.del .sg, html[data-diff=blue-orange] .dl.del .ln { color: var(--diff-del); }
 

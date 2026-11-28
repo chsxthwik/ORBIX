@@ -17,14 +17,18 @@ import { renderMarkdown } from './markdown.js';
 import { openLink } from './engine.js';
 import { prUrl, splitMessage, joinMessage } from './pr-link.mjs';
 import { desktopBrowser, canShowInside, addressToUrl, rememberVisit } from './browser.js';
-import { btn } from './dialogs.js';
+import { btn, popover } from './dialogs.js';
+import { fuzzy, marked } from './composer.js';
 import { drawTerminal } from './terminal.js';
 import { effectiveKeys } from './keys.mjs';
+import { fileTextPreview, previewableText } from './file-preview.js';
 
 const P = { tab: 'changes', file: null, git: null, gitErr: null, stats: {}, msg: '', committing: false, shipped: null, dOpen: new Set(), dText: new Map(), tree: new Map(), open: new Set(), ws: null, busy: false };
 let root;
 let body;
 let tabsEl;
+let quickOpenButton;
+let tabsSignature = '';
 let inspector = null;
 
 const ALL_TABS = [['review', 'Review', 'check'], ['changes', 'Changes', 'branch'], ['files', 'Files', 'folder'], ['console', 'Terminal', 'terminal'], ['browser', 'Browser', 'globe'], ['todos', 'Tasks', 'list'], ['run', 'Inspect', 'activity'], ['ask', 'Side question', 'message'], ['context', 'Context', 'gauge'], ['new', 'New tab', 'compass']];
@@ -62,8 +66,10 @@ export function mountPanel(el) {
   P.tab = OPEN.includes(S.ui.rightTab) ? S.ui.rightTab : OPEN[0] || 'new';
   if (!OPEN.length) OPEN = ['new'];
   tabsEl = h('div', { class: 'ptabs', role: 'tablist', 'aria-label': 'Side panel' });
-  body = h('div', { class: 'pbody' });
-  root.append(tabsEl, body);
+  tabsSignature = '';
+  quickOpenButton = h('button', { class: 'ptab-new', type: 'button', 'data-tooltip': 'Open a surface, file or URL', 'aria-label': 'Open a surface, file or URL', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', onclick: (e) => quickOpen(e.currentTarget) }, icon('plus', 14));
+  body = h('div', { class: 'pbody', id: 'panel-content', role: 'tabpanel' });
+  root.append(h('div', { class: 'panel-bar' }, tabsEl, quickOpenButton), body);
   on('active', () => resetFor(cur()));
   on('home:project', () => !activeTab() && resetFor(cur()));
   // A link from a reply, with Settings → Browser → Open links in: Built-in browser.
@@ -95,6 +101,7 @@ export function mountPanel(el) {
   for (const event of ['tab:state', 'tab:status']) on(event, refreshCtx);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&P.tab==='run'&&activeTab())inspector?.update(activeTab());});
   for (const event of ['tab:tool','tab:state','tab:status','tab:messages']) on(event, refreshRun);
+  setInterval(watchFiles, 1500);
   resetFor(cur());
 }
 
@@ -104,6 +111,7 @@ const reviewRedraw = () => {
 };
 
 function resetFor(tab) {
+  document.querySelector('.qo-pop:not(.leaving)')?._close();
   syncTabs(tab);
   const ws = tab?.workspace || null;
   if (ws !== P.ws) {
@@ -124,7 +132,7 @@ export const panelTab = () => P.tab;
 export const gitState = (ws) => (ws && ws === P.ws ? P.git : null);
 
 /** Show surface `name`, opening its tab (next to the current one, or in place of a New tab) when it is not open. */
-export function showTab(name) {
+export function showTab(name, { focusSurface = true } = {}) {
   const t = cur();
   if (!known(name) || !allowed(name, t)) name = allowed('changes', t) ? 'changes' : 'new';
   if (!OPEN.includes(name)) {
@@ -146,12 +154,8 @@ export function showTab(name) {
   P.stats = {};
   P.shipped = null;
   drawTabs();
-  focusTerm = name === 'console';
+  focusTerm = focusSurface && name === 'console';
   draw();
-  // The new surface settles in (once per switch, not on every refresh of its content).
-  body.classList.remove('enter');
-  void body.offsetWidth;
-  body.classList.add('enter');
   if (name === 'changes') loadGit();
   if (name === 'review' && activeTab()?.worktree) loadReview(activeTab(), reviewRedraw);
   savePrefs({ rightTab: name, rightPanel: true });
@@ -159,10 +163,79 @@ export function showTab(name) {
   focusTerm = false;
   const field = { ask: '.ask-in', browser: '.br-url', new: '.nt-it:not(.off)' }[name];
   const input = field && body.querySelector(field);
-  if (input) queueMicrotask(() => input.isConnected && input.focus({ preventScroll: true }));
+  if (focusSurface && input) queueMicrotask(() => input.isConnected && input.focus({ preventScroll: true }));
 }
 
 let fresh = ''; // the tab just opened, which grows in once
+
+/**
+ * "+": a quick-open panel under the button. One field takes a surface name ("term"), an address ("localhost:3000",
+ * "github.com") or a file name; the rows below follow what you type. ↑ ↓ move, Enter opens, Esc closes.
+ */
+function quickOpen(anchor) {
+  if (document.querySelector('.qo-pop:not(.leaving)')) return document.querySelector('.qo-pop')._close();
+  const t = cur();
+  if (!t) return toast('Open a project first.', 'info', 2200);
+  const conv = !!t && !t.home;
+  const q = h('input', { type: 'search', class: 'qo-q', placeholder: 'Open a surface, file or URL…', 'aria-label': 'Open a surface, file or URL', spellcheck: 'false', autocomplete: 'off', role: 'combobox', 'aria-controls': 'qo-list', 'aria-expanded': 'true' });
+  const list = h('div', { class: 'qo-list', id: 'qo-list', role: 'listbox', 'aria-label': 'Surfaces' });
+  let rows = [];
+  let sel = 0;
+  const looksLikeUrl = (v) => /^(https?:\/\/|(?:localhost|127\.0\.0\.1)(?:[:/]|$)|\d{2,5}$)/i.test(v) || /^[^\s/]+\.[a-z]{2,}(:\d+)?(\/\S*)?$/i.test(v);
+  const go = (it) => {
+    if (!it) return;
+    pop.close();
+    it.run();
+  };
+  const draw = () => {
+    const v = q.value.trim();
+    const items = [];
+    if (v && looksLikeUrl(v)) items.push({ icon: 'globe', label: `Open ${v}`, note: 'In the built-in browser', run: () => emit('browse', addressToUrl(v)) });
+    // Only what can open here: the New tab page ("All surfaces") still lists the rest with the reason.
+    for (const it of surfaces(t)) {
+      if (it.off) continue;
+      const m = v ? fuzzy(v, it.label) : { score: 0, hits: [] };
+      if (m) items.push({ ...it, score: m.score, hits: m.hits });
+    }
+    if (v) items.sort((a, b) => (a.score ?? -1) - (b.score ?? -1));
+    if (v && conv && !/^https?:\/\//i.test(v)) items.push({ icon: 'file', label: `Find files named “${v}”`, note: 'Search this project', run: () => emit('search', 'files', v) });
+    if (!v) items.push({ icon: 'compass', label: 'All surfaces', note: 'Open the New tab page', run: () => newPanelTab() });
+    rows = items.map((it, i) => {
+      const key = it.id ? surfaceKey(it.id) : '';
+      const b = h('button', { class: 'qo-it', type: 'button', role: 'option', id: `qo-${i}`, tabindex: '-1', title: it.note || null, onclick: () => go(it), onmousemove: () => sel !== i && ((sel = i), mark()) },
+        icon(it.icon, 15),
+        h('span', { class: 'qo-l ell' }, it.hits ? marked(it.label, it.hits) : it.label),
+        h('span', { class: 'grow' }),
+        keyHint(key));
+      b._it = it;
+      return b;
+    });
+    replace(list, rows.length ? rows : h('div', { class: 'qo-empty' }, 'No matches.'));
+    sel = Math.max(0, Math.min(sel, rows.length - 1));
+    mark();
+  };
+  const mark = () => {
+    rows.forEach((r, i) => {
+      r.classList.toggle('sel', i === sel);
+      r.setAttribute('aria-selected', String(i === sel));
+    });
+    const r = rows[sel];
+    q.setAttribute('aria-expanded', String(!!r));
+    if (r) (q.setAttribute('aria-activedescendant', r.id), r.scrollIntoView({ block: 'nearest' }));
+    else q.removeAttribute('aria-activedescendant');
+  };
+  q.addEventListener('input', () => ((sel = 0), draw()));
+  q.addEventListener('keydown', (e) => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') return e.preventDefault(), (sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % Math.max(1, rows.length)), mark();
+    if (e.key === 'Tab') return pop.close();
+    if (e.key === 'Enter') return e.preventDefault(), go(rows[sel]?._it);
+  });
+  const pop = popover(anchor, [h('label', { class: 'qo-top' }, icon('search', 14), q), list], { align: 'end', cls: 'qo-pop', label: 'Open', onClose: () => anchor.setAttribute('aria-expanded', 'false') });
+  anchor.setAttribute('aria-expanded', 'true');
+  draw();
+  q.focus({ preventScroll: true });
+}
 
 /** "+": a New tab page next to the current tab (or the one already open). */
 function newPanelTab() {
@@ -175,7 +248,7 @@ function newPanelTab() {
 }
 
 /** Close tab `k`: the one beside it takes its place; the last one closed leaves a New tab. */
-function closePanelTab(k) {
+function closePanelTab(k, options) {
   const t = cur();
   const shown = TABS.map(([x]) => x);
   const at = shown.indexOf(k);
@@ -186,7 +259,7 @@ function closePanelTab(k) {
   if (!wasCur) return drawTabs();
   syncTabs(t);
   const left = TABS.map(([x]) => x);
-  showTab(left[Math.min(at, left.length - 1)] || 'new');
+  showTab(left[Math.min(at, left.length - 1)] || 'new', options);
 }
 
 /** The counts on the tabs: changed files, open tasks plus working helper agents (both under Tasks), files to review. */
@@ -288,15 +361,26 @@ function drawNew(t) {
     const n = e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
     rows[n]?.focus();
   });
-  body.append(h('div', { class: 'p-scroll nt-page' }, list));
+  body.append(h('div', { class: 'p-scroll nt-page' },
+    h('header', { class: 'nt-head' }, h('h2', null, 'Panel tools')),
+    list));
 }
 
 function drawTabs() {
-  const t = cur();
-  const badge = badges(t);
+  const badge = badges(cur());
+  const signature = JSON.stringify([P.tab, TABS.map(([k]) => [k, badge[k]])]);
+  if (signature === tabsSignature) return;
+  tabsSignature = signature;
+  const focused = tabsEl.contains(document.activeElement) ? document.activeElement.id : '';
+  body.setAttribute('aria-labelledby', `panel-tab-${P.tab}`);
   const tabs = TABS.map(([k, l, ic], index) => {
-    const tab = h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), type: 'button', role: 'tab', 'aria-label': l, tabindex: P.tab === k ? '0' : '-1', 'aria-selected': String(P.tab === k), title: l, onclick: () => showTab(k), onauxclick: (e) => e.button === 1 && (e.preventDefault(), closePanelTab(k)), onkeydown: (e) => {
-      if (e.key === 'Delete') return e.preventDefault(), closePanelTab(k);
+    const tab = h('button', { class: 'ptab' + (P.tab === k ? ' cur' : ''), id: `panel-tab-${k}`, type: 'button', role: 'tab', 'aria-label': l, 'aria-controls': 'panel-content', tabindex: P.tab === k ? '0' : '-1', 'aria-selected': String(P.tab === k), 'data-tooltip': l, onclick: () => showTab(k), onauxclick: (e) => e.button === 1 && (e.preventDefault(), closePanelTab(k)), onkeydown: (e) => {
+      if (e.key === 'Delete') {
+        e.preventDefault();
+        closePanelTab(k, { focusSurface: false });
+        tabsEl.querySelector('.ptab.cur')?.focus({ preventScroll: true });
+        return;
+      }
       let next;
       if (e.key === 'ArrowRight') next = (index + 1) % TABS.length;
       else if (e.key === 'ArrowLeft') next = (index + TABS.length - 1) % TABS.length;
@@ -304,15 +388,16 @@ function drawTabs() {
       else if (e.key === 'End') next = TABS.length - 1;
       if (next == null) return;
       e.preventDefault();
-      showTab(TABS[next][0]);
-      tabsEl.querySelectorAll('.ptab')[next]?.focus();
+      showTab(TABS[next][0], { focusSurface: false });
+      tabsEl.querySelector('.ptab.cur')?.focus({ preventScroll: true });
     } }, icon(ic, 14), h('span', { class: 'lbl ell' }, l), badge[k] ? h('span', { class: 'badge num' }, badge[k]) : null);
     const x = h('button', { class: 'ptab-x', type: 'button', tabindex: '-1', title: `Close ${l} (Delete)`, 'aria-label': `Close ${l}`, onclick: () => closePanelTab(k) }, icon('x', 12));
     return h('div', { class: 'ptab-w' + (P.tab === k ? ' cur' : '') + (fresh === k ? ' fresh' : '') }, tab, x);
   });
   fresh = '';
-  const plus = h('button', { class: 'ptab-new', type: 'button', title: 'New tab', 'aria-label': 'New tab', onclick: newPanelTab }, icon('plus', 14));
-  replace(tabsEl, tabs, plus);
+  replace(tabsEl, tabs);
+  tabsEl.querySelector('.ptab-w.cur')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (focused) (document.getElementById(focused) || tabsEl.querySelector('.ptab.cur'))?.focus({ preventScroll: true });
 }
 
 function draw() {
@@ -501,6 +586,49 @@ async function loadDir(p) {
   return listing.entries;
 }
 
+let watchedWorkspace;
+let watched = new Map();
+let checkingFiles = false;
+async function watchFiles() {
+  const t = cur();
+  if (!t || document.hidden || P.tab !== 'files' || !root?.getClientRects().length || checkingFiles) return;
+  if (t.workspace !== watchedWorkspace) {
+    watchedWorkspace = t.workspace;
+    watched = new Map();
+  }
+  const preview = P.file;
+  const dirs = [t.workspace, ...[...P.open].slice(0, 62)];
+  const paths = [...new Set([...(preview ? [preview.path] : []), ...dirs])];
+  checkingFiles = true;
+  try {
+    const { stamps } = await api.post('/api/fs/stamps', { paths });
+    if (cur()?.workspace !== t.workspace || P.tab !== 'files') return;
+    const changed = paths.filter((p, i) => watched.has(p) && watched.get(p) !== stamps[i]);
+    watched = new Map(paths.map((p, i) => [p, stamps[i]]));
+    for (const p of changed) P.tree.delete(p);
+    if (preview && !preview.loading && P.file === preview && changed.includes(preview.path)) {
+      let next;
+      try {
+        const { file } = await api.get(`/api/fs/read?path=${encodeURIComponent(preview.path)}`);
+        next = { ...file, source: preview.source };
+      } catch (e) {
+        next = { path: preview.path, error: e.message, source: preview.source };
+      }
+      if (P.file === preview && cur()?.workspace === t.workspace && P.tab === 'files') {
+        const scroll = body.querySelector('.p-scroll')?.scrollTop || 0;
+        P.file = next;
+        draw();
+        const viewer = body.querySelector('.p-scroll');
+        if (viewer) viewer.scrollTop = scroll;
+      }
+    } else if (changed.length && !P.file) draw();
+  } catch {
+    // Keep manual refresh available when a remote machine is temporarily unreachable.
+  } finally {
+    checkingFiles = false;
+  }
+}
+
 function drawFiles(t) {
   if (P.file) return drawViewer(t);
   const list = h('div', { class: 'tree' });
@@ -539,32 +667,41 @@ export async function viewFile(tab, p) {
   const clean = p.replace(/:(\d+)(-\d+)?$/, '');
   const abs = /^([A-Za-z]:[\\/]|\/|\\\\)/.test(clean) ? clean : joinP(tab.workspace, clean.replace(/^\.\//, ''));
   P.tab = 'files';
-  P.file = { path: abs, loading: true };
+  const pending = { path: abs, loading: true, source: false };
+  P.file = pending;
   savePrefs({ rightPanel: true, rightTab: 'files' });
   emit('panel:open');
   drawTabs();
   draw();
   try {
     const { file } = await api.get(`/api/fs/read?path=${encodeURIComponent(abs)}`);
-    P.file = file;
+    if (P.file === pending) P.file = { ...file, source: pending.source };
   } catch (e) {
-    P.file = { path: abs, error: e.message };
+    if (P.file === pending) P.file = { path: abs, error: e.message };
   }
   if (P.tab === 'files') draw();
 }
 
 function drawViewer(t) {
   const f = P.file;
-  body.append(h('div', { class: 'p-bar' }, iconBtn('chevron-left', 'Back to files', () => { P.file = null; draw(); }, 'sm'), h('span', { class: 'grow ell mono', title: f.path }, baseName(f.path)), iconBtn('at', 'Mention in the message', () => emit('insert', `@${relTo(t.workspace, f.path)} `), 'sm'), iconBtn('copy', 'Copy path', () => copyText(f.path), 'sm'), iconBtn('external', 'Show in Explorer', () => api.post('/api/fs/reveal', { path: f.path }).catch((e) => toast(e.message, 'error')), 'sm')));
+  const toggleSource = previewableText(f) ? btn(f.source ? 'Preview' : 'Source', () => { f.source = !f.source; draw(); }, 'sm') : null;
+  body.append(h('div', { class: 'p-bar' }, iconBtn('chevron-left', 'Back to files', () => { P.file = null; draw(); }, 'sm'), h('span', { class: 'grow ell mono', title: f.path }, baseName(f.path)), toggleSource, iconBtn('at', 'Mention in the message', () => emit('insert', `@${relTo(t.workspace, f.path)} `), 'sm'), iconBtn('copy', 'Copy path', () => copyText(f.path), 'sm'), iconBtn('external', 'Show in Explorer', () => api.post('/api/fs/reveal', { path: f.path }).catch((e) => toast(e.message, 'error')), 'sm')));
   const c = h('div', { class: 'p-scroll' });
   body.append(c);
   if (f.loading) c.append(skeleton(14, 'pad'));
   else if (f.error) c.append(errorState(f.error, { title: 'Couldn’t open this file.', retry: () => viewFile(t, f.path) }));
   else if (f.image) c.append(f.dataUrl ? h('img', { class: 'p-img', src: f.dataUrl, alt: baseName(f.path) }) : h('div', { class: 'empty' }, 'Image too large to preview.'));
+  else if (f.video && f.dataUrl) {
+    const video = h('video', { class: 'p-img', src: f.dataUrl, controls: true, preload: 'metadata', 'aria-label': baseName(f.path) });
+    video.addEventListener('error', () => c.replaceChildren(h('div', { class: 'empty' }, 'This video format or codec could not be played.')));
+    c.append(video);
+  } else if (f.video) c.append(h('div', { class: 'empty' }, 'Videos larger than 16 MB cannot be previewed.'));
   else if (f.binary) c.append(h('div', { class: 'empty' }, `Binary file (${f.size} bytes).`));
   else {
     if (f.truncated) c.append(h('div', { class: 'p-note' }, `Showing the first 2 MB of ${f.size} bytes.`));
-    c.append(codeView(f.content, langFor(f.ext), { maxHeight: 'none' }));
+    c.append(toggleSource && !f.source
+      ? h('div', { class: 'p-text-preview' }, fileTextPreview(f))
+      : codeView(f.content, langFor(f.ext), { maxHeight: 'none' }));
   }
 }
 
@@ -703,12 +840,13 @@ const diffKey = (f) => `${f.path}|${f.untracked ? 1 : 0}|${S.ui.diffIgnoreWs ===
 async function loadDiff(t, f) {
   const key = diffKey(f);
   if (P.dText.get(key)?.text != null || P.dText.get(key)?.loading) return;
-  P.dText.set(key, { loading: true });
+  const loading = { loading: true };
+  P.dText.set(key, loading);
   try {
     const { diff } = await api.get(`/api/git/diff?ws=${encodeURIComponent(t.workspace)}&file=${encodeURIComponent(f.path)}${f.untracked ? '&untracked=1' : ''}${S.ui.diffIgnoreWs === true ? '&w=1' : ''}`);
-    P.dText.set(key, { text: diff.text });
+    if (P.dText.get(key) === loading) P.dText.set(key, { text: diff.text });
   } catch (e) {
-    P.dText.set(key, { error: e.message });
+    if (P.dText.get(key) === loading) P.dText.set(key, { error: e.message });
   }
 }
 
@@ -723,6 +861,9 @@ async function toggleDiff(t, f) {
 
 function diffBody(t, f) {
   const d = P.dText.get(diffKey(f));
+  if (!d) loadDiff(t, f).then(() => {
+    if (P.tab === 'changes' && cur() === t && P.dOpen.has(f.path)) draw();
+  });
   if (!d || d.loading) return skeleton(5, 'pad');
   if (d.error) return errorState(d.error, { title: 'Couldn’t load this diff.', retry: async () => { P.dText.delete(diffKey(f)); await loadDiff(t, f); if (P.tab === 'changes' && cur() === t) draw(); } });
   if (!d.text.trim()) return h('div', { class: 'empty' }, 'No text changes.');

@@ -692,6 +692,47 @@ describe('GET /api/fs/list', () => {
   });
 });
 
+test('full-text search finds later messages, refreshes changed transcripts, and excludes deleted conversations', async () => {
+  const dir = path.join(DATA, 'sessions', 'history-search');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'full-text.jsonl');
+  const line = (o) => `${JSON.stringify(o)}\n`;
+  const message = (role, content) => line({ type: 'message', message: { role, content } });
+  const search = async (q) => (await api('GET', `/api/sessions/search?q=${encodeURIComponent(q)}`)).json.matches;
+  fs.writeFileSync(file, line({ type: 'session', id: 'history', cwd: TMP }) + message('user', 'Just the first prompt') + message('assistant', 'preface '.repeat(9000)) + message('assistant', 'The RUNE "PARITY" fingerprint is here.') + message('toolResult', 'private-tool-only'));
+  assert.deepEqual((await search('rune "parity"')).map(({ id }) => id), ['history']);
+  assert.match((await search('fingerprint'))[0].snippet, /fingerprint/);
+  assert.deepEqual(await search('private-tool-only'), []);
+  fs.appendFileSync(file, message('user', 'Another specific marker'));
+  assert.equal((await search('specific marker'))[0].id, 'history');
+  fs.appendFileSync(file, line({ type: 'rewind', count: 4 }));
+  assert.deepEqual(await search('specific marker'), []);
+  assert.equal((await api('POST', '/api/sessions/delete', { body: { paths: [file] } })).status, 200);
+  assert.deepEqual(await search('fingerprint'), []);
+});
+
+test('portable transcript import creates a clean conversation in the selected project', async () => {
+  const project = (await api('POST', '/api/workspaces', { body: { path: TMP } })).json.workspace;
+  const transcript = { format: 'orbix-transcript', version: 1, title: 'Portable conversation', messages: [
+    { role: 'user', text: 'A saved question', toolCalls: [{ command: 'echo not imported' }] },
+    { role: 'assistant', text: 'A saved answer' },
+  ], cwd: 'must not be imported', provider: 'must not be imported' };
+  const send = (value, projectId = project.id) => api('POST', '/api/sessions/import', { body: { projectId, transcript: value } });
+  assert.equal((await send({ ...transcript, version: 2 })).status, 400);
+  assert.equal((await send({ ...transcript, messages: [{ role: 'system', text: 'No' }] })).status, 400);
+  assert.equal((await send(transcript, 'missing-project')).status, 400);
+  const result = await send(transcript);
+  assert.equal(result.status, 200, result.text);
+  const { session } = result.json;
+  const saved = fs.readFileSync(session.path, 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(session.cwd, TMP);
+  assert.equal(saved[0].engine, 'builtin');
+  assert.deepEqual(saved.slice(2).map((e) => e.message.content), [[{ type: 'text', text: 'A saved question' }], [{ type: 'text', text: 'A saved answer' }]]);
+  assert.equal(saved[2].message.toolCalls, undefined);
+  assert.equal((await api('GET', '/api/sessions')).json.sessions.find((s) => s.id === session.id).title, transcript.title);
+  await api('POST', '/api/workspaces/remove', { body: { id: project.id } });
+});
+
 describe('POST /api/sessions/rename', () => {
   const sessions = path.join(DATA, 'sessions');
   const rename = (p, title) => api('POST', '/api/sessions/rename', { body: { path: p, title } });

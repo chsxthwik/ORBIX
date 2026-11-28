@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { once } from 'node:events';
 import { rmTmp } from './fixtures/tmp.mjs';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-agents-'));
@@ -72,6 +73,10 @@ describe('a conversation on an ACP agent', () => {
     });
     await p.start();
     assert.equal(p.nativeId, 'fake-1');
+    assert.deepEqual(p._state().agent.acp, { protocolVersion: 1, version: '0.1.0', loadSession: true, image: false });
+    assert.deepEqual((await p.request({ type: 'get_available_models' })).data.models.map((m) => m.id), ['fake/small', 'fake/large']);
+    await p.request({ type: 'set_model', modelId: 'fake/large' });
+    assert.equal(p._state().model.id, 'fake/large');
     const r = await p._turn('please run cmd');
     assert.equal(r.status, 'completed');
     assert.equal(r.toolCalls, 1);
@@ -81,8 +86,10 @@ describe('a conversation on an ACP agent', () => {
     assert.deepEqual(roles, ['user', 'assistant', 'toolResult', 'assistant']);
     assert.equal(p.messages[2].content[0].text, 'hi');
     assert.equal(p.messages[3].content.find((c) => c.type === 'text').text, 'Hello from fake');
+    assert.ok(!JSON.stringify(p.messages).includes('UNRELATED'));
     assert.ok(p.messages[1].content.some((c) => c.type === 'thinking'));
     assert.ok(events.some((e) => e.type === 'agent_end'));
+    await p.request({ type: 'set_model', modelId: 'fake/small' });
     file = p.session.file;
     await p.stop(500);
     const saved = loadSession(file);
@@ -122,11 +129,46 @@ describe('a conversation on an ACP agent', () => {
     await p.start();
     assert.equal(p.messages.length, 4);
     assert.equal(p.nativeId, 'fake-1');
+    assert.equal(p._state().model.id, 'fake/small');
+    assert.equal((await p.request({ type: 'get_available_commands' })).data.commands[0].name, 'review');
     assert.ok(!texts.some((t) => t.includes('REPLAYED')));
     const r = await p._turn('hello');
     assert.equal(r.status, 'completed');
     assert.equal(p.messages.length, 6);
     await p.stop(500);
+  });
+
+  test('a one-time approval cannot grant a persistent ACP permission, and cancel settles a turn', async () => {
+    const p = new HarnessProc({ id: 'p5', backend, workspace: ws, config, agent, registry, noSession: true });
+    p.on('event', (ev) => ev.type === 'extension_ui_request' && ev.method === 'select' && p.send({ type: 'extension_ui_response', id: ev.id, value: 'Allow once' }));
+    await p.start();
+    try {
+      await p._turn('cmd persistent-only');
+      assert.equal(p.messages.find((m) => m.role === 'toolResult').isError, true);
+      const started = new Promise((resolve) => {
+        const check = (ev) => {
+          if (ev.type !== 'message_start' || ev.message.role !== 'assistant') return;
+          p.off('event', check);
+          resolve();
+        };
+        p.on('event', check);
+      });
+      const turn = p._turn('wait');
+      await started;
+      await p.request({ type: 'abort' });
+      assert.equal((await turn).status, 'aborted');
+    } finally {
+      await p.stop(500);
+    }
+  });
+
+  test('an incompatible ACP handshake fails before creating a session and closes the child', async () => {
+    const { AcpDriver } = await import('../src/harness/acp.mjs');
+    const driver = new AcpDriver({ backend, argv: [process.execPath, FAKE, '--serve', '--wrong-version'], cwd: ws });
+    const exit = once(driver, 'exit');
+    await assert.rejects(driver.start({}), /reported ACP protocol 99/);
+    await exit;
+    assert.equal(driver.sessionId, '');
   });
 });
 

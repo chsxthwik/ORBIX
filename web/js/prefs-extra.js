@@ -116,21 +116,21 @@ export function lookExtraGroups() {
   const u = S.ui;
   return [
     group('Code', null,
-      row('Code font', pick('Code font', CODE_FONTS.map(([k, l]) => [k, l]), CODE_FONTS.some(([k]) => k === u.codeFont) ? u.codeFont : 'default', (v) => savePrefs({ codeFont: v })), 'Code blocks, diffs and file previews. A font that is not installed falls back to the next one.'),
+      row('Code font', pick('Code font', CODE_FONTS.map(([k, l]) => [k, l]), CODE_FONTS.some(([k]) => k === u.codeFont) ? u.codeFont : 'default', (v) => savePrefs({ codeFont: v })), 'Code blocks, diffs and file previews.'),
       row('Code font size', pick('Code font size', [['default', 'Default'], ...CODE_SIZES.map((n) => [String(n), `${n}px`])], CODE_SIZES.includes(u.codeFontSize) ? String(u.codeFontSize) : 'default', (v) => savePrefs({ codeFontSize: v === 'default' ? null : Number(v) }))),
-      row('Word wrap', toggle(u.wrapCode === true, (v) => savePrefs({ wrapCode: v }), 'Word wrap'), 'Wrap long lines in code blocks and file previews instead of scrolling sideways.')),
+      row('Word wrap', toggle(u.wrapCode === true, (v) => savePrefs({ wrapCode: v }), 'Word wrap'), 'Wrap long lines instead of scrolling sideways.')),
     group('Layout', null,
-      row('Conversations as tabs', toggle(u.topTabs === true, (v) => savePrefs({ topTabs: v }), 'Conversations as tabs'), 'The open conversations in a row of tabs under the toolbar, like a browser. The sidebar stays as it is.')),
+      row('Conversations as tabs', toggle(u.topTabs === true, (v) => savePrefs({ topTabs: v }), 'Conversations as tabs'), 'Open conversations as tabs under the toolbar.')),
     group('Text', null,
-      row('Message box font size', pick('Message box font size', [['default', 'Default'], ...PROMPT_SIZES.map((n) => [String(n), `${n}px`])], PROMPT_SIZES.includes(u.promptFontSize) ? String(u.promptFontSize) : 'default', (v) => savePrefs({ promptFontSize: v === 'default' ? null : Number(v) })), 'The text you type, on Home and in conversations.'),
-      row('Terminal font size', pick('Terminal font size', [['default', 'Default'], ...TERM_SIZES.map((n) => [String(n), `${n}px`])], TERM_SIZES.includes(u.termFontSize) ? String(u.termFontSize) : 'default', (v) => savePrefs({ termFontSize: v === 'default' ? null : Number(v) })), 'Open terminals change at once.'),
-      row('Font smoothing', toggle(u.fontSmoothing !== false, (v) => savePrefs({ fontSmoothing: v }), 'Font smoothing'), 'Thinner, smoother letters. Off uses the system’s own rendering, which looks bolder on some screens.'),
-      row('Reasoning level', seg('Reasoning level', [['label', 'Name'], ['bars', 'Bars']], u.effortDisplay === 'bars' ? 'bars' : 'label', (v) => savePrefs({ effortDisplay: v })), 'How the message box shows the reasoning level: “Medium”, or bars that fill up.')),
+      row('Message box font size', pick('Message box font size', [['default', 'Default'], ...PROMPT_SIZES.map((n) => [String(n), `${n}px`])], PROMPT_SIZES.includes(u.promptFontSize) ? String(u.promptFontSize) : 'default', (v) => savePrefs({ promptFontSize: v === 'default' ? null : Number(v) })), 'The text you type.'),
+      row('Terminal font size', pick('Terminal font size', [['default', 'Default'], ...TERM_SIZES.map((n) => [String(n), `${n}px`])], TERM_SIZES.includes(u.termFontSize) ? String(u.termFontSize) : 'default', (v) => savePrefs({ termFontSize: v === 'default' ? null : Number(v) })), 'Open terminals update at once.'),
+      row('Font smoothing', toggle(u.fontSmoothing !== false, (v) => savePrefs({ fontSmoothing: v }), 'Font smoothing'), 'Thinner letters. Off uses system rendering.'),
+      row('Reasoning level', seg('Reasoning level', [['label', 'Name'], ['bars', 'Bars']], u.effortDisplay === 'bars' ? 'bars' : 'label', (v) => savePrefs({ effortDisplay: v })), 'How the message box shows the reasoning level.')),
     group('Diffs', null,
-      row('Ignore whitespace', toggle(u.diffIgnoreWs === true, (v) => savePrefs({ diffIgnoreWs: v }), 'Ignore whitespace'), 'Changes panel: leave out lines where only spaces or indentation changed.'),
-      row('Diff colors', seg('Diff colors', [['red-green', 'Red & green'], ['blue-orange', 'Blue & orange']], u.diffColors === 'blue-orange' ? 'blue-orange' : 'red-green', (v) => savePrefs({ diffColors: v })), 'Blue & orange is easier to tell apart with red-green colour blindness.')),
+      row('Ignore whitespace', toggle(u.diffIgnoreWs === true, (v) => savePrefs({ diffIgnoreWs: v }), 'Ignore whitespace'), 'Hide whitespace-only changes in the Changes panel.'),
+      row('Diff colors', seg('Diff colors', [['red-green', 'Red & green'], ['blue-orange', 'Blue & orange']], u.diffColors === 'blue-orange' ? 'blue-orange' : 'red-green', (v) => savePrefs({ diffColors: v })), 'Blue & orange suits red-green color blindness.')),
     group('Motion', null,
-      row('Animations', seg('Animations', [['full', 'On'], ['off', 'Off']], u.motion === 'off' ? 'off' : 'full', (v) => savePrefs({ motion: v })), 'Off: panels, menus and lists change at once. Windows’ reduce-motion setting does the same.')),
+      row('Animations', seg('Animations', [['full', 'On'], ['off', 'Off']], u.motion === 'off' ? 'off' : 'full', (v) => savePrefs({ motion: v })), 'Off: panels and menus change at once.')),
   ];
 }
 
@@ -139,11 +139,11 @@ export function generalExtraGroups() {
   const u = S.ui;
   return [
     group('Time', null,
-      row('Time format', seg('Time format', [['relative', 'Relative'], ['12h', '12-hour'], ['24h', '24-hour']], ['12h', '24h'].includes(u.timeFormat) ? u.timeFormat : 'relative', (v) => savePrefs({ timeFormat: v })), 'When each message was sent. Relative shows “5m ago”; the exact time is in the tooltip either way.')),
+      row('Time format', seg('Time format', [['relative', 'Relative'], ['12h', '12-hour'], ['24h', '24-hour']], ['12h', '24h'].includes(u.timeFormat) ? u.timeFormat : 'relative', (v) => savePrefs({ timeFormat: v })), 'Message times. The exact time is always in the tooltip.')),
     group('Sidebar', null,
-      row('Running section', toggle(showRunningSection(), (v) => savePrefs({ sidebarRunning: v }), 'Running section'), 'Working conversations, and ones that need you, listed on top of the sidebar. Off leaves them only under their projects.')),
+      row('Running section', toggle(showRunningSection(), (v) => savePrefs({ sidebarRunning: v }), 'Running section'), 'Working conversations and ones that need you, at the top.')),
     group('Message box', null,
-      row('Skills in the slash menu', toggle(skillsInSlashMenu(), (v) => savePrefs({ skillsInSlash: v }), 'Skills in the slash menu'), 'List your skills with the commands when you type /. Off: commands only (skills stay in the Context menu).')),
+      row('Skills in the slash menu', toggle(skillsInSlashMenu(), (v) => savePrefs({ skillsInSlash: v }), 'Skills in the slash menu'), 'List skills with commands when you type /.')),
     group('Git', null,
       row('No AI credit in commits', toggle(S.engine?.noCoAuthor === true, async (v) => {
         try {
@@ -153,13 +153,13 @@ export function generalExtraGroups() {
         } catch (e) {
           toast(e.message, 'error');
         }
-      }, 'No AI credit in commits'), 'Commits and pull requests carry no Co-authored-by or “generated with” lines. Applies to ORBIX’s agent and Claude Code, from the next conversation.')),
+      }, 'No AI credit in commits'), 'No Co-authored-by or “generated with” lines, from ORBIX’s agent or Claude Code.')),
     group('Confirmations', null,
-      row('Ask before deleting a conversation', toggle(askBeforeDelete(), (v) => savePrefs({ confirmDelete: v }), 'Ask before deleting a conversation'), 'Off deletes at once. It can still be restored from Settings → Conversations for 30 days.'),
-      row('Ask before closing a working conversation', toggle(askBeforeClose(), (v) => savePrefs({ confirmClose: v }), 'Ask before closing a working conversation'), 'Closing stops the agent while it is still working.'),
-      row('Ask before archiving a conversation', toggle(askBeforeArchive(), (v) => savePrefs({ confirmArchive: v }), 'Ask before archiving a conversation'), 'Archived conversations leave the sidebar; the filter beside Projects shows them again.'),
+      row('Ask before deleting a conversation', toggle(askBeforeDelete(), (v) => savePrefs({ confirmDelete: v }), 'Ask before deleting a conversation'), 'Deleted conversations can be restored for 30 days.'),
+      row('Ask before closing a working conversation', toggle(askBeforeClose(), (v) => savePrefs({ confirmClose: v }), 'Ask before closing a working conversation'), 'Closing stops the agent.'),
+      row('Ask before archiving a conversation', toggle(askBeforeArchive(), (v) => savePrefs({ confirmArchive: v }), 'Ask before archiving a conversation')),
       row('Ask before unpinning a conversation', toggle(askBeforeUnpin(), (v) => savePrefs({ confirmUnpin: v }), 'Ask before unpinning a conversation')),
-      row('Ask before killing a terminal', toggle(askBeforeKillTerminal(), (v) => savePrefs({ confirmTerminalClose: v }), 'Ask before killing a terminal'), 'Killing a terminal stops whatever is running in it.')),
+      row('Ask before killing a terminal', toggle(askBeforeKillTerminal(), (v) => savePrefs({ confirmTerminalClose: v }), 'Ask before killing a terminal'), 'Stops what runs in it.')),
   ];
 }
 
@@ -179,11 +179,11 @@ export function agentOptionGroups() {
   const e = S.engine || {};
   return [
     group('Safety', null,
-      row('Command Guard', toggle(e.commandGuard !== false, (v) => engineSet({ commandGuard: v }), 'Command Guard'), 'Never runs commands that wreck a computer or an account: deleting a whole home folder or drive, wiping or formatting a disk, a fork bomb, deleting a hosted repository. Applies to ORBIX’s agent and to the commands Claude Code, Codex and ACP agents ask to run. Not a sandbox.')),
+      row('Command Guard', toggle(e.commandGuard !== false, (v) => engineSet({ commandGuard: v }), 'Command Guard'), 'Blocks commands that wipe a disk, drive, home folder or hosted repository, for every agent. Not a sandbox.')),
     group('Claude Code', null,
-      row('Claude Code subagents', toggle(e.claudeNoSubagents !== true, (v) => engineSet({ claudeNoSubagents: !v }), 'Claude Code subagents'), 'Off hides Claude Code’s own Task tool, so it works in one thread you can follow. From the next Claude Code conversation.')),
+      row('Claude Code subagents', toggle(e.claudeNoSubagents !== true, (v) => engineSet({ claudeNoSubagents: !v }), 'Claude Code subagents'), 'Off hides its Task tool, so it works in one thread. New conversations only.')),
     group('Retries', null,
-      row('Longest automatic wait', pick('Longest automatic wait', [['0', 'Don’t wait'], ['60', '1 minute'], ['300', '5 minutes'], ['900', '15 minutes'], ['3600', '1 hour']], String(Number.isFinite(e.retryMaxWait) ? e.retryMaxWait : 60), (v) => engineSet({ retryMaxWait: Number(v) })), 'When a provider is busy or rate-limited and says when to try again, ORBIX waits up to this long and retries by itself. A longer pause is reported instead.')),
+      row('Longest automatic wait', pick('Longest automatic wait', [['0', 'Don’t wait'], ['60', '1 minute'], ['300', '5 minutes'], ['900', '15 minutes'], ['3600', '1 hour']], String(Number.isFinite(e.retryMaxWait) ? e.retryMaxWait : 60), (v) => engineSet({ retryMaxWait: Number(v) })), 'Retry a busy or rate-limited provider after its requested wait, up to this long.')),
   ];
 }
 
@@ -207,7 +207,7 @@ export function browserExtraGroups() {
       row('Search engine', pick('Search engine', SEARCH_ENGINES.map(([k, l]) => [k, l]), cur, (v) => {
         customRow.hidden = v !== 'custom';
         savePrefs({ searchEngine: v });
-      }), 'What runs when you type words, not an address, in the built-in browser.'),
+      }), 'For words typed in the built-in browser’s address bar.'),
       customRow),
   ];
 }

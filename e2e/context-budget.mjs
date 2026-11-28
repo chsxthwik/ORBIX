@@ -54,12 +54,18 @@ try {
   await page.mouse('.tb-ctx');
   await page.until(`document.querySelector('.ctx-popover .ctx-pop-list')`, 'critical context breakdown');
   const rows = await page.text('.ctx-pop-list');
-  for (const label of ['System prompt', 'Project rules', 'Files attached', 'Conversation history', 'Tool results']) assert.ok(rows.includes(label));
+  for (const label of ['System prompt', 'Tool definitions', 'Conversation history']) assert.ok(rows.includes(label), label);
+  for (const label of ['Project rules', 'Files attached', 'Tool results']) assert.ok(!rows.includes(label), label);
+  await page.press('Escape', 27);
+  await page.mouse('.c-ctx');
+  await page.until(`document.querySelector('.cx-pop .cx-rows')?.textContent.includes('Conversation history')`, 'composer context breakdown');
+  await page.press('Escape', 27);
+  await page.mouse('.tb-ctx');
   await page.click('Compact now', '.ctx-popover');
   await page.until(`document.querySelector('.ctx-pop-outcome')?.textContent.includes('tokens saved')`, 'tokens saved in the popover');
   await page.until(`document.querySelector('.ctx-pop-cost')?.textContent.includes('$0.0984')`, 'summary cost reflected in the session');
   assert.ok(await page.eval(`return window.__contextTab.messages.some(m => m.role === 'user' && m.content[0].text === 'critical fixture: keep this latest message.')`));
-  console.log('Electron: 80% amber, 95% red, five buckets, reported usage, running cost, compact savings and latest message verified.');
+  console.log('Electron: context warnings, measured buckets, composer context, reported usage, cost and compaction verified.');
 } catch (e) {
   if (page) console.error(await page.eval(`return {
     meter: document.querySelector('.tb-ctx')?.textContent,

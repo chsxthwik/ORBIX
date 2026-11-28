@@ -90,7 +90,7 @@ Layout classes on `#app`: `side-rail` (tested), `no-side`, `no-panel` (tested), 
   - `.row-acts` holds pin (`.on`), archive and more.
   - `.pin-sec` "Pinned". `.s-more[aria-expanded]` "Show N more" (8 shown by default).
   - `.s-none` (tested): "No conversations yet · Start one" / "All pinned".
-- **Hover card:** `bindHoverCards()` in shell.js shows `.hcard[role=tooltip]` (`.hc-t`, `.hc-l`, `.hc-st`, `.hc-p`) after 450ms.
+- **Hover card:** `bindHoverCards()` in shell.js shows `.hcard[role=tooltip]` (`.hc-t`, `.hc-p`) after 450ms, tucked into the corner of the row. On the rail, a project icon previews its latest conversation (`data-peek`).
 - **Keys:** F2 rename, P pin, A archive, Del delete, Shift+F10 / ContextMenu opens the menu, arrows / Home / End move. Double-click renames.
 
 ## 8. Sidebar footer

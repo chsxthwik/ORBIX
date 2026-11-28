@@ -25,17 +25,12 @@ function loadXterm() {
 }
 
 const css = (name, fallback) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-function theme() {
-  const light = document.documentElement.dataset.mode === 'light';
-  const base = light
-    ? { foreground: '#1F1F1D', cursor: '#0A0A0B', cursorAccent: '#FFFFFF', selectionBackground: 'rgba(8,122,63,.2)',
-        black: '#1F1F1D', red: '#C8263E', green: '#2F7D16', yellow: '#946200', blue: '#2557C9', magenta: '#B0247A', cyan: '#127D8C', white: '#6B6B66',
-        brightBlack: '#5A5A55', brightRed: '#E0344F', brightGreen: '#3B9A1D', brightYellow: '#B07700', brightBlue: '#3A6FE0', brightMagenta: '#D0308F', brightCyan: '#1898A8', brightWhite: '#1F1F1D' }
-    : { foreground: '#E4E4E0', cursor: '#F4F4F0', cursorAccent: '#0A0A0B', selectionBackground: 'rgba(61,242,140,.26)',
-        black: '#2A2A2E', red: '#FF6B6B', green: '#8FD694', yellow: '#E8C27A', blue: '#6FA8FF', magenta: '#FF79B4', cyan: '#5FD7E8', white: '#C9C9C4',
-        brightBlack: '#6E6E73', brightRed: '#FF8F8F', brightGreen: '#A9E8AD', brightYellow: '#F3D394', brightBlue: '#94BEFF', brightMagenta: '#FF9CCB', brightCyan: '#8EEEFF', brightWhite: '#F4F4F0' };
-  return { ...base, background: css('--term-bg', light ? '#FFFFFF' : '#0A0A0B') };
-}
+const theme = () => ({
+  foreground: '#E4E4E0', cursor: '#F4F4F0', cursorAccent: '#0A0A0B', selectionBackground: 'rgba(61,242,140,.26)',
+  black: '#2A2A2E', red: '#FF6B6B', green: '#8FD694', yellow: '#E8C27A', blue: '#6FA8FF', magenta: '#FF79B4', cyan: '#5FD7E8', white: '#C9C9C4',
+  brightBlack: '#6E6E73', brightRed: '#FF8F8F', brightGreen: '#A9E8AD', brightYellow: '#F3D394', brightBlue: '#94BEFF', brightMagenta: '#FF9CCB', brightCyan: '#8EEEFF', brightWhite: '#F4F4F0',
+  background: css('--term-bg', '#0A0A0B'),
+});
 
 /** The project the Terminal works for: the open conversation's, else Home's. */
 const project = () => activeTab()?.workspace || homeProject() || '';
@@ -281,11 +276,9 @@ export function mountTerminal({ close }) {
     if (t && g.out) t.xt.write(g.out);
   });
   on('prefs', (p) => {
-    if (p && ('theme' in p || 'mode' in p)) requestAnimationFrame(() => byId.forEach((t) => (t.xt.options.theme = theme())));
     // Settings → Appearance → Terminal font size: open terminals follow, and fit their new columns.
     if (p && 'termFontSize' in p) (byId.forEach((t) => (t.xt.options.fontSize = termFontSize())), requestAnimationFrame(fitAll));
   });
-  new MutationObserver(() => byId.forEach((t) => (t.xt.options.theme = theme()))).observe(document.documentElement, { attributes: true, attributeFilter: ['data-mode', 'data-theme'] });
 }
 
 function build() {

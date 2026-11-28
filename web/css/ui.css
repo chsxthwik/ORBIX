@@ -4,16 +4,13 @@
 /* ---- state colours (the accent is not one of them): working is blue; needs you, done and failed use --warn, --ok
    and --err from the theme ---- */
 :root { --working: var(--a4); }
-:root[data-theme=graphite] { --working: var(--live); }
 
 /* ---- a project's tile: its letter on one of eight low-saturation colours picked from its name (js/tile.mjs) ---- */
 :root { --tile-sat: 34%; --tile-bg-l: 52%; --tile-bg-a: .2; --tile-fg-l: 76%;
   --tile-0: 212; --tile-1: 152; --tile-2: 32; --tile-3: 268; --tile-4: 340; --tile-5: 188; --tile-6: 52; --tile-7: 8; }
-:root[data-mode=light] { --tile-sat: 40%; --tile-bg-l: 50%; --tile-bg-a: .14; --tile-fg-l: 32%; }
 .ptile { --th: var(--tile-0); display: inline-grid; place-items: center; flex: none; width: var(--s, 20px); height: var(--s, 20px); border-radius: 6px; background: hsl(var(--th) var(--tile-sat) var(--tile-bg-l) / var(--tile-bg-a)); box-shadow: inset 0 0 0 1px hsl(var(--th) var(--tile-sat) var(--tile-bg-l) / .22); color: hsl(var(--th) calc(var(--tile-sat) + 14%) var(--tile-fg-l)); font: var(--fw-h) var(--fs-12)/1 var(--font); }
 .ptile[data-tile="1"] { --th: var(--tile-1); } .ptile[data-tile="2"] { --th: var(--tile-2); } .ptile[data-tile="3"] { --th: var(--tile-3); }
 .ptile[data-tile="4"] { --th: var(--tile-4); } .ptile[data-tile="5"] { --th: var(--tile-5); } .ptile[data-tile="6"] { --th: var(--tile-6); } .ptile[data-tile="7"] { --th: var(--tile-7); }
-:root[data-theme=graphite] .ptile { background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--fg); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 8%, transparent); }
 @media (forced-colors: active) { .ptile { forced-color-adjust: none; } }
 
 /* ---- the Customize page's tabs: Plugins, Skills, Loops, Review ---- */
@@ -43,7 +40,7 @@
 
 /* ================= provider tiles (js/brands.js brandTile) =================
    A provider as an app icon: its mark on its brand colour, a soft top light and a hairline so a black or white
-   tile still has an edge on any theme. */
+   tile still has an edge. */
 .btile { display: grid; place-items: center; flex: none; width: var(--bt); height: var(--bt); border: 0; border-radius: calc(var(--bt) * .26);
   background: var(--bt-bg); color: var(--bt-fg, #0B0B0C);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), inset 0 0 0 1px rgb(255 255 255 / .08), 0 0 0 1px color-mix(in srgb, var(--fg) 9%, transparent), 0 1px 2px rgb(0 0 0 / .22); }
@@ -54,7 +51,6 @@
 .mp-pv .btile { --bt: 24px; opacity: .82; transition: opacity var(--t2) var(--ease); }
 .mp-pv:hover .btile, .mp-pv.on .btile { opacity: 1; }
 .mp-pv.dim .btile { opacity: .3; filter: grayscale(1); }
-:root[data-theme=graphite] .btile:not(.plain) { filter: grayscale(1); }
 @media (forced-colors: active) { .btile { forced-color-adjust: none; } }
 
 /* ================= Connect (js/connect.js) ================= */
@@ -72,10 +68,6 @@
 .mp-empty p { margin: 0; }
 .pv-name { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .pv-via { display: inline-flex; align-items: center; height: 18px; padding: 0 8px; border-radius: 5px; background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg-2); font-size: var(--fs-12); font-weight: var(--fw); }
-
-/* Provider marks whose own colours fall under 3:1 on light surfaces use one colour there (js/brands.js); on their
-   dark tiles they keep their colours. */
-:root[data-mode=light] .bm-lowlight:not(.btile .bm-lowlight) * { fill: currentColor; }
 
 
 /* ---- the Changes panel: files with added and removed lines, a diff that opens under the file, Commit & push ---- */

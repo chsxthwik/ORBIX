@@ -78,7 +78,7 @@ export class HarnessProc extends EventEmitter {
       this.handoff = !!s.handoff;
       if (s.header.worktree) this.worktree = s.header.worktree;
       this.worktreeState = s.worktreeState || null;
-      if (!this.opts.model && s.header.model) this.model = s.header.model;
+      if (!this.opts.model) this.model = s.selectedModel ?? s.header.model ?? '';
       for (const m of this.messages) if (m.role === 'assistant' && m.usage) this._addUsage(m.usage);
     }
     await this._driver();
@@ -87,6 +87,13 @@ export class HarnessProc extends EventEmitter {
 
   /** Start the agent CLI (again, after it stopped), resuming its own session when there is one. */
   async _driver() {
+    if (!this.driverStart) {
+      this.driverStart = this._startDriver().finally(() => (this.driverStart = null));
+    }
+    return this.driverStart;
+  }
+
+  async _startDriver() {
     const a = this.agent;
     const approvals = this.config.data.approvals;
     const cwd = this.workspace;
@@ -94,17 +101,25 @@ export class HarnessProc extends EventEmitter {
     if (a.kind === 'claude') d = new ClaudeDriver({ backend: this.backend, bin: (await this.registry.argv(a))[0], cwd, approvals, noCoAuthor: this.config.data.noCoAuthor === true, noSubagents: this.config.data.claudeNoSubagents === true });
     else if (a.kind === 'codex') d = new CodexDriver({ backend: this.backend, bin: (await this.registry.argv(a))[0], cwd, approvals });
     else {
-      // OpenCode asks through ACP only for what its config says "ask": commands always (ORBIX decides, Full access included,
-      // so a destructive one still asks), file edits unless Auto edits or Full access allow them.
-      const env = a.id === 'agent-opencode' ? { ...a.env, OPENCODE_CONFIG_CONTENT: JSON.stringify({ autoupdate: false, permission: { edit: approvals === 'ask' ? 'ask' : 'allow', bash: 'ask', webfetch: approvals === 'auto' ? 'allow' : 'ask' } }) } : a.env;
-      d = new AcpDriver({ backend: this.backend, argv: await this.registry.argv(a), cwd, approvals, env, name: a.name });
+      // Ask through ACP; the current ORBIX mode is checked when a request arrives.
+      const argv = await this.registry.argv(a);
+      const version = a.id === 'agent-opencode' ? (await this.registry.detect())[a.id]?.version : '';
+      const env = a.id === 'agent-opencode' ? { ...a.env, OPENCODE_CONFIG_CONTENT: JSON.stringify(openCodeConfig(version)) } : a.env;
+      d = new AcpDriver({ backend: this.backend, argv, cwd, approvals, env, name: a.name });
     }
     d.ask = (req) => this._approve(req);
     this._wire(d);
     this.driver = d;
-    const r = await d.start({ model: this.model, resume: this.nativeId || undefined, effort: this.thinkingLevel || undefined });
+    let r;
+    try {
+      r = await d.start({ model: this.model, resume: this.nativeId || undefined, effort: this.thinkingLevel || undefined });
+    } catch (error) {
+      if (this.driver === d) this.driver = null;
+      await d.close();
+      throw error;
+    }
     this._setNative(r.nativeId);
-    if (!this.model && r.model) this.model = r.model;
+    if (r.model && (d.capabilities || !this.model)) this.model = r.model;
     this.cache.commands = r.commands || [];
     this._emit({ type: 'available_commands_update', commands: this.cache.commands });
   }
@@ -141,6 +156,12 @@ export class HarnessProc extends EventEmitter {
       this.cache.commands = c;
       this._emit({ type: 'available_commands_update', commands: c });
     });
+    d.on('model', (model) => {
+      if (!model || model === this.model) return;
+      this.model = model;
+      if (this.session && !this.opts.noSession) appendEntry(this.session.file, { type: 'model', provider: this.agent.id, model });
+      this._emit({ type: 'model_changed', model: this._state().model });
+    });
     d.on('plan', (entries) => {
       this.todoPhases = [{ name: 'Plan', items: entries.map((e) => ({ text: e.text, status: e.status === 'completed' ? 'done' : e.status === 'in_progress' ? 'doing' : 'todo' })) }];
       this._emit({ type: 'todo_update', phases: this.todoPhases });
@@ -150,6 +171,7 @@ export class HarnessProc extends EventEmitter {
     d.on('exit', ({ code, why }) => {
       if (this.driver !== d) return;
       this.driver = null;
+      this._cancelAsks();
       if (this.exited) return;
       for (const l of String(why || '').split('\n')) if (l.trim()) this.stderrTail.push(l);
       this.stderrTail = this.stderrTail.slice(-30);
@@ -278,7 +300,7 @@ export class HarnessProc extends EventEmitter {
   }
 
   async _turn(text, images = [], attribution = 'user', attachments = []) {
-    if (!this.driver) {
+    if (!this.driver || this.driverStart) {
       try {
         await this._driver();
       } catch (e) {
@@ -286,6 +308,7 @@ export class HarnessProc extends EventEmitter {
         throw e;
       }
     }
+    if (this.exited) throw new Error('This conversation has stopped.');
     this.streaming = true;
     this.cur = null;
     this.tools = new Map();
@@ -421,7 +444,7 @@ export class HarnessProc extends EventEmitter {
       case 'get_messages':
         return ok({ messages: this.messages });
       case 'get_available_models':
-        return ok({ models: (await this.registry.models(this.agent.id)).map((m) => ({ ...m, provider: this.agent.id })) });
+        return ok({ models: (this.driver?.models?.length ? this.driver.models : await this.registry.models(this.agent.id)).map((m) => ({ ...m, provider: this.agent.id })) });
       case 'get_available_commands':
         return ok({ commands: this.cache.commands });
       case 'get_session_stats':
@@ -437,9 +460,13 @@ export class HarnessProc extends EventEmitter {
         if (!cmd.modelId) throw new Error('modelId is required');
         if (cmd.provider && cmd.provider !== this.agent.id) throw Object.assign(new Error(`This conversation runs on ${this.agent.name}. Start a new conversation to use another agent or model provider.`), { status: 400 });
         const id = cmd.modelId === 'default' ? '' : cmd.modelId;
-        if (this.driver && id) await this.driver.setModel(id);
-        this.model = id;
-        if (this.session && !this.opts.noSession) appendEntry(this.session.file, { type: 'model', provider: this.agent.id, model: id });
+        let selected = '';
+        if (this.driver && id) {
+          const result = await this.driver.setModel(id);
+          if (this.driver?.capabilities) selected = result;
+        }
+        this.model = selected || id;
+        if (this.session && !this.opts.noSession) appendEntry(this.session.file, { type: 'model', provider: this.agent.id, model: this.model });
         this._emit({ type: 'model_changed', model: this._state().model });
         return ok({});
       }
@@ -473,6 +500,8 @@ export class HarnessProc extends EventEmitter {
         const men = await readMentions(this.backend, this.workspace, text).catch(() => []);
         const all = [...images, ...att.images, ...men.filter((m) => m.image).map((m) => m.image)];
         const files = [...att.attachments, ...men.filter((m) => !m.image)];
+        if (!this.driver || this.driverStart) await this._driver();
+        if (all.length && this.driver?.capabilities?.image === false) throw Object.assign(new Error(`${this.agent.name} does not accept image attachments through ACP.`), { status: 400 });
         if (this.streaming) {
           this.queue[cmd.streamingBehavior === 'followUp' ? 'followUp' : 'steer'].push({ text, images: all, attachments: files, attribution: 'user' });
           return ok({ queued: true });
@@ -505,9 +534,10 @@ export class HarnessProc extends EventEmitter {
 
   _state() {
     const thinking = this.agent.kind === 'claude' ? { efforts: ['low', 'medium', 'high', 'xhigh', 'max'], mode: 'effort', canOff: true } : this.agent.kind === 'codex' ? { efforts: ['minimal', 'low', 'medium', 'high', 'xhigh'], mode: 'effort', canOff: true } : undefined;
+    const acp = this.driver?.capabilities;
     return {
-      model: { id: this.model || 'default', provider: this.agent.id, name: this.model ? `${this.model}` : `${this.agent.name} default`, reasoning: !!thinking, input: ['text', 'image'], contextWindow: this.contextWindow, thinking },
-      agent: { id: this.agent.id, name: this.agent.name, kind: this.agent.kind, nativeId: this.nativeId, limits: this.limits },
+      model: { id: this.model || 'default', provider: this.agent.id, name: this.model ? `${this.model}` : `${this.agent.name} default`, reasoning: !!thinking, input: acp?.image === false ? ['text'] : ['text', 'image'], contextWindow: this.contextWindow, thinking },
+      agent: { id: this.agent.id, name: this.agent.name, kind: this.agent.kind, nativeId: this.nativeId, limits: this.limits, ...(acp ? { acp } : {}) },
       thinkingLevel: this.thinkingLevel || 'off',
       isStreaming: this.streaming,
       turnStartedAt: this.streaming ? this.run?.startedAt || null : null,
@@ -563,4 +593,14 @@ export class HarnessProc extends EventEmitter {
     if (this.session) closeSession(this.session.file);
     this.emit('exit', 0);
   }
+}
+
+function openCodeConfig(version) {
+  if (/^1\./.test(version || '')) {
+    return { autoupdate: false, permission: { edit: 'ask', bash: 'ask', webfetch: 'ask', external_directory: 'ask' } };
+  }
+  return {
+    update: 'disable',
+    permissions: ['edit', 'shell', 'webfetch', 'external_directory'].map((action) => ({ action, resource: '*', effect: 'ask' })),
+  };
 }

@@ -75,9 +75,7 @@ export async function runSlash(agent, text) {
       return true;
     }
     case 'plan':
-      agent.planMode = !agent.planMode;
-      if (agent.session) agent._persistRaw({ type: 'plan', on: agent.planMode });
-      agent._planStatus();
+      agent._setMode(agent.planMode ? 'agent' : 'plan');
       agent._out(agent.planMode ? 'Plan mode is **on**: the agent only reads and searches, then proposes a plan. Nothing is changed. Type /plan again to let it make changes.' : 'Plan mode is **off**: the agent can edit files and run commands again (with your approval).');
       return true;
     case 'model': {

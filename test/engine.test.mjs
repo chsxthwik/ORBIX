@@ -1894,7 +1894,9 @@ describe('compact: estimates, cut points, context', () => {
     test('engine settings are recovered, the latest wins', () => {
       fs.writeFileSync(file, lines({ type: 'thinking', level: 'low' }, { type: 'thinking', level: 'high' }, { type: 'plan', on: true }, { type: 'model', model: 'm1', provider: 'p1' }, { type: 'model', model: 'm2', provider: 'p2' }));
       const { droppedUsage, ...ex } = rebuildSession(file).extras;
-      assert.deepEqual(ex, { thinkingLevel: 'high', planMode: true, model: 'm2', provider: 'p2', roles: null });
+      assert.deepEqual(ex, { thinkingLevel: 'high', planMode: true, chatMode: '', model: 'm2', provider: 'p2', roles: null });
+      fs.writeFileSync(file, lines({ type: 'mode', mode: 'ask' }, { type: 'mode', mode: 'debug' }, { type: 'mode', mode: 'bogus' }, { type: 'mode', mode: 'ask' }));
+      assert.equal(rebuildSession(file).extras.chatMode, 'ask');
       assert.deepEqual(droppedUsage, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
     });
     test('cleared tool output is marked again on resume', () => {
@@ -1908,7 +1910,7 @@ describe('compact: estimates, cut points, context', () => {
       assert.equal(rebuildSession(file).messages.length, 1);
       const none = rebuildSession(path.join(TMP, 'absent.jsonl'));
       assert.deepEqual(none.messages, []);
-      assert.deepEqual({ ...none.extras, droppedUsage: undefined }, { thinkingLevel: null, planMode: false, model: null, provider: null, roles: null, droppedUsage: undefined });
+      assert.deepEqual({ ...none.extras, droppedUsage: undefined }, { thinkingLevel: null, planMode: false, chatMode: '', model: null, provider: null, roles: null, droppedUsage: undefined });
     });
   });
 });

@@ -714,10 +714,69 @@ describe('agent loop end to end (mock provider)', () => {
     assert.equal(u.contextWindow, 200000);
     assert.ok(Math.abs(u.tokens - 18125) / 18125 <= 0.05, 'current usage agrees with reported prompt plus reply');
     assert.equal(u.breakdown.reduce((n, r) => n + r.tokens, 0), u.tokens);
-    assert.deepEqual(u.breakdown.map((r) => r.key), ['system', 'rules', 'files', 'history', 'results']);
+    // No skills and no MCP servers in this workspace: those parts are left out, not shown as zero.
+    assert.deepEqual(u.breakdown.map((r) => r.key), ['system', 'tools', 'rules', 'files', 'history', 'results']);
     assert.ok(u.breakdown.every((r) => r.tokens > 0));
+    const tools = u.breakdown.find((r) => r.key === 'tools').tokens;
+    const rules = u.breakdown.find((r) => r.key === 'rules').tokens;
+    assert.ok(tools > rules, 'tool definitions are measured on their own, not folded into the system prompt');
     const expected = ((1000 + 14990) * 3 + (20 + 85) * 15 + 3050 * 0.3) / 1e6;
     assert.ok(Math.abs(data.cost - expected) < 1e-9);
+  });
+
+  test('ask mode is enforced at the tool call: reads run, edits and mutating commands do not', async () => {
+    const p = await make();
+    assert.equal((await p.request({ type: 'set_mode', mode: 'ask' })).data.mode, 'ask');
+    assert.equal(p._state().mode, 'ask');
+    assert.equal(p._state().planMode, false);
+    const offered = p._toolDefs().map((d) => d.name);
+    assert.ok(offered.includes('read') && offered.includes('bash'));
+    assert.ok(!offered.includes('write') && !offered.includes('edit'));
+    // The model calls tools it was not offered anyway: the engine refuses them.
+    script = [
+      sseResponse(turn({ tools: [
+        { id: 'ask-r', name: 'read', args: { path: 'hello.txt' } },
+        { id: 'ask-w', name: 'write', args: { path: 'ask-made.txt', content: 'no' } },
+        { id: 'ask-e', name: 'edit', args: { path: 'hello.txt', old_string: 'hello', new_string: 'bye' } },
+        { id: 'ask-m', name: 'bash', args: { command: 'mkdir ask-dir' } },
+        { id: 'ask-b', name: 'bash', args: { command: 'echo readonly' } },
+      ], stop: 'tool_use' })),
+      sseResponse(turn({ text: 'Answered.' })),
+    ];
+    await send(p, 'what does hello.txt say?');
+    const res = (id) => p.messages.find((m) => m.role === 'toolResult' && m.toolCallId === id);
+    assert.equal(res('ask-r').isError, false);
+    for (const id of ['ask-w', 'ask-e', 'ask-m']) {
+      assert.equal(res(id).isError, true, id);
+      assert.match(res(id).content[0].text, /Ask mode is on/);
+    }
+    assert.equal(res('ask-b').isError, false);
+    assert.match(res('ask-b').content[0].text, /readonly/);
+    assert.ok(!fs.existsSync(path.join(ws, 'ask-made.txt')));
+    assert.ok(!fs.existsSync(path.join(ws, 'ask-dir')));
+    assert.equal(fs.readFileSync(path.join(ws, 'hello.txt'), 'utf8'), 'hello world\n');
+    assert.match(lastBody().system.map((s) => s.text).join('\n'), /# ASK MODE IS ON/);
+  });
+
+  test('modes switch exclusively, survive a resume, and debug adds its guidance', async () => {
+    const p = await make();
+    await p.request({ type: 'set_mode', mode: 'plan' });
+    assert.deepEqual([p.planMode, p.chatMode, p._mode()], [true, '', 'plan']);
+    await p.request({ type: 'set_mode', mode: 'debug' });
+    assert.deepEqual([p.planMode, p.chatMode, p._mode()], [false, 'debug', 'debug']);
+    assert.ok(p._toolDefs().some((d) => d.name === 'write'), 'debug mode may still fix the bug');
+    await assert.rejects(p.request({ type: 'set_mode', mode: 'yolo' }), /Unknown mode/);
+    script = [sseResponse(turn({ text: 'Reproduced.' }))];
+    await send(p, 'the test fails');
+    assert.match(lastBody().system.map((s) => s.text).join('\n'), /# DEBUG MODE IS ON[\s\S]*Reproduce/);
+    const q = await make({ resume: p.session.file });
+    assert.equal(q._mode(), 'debug');
+    await q.request({ type: 'prompt', message: '/plan' });
+    assert.equal(q._mode(), 'plan');
+    await q.request({ type: 'set_mode', mode: 'agent' });
+    assert.deepEqual([q.planMode, q.chatMode, q._mode()], [false, '', 'agent']);
+    const r = await make({ resume: p.session.file });
+    assert.equal(r._mode(), 'agent');
   });
 
   test('manual compaction saves context, keeps six complete turns and never consumes an approval', async () => {

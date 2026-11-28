@@ -1,52 +1,180 @@
-/* The transcript: your messages as right-aligned pills, replies as plain text (no bubble), the steps folded into one
-   line. The reading column is 760px at most. Under a message only Copy is always there; thumbs, retry, the time, the
-   model and its speed appear on hover or keyboard focus (their buttons stay focusable, and focusing one shows them). */
-.msg-acts { display: flex; align-items: center; gap: var(--sp-1); margin: var(--sp-1) 0 0 calc(-1 * var(--sp-2)); }
-/* Your message: Copy at the pill's right edge, the hover actions growing to its left. */
-.msg.user .msg-acts { flex-direction: row-reverse; justify-content: flex-start; margin: var(--sp-1) calc(-1 * var(--sp-2)) 0 0; }
-.msg-acts > :not(.copy) { opacity: 0; transition: opacity var(--dur-hover) var(--ease-out); }
-.msg:is(:hover, :focus-within) > .msg-acts > :not(.copy) { opacity: 1; }
-.msg-acts .msg-time { order: 10; }
-.msg-acts .msg-model { order: 11; color: var(--fg-3); font-size: var(--fs-12); }
+/* The transcript: your messages as right-aligned pills, replies as plain text (no bubble), a turn's steps folded into
+   one "Worked for…" row. Every rule for message actions, steps, thinking, command output and the timeline lives here;
+   app.css keeps the page frame, Markdown and the shared output and diff views. */
+
+/* ================= message actions ================= */
+/* One quiet row under a message: icon buttons, then the time and the model. Hidden until the pointer or keyboard
+   focus reaches the message (the latest reply keeps its row in view). The row keeps its height either way, so showing
+   it never moves the text. */
+.msg-acts { display: flex; align-items: center; gap: 2px; min-height: 28px; margin: var(--sp-1) 0 0 calc(-1 * var(--sp-1)); }
+.msg.user .msg-acts { flex-direction: row-reverse; margin: var(--sp-1) calc(-1 * var(--sp-1)) 0 0; }
+.msg-acts > * { opacity: 0; transition: opacity var(--dur-hover) var(--ease-out); }
+.msg:is(:hover, :focus-within, .latest) > .msg-acts > * { opacity: 1; }
+.tin > .msg.asst:has(+ .msg.cont) > .msg-acts, .work-b > .msg > .msg-acts { display: none; }
+.msg-act { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; gap: 0; border-radius: var(--r); color: var(--fg-3); font-size: 0; }
+.msg-act svg { width: 14px; height: 14px; }
+.msg-act:hover { background: var(--bg-hover); color: var(--fg); }
 .msg-act:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.msg-act.done { color: var(--ok); }
+.msg-act.done svg { animation: pop-in var(--t2) var(--ease); }
+.msg-act.rate[aria-pressed=true] { color: var(--fg); }
+.msg-act.rate[aria-pressed=true] svg { fill: currentColor; fill-opacity: .2; }
+.msg-time { order: 10; padding: 0 var(--sp-2); color: var(--fg-3); font-size: var(--fs-12); font-variant-numeric: tabular-nums; }
+.msg-model { order: 11; color: var(--fg-3); font-size: var(--fs-12); }
 
-/* "Worked for 44s · Read 8 files · Ran 2 commands": one row that opens on a click. */
-.work-h { max-width: 100%; white-space: nowrap; }
-.work-facts { overflow: hidden; text-overflow: ellipsis; }
+/* ================= a turn's steps ================= */
+/* "Worked for 44s ›  Read 8 files · Ran 2 commands": one row that opens on a click. While the turn works it reads
+   what happens now ("Running npm test  12s"), the words shimmering. */
 
-/* Tables: 1px hairlines between cells, no fill. */
+details.work { min-width: 0; }
+.work-h { display: flex; align-items: center; gap: var(--sp-2); width: fit-content; max-width: 100%; min-height: 28px; margin-left: calc(-1 * var(--sp-2)); padding: 0 var(--sp-2); border-radius: var(--r); color: var(--fg-3); font-size: var(--fs-13); white-space: nowrap; cursor: pointer; list-style: none; user-select: none; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.work-h::-webkit-details-marker { display: none; }
+.work-h:hover { background: var(--bg-hover); color: var(--fg-2); }
+.work-h:focus-visible { outline-offset: 0; }
+.work-l { order: 1; flex: none; }
+.work-t { order: 2; flex: none; font-variant-numeric: tabular-nums; }
+.work-h .chev { order: 3; }
+.work-facts { order: 4; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-12); }
+.ts-fact + .ts-fact::before { content: '·'; padding: 0 var(--sp-2); color: var(--fg-3); }
+.ts-fact.bad { color: var(--err); }
+details.work.live > .work-h .work-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; background: linear-gradient(90deg, var(--fg-3) 0 38%, var(--fg) 50%, var(--fg-3) 62% 100%) 100% 0 / 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer-text 2.2s linear infinite; }
+@keyframes shimmer-text { to { background-position: 0 0; } }
+/* Opened: the steps on a hairline rail, each one 28px row of muted words. */
+.work-b { display: flex; flex-direction: column; margin: var(--sp-1) 0 var(--sp-2); padding: 0 0 0 var(--sp-2); border-left: 1px solid var(--line); }
+details.work:not([open]) > .work-b { display: none; }
+details.work[open] > .work-b { animation: rise var(--t2) var(--ease-out); }
+.work-b > .msg { gap: 0; margin: 0; }
+.work-b > .msg > .md { margin: var(--sp-1) 0; padding-left: var(--sp-2); color: var(--fg-2); }
+
+/* ================= thinking ================= */
+/* "Thought 3s ›  what it was about": one quiet row; opened, the text in the muted colour at a step smaller. */
+.think { min-width: 0; }
+.think > summary { display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 100%; height: 28px; margin-left: calc(-1 * var(--sp-2)); padding: 0 var(--sp-2); border-radius: var(--r); color: var(--fg-3); font-size: var(--fs-13); cursor: pointer; list-style: none; user-select: none; transition: background-color var(--dur-hover) var(--ease-out), color var(--dur-hover) var(--ease-out); }
+.think > summary::-webkit-details-marker { display: none; }
+.think > summary:hover { background: var(--bg-hover); color: var(--fg-2); }
+.think-l, .think-t { flex: none; }
+.think-t { font-variant-numeric: tabular-nums; }
+.think-t:empty { display: none; }
+.think-p { min-width: 0; }
+.think-p:empty, .think[open] > summary .think-p { display: none; }
+.think.live .think-l { animation: breathe 1.6s var(--ease) infinite; }
+.think-b { margin: var(--sp-1) 0 var(--sp-2); color: var(--fg-2); }
+.think-b .md { font-size: calc(var(--fs) - 1px); line-height: 1.6; }
+details.think[open] > .think-b { animation: rise var(--t2) var(--ease-out); }
+.work-b .think > summary { margin-left: 0; }
+.work-b .think-b { padding-left: var(--sp-2); }
+
+/* ================= tool steps ================= */
+/* One quiet line each: verb, then what it acted on. Duration and the done tick appear under the pointer; colour only
+   for a state that needs you (waiting, failed). Opened, a step becomes a card; inside the steps' fold it opens flat. */
+.tool { position: relative; min-width: 0; margin-left: 2px; border: 1px solid transparent; border-radius: var(--r-md); transition: border-color var(--t2) var(--ease), background-color var(--t2) var(--ease); }
+.tool + .tool { margin-top: calc(-1 * var(--sp-3)); }
+.compact .tool + .tool { margin-top: calc(-1 * var(--sp-1)); }
+.tool.open { border-color: var(--line); background: var(--bg-raise); }
+.tool.open.error { border-color: var(--err-line); }
+.tool.open.waiting { border-color: var(--warn-line); }
+.tool-head { position: relative; display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 28px; padding: 0 var(--sp-2); border-radius: var(--r-sm); color: var(--fg-2); font-size: var(--fs-13); text-align: left; transition: background-color var(--dur-hover) var(--ease-out); }
+.tool.open .tool-head { border-radius: var(--r-md) var(--r-md) 0 0; }
+.tool.open.waiting .tool-head { background: var(--warn-soft); }
+.tool-head:not(.static):hover { background: var(--bg-hover); }
+.tool-head:focus-visible { outline-offset: -2px; border-radius: var(--r-sm); }
+.tool-ico { position: relative; display: grid; place-items: center; flex: none; width: 16px; height: 16px; color: var(--fg-3); }
+.tool:is(.running, .pending) .tool-ico { color: var(--live); }
+.tool.waiting .tool-ico { color: var(--warn); }
+.tool.error .tool-ico { color: var(--err); }
+.tool-name { flex: none; color: var(--fg-2); }
+.tool-sum { flex: 1; min-width: 0; color: var(--fg-3); font-family: var(--mono); font-size: var(--fs-12); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-sum.plain { font-family: var(--font); font-size: var(--fs-13); }
+.tool-head:hover .tool-name, .tool.running .tool-name { color: var(--fg); }
+.tool-head:hover .tool-sum, .tool:is(.running, .pending) .tool-sum { color: var(--fg-2); }
+.tool.error:not(.open) .tool-name, .work-b .tool:is(.error, .denied) .tool-name { color: var(--err); }
+.tool-stat { display: inline-flex; gap: var(--sp-2); flex: none; font-family: var(--mono); font-size: var(--fs-12); }
+.tool-exit { flex: none; color: var(--err); font-family: var(--mono); font-size: var(--fs-12); }
+.tool.open > .tool-head .tool-exit { display: none; }
+.tool-dur { flex: none; color: var(--fg-3); font-size: var(--fs-12); font-variant-numeric: tabular-nums; }
+.tool.done :is(.tool-dur, .st.ok) { opacity: 0; transition: opacity var(--t2) var(--ease); }
+.tool.done :is(.tool-head:hover, .tool-head:focus-visible) :is(.tool-dur, .st.ok), .tool.done.open :is(.tool-dur, .st.ok) { opacity: 1; }
+.tool.just-done .st.ok svg { animation: pop-in var(--t3) var(--ease); }
+.tool-head .chev { color: var(--fg-3); opacity: 0; transition: opacity var(--dur-hover) var(--ease-out), transform var(--dur-panel) var(--ease-out); }
+.tool-head:is(:hover, :focus-visible) .chev, .tool.open .chev { opacity: 1; }
+.tool.open .chev { transform: rotate(90deg); }
+.tool-body { display: none; padding: var(--sp-3); border-top: 1px solid var(--line); }
+.tool.open .tool-body { display: block; animation: rise var(--t2) var(--ease-out); }
+.tool-body > div, .tool-body .out-wrap { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.tool-body.failed > div > .out-wrap pre.out { color: var(--err); }
+.tool-body .muted.small { font-size: var(--fs-13); }
+.tool-body > .undo-row { display: flex; flex-direction: row; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }
+/* Inside the steps' fold: no icons, no durations, and an opened step is the line and its body, no card (a step that
+   waits for you or failed keeps its card, so it stands out). */
+.work-b .tool { margin: 0; }
+.work-b .tool-ico, .work-b .tool-dur { display: none; }
+.work-b .tool-name { color: var(--fg-3); }
+.work-b .tool-sum { flex: 0 1 auto; }
+.work-b .tool.open:not(.waiting, .error) { border-color: transparent; background: none; }
+.work-b .tool:not(.waiting, .error) > .tool-body { padding: var(--sp-1) 0 var(--sp-2) var(--sp-2); border-top: 0; }
+.compact .work-b :is(.tool-head, .think > summary) { min-height: 24px; height: auto; }
+@media (forced-colors: active) { .tool.done :is(.tool-dur, .st.ok) { opacity: 1; } }
+
+/* ================= a command and its output ================= */
+/* A terminal block: "$ command" in the code font and full ink, the output below it muted, the last 12 lines until
+   "Show more" (the cut edge fades), a copy button in the corner, and the exit code at the foot when it is not 0. */
+.cli { position: relative; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--bg-inset); font-family: var(--mono); font-size: var(--fs-12); line-height: 1.6; overflow: hidden; }
+.cli-cmd { margin: 0; padding: var(--sp-2) var(--sp-10) var(--sp-2) var(--sp-3); color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cli-ps { margin-right: var(--sp-2); color: var(--fg-3); user-select: none; }
+.cli-out { margin: 0; padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line); color: var(--fg-3); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cli-out.cut { -webkit-mask-image: linear-gradient(transparent, var(--fg) var(--sp-8)); mask-image: linear-gradient(transparent, var(--fg) var(--sp-8)); }
+.cli-out.all { max-height: 400px; overflow: auto; }
+.cli-more { display: block; width: 100%; height: 28px; padding: 0 var(--sp-3); border-top: 1px solid var(--line); color: var(--fg-3); font-family: var(--font); font-size: var(--fs-12); text-align: left; }
+.cli-more:hover { background: var(--bg-hover); color: var(--fg); }
+.cli-more:focus-visible { outline-offset: -2px; }
+.cli-note { padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line); color: var(--fg-3); font-family: var(--font); }
+.cli-exit { padding: var(--sp-1) var(--sp-3); border-top: 1px solid var(--line); color: var(--err); }
+.cli-copy { position: absolute; top: var(--sp-1); right: var(--sp-1); display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r); color: var(--fg-3); opacity: 0; transition: opacity var(--dur-hover) var(--ease-out); }
+.cli:hover .cli-copy, .cli-copy:focus-visible, .cli-copy.done { opacity: 1; }
+.cli-copy:hover { background: var(--bg-hover); color: var(--fg); }
+.cli-copy.done { color: var(--ok); }
+
+/* ================= tables ================= */
+/* No outer box, a hairline between rows, muted headers. */
 .table-wrap { max-width: 100%; overflow-x: auto; }
 .table-wrap table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); }
-.table-wrap :is(th, td) { padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); background: none; text-align: left; vertical-align: top; }
-.table-wrap th { color: var(--fg); font-weight: var(--fw-h); white-space: nowrap; }
+.table-wrap :is(th, td) { padding: var(--sp-2) var(--sp-3) var(--sp-2) 0; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; vertical-align: top; }
+.table-wrap th { color: var(--fg-3); font-weight: var(--fw); white-space: nowrap; }
+.table-wrap tr:last-child > td { border-bottom: 0; }
 .table-wrap tbody tr:hover td { background: none; }
 
-/* An empty conversation: the Home stack in the reading column. The mark, one line, three suggestion rows (their rows
-   are styled with Home's, in home.css). */
+/* ================= an empty conversation ================= */
+/* The Home stack in the reading column: the mark, one line, three suggestion rows (styled with Home's, in home.css). */
 .chat-empty { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); padding: 12vh 0 0; text-align: center; }
 .chat-empty > * { width: 100%; }
 .chat-empty > .empty-mark { width: auto; }
 .ce-name { margin: 0; color: var(--fg); font: var(--fw-h) var(--fs-20)/1.25 var(--font); text-wrap: balance; }
 .ce-tasks-slot { min-height: calc(3 * var(--ctl-h)); margin-top: var(--sp-2); text-align: left; }
 
-@media (prefers-reduced-motion: reduce) { .msg-acts > :not(.copy) { transition: none; } }
-
 /* ================= conversation timeline ================= */
-/* One dot per turn (each of your messages starts one) in a thin column 24px outside the transcript's left edge
-   (web/js/timeline.js): hollow rings, the turns on screen a step stronger, the current turn filled with the accent.
-   Where the column leaves no room it sits 12px from the sheet's edge, inside the padding. Hidden under 1100px. Only
-   transform and opacity animate; a long conversation slides the track. */
+/* One short mark per turn (each of your messages starts one) in a column 24px outside the transcript's left edge
+   (web/js/timeline.js): turns not on screen faint, turns on screen muted, the current turn full length in the accent.
+   Where the column leaves no room it sits 12px from the sheet's edge. Hidden under 1100px. A long conversation slides
+   the track; only transform and opacity animate. */
 .turn-map { position: absolute; left: max(var(--sp-3), calc(50% - min(var(--col), 100% - 48px) / 2 - 24px)); top: 50%; transform: translate(-50%, -50%); z-index: 2; width: var(--sp-4); max-height: min(60%, 420px); padding: var(--sp-2) 0; overflow: hidden; }
 html.wide .turn-map { --col: 1140px; }
 .tm-track { display: flex; flex-direction: column; align-items: center; transition: transform var(--dur-panel) var(--ease-out); }
-.turn-map::before { content: ''; position: absolute; top: var(--sp-3); bottom: var(--sp-3); left: 50%; width: 1px; margin-left: -.5px; background: var(--line-2); pointer-events: none; }
-.turn-mark { position: relative; flex: none; display: grid; place-items: center; width: var(--sp-4); height: var(--sp-4); padding: 0; border: 0; border-radius: var(--sp-1); background: transparent; cursor: pointer; }
-.turn-mark::after { content: ''; box-sizing: border-box; width: var(--sp-2); height: var(--sp-2); border: 1.5px solid var(--fg-3); border-radius: 50%; background: var(--bg); transition: transform var(--dur-hover) var(--ease-out); }
-.turn-mark.seen::after { border-color: var(--fg-2); }
-.turn-mark[aria-current]::after { border-color: var(--accent-solid); background: var(--accent-solid); }
-.turn-mark:hover::after, .turn-mark:focus-visible::after { transform: scale(1.4); }
+.turn-mark { flex: none; display: grid; place-items: center; width: var(--sp-4); height: var(--sp-4); padding: 0; border: 0; border-radius: var(--sp-1); background: transparent; cursor: pointer; }
+.turn-mark::after { content: ''; width: var(--sp-3); height: 2px; border-radius: 1px; background: var(--line-3); transform: scaleX(.67); transition: transform var(--dur-hover) var(--ease-out); }
+.turn-mark.seen::after { background: var(--fg-3); }
+.turn-mark:is(:hover, :focus-visible)::after { background: var(--fg-2); transform: none; }
+.turn-mark[aria-current]::after { background: var(--accent-solid); transform: none; }
 .turn-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.tm-tip { position: absolute; left: 0; top: 0; z-index: 6; max-width: min(340px, 60%); padding: var(--sp-1) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--sp-2); background: var(--bg-raise-2); color: var(--fg); font-size: var(--fs-12); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; opacity: 0; transform: translate(calc(var(--tip-x, 0px) - 4px), calc(var(--tip-y, 0px) - 50%)); transition: opacity var(--dur-hover) var(--ease-out), transform var(--dur-hover) var(--ease-out); }
-.tm-tip.on { opacity: 1; transform: translate(var(--tip-x, 0px), calc(var(--tip-y, 0px) - 50%)); }
+/* The card beside a mark: your message on one line, the start of the reply on two. */
+.tm-tip { position: absolute; left: 0; top: 0; z-index: 6; width: min(320px, var(--tip-room, 320px)); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--bg-modal); box-shadow: var(--shadow-pop); pointer-events: none; opacity: 0; transform: translate(var(--tip-x, 0px), var(--tip-y, 0px)); transition: opacity var(--dur-hover) var(--ease-out); }
+.tm-tip.on { opacity: 1; }
+.tm-tip-q { overflow: hidden; color: var(--fg); font-size: var(--fs-13); font-weight: var(--fw-h); line-height: 1.5; white-space: nowrap; text-overflow: ellipsis; }
+.tm-tip-a { display: -webkit-box; margin-top: 2px; overflow: hidden; color: var(--fg-3); font-size: var(--fs-12); line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.tm-tip-a:empty { display: none; }
 @media (max-width: 1099px), (pointer: coarse) { .turn-map, .tm-tip { display: none; } }
-@media (prefers-reduced-motion: reduce) { .turn-mark::after, .tm-tip, .tm-track { transition: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .msg-acts > *, .work-h, .think > summary, .tool, .tool-head, .tool-head .chev, .tool.done :is(.tool-dur, .st.ok), .cli-copy, .turn-mark::after, .tm-track, .tm-tip { transition: none; }
+  details.work[open] > .work-b, details.think[open] > .think-b, .tool.open .tool-body, .think.live .think-l, .msg-act.done svg, .tool.just-done .st.ok svg { animation: none; }
+  details.work.live > .work-h .work-l { animation: none; background: none; color: var(--fg-2); }
+}

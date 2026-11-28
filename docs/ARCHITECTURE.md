@@ -166,8 +166,6 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `main.js` | start-up, layout, sidebar, keyboard shortcuts, routing events to views |
 | `shell.js`, `controls.js` | the window chrome, one 40px row (logo, menus, sidebar toggle, back/forward and search on the left; the breadcrumb in the middle; the context meter and panel toggles on the right; the caption buttons of the Windows app after it) and the message box's "+", model button, reasoning menu and permission chip (Full access is a neutral chip with a warning icon) |
 | `context.js` | the toolbar's Context menu: where the project runs, MCP servers, skills and rule files, each in a submenu (`cascade()` in dialogs.js) |
-| `backdrop.js` | the scene themes' moving pictures and the fireworks when a task finishes |
-| `web/css/themes.css` | the editor palettes (Tokyo Night, Catppuccin Mocha and Latte, Rosé Pine and Dawn, Nord, Dracula, Gruvbox): surfaces, ink, status and syntax colours, and their Settings previews |
 | `web/css/tokens.css` | loaded first: the type scale (12/13/14/16/20/28 px), weights (400; 500 for headings), the 4px spacing grid (`--sp-*`), row and bar heights, motion (120ms hovers, 180ms panels, ease-out) and the 760px reading column. Every later stylesheet asks for these (`test/design-tokens.test.mjs`, and `node tools/shots.mjs --audit` on the rendered page) |
 | `web/css/sidebar.css`, `ui.css`, `transcript.css`, `composer.css`, `home.css`, `side-icons.js` | the stylesheets of the redesign: the 260px sidebar (resizable 220-360px, rows of 28px, a 2px bar on the current row) and the tokens-this-week line; project tiles, the Customize tabs, the week chart, provider tiles, the Connect dialog and the Changes panel; the transcript (pill messages, the one-row work summary, hairline tables, the timeline); the flat message box; Home and the empty conversation |
 | `updates.js` | update status: the pill at the top right of the menu row, and Settings → About |
@@ -198,7 +196,7 @@ Plain ES modules, no framework or build step. All text goes through `createTextN
 | `automations.js`, `schedule.mjs` | the Loops page; Create with Prompt, which turns one sentence into a schedule and a task with plain rules (no model) |
 | `ratings.js` | your 👍 and 👎 per model, counted on this PC only (`localStorage`), listed in Settings → Models → Your ratings |
 | `workspace.js`, `exporter.js` | task suggestions, and a conversation as Markdown |
-| `theme-boot.js`, `desktop.js`, `interface.js` | the theme before first paint, the Windows title bar colours, tooltips |
+| `desktop.js`, `interface.js` | the Windows title bar colours, tooltips |
 | `word-diff.mjs`, `tool-title.mjs`, `coalesce.mjs` | helpers without DOM (word-level diff, tool step titles, batched redraws), so tests can import them |
 
 ## Tests

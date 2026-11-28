@@ -1,5 +1,5 @@
-// The sidebar, rail and side panel under stress: window widths, display scaling, many and odd conversations, every
-// theme, reduced motion, forced colours, keyboard only, hover, status changes and re-renders. Each check names what it
+// The sidebar, rail and side panel under stress: window widths, display scaling, many and odd conversations, the
+// one theme, reduced motion, forced colours, keyboard only, hover, status changes and re-renders. Each check names what it
 // measured; any failure exits 1. Screenshots of the key states go to a folder when one is given.
 //
 //   node e2e/ui-stress.mjs [screenshot folder]
@@ -96,17 +96,17 @@ try {
             if (m.longCut !== null) check(m.longCut && m.longTip, `${tag}: a 120-character title is cut with an ellipsis and has its full text as a tooltip`);
             check(!m.half, `${tag}: no hairline thinner than one pixel`);
           }
-          if (count === 0) check(await page.eval(`return [...document.querySelectorAll('#sidebar .s-start')].some((x) => /New conversation/.test(x.textContent))`), `${tag}: an empty project offers a New conversation row`);
+          if (count === 0) check(await page.eval(`return [...document.querySelectorAll('#sidebar .side-empty')].some((x) => /No conversations yet/.test(x.textContent))`), `${tag}: an empty list says so and offers to start one`);
 
           if (count === 500 && scale === 1 && w === 1440) {
             // hover: actions fade in over the row's end; nothing else moves
-            const pos = `return JSON.stringify([...document.querySelectorAll('#sidebar .proj-head, #sidebar .s-row')].slice(0, 12).map((e) => { const r = e.getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(Math.round); }))`;
+            const pos = `return JSON.stringify([...document.querySelectorAll('#sidebar .s-row')].slice(0, 12).map((e) => { const r = e.getBoundingClientRect(); return [r.top, r.left, r.width, r.height].map(Math.round); }))`;
             const before = await page.eval(pos);
-            const at = JSON.parse(await page.eval(`const r = document.querySelector('#sidebar .proj-head').getBoundingClientRect(); return JSON.stringify([r.left + 40, r.top + r.height / 2]);`));
+            const at = JSON.parse(await page.eval(`const r = document.querySelector('#sidebar .t-row').getBoundingClientRect(); return JSON.stringify([r.left + 40, r.top + r.height / 2]);`));
             await dt.hover(at[0], at[1]);
             await sleep(250);
-            check((await page.eval(pos)) === before, `${tag}: hovering a project row moves nothing`);
-            check(await page.eval(`return getComputedStyle(document.querySelector('#sidebar .proj-head .row-acts')).opacity === '1'`), `${tag}: the project row's actions show on hover`);
+            check((await page.eval(pos)) === before, `${tag}: hovering a thread row moves nothing`);
+            check(await page.eval(`return getComputedStyle(document.querySelector('#sidebar .t-row .row-acts')).opacity === '1'`), `${tag}: a thread row's actions show on hover`);
             if (OUT) await page.shot(path.join(OUT, 'stress-hover.png'));
             await dt.hover(5, h - 5);
             // a status change keeps every row in place
@@ -127,17 +127,15 @@ try {
             check(await page.eval(`return [...document.querySelectorAll('#sidebar .side-scroll [tabindex="0"]')].length === 1`), `${tag}: the sidebar list is one tab stop`);
             await page.press('ArrowDown', 40);
             check(await page.eval(`return document.activeElement?.dataset.path !== window.__f && document.activeElement?.closest('#sidebar .side-scroll') && document.activeElement.tabIndex === 0`), `${tag}: ArrowDown moves to the next row and makes it the tab stop`);
-            // every theme: switching leaves no stuck colours
-            const themes = ['dark', 'light', 'midnight', 'frost', 'graphite', 'tokyo', 'mocha', 'rosepine', 'nord', 'dracula', 'gruvbox', 'latte', 'dawn', 'orbix', 'sunset', 'nebula', 'aurora', 'dither', 'dark'];
+            // one theme: a theme saved by an older version (light, a palette, a scene, System) changes nothing
             const seen = await page.eval(`const st = await import('/js/store.js'); const out = [];
-              for (const t of ${JSON.stringify(themes)}) { st.savePrefs({ theme: t }); await new Promise((r) => setTimeout(r, 120));
-                const r = document.documentElement; out.push([r.dataset.theme, getComputedStyle(r).getPropertyValue('--bg').trim(), getComputedStyle(document.querySelector('#sidebar')).backgroundColor, [...r.style].filter((p) => !p.startsWith('--')).length]); }
+              for (const t of [null, 'light', 'graphite', 'dither', 'system']) { if (t) st.savePrefs({ theme: t }); await new Promise((r) => setTimeout(r, 120));
+                const r = document.documentElement; out.push([r.dataset.theme, r.dataset.mode, r.dataset.scene || '', getComputedStyle(r).getPropertyValue('--bg').trim(), getComputedStyle(document.querySelector('#sidebar')).backgroundColor, [...r.style].filter((p) => !p.startsWith('--')).length]); }
               return JSON.stringify(out);`);
             const rows = JSON.parse(seen);
-            check(rows.every((r, i) => r[0] === themes[i]), 'every theme applies');
-            check(rows.every((r) => r[3] === 0), 'theme switches leave no inline style behind');
-            check(new Set(rows.map((r) => r[1])).size >= 14, `each theme has its own background (${new Set(rows.map((r) => r[1])).size} distinct)`);
-            check(rows[0][1] === rows.at(-1)[1] && rows[0][2] === rows.at(-1)[2], 'back to Dark, the colours are Dark again');
+            check(rows.every((r) => r[0] === 'dark' && r[1] === 'dark' && r[2] === ''), 'an old saved theme still loads as Dark');
+            check(rows.every((r) => r[5] === 0), 'no inline style is left behind');
+            check(rows.every((r) => r[3] === rows[0][3] && r[4] === rows[0][4]), `the colours stay Dark (${rows[0][3]})`);
             // reduced motion and forced colours
             await dt.media([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
             await sleep(200);
@@ -147,9 +145,9 @@ try {
             check(await page.eval(`return matchMedia('(forced-colors: active)').matches`), 'forced colours: emulated');
             if (OUT) await page.shot(path.join(OUT, 'stress-forced-colors.png'));
             await dt.media([]);
-            // the rail: icons only, 56px, with tooltips; Ctrl+B goes back
+            // the rail: icons only, 48px, with tooltips; Ctrl+B goes back
             await page.eval(`(await import('/js/store.js')).savePrefs({ sideRail: true }); await new Promise((r) => setTimeout(r, 400));`);
-            const rail = JSON.parse(await page.eval(`const s = document.querySelector('#sidebar'); return JSON.stringify({ w: Math.round(s.getBoundingClientRect().width), labels: [...s.querySelectorAll('.side-l')].filter((x) => x.getClientRects().length).length, tips: [...s.querySelectorAll('.side-link, .proj-btn')].filter((x) => x.getClientRects().length).every((x) => x.title), over: s.scrollWidth - s.clientWidth })`));
+            const rail = JSON.parse(await page.eval(`const s = document.querySelector('#sidebar'); return JSON.stringify({ w: Math.round(s.getBoundingClientRect().width), labels: [...s.querySelectorAll('.side-l')].filter((x) => x.getClientRects().length).length, tips: [...s.querySelectorAll('.side-link, .proj-btn')].filter((x) => x.getClientRects().length).every((x) => x.dataset.railTip && x.getAttribute('aria-label') && !x.title), over: s.scrollWidth - s.clientWidth })`));
             check(rail.w === 56 && rail.labels === 0 && rail.tips && rail.over <= 1, `rail: 56px, icons only, every item has a tooltip (${rail.w}px)`);
             if (OUT) await page.shot(path.join(OUT, 'stress-rail.png'));
             await page.key('b', { ctrl: true, keyCode: 66, code: 'KeyB' });

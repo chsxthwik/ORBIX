@@ -1,6 +1,6 @@
 // The interface audit: what the page in front of it breaks of the design rules, read from the rendered page (computed
 // styles, so what a later stylesheet overrides is not counted). Used by `node tools/shots.mjs --visual --audit`, which
-// runs it on every screen in every theme, and by e2e/ui-stress.mjs.
+// runs it on every screen, and by e2e/ui-stress.mjs.
 //
 // Rules (see web/css/tokens.css): type 12/13/14/16/20/28 px, weight 400 (500 for headings); spacing on a 4px grid
 // (1px and 2px are allowed for a hairline or a bar); accent colour only for the focus ring, the current row's bar, the
@@ -20,7 +20,7 @@ export function auditPage() {
     for (let e = el, i = 0; e && i < 3; e = e.parentElement, i++) if (e.matches(HEAD) || [...e.classList].some((c) => HEAD_CLASS.test(c))) return true;
     return false;
   };
-  const SKIP = '.term-host, .xterm, svg, canvas, iframe, script, style, .tp-win, [data-audit-skip]';
+  const SKIP = '.term-host, .xterm, svg, canvas, iframe, script, style, [data-audit-skip]';
   const found = new Map();
   const add = (k, el, v, t = '') => {
     const s = path(el);
@@ -72,7 +72,7 @@ export function auditPage() {
     }
     let base = [0, 0, 0, 1];
     if (!layers.length || layers[layers.length - 1][3] < 0.999) base = rgba(getComputedStyle(document.documentElement).backgroundColor);
-    if (base[3] < 0.999) base = document.documentElement.dataset.theme === 'light' ? [255, 255, 255, 1] : [0, 0, 0, 1];
+    if (base[3] < 0.999) base = [0, 0, 0, 1];
     return layers.reduceRight((under, l) => over(l, under), base);
   };
   const opacityOf = (el) => {
@@ -89,7 +89,6 @@ export function auditPage() {
     return c;
   };
   const accents = ['--accent', '--accent-solid'].map(probe).filter((c) => c[3] > 0.5);
-  const ink = document.documentElement.dataset.theme === 'graphite'; // its accent is ink: no hue to tell from text
   const sameRgb = (c) => c[3] > 0.05 && accents.some((a) => Math.abs(a[0] - c[0]) < 3 && Math.abs(a[1] - c[1]) < 3 && Math.abs(a[2] - c[2]) < 3);
   // Where the accent belongs: the send button and a screen's one primary action, progress, the current row's bar,
   // today's bar, the current timeline dot.
@@ -135,7 +134,7 @@ export function auditPage() {
       add('space', el, `${p.replace(/([A-Z])/g, '-$1').toLowerCase()} ${Math.round(v * 100) / 100}px`, el.textContent);
     }
     // accent colour in places that are not the focus ring, the current row, send or progress
-    if (!ink && !el.matches(ACCENT_OK) && !el.closest(ACCENT_OK)) {
+    if (!el.matches(ACCENT_OK) && !el.closest(ACCENT_OK)) {
       for (const [p, label] of [['color', 'text'], ['backgroundColor', 'fill'], ['borderTopColor', 'border'], ['borderBottomColor', 'border'], ['borderLeftColor', 'border'], ['borderRightColor', 'border'], ['outlineColor', 'outline']]) {
         if ((p.startsWith('border') && cs[p.replace('Color', 'Style')] === 'none') || (p === 'outlineColor' && cs.outlineStyle === 'none')) continue;
         // text colour is inherited: only the element that sets it counts

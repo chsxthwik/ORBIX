@@ -225,7 +225,7 @@ npm run visual           # capture every screen and compare it with test/visual/
 npm run visual:approve   # accept the current screens as the new baselines
 ```
 
-`npm run visual` starts ORBIX on sample data with a scripted local model, opens it in headless Chromium (Edge, Chrome, Brave or Chromium; or set `ORBIX_BROWSER`) and captures each screen in Dark, Light and Graphite at scale 1: Home; a conversation that is finished, still streaming and waiting for approval; the right panel's tabs; the model picker; the Runs views, a run in each of its tabs and the Review queue; every Settings page; and the sidebar rail.
+`npm run visual` starts ORBIX on sample data with a scripted local model, opens it in headless Chromium (Edge, Chrome, Brave or Chromium; or set `ORBIX_BROWSER`) and captures each screen in Dark (the one theme) at scale 1: Home; a conversation that is finished, still streaming and waiting for approval; the right panel's tabs; the model picker; the Runs views, a run in each of its tabs and the Review queue; every Settings page; and the sidebar rail.
 
 Each capture is compared pixel by pixel with its baseline in `test/visual/` (`<screen>-<theme>-1x.png`; display scaling is covered by `e2e/ui-stress.mjs`). A screen fails when more than 0.1% of its pixels change or its size changes. For every screen that changed, `test/visual/diff/` gets `<name>.png` (changed pixels in magenta over a dimmed copy) and `<name>.actual.png`. Add `--only <prefix>` to `node tools/shots.mjs --visual` to check some screens only.
 

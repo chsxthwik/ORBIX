@@ -17,7 +17,7 @@ import { DATA_DIR } from './store.mjs';
 import { Automations } from './automations.mjs';
 import { findDevServers } from './devservers.mjs';
 import { discoverSkills, parseFrontmatter, saveSkill, trashSkill } from './engine/skills.mjs';
-import { EngineConfig, listAgentSessions, deleteAgentSessions, listTrash, restoreFromTrash, emptyTrash, renameAgentSession, isAgentSessionPath, appendEntry, closeSession } from './engine/store.mjs';
+import { EngineConfig, listAgentSessions, deleteAgentSessions, listTrash, restoreFromTrash, emptyTrash, renameAgentSession, isAgentSessionPath, appendEntry, closeSession, createSession } from './engine/store.mjs';
 import { modelChoice } from './engine/proc-models.mjs';
 import { clientFor, LIST_TIMEOUT } from './engine/providers.mjs';
 import * as oauth from './engine/oauth.mjs';
@@ -33,6 +33,8 @@ import * as gitapi from './gitapi.mjs';
 import * as projectapi from './project.mjs';
 import { RunController, runRoutes } from './runctl.mjs';
 import { openExternal } from './launcher.mjs';
+import { ConversationSearch } from './conversation-search.mjs';
+import { portableTranscript, TRANSCRIPT_MAX_BYTES } from '../web/js/portable-transcript.mjs';
 
 export { VERSION };
 
@@ -63,6 +65,7 @@ export function trackOpenUi(open, ev) {
 const CSP = [
   "default-src 'self'",
   "img-src 'self' data: blob:",
+  "media-src data:",
   "style-src 'self'",
   "script-src 'self'",
   "connect-src 'self'",
@@ -146,6 +149,7 @@ export class AppServer {
     this.engineCfg = new EngineConfig();
     // Other agent CLIs a conversation can run on (Claude Code, Codex, OpenCode, ACP agents): see harness/.
     this.agents = new AgentRegistry({ backend: this.backend, config: this.engineCfg });
+    this.conversationSearch = new ConversationSearch(() => listAgentSessions(this.backend));
     this.agentView = [];
     // Other ORBIX servers you run (ORBIX Cloud), and moving conversations to them: see cloud.mjs.
     this.machines = new Machines(this);
@@ -706,6 +710,30 @@ export class AppServer {
         const own = await listAgentSessions(this.backend).catch(() => []);
         return { sessions: own.sort((a, b) => b.mtime - a.mtime) };
       },
+      'GET /api/sessions/search': async ({ q }) => ({ matches: await this.conversationSearch.find(q.q) }),
+      'POST /api/sessions/import': async ({ body }) => {
+        const project = this.store.data.workspaces.find((w) => w.id === body.projectId);
+        if (!project) throw Object.assign(new Error('Choose an existing ORBIX project.'), { status: 400 });
+        let transcript;
+        try {
+          transcript = portableTranscript(body.transcript);
+          if (Buffer.byteLength(JSON.stringify(transcript)) > TRANSCRIPT_MAX_BYTES) throw new Error('This portable transcript exceeds 16 MB.');
+        } catch (error) {
+          throw Object.assign(error, { status: 400 });
+        }
+        const cwd = project.path;
+        const host = this.backend.hostPath(cwd);
+        if (!(await fs.promises.stat(host).catch(() => null))?.isDirectory()) {
+          throw Object.assign(new Error('The selected project folder is unavailable.'), { status: 404 });
+        }
+        const entries = [{ type: 'title', title: transcript.title }];
+        for (const { role, text } of transcript.messages) {
+          entries.push({ type: 'message', message: { role, id: uid(role === 'user' ? 'u' : 'a'), content: [{ type: 'text', text }], timestamp: Date.now(), ...(role === 'assistant' ? { stopReason: 'stop' } : {}) } });
+        }
+        const { id, file } = createSession({ cwd, keyPath: this.backend.keyPath(cwd), entries });
+        loadSessionsHint(this);
+        return { session: { id, path: file, cwd, cwdDisplay: this.backend.displayPath(cwd), title: transcript.title } };
+      },
       'GET /api/engine': async () => ({ engine: this.engineView() }),
       'POST /api/engine/provider': async ({ body }) => {
         const id = String(body.id || '');
@@ -1118,6 +1146,7 @@ export class AppServer {
 
       'GET /api/fs/list': async ({ q }) => ({ listing: await fsapi.listDir(this.backend, q.path || '', { dirsOnly: q.dirs === '1' }) }),
       'GET /api/fs/read': async ({ q }) => ({ file: await fsapi.readFile(this.backend, q.path) }),
+      'POST /api/fs/stamps': async ({ body }) => ({ stamps: await fsapi.fileStamps(this.backend, body.paths) }),
       'GET /api/fs/find': async ({ q }) => ({ files: await fsapi.findFiles(this.backend, wsPath(q), q.q || '') }),
       'POST /api/fs/reveal': async ({ body }) => {
         await fsapi.reveal(this.backend, String(body.path || ''));

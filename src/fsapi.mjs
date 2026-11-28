@@ -3,12 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { isWinPath, runProc } from './backend.mjs';
-import { looksBinary } from './util.mjs';
+import { looksBinary, pool } from './util.mjs';
 import { git } from './gitapi.mjs';
 
 const MAX_TEXT = 2 * 1024 * 1024;
 const MAX_IMAGE = 6 * 1024 * 1024;
+const MAX_VIDEO = 16 * 1024 * 1024;
 const IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', ico: 'image/x-icon', svg: 'image/svg+xml' };
+const VIDEO = { mp4: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg' };
 const HIDDEN_DIRS = new Set(['$RECYCLE.BIN', 'System Volume Information']);
 const SKIP_DIRS = new Set([...HIDDEN_DIRS, 'node_modules', '.git']);
 
@@ -97,10 +99,19 @@ export async function readFile(backend, p) {
   if (!st.isFile()) throw Object.assign(new Error('That isn’t a regular file'), { status: 400 }); // a device (CON, NUL) can block a read
   const ext = path.extname(host).slice(1).toLowerCase();
   const base = { path: p, size: st.size, mtime: st.mtimeMs, ext };
-  if (IMG[ext]) {
-    if (st.size > MAX_IMAGE) return { ...base, image: true, tooLarge: true };
-    const buf = await fs.promises.readFile(host);
-    return { ...base, image: true, dataUrl: `data:${IMG[ext]};base64,${buf.toString('base64')}` };
+  if (Object.hasOwn(IMG, ext) || Object.hasOwn(VIDEO, ext)) {
+    const isVideo = Object.hasOwn(VIDEO, ext);
+    const media = isVideo ? { video: true } : { image: true };
+    const max = isVideo ? MAX_VIDEO : MAX_IMAGE;
+    if (st.size > max) return { ...base, ...media, tooLarge: true };
+    const fh = await fs.promises.open(host, 'r');
+    try {
+      const buffer = Buffer.alloc(st.size);
+      const { bytesRead } = await fh.read(buffer, 0, buffer.length, 0);
+      return { ...base, ...media, dataUrl: `data:${isVideo ? VIDEO[ext] : IMG[ext]};base64,${buffer.subarray(0, bytesRead).toString('base64')}` };
+    } finally {
+      await fh.close();
+    }
   }
   const fh = await fs.promises.open(host, 'r');
   try {
@@ -113,6 +124,18 @@ export async function readFile(backend, p) {
   } finally {
     await fh.close();
   }
+}
+
+/** Small stat-only batches for the visible workspace tree and the open preview. */
+export async function fileStamps(backend, paths) {
+  if (!Array.isArray(paths) || paths.length > 64 || paths.some((p) => typeof p !== 'string' || !p || p.length > 4096 || p.includes('\0'))) {
+    throw Object.assign(new Error('Expected up to 64 file or directory paths'), { status: 400 });
+  }
+  return pool(paths, 8, async (p) => {
+    const host = backend.hostPath(normalizeForUi(p, backend));
+    const stat = await fs.promises.stat(host, { bigint: true });
+    return `${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+  });
 }
 
 // The list of a project's files is reused for a few seconds. Search runs on every keystroke; without this, each
@@ -228,4 +251,3 @@ export async function reveal(backend, p) {
   const args = st.isDirectory() ? [host] : [`/select,${host}`];
   await runProc('explorer.exe', args, { timeout: 5000 });
 }
-

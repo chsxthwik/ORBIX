@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Framed images for the README: each real screen from docs/img/shots (made by `node tools/shots.mjs --theme graphite`)
+// Framed images for the README: each real screen from docs/img/shots (made by `node tools/shots.mjs`)
 // on the website's near-black ground and dot field, with a mono label, bleeding off the bottom edge. No dependencies:
 // a headless Chromium (Microsoft Edge, Chrome, Brave or Chromium, or the one named by ORBIX_BROWSER) renders a small
 // page per image, driven over the DevTools protocol.

@@ -46,14 +46,13 @@ const WIN = process.platform === 'win32';
 let winShell = null;
 
 const DARK = { bg: '#151515', fg: '#E9E9E7' };
-const LIGHT = { bg: '#E9E8E2', fg: '#151514' };
 
 // The window opens where it was last closed, on the same monitor, with the size and place it had there (each monitor
 // remembers its own). A monitor that is gone moves the window to the main one, and so does unplugging it while open.
 const STATE = () => path.join(app.getPath('userData'), 'window.json');
 
 function createWindow(url, extra = {}) {
-  const c = nativeTheme.shouldUseDarkColors ? DARK : LIGHT;
+  const c = DARK;
   const placement = windowPlacement(screen, STATE());
   const place = placement.place;
   win = new BrowserWindow({
@@ -157,7 +156,7 @@ ipcMain.handle('orbix:machine:home', () => {
   return true;
 });
 
-// The page tells the window its theme, so the window buttons match it (light, dark, midnight, frost, graphite).
+// The page tells the window its colours, so the window buttons match the menu row (your own colours included).
 ipcMain.on('orbix:titlebar', (e, value) => {
   const w = BrowserWindow.fromWebContents(e.sender);
   const t = titleBarArgs(value);
@@ -243,6 +242,8 @@ const fromApp = (e) => e.sender === win?.webContents && String(e.senderFrame?.ur
 app.whenReady().then(async () => {
   if (!primary) return;
   Menu.setApplicationMenu(null);
+  // ORBIX has one theme, Dark: Mica, the window buttons and native menus follow it, whatever Windows uses.
+  nativeTheme.themeSource = 'dark';
   startUpdates({ restart: () => quit() }); // registers its IPC handlers at once; the updater itself loads after
   setupBrowser(() => win);
   // Imported only now, so ORBIX_DATA above is set before the data folder is chosen.

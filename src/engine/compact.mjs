@@ -246,7 +246,7 @@ export async function summarize({ stream, older, focus, contextWindow, signal, o
 export function rebuildSession(file) {
   const messages = [];
   // droppedUsage: tokens and cost of replies that were later regenerated or edited away (still spent).
-  const extras = { thinkingLevel: null, planMode: false, model: null, provider: null, roles: null, droppedUsage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 } };
+  const extras = { thinkingLevel: null, planMode: false, chatMode: '', model: null, provider: null, roles: null, droppedUsage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 } };
   let raw;
   try {
     raw = fs.readFileSync(file, 'utf8');
@@ -273,6 +273,7 @@ export function rebuildSession(file) {
       for (const m of messages) if (m.role === 'toolResult' && ids.has(m.toolCallId)) m.pruned = true;
     } else if (o.type === 'thinking') extras.thinkingLevel = o.level;
     else if (o.type === 'plan') extras.planMode = !!o.on;
+    else if (o.type === 'mode') extras.chatMode = o.mode === 'ask' || o.mode === 'debug' ? o.mode : '';
     else if (o.type === 'roles') extras.roles = { fast: String(o.fast || ''), plan: String(o.plan || '') };
     else if (o.type === 'model') {
       extras.model = o.model;
