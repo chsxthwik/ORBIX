@@ -159,8 +159,12 @@ describe('window placement per monitor', () => {
     assert.deepEqual(legacy.bounds, { x: 2100, y: 10, width: 900, height: 600 });
   });
 
-  test('windowPlacement remembers each monitor and moves off an unplugged one', () => {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-place-')), 'window.json');
+  test('windowPlacement remembers each monitor and moves off an unplugged one', (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orbix-place-'));
+    let closed;
+    // close the window first (it cancels the pending save), then remove the folder
+    t.after(() => { closed?.(); fs.rmSync(dir, { recursive: true, force: true }); });
+    const file = path.join(dir, 'window.json');
     const handlers = {};
     let displays = [A, B];
     const screen = {
@@ -170,7 +174,7 @@ describe('window placement per monitor', () => {
     };
     let bounds = { x: 2100, y: 100, width: 1200, height: 800 };
     const w = {
-      on() {}, once() {}, isDestroyed: () => false, isMinimized: () => false, isFullScreen: () => false, isMaximized: () => false,
+      on() {}, once: (n, f) => n === 'closed' && (closed = f), isDestroyed: () => false, isMinimized: () => false, isFullScreen: () => false, isMaximized: () => false,
       getBounds: () => bounds, getNormalBounds: () => bounds, setBounds: (b) => (bounds = b), setMinimumSize() {}, maximize() {}, unmaximize() {},
     };
     const p = windowPlacement(screen, file);
