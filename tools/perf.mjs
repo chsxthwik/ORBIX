@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // Profile ORBIX on a long conversation. No dependencies.
 //
-//   node tools/perf.mjs [--messages 2000] [--runs 3] [--json out.json] [--profile] [--electron] [--keep]
+//   node tools/perf.mjs [--messages 2000] [--runs 3] [--json out.json] [--profile] [--electron] [--throttle 4] [--keep]
 //
 // --electron measures the Windows app itself (Electron from node_modules, or ORBIX_ELECTRON), with the engine in its
 // own process as users run it. Without it a headless browser opens the ORBIX server: Chromium is the cleanest there,
 // as Edge and Brave inject page scripts of their own that show up in the numbers.
+//
+// --throttle N slows the page's CPU N times (DevTools CPU throttling), to see a slower PC: on a fast one the scroll
+// test sits at the display's 60 fps and hides differences. --profile adds a CPU profiler, which itself slows the
+// page a lot: use it to see where time goes, not for the numbers.
 //
 // It seeds a conversation of --messages messages (tools/seed-conversation.mjs) into a temporary data folder, starts
 // ORBIX on it with a scripted local model, opens it in a headless Chromium browser (Edge, Chrome, Brave or Chromium;
@@ -31,7 +35,11 @@ const MESSAGES = Number(arg('messages', 2000));
 const RUNS = Math.max(1, Number(arg('runs', 3)));
 const KEEP = args.includes('--keep');
 const ELECTRON = args.includes('--electron');
+const THROTTLE = Math.max(1, Number(arg('throttle', 1)));
 const MARK = 'STREAM-START';
+// Windows slows or stops the frames of a window that is covered or in the background. The measurement must not
+// depend on what else is on the screen, so the app under test keeps drawing as if it were in front.
+const AWAKE = ['--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-background-timer-throttling', '--disable-features=CalculateNativeWinOcclusion'];
 const say = (s) => process.stdout.write(s + '\n');
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 
@@ -199,11 +207,12 @@ async function main() {
   const results = [];
   try {
     for (let run = 0; run < RUNS; run++) {
-      const page = ELECTRON ? await startDesktop(electron, data, path.join(tmp, `profile-${run}`), ROOT) : await startBrowser(path.join(tmp, `browser-${run}`));
+      const page = ELECTRON ? await startDesktop(electron, data, path.join(tmp, `profile-${run}`), ROOT, AWAKE) : await startBrowser(path.join(tmp, `browser-${run}`));
       try {
         if (!ELECTRON) await page.goto(orbix.url);
         await page.until(`[...document.querySelectorAll('.sidebar button, .sidebar a')].some((b) => b.textContent.includes('A long conversation'))`, 'the seeded conversation in the sidebar');
         await sleep(500);
+        if (THROTTLE > 1) await page.cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE });
         const open = await profiled(page, 'open', () => page.eval(OPEN));
         // Older messages are drawn in the background after the first paint: wait until all of them are in the page.
         const all = await page.eval(`

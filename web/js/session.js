@@ -17,7 +17,7 @@ import { rateModel } from './ratings.js';
 import { shellCommand } from './tool-title.mjs';
 import { Composer, ASK } from './composer.js';
 import { addContext, permissionChip, modelLabel, effortChip, modelGroup, keyHints, modePill } from './controls.js';
-import { contextRing } from './context-popover.js';
+import { contextMeter } from './context-popover.js';
 import { Timeline } from './timeline.js';
 
 // How each thinking level reads in the interface.
@@ -328,7 +328,7 @@ export class TabView {
       this.focus();
     });
     this.modePill = modePill(() => this.setMode('agent'));
-    this.ctxRing = contextRing(t, () => showTab('context'));
+    this.ctxRing = contextMeter(() => t, () => showTab('context'), { cls: 'c-ctx' });
     this.statusLine = h('div', { class: 'c-status', 'aria-live': 'polite' });
     this.keys = keyHints();
     const mode = { get: () => t.state?.mode || 'agent', set: (id) => this.setMode(id), available: () => !t.dead && !!t.state && 'mode' in t.state };
@@ -356,6 +356,7 @@ export class TabView {
       else if (sc.scrollTop < this.lastTop - 1) this.stick = false;
       this.lastTop = sc.scrollTop;
       this.showJump(!this.stick);
+      this.timeline.scrolled?.();
     });
     this.scroller.addEventListener('scroll', this.onScroll, { passive: true });
     // A window, panel or composer resize keeps a reader who was at the bottom at the bottom.
@@ -405,6 +406,10 @@ export class TabView {
   detach() {
     this.bar.closeFind(true);
     this.saved = { top: this.scroller.scrollTop, stick: this.stick };
+    // Off-screen messages have estimated heights, so the same pixel offset can be another place when the view
+    // comes back. Remember the message at the top of the view and how far it sat from the top edge.
+    const anchor = this.stick ? null : this.timeline.firstSeen();
+    if (anchor) Object.assign(this.saved, { anchor, offset: anchor.getBoundingClientRect().top - this.scroller.getBoundingClientRect().top });
   }
 
   /** The tab is closed for good: release observers and callbacks that would keep this view and its DOM alive. */
@@ -437,6 +442,20 @@ export class TabView {
       this.stick = false;
       this.lastTop = s.top;
       this.scroller.scrollTop = s.top;
+      // Put the remembered message back where it was, and again over the next frames while the messages now in
+      // view take their real heights (unless the reader scrolls meanwhile).
+      let frames = 8;
+      const hands = new AbortController();
+      for (const ev of ['wheel', 'pointerdown', 'keydown', 'touchstart']) this.scroller.addEventListener(ev, () => hands.abort(), { signal: hands.signal, passive: true });
+      const settle = () => {
+        if (hands.signal.aborted) return;
+        if (!s.anchor?.isConnected || !this.scroller.isConnected || this.stick || --frames < 0) return hands.abort();
+        const by = s.anchor.getBoundingClientRect().top - this.scroller.getBoundingClientRect().top - s.offset;
+        if (Math.abs(by) > 1) this.scroller.scrollTop += by;
+        this.lastTop = this.scroller.scrollTop;
+        requestAnimationFrame(settle);
+      };
+      settle();
       this.showJump(true);
     } else this.scrollBottom(true);
     this.timeline.update();

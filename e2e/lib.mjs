@@ -263,9 +263,12 @@ export async function startBrowser(dir, { width = 1360, height = 860, scale = 1 
 
 const debugPages = async (port) => (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2000) })).json();
 
-/** Run the same UI checks in the packaged Electron host, isolated from the installed app. */
-export async function startDesktop(exe, data, profile, appDir) {
-  const proc = spawn(exe, ['--remote-debugging-port=0', `--user-data-dir=${profile}`, ...(appDir ? [appDir] : [])], {
+/**
+ * Run the same UI checks in the packaged Electron host, isolated from the installed app. `flags`: extra Chromium
+ * switches (tools/perf.mjs keeps a covered window drawing at full rate with them).
+ */
+export async function startDesktop(exe, data, profile, appDir, flags = []) {
+  const proc = spawn(exe, ['--remote-debugging-port=0', `--user-data-dir=${profile}`, ...flags, ...(appDir ? [appDir] : [])], {
     cwd: ROOT,
     env: { ...process.env, ORBIX_DATA: data, ORBIX_NO_UPDATES: '1', ...IDENTITY },
     stdio: ['ignore', 'ignore', 'pipe'],

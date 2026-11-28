@@ -6,6 +6,10 @@
 //
 // Nothing here runs on scroll. An IntersectionObserver on the transcript lights the turns in view, and
 // the dot list is rebuilt only when the transcript's top-level children change (a MutationObserver, one frame later).
+// The observer watches only the messages around the view (WATCH on each side of those on screen), not all of them:
+// the browser works out every watched element's intersection on every frame, which with 2,000 messages was the
+// largest single cost of scrolling. The watched range follows the reader; after a far jump one pass over all
+// messages finds the view again (findView).
 // Existing dots are kept and reused, so a new message adds one button instead of redrawing the strip.
 // Nothing here reads layout either: sizes come from ResizeObservers and dot positions from arithmetic, because a
 // layout read with a long transcript waiting to be laid out costs hundreds of milliseconds.
@@ -18,6 +22,7 @@ const still = () => {
 };
 
 const TIP_DELAY = 150; // ms before the card shows; moving to another mark while it shows switches at once
+const WATCH = 24; // messages kept under watch on each side of the ones on screen
 const REPLY_CHARS = 240; // the card clamps the reply to two lines; this only bounds the text put in it
 
 /** The text of your message. */
@@ -52,7 +57,11 @@ export class Timeline {
     this.marks = []; // one per turn: { target (your message), button, line, label }
     this.byTarget = new Map(); // your message -> its mark
     this.turnOf = new Map(); // every message in the transcript -> the index of its turn
-    this.observed = new Set(); // every message watched by the IntersectionObserver
+    this.order = []; // the messages of the transcript, top to bottom
+    this.at = new Map(); // message -> its index in `order`
+    this.observed = new Set(); // the messages the IntersectionObserver watches: a range of `order` around the view
+    this.finder = null; // the one-off observer of findView, while it runs
+    this.foundAt = 0; // when findView last finished
     this.seen = new Set(); // messages on screen
     this.seenTurns = new Map(); // turn index -> how many of its messages are on screen
     this.active = -1;
@@ -79,7 +88,10 @@ export class Timeline {
     this.el.addEventListener('focusin', (e) => this.tipSoon(e.target.closest('.turn-mark')));
     this.el.addEventListener('focusout', (e) => this.el.contains(e.relatedTarget) || this.hideTip());
     // Kept as a function property: session.js calls timeline.update() on resize and when a conversation opens.
-    this.update = () => this.measure();
+    this.update = () => {
+      this.measure();
+      if (!this.seen.size) this.findView(); // shown again, or resized: the watched range may be elsewhere
+    };
     this.update.cancel = () => {};
   }
 
@@ -100,16 +112,22 @@ export class Timeline {
       if (keep.has(el)) continue;
       this.io.unobserve(el);
       this.observed.delete(el);
-      this.seen.delete(el);
-      this.byTarget.delete(el);
     }
+    for (const el of this.seen) if (!keep.has(el)) this.seen.delete(el);
+    for (const el of this.byTarget.keys()) if (!keep.has(el)) this.byTarget.delete(el);
     this.turnOf.clear();
+    this.order = all;
+    this.at = new Map(all.map((el, i) => [el, i]));
     const users = [];
     for (const el of all) {
       if (el.classList.contains('user')) users.push(el);
       if (users.length) this.turnOf.set(el, users.length - 1);
-      if (!this.observed.has(el)) (this.observed.add(el), this.io.observe(el));
     }
+    // Keep watching around what is on screen. With nothing on screen yet: a reader at the bottom (a conversation
+    // that just opened, a new message) is at the last messages; anywhere else, look for the view.
+    if (this.seen.size) this.follow();
+    else if (this.view.stick !== false) this.watch(all.length - 1 - 2 * WATCH, all.length - 1);
+    else this.findView();
     const focused = this.el.contains(document.activeElement) ? document.activeElement : null;
     const total = users.length;
     this.marks = users.map((target, i) => {
@@ -155,17 +173,107 @@ export class Timeline {
     if (hide) this.hideTip();
   }
 
+  /** Message `el` came on screen or left it: keep the count of its turn and that turn's dot. */
+  setSeen(el, on) {
+    if (on === this.seen.has(el)) return;
+    if (on) this.seen.add(el);
+    else this.seen.delete(el);
+    this.countTurn(el, on ? 1 : -1);
+    const turn = this.turnOf.get(el);
+    if (turn !== undefined) this.marks[turn]?.button.classList.toggle('seen', this.seenTurns.has(turn));
+  }
+
   onSeen(entries) {
-    for (const e of entries) {
-      const el = e.target;
-      if (e.isIntersecting === this.seen.has(el)) continue;
-      if (e.isIntersecting) this.seen.add(el);
-      else this.seen.delete(el);
-      this.countTurn(el, e.isIntersecting ? 1 : -1);
-      const turn = this.turnOf.get(el);
-      if (turn !== undefined) this.marks[turn]?.button.classList.toggle('seen', this.seenTurns.has(turn));
+    const had = this.seen.size;
+    for (const e of entries) if (this.observed.has(e.target)) this.setSeen(e.target, e.isIntersecting);
+    if (this.seen.size) {
+      this.markCurrent();
+      this.follow();
+    } else if (had) this.findView(); // every watched message left the screen at once: a jump past the watched range
+    else this.markCurrent();
+  }
+
+  /** The topmost message on screen, or null. No layout read: it comes from what the observer reported. */
+  firstSeen() {
+    let first = null;
+    let at = Infinity;
+    for (const el of this.seen) {
+      const i = this.at.get(el);
+      if (i !== undefined && i < at) (at = i), (first = el);
     }
-    this.markCurrent();
+    return first;
+  }
+
+  /** Watch messages lo..hi of `order` and no others. */
+  watch(lo, hi) {
+    lo = Math.max(0, lo);
+    hi = Math.min(this.order.length - 1, hi);
+    for (const el of this.observed) {
+      const i = this.at.get(el);
+      if (i !== undefined && i >= lo && i <= hi) continue;
+      this.io.unobserve(el);
+      this.observed.delete(el);
+      this.setSeen(el, false);
+    }
+    for (let i = lo; i <= hi; i++) {
+      const el = this.order[i];
+      if (!this.observed.has(el)) (this.observed.add(el), this.io.observe(el));
+    }
+  }
+
+  /** Move the watched range so it stays WATCH messages wider, on each side, than the messages on screen. */
+  follow() {
+    let lo = Infinity;
+    let hi = -1;
+    for (const el of this.seen) {
+      const i = this.at.get(el);
+      if (i === undefined) continue;
+      if (i < lo) lo = i;
+      if (i > hi) hi = i;
+    }
+    if (hi >= 0) this.watch(lo - WATCH, hi + WATCH);
+  }
+
+  /**
+   * Nothing watched is on screen (a jump to a far turn, Find, the scrollbar dragged a long way): find where the
+   * view is. One throwaway observer looks at every message once; its first report carries each one's position,
+   * so this reads no layout. With no message on screen at all (a long reply still being written fills it), the
+   * range goes around the gap the view is in, and the next message to scroll into view is a watched one.
+   */
+  findView() {
+    if (this.finder || !this.order.length || !this.view.scroller.isConnected) return;
+    const finder = (this.finder = new IntersectionObserver((entries) => {
+      finder.disconnect();
+      if (this.finder !== finder) return;
+      this.finder = null;
+      this.foundAt = performance.now();
+      if (!entries.some((e) => e.rootBounds)) return; // the view left the screen meanwhile; update() looks again
+      let lo = Infinity;
+      let hi = -1;
+      let above = -1;
+      for (const e of entries) {
+        const i = this.at.get(e.target);
+        if (i === undefined) continue;
+        if (e.isIntersecting) {
+          if (i < lo) lo = i;
+          if (i > hi) hi = i;
+        } else if (e.rootBounds && e.boundingClientRect.bottom <= e.rootBounds.top && i > above) above = i;
+      }
+      if (hi < 0) (lo = above), (hi = above + 1);
+      this.watch(lo - WATCH, hi + WATCH); // the main observer reports the ones on screen next
+      if (!this.seen.size) this.markCurrent();
+    }, { root: this.view.scroller, threshold: 0 }));
+    for (const el of this.order) finder.observe(el);
+  }
+
+  /**
+   * The view calls this once per frame while the transcript scrolls. It does nothing while a watched message is on
+   * screen. With none (the range was left behind without any watched message crossing the view), it looks for the
+   * view, at most every 300 ms.
+   */
+  scrolled() {
+    if (this.seen.size || this.finder || performance.now() - this.foundAt < 300) return;
+    this.findView();
   }
 
   /** The current turn: the first with a message on screen (the last turn when none is). One dot is tabbable: this one. */
@@ -269,6 +377,9 @@ export class Timeline {
     this.frame = 0;
     clearTimeout(this.tipTimer);
     this.io.disconnect();
+    this.finder?.disconnect();
+    this.landing?.abort();
+    this.finder = null;
     this.mo.disconnect();
     this.ro.disconnect();
     this.tip.remove();
@@ -280,8 +391,20 @@ export class Timeline {
     const fold = el.closest('details.work:not([open])');
     if (fold) fold.open = true; // the step is inside a folded turn: show it
     this.view.stick = false;
-    const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - sc.clientHeight / 3;
-    sc.scrollTo({ top: Math.max(0, top), behavior: still() ? 'auto' : 'smooth' });
+    const off = () => el.getBoundingClientRect().top - sc.getBoundingClientRect().top - sc.clientHeight / 3;
+    sc.scrollTo({ top: Math.max(0, sc.scrollTop + off()), behavior: still() ? 'auto' : 'smooth' });
+    // Messages on the way take their real heights as they come into view, so a long jump can stop short of the
+    // turn. When the scroll ends, land on it exactly, unless the reader has taken over meanwhile.
+    this.landing?.abort();
+    const landing = (this.landing = new AbortController());
+    const opts = { signal: landing.signal, passive: true };
+    for (const ev of ['wheel', 'pointerdown', 'keydown', 'touchstart']) sc.addEventListener(ev, () => landing.abort(), opts);
+    sc.addEventListener('scrollend', () => {
+      landing.abort();
+      const by = off();
+      if (el.isConnected && Math.abs(by) > 8) sc.scrollTo({ top: Math.max(0, sc.scrollTop + by), behavior: 'auto' });
+    }, opts);
+    setTimeout(() => landing.abort(), 4000);
     el.classList.remove('tl-flash');
     void el.offsetWidth; // restart the flash if it is already playing
     el.classList.add('tl-flash');
