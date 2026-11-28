@@ -1,5 +1,6 @@
 // Tiny DOM helpers. All text goes through createTextNode → no HTML injection by construction.
 import { tileIndex, tileLetter } from './tile.mjs';
+import { markFor } from './mark.js';
 export const $ = (sel, root = document) => root.querySelector(sel);
 
 export function h(tag, props, ...kids) {
@@ -126,8 +127,6 @@ const P = {
   palette: 'M12 22a10 10 0 1 1 10-10c0 2.8-2.2 4-4 4h-1.8a2 2 0 0 0-1.5 3.3 1.7 1.7 0 0 1-1.3 2.7ZM7.5 10.5h.01M10.5 7.5h.01M15.5 7.5h.01M17.5 11.5h.01',
   compass: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM16.2 7.8l-2.1 6.3-6.3 2.1 2.1-6.3Z',
   message: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z',
-  sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M6.3 17.7l-1.4 1.4M19.1 4.9l-1.4 1.4',
-  moon: 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z',
   keyboard: 'M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2ZM6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10',
   activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
   wrap: 'M3 6h18M3 12h15a3 3 0 0 1 0 6h-4M16 16l-2 2 2 2M3 18h7',
@@ -172,20 +171,63 @@ const svgEl = (tag, attrs, ...kids) => {
   return el;
 };
 
-// The ORBIX mark (logo kit v2): an O split along one elliptical orbit whose halves swap sides and become `)(`, the X
-// in ORBIX. Drawn as the two halves of the O; at rest they sit swapped (the X). One colour, currentColor (Bone on
-// dark, Obsidian on light); the brand green only while an agent works.
-const HALF_L = 'M0 50C0 22.39 22.39 0 50 0C50.12 0 50.23 0 50.35 0V18C50.23 18 50.12 18 50 18C32.33 18 18 32.33 18 50C18 67.67 32.33 82 50 82C50.12 82 50.23 82 50.35 82V100C50.23 100 50.12 100 50 100C22.39 100 0 77.61 0 50Z';
-const HALF_R = 'M49.65 100V82C49.77 82 49.88 82 50 82C67.67 82 82 67.67 82 50C82 32.33 67.67 18 50 18C49.88 18 49.77 18 49.65 18V0C49.77 0 49.88 0 50 0C77.61 0 100 22.39 100 50C100 77.61 77.61 100 50 100C49.88 100 49.77 100 49.65 100Z';
+// The ORBIX mark: an O split along its vertical axis whose halves swap sides and become `)(`, the X in ORBIX. Drawn
+// as the two halves of the O (geometry in mark.js); at rest they sit swapped (the X). One colour, currentColor (Bone);
+// the brand green only while an agent works.
+
+const marks = new Map();
+const markPx = (px) => {
+  if (!marks.has(px)) marks.set(px, markFor(px));
+  return marks.get(px);
+};
+
+/**
+ * Draws the mark for its size on this screen and nudges it onto whole device pixels: the arms, ends and width are
+ * set for the device pixels it covers (18 px at 150 % is 27 of them), so the X is sharp at every display scaling.
+ */
+function fitMark(svg) {
+  const d = window.devicePixelRatio || 1;
+  const px = Math.max(8, Math.round(+svg.getAttribute('width') * d));
+  const m = markPx(px);
+  if (svg.dataset.px !== String(px)) {
+    svg.dataset.px = String(px);
+    svg.style.setProperty('--swap', m.swap + 'px');
+    svg.querySelector('.lg-l').setAttribute('d', m.l);
+    svg.querySelector('.lg-r').setAttribute('d', m.r);
+  }
+  if (!svg.isConnected) return false;
+  svg.style.translate = '';
+  const r = svg.getBoundingClientRect();
+  if (!r.width) return false;
+  const fx = (Math.round(r.left * d) - r.left * d) / d, fy = (Math.round(r.top * d) - r.top * d) / d;
+  if (Math.abs(fx) > 0.001 || Math.abs(fy) > 0.001) svg.style.translate = `${fx.toFixed(3)}px ${fy.toFixed(3)}px`;
+  return true;
+}
+// Refit on a resize and when the window moves to a screen with another scaling.
+let refit = 0;
+const refitAll = () => {
+  cancelAnimationFrame(refit);
+  refit = requestAnimationFrame(() => document.querySelectorAll('svg.logo').forEach(fitMark));
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', refitAll);
+  const watchScale = () => matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', () => { refitAll(); watchScale(); }, { once: true });
+  watchScale();
+}
 
 /**
  * The mark. `alive`: the halves swap O ↔ X on the brand's 2.8 s loop while an agent works (.agent-busy), and
  * `loop` keeps swapping always (the loader). Under reduced motion it holds the X.
  */
 export function logo(size = 20, { alive = false, loop = false } = {}) {
-  return svgEl('svg', { class: 'logo' + (alive ? ' alive' : '') + (loop ? ' loop' : ''), viewBox: '0 0 100 100', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' },
-    svgEl('path', { class: 'lg-h lg-l', fill: 'currentColor', d: HALF_L }),
-    svgEl('path', { class: 'lg-h lg-r', fill: 'currentColor', d: HALF_R }));
+  const el = svgEl('svg', { class: 'logo' + (alive ? ' alive' : '') + (loop ? ' loop' : ''), viewBox: '0 0 100 100', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' },
+    svgEl('path', { class: 'lg-h lg-l', fill: 'currentColor' }),
+    svgEl('path', { class: 'lg-h lg-r', fill: 'currentColor' }));
+  fitMark(el);
+  let tries = 0;
+  const settle = () => { if (!fitMark(el) && ++tries < 20) requestAnimationFrame(settle); };
+  requestAnimationFrame(settle);
+  return el;
 }
 
 /**
@@ -315,7 +357,7 @@ export function wordmark() {
     (document.fonts?.ready || Promise.resolve()).then(() => { born = performance.now(); if (!raf) raf = requestAnimationFrame(loop); });
   };
   requestAnimationFrame(start);
-  // A theme or palette change repaints it in the new colours (the canvas does not follow CSS on its own).
+  // A colour change (your own colours, contrast) repaints it (the canvas does not follow CSS on its own).
   const mo = new MutationObserver(() => {
     if (!cv.isConnected) return mo.disconnect();
     if (raf) return;
@@ -323,13 +365,15 @@ export function wordmark() {
     // An agent started: the glint runs now instead of after the idle pause.
     if (born && !still() && cv.closest('.agent-busy') && glint < 0) { clearTimeout(wait); glint = -6; raf = requestAnimationFrame(loop); }
   });
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-mode', 'data-theme', 'data-palette'] });
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
   return cv;
 }
 
 /** The mark in its tile: the app icon's shape (About). */
 export function logoTile(size = 44) {
-  return h('span', { class: 'logo-tile', style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' }, logo(size));
+  // the mark at 56 % of the tile, rounded so the gap on each side is whole pixels
+  const m = size - 2 * Math.round(size * 0.22);
+  return h('span', { class: 'logo-tile', style: { width: size + 'px', height: size + 'px' }, 'aria-hidden': 'true' }, logo(m));
 }
 
 /**

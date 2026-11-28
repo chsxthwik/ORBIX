@@ -54,3 +54,30 @@ test('every provider has a mark, or a deliberate neutral one', () => {
   const box = JSON.parse(/const BOX = (\{.*?\});/.exec(brands)[1]);
   for (const id of marks) assert.ok(box[id]?.length === 4, `frame for ${id}`);
 });
+
+test('the mark has one geometry: the app and the icon both draw it from web/js/mark.js', async () => {
+  const { MARK, SWAP, HALF_L, HALF_R, markFor } = await import('../web/js/mark.js');
+  assert.match(read('web/js/dom.js').toString(), /import \{ markFor \} from '\.\/mark\.js'/);
+  assert.match(read('tools/icons.mjs').toString(), /from '\.\.\/web\/js\/mark\.js'/);
+  // the CSS moves each half by the mark's own swap distance (--swap, set per size) to make the X
+  const css = read('web/css/shell.css').toString();
+  assert.match(css, new RegExp(`\\.logo \\.lg-l \\{ transform: translate\\(var\\(--swap, ${SWAP}px\\), 0\\); \\}`));
+  assert.match(css, /\.logo \.lg-r \{ transform: translate\(calc\(-1 \* var\(--swap, [\d.]+px\)\), 0\); \}/);
+  // the title bar's 18 px mark: width and arms on whole pixels
+  const m18 = markFor(18);
+  const w18 = (m18.swap * 2 * 18) / 100;
+  assert.ok(Math.abs(w18 - Math.round(w18)) < 0.01, 'whole-pixel width at 18 px');
+  // optical corrections: arms lighter than bends, a short solid waist, a near-square silhouette
+  assert.ok(MARK.arm < MARK.bend && MARK.waist > 0 && MARK.waist < MARK.arm / 2 && MARK.W < MARK.H);
+  for (const d of [HALF_L, HALF_R]) assert.match(d, /^M[\d. CLZ-]+Z$/);
+});
+
+test('16 to 64 px icons are hand-set on whole pixels and centred on the pixel grid', async () => {
+  const { HINTS, markAt } = await import('../tools/icons.mjs');
+  for (const s of [16, 20, 24, 32, 40, 48, 64]) {
+    const [H, W, arm] = HINTS[s];
+    assert.ok(Number.isInteger(H) && Number.isInteger(W) && Number.isInteger(arm), `${s}px: whole-pixel box and arms`);
+    assert.ok(Number.isInteger((s - H) / 2) && Number.isInteger((s - W) / 2), `${s}px: centred on whole pixels`);
+    assert.deepEqual(markAt(s).H, H);
+  }
+});
